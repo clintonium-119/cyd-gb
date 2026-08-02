@@ -54,8 +54,9 @@ static uint8_t fskip = 0, fcnt = 0;
 static uint32_t fpsc = 0, fpst = 0, cfps = 0;
 static uint8_t jpad = 0;
 
-// ─── 20 Palettes (byte-swapped for pushImage) ──────────────────────────────
-#define SW(c) (uint16_t)(((c)>>8)|((c)<<8))
+// ─── 20 Palettes (SW is identity for testing; remove pre-swapped values) ──
+// Change this to identity to test driver-side byte ordering (use with setSwapBytes).
+#define SW(c) (uint16_t)(c)
 
 static const uint16_t pals[NUM_PALETTES][4] = {
     {SW(0x9FE5),SW(0x4F64),SW(0x2542),SW(0x0261)}, //  0 Classic Green

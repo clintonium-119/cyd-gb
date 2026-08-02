@@ -202,13 +202,13 @@ void touch_run_calibration() {
     tft.fillScreen(TFT_BLACK);
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(0xFFE0);
-    tft.drawString("CALIBRATION", 160, 12, 4);
+    tft.drawString("CALIBRATION", SCREEN_W/2, 16, 4);
     tft.setTextColor(0xAD55);
-    tft.drawString("Touch each + carefully", 160, 35, 2);
+    tft.drawString("Touch each + carefully", SCREEN_W/2, 46, 2);
 
     // 5 calibration points: 4 corners + center
     struct { int16_t sx, sy; } targets[5] = {
-        {30, 60}, {290, 60}, {30, 210}, {290, 210}, {160, 135}
+        {22, 80}, {218, 80}, {22, 280}, {218, 280}, {120, 180}
     };
     const char* labels[5] = {"Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right", "Center"};
     int16_t raw_x[5], raw_y[5];
@@ -216,11 +216,11 @@ void touch_run_calibration() {
 
     for (int i = 0; i < 5; i++) {
         // Clear instruction area
-        tft.fillRect(0, 42, 320, 20, TFT_BLACK);
+        tft.fillRect(0, 42, SCREEN_W, 28, TFT_BLACK);
         tft.setTextColor(TFT_WHITE);
         tft.setTextDatum(MC_DATUM);
         char msg[32]; snprintf(msg, 32, "%d/5: %s", i + 1, labels[i]);
-        tft.drawString(msg, 160, 52, 2);
+        tft.drawString(msg, SCREEN_W/2, 70, 2);
 
         // Draw crosshair with circle
         int tx = targets[i].sx, ty = targets[i].sy;
@@ -332,21 +332,21 @@ void touch_run_calibration() {
         tft.fillScreen(TFT_BLACK);
         tft.setTextColor(0x07E0);
         tft.setTextDatum(MC_DATUM);
-        tft.drawString("VERIFY", 160, 10, 4);
+        tft.drawString("VERIFY", SCREEN_W/2, 13, 4);
         tft.setTextColor(0xAD55);
-        tft.drawString("Draw to test accuracy", 160, 35, 2);
+        tft.drawString("Draw to test accuracy", SCREEN_W/2, 46, 2);
         tft.setTextColor(0x7BEF);
-        tft.drawString("Wait 5s or lift to exit", 160, 228, 1);
+        tft.drawString("Wait 5s or lift to exit", SCREEN_W/2, 304, 1);
 
-        // Draw reference grid
-        for (int x = 0; x <= 320; x += 64) tft.drawFastVLine(x, 50, 170, 0x18C3);
-        for (int y = 50; y <= 220; y += 42) tft.drawFastHLine(0, y, 320, 0x18C3);
-        // Draw corner markers
-        tft.drawCircle(30, 60, 4, 0x4A69);
-        tft.drawCircle(290, 60, 4, 0x4A69);
-        tft.drawCircle(30, 210, 4, 0x4A69);
-        tft.drawCircle(290, 210, 4, 0x4A69);
-        tft.drawCircle(160, 135, 4, 0x4A69);
+        // Draw reference grid (scaled steps)
+        for (int x = 0; x <= SCREEN_W; x += 48) tft.drawFastVLine(x, 66, 228, 0x18C3);
+        for (int y = 66; y <= 293; y += 56) tft.drawFastHLine(0, y, SCREEN_W, 0x18C3);
+        // Draw corner markers (scaled)
+        tft.drawCircle(22, 80, 4, 0x4A69);
+        tft.drawCircle(218, 80, 4, 0x4A69);
+        tft.drawCircle(22, 280, 4, 0x4A69);
+        tft.drawCircle(218, 280, 4, 0x4A69);
+        tft.drawCircle(120, 180, 4, 0x4A69);
 
         uint32_t t0 = millis();
         uint32_t no_touch_since = 0;
@@ -371,7 +371,7 @@ void touch_run_calibration() {
     tft.fillScreen(TFT_BLACK);
     tft.setTextColor(0x07E0);
     tft.setTextDatum(MC_DATUM);
-    tft.drawString("Calibration Saved!", 160, 110, 4);
+    tft.drawString("Calibration Saved!", SCREEN_W/2, 146, 4);
     delay(1200);
     return;
 
@@ -379,8 +379,8 @@ cal_fail:
     tft.fillScreen(TFT_BLACK);
     tft.setTextColor(TFT_RED);
     tft.setTextDatum(MC_DATUM);
-    tft.drawString("Calibration Failed!", 160, 100, 4);
+    tft.drawString("Calibration Failed!", SCREEN_W/2, 133, 4);
     tft.setTextColor(0x7BEF);
-    tft.drawString("Using previous values", 160, 140, 2);
+    tft.drawString("Using previous values", SCREEN_W/2, 186, 2);
     delay(2000);
 }

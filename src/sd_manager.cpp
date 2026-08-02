@@ -8,13 +8,75 @@ static SPIClass sdSPI(VSPI);
 static bool ready = false;
 
 bool sd_init() {
-    sdSPI.begin(SD_PIN_SCK, SD_PIN_MISO, SD_PIN_MOSI, SD_PIN_CS);
-    if(!SD.begin(SD_PIN_CS, sdSPI, 20000000)){Serial.println("[SD] Mount fail!");return false;}
+    // Reset SD library and SPI state before init, to handle cold starts/factory resets
+    Serial.println("[SD] Resetting SD/SPI state");
+    SD.end();
+    SPI.end();
+    sdSPI.end();
+
+    pinMode(SD_PIN_CS, OUTPUT);
+    digitalWrite(SD_PIN_CS, HIGH);
+    pinMode(SD_PIN_SCK, OUTPUT);
+    digitalWrite(SD_PIN_SCK, LOW);
+    pinMode(SD_PIN_MOSI, OUTPUT);
+    digitalWrite(SD_PIN_MOSI, HIGH);
+    pinMode(SD_PIN_MISO, INPUT);
+
+    Serial.println("[SD] Waiting 1200ms for card power-up");
+    delay(1200);
+
+    const uint32_t freqs[] = {250000, 400000, 1000000, 4000000, 10000000, 20000000};
+    bool ok = false;
+    for (size_t i = 0; i < sizeof(freqs)/sizeof(freqs[0]) && !ok; ++i) {
+        uint32_t freq = freqs[i];
+        for (int attempt = 0; attempt < 3 && !ok; ++attempt) {
+            Serial.printf("[SD] Try freq=%u attempt=%d\n", (unsigned)freq, attempt+1);
+            sdSPI.end();
+            digitalWrite(SD_PIN_CS, HIGH);
+            delay(50);
+            sdSPI.begin(SD_PIN_SCK, SD_PIN_MISO, SD_PIN_MOSI, SD_PIN_CS);
+            sdSPI.setHwCs(false);
+            sdSPI.setBitOrder(MSBFIRST);
+            sdSPI.setDataMode(SPI_MODE0);
+            sdSPI.setFrequency(freq);
+            delay(10);
+
+            // Provide at least 80 clock cycles with CS high before SD init.
+            digitalWrite(SD_PIN_CS, HIGH);
+            sdSPI.beginTransaction(SPISettings(250000, MSBFIRST, SPI_MODE0));
+            for (int j = 0; j < 10; ++j) {
+                sdSPI.transfer(0xFF);
+            }
+            sdSPI.endTransaction();
+            delay(20);
+
+            // Toggle CS low/high once to ensure card is deselected.
+            digitalWrite(SD_PIN_CS, LOW);
+            delay(10);
+            digitalWrite(SD_PIN_CS, HIGH);
+            delay(10);
+
+            if (SD.begin(SD_PIN_CS, sdSPI, freq)) {
+                ok = true;
+                break;
+            }
+            Serial.printf("[SD] Mount fail (freq=%u) attempt %d\n", (unsigned)freq, attempt+1);
+            SD.end();
+            delay(300);
+        }
+    }
+
+    if (!ok) {
+        Serial.println("[SD] Mount fail after retries");
+        return false;
+    }
+
     Serial.printf("[SD] Type:%d Size:%lluMB\n",SD.cardType(),SD.cardSize()/(1024*1024));
     if(!SD.exists(ROM_PATH_GB)) SD.mkdir(ROM_PATH_GB);
     if(!SD.exists(ROM_PATH_GBC)) SD.mkdir(ROM_PATH_GBC);
     if(!SD.exists(SAVE_PATH)) SD.mkdir(SAVE_PATH);
-    ready=true; return true;
+    ready=true;
+    return true;
 }
 
 static int scan_dir(const char* dir, bool gbc, RomEntry* l, int si, int mx) {
