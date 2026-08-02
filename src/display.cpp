@@ -9,6 +9,7 @@ void display_init() {
     pinMode(TFT_PIN_BL, OUTPUT);
     digitalWrite(TFT_PIN_BL, HIGH);
     tft.init();
+    tft.invertDisplay(true);
     // Some ST77xx displays expect swapped byte order (RGB/BGR). Enable
     // swap here to match palette byte-order when needed.
     tft.setSwapBytes(true);
