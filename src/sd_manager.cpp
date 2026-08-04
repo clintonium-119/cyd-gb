@@ -58,6 +58,7 @@ void sd_get_save_path(const char* rp, char* sp, int mx) {
 bool sd_save_state(const char* rp, const uint8_t* data, uint32_t sz) {
     if(!ready||!data||!sz) return false;
     char sp[96]; sd_get_save_path(rp,sp,96);
+    if(SD.exists(sp)) SD.remove(sp);
     File f=SD.open(sp,FILE_WRITE); if(!f) return false;
     size_t w=f.write(data,sz); f.close();
     Serial.printf("[SD] Save: %s (%u)\n",sp,w);

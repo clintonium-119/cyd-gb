@@ -49,8 +49,8 @@ static void save_ram() {
     if(!cur_path[0]) return;
     uint32_t sz=0; uint8_t* r=emu_get_cart_ram(&sz);
     if(sz>0) {
-        sd_save_state(cur_path,r,sz);
-        Serial.printf("[SAVE] %u bytes\n",sz);
+        bool ok = sd_save_state(cur_path,r,sz);
+        Serial.printf("[SAVE] %u bytes (%s)\n",sz, ok ? "ok" : "fail");
     }
 }
 
@@ -170,6 +170,7 @@ void loop() {
     if(sel<0||sel>=rcnt) return;
 
     strncpy(cur_path,roms[sel].full_path,79);
+    cur_path[79] = 0;
 
     // Loading screen
     tft.fillScreen(TFT_BLACK); tft.setTextDatum(MC_DATUM);
