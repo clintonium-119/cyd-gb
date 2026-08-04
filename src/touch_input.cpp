@@ -302,28 +302,58 @@ void touch_run_calibration() {
         nc.invert_x = (mx[0] > mx[1]);  // left has higher raw than right
         nc.invert_y = (my[0] > my[2]);  // top has higher raw than bottom
 
-        // Calculate ranges using all points for better accuracy
-        int16_t x_vals[5], y_vals[5];
-        for (int i = 0; i < 5; i++) { x_vals[i] = mx[i]; y_vals[i] = my[i]; }
-
-        // Sort to find range
-        for (int a = 0; a < 4; a++) for (int b = a+1; b < 5; b++) {
-            if (x_vals[a] > x_vals[b]) { int16_t t = x_vals[a]; x_vals[a] = x_vals[b]; x_vals[b] = t; }
-            if (y_vals[a] > y_vals[b]) { int16_t t = y_vals[a]; y_vals[a] = y_vals[b]; y_vals[b] = t; }
+        // Compute axis bounds from known calibration point geometry.
+        // This avoids symmetric "magic" extrapolation and improves Y accuracy.
+        int32_t ox[5], oy[5];
+        for (int i = 0; i < 5; i++) {
+            ox[i] = nc.invert_x ? -(int32_t)mx[i] : (int32_t)mx[i];
+            oy[i] = nc.invert_y ? -(int32_t)my[i] : (int32_t)my[i];
         }
 
-        // Use 2nd lowest and 2nd highest (outlier rejection)
-        int16_t xlo = x_vals[1], xhi = x_vals[3];
-        int16_t ylo = y_vals[1], yhi = y_vals[3];
+        // Pairwise averages from corner points in oriented space.
+        int32_t left_raw_o = (ox[0] + ox[2]) / 2;
+        int32_t right_raw_o = (ox[1] + ox[3]) / 2;
+        int32_t top_raw_o = (oy[0] + oy[1]) / 2;
+        int32_t bottom_raw_o = (oy[2] + oy[3]) / 2;
 
-        // Extrapolate to full screen (calibration points are not at edges)
-        // Points are at ~10% and ~90% of screen, so extend by ~12%
-        int16_t xspan = xhi - xlo;
-        int16_t yspan = yhi - ylo;
-        nc.x_min = xlo - xspan * 12 / 80;
-        nc.x_max = xhi + xspan * 12 / 80;
-        nc.y_min = ylo - yspan * 15 / 75;
-        nc.y_max = yhi + yspan * 15 / 75;
+        int32_t x_span_raw = max((int32_t)1, right_raw_o - left_raw_o);
+        int32_t y_span_raw = max((int32_t)1, bottom_raw_o - top_raw_o);
+        int32_t x_span_px = max((int32_t)1, (int32_t)targets[1].sx - (int32_t)targets[0].sx);
+        int32_t y_span_px = max((int32_t)1, (int32_t)targets[2].sy - (int32_t)targets[0].sy);
+
+        int32_t x_left_px = targets[0].sx;
+        int32_t x_right_px = (SCREEN_W - 1) - targets[1].sx;
+        int32_t y_top_px = targets[0].sy;
+        int32_t y_bottom_px = (SCREEN_H - 1) - targets[2].sy;
+
+        int32_t x_left_ext = (x_span_raw * x_left_px + x_span_px / 2) / x_span_px;
+        int32_t x_right_ext = (x_span_raw * x_right_px + x_span_px / 2) / x_span_px;
+        int32_t y_top_ext = (y_span_raw * y_top_px + y_span_px / 2) / y_span_px;
+        int32_t y_bottom_ext = (y_span_raw * y_bottom_px + y_span_px / 2) / y_span_px;
+
+        int32_t x_min_o = left_raw_o - x_left_ext;
+        int32_t x_max_o = right_raw_o + x_right_ext;
+        int32_t y_min_o = top_raw_o - y_top_ext;
+        int32_t y_max_o = bottom_raw_o + y_bottom_ext;
+
+        if (!nc.invert_x) {
+            nc.x_min = (int16_t)x_min_o;
+            nc.x_max = (int16_t)x_max_o;
+        } else {
+            nc.x_min = (int16_t)(-x_max_o);
+            nc.x_max = (int16_t)(-x_min_o);
+        }
+
+        if (!nc.invert_y) {
+            nc.y_min = (int16_t)y_min_o;
+            nc.y_max = (int16_t)y_max_o;
+        } else {
+            nc.y_min = (int16_t)(-y_max_o);
+            nc.y_max = (int16_t)(-y_min_o);
+        }
+
+        if (nc.x_min >= nc.x_max) { int16_t t = nc.x_min; nc.x_min = nc.x_max; nc.x_max = t; }
+        if (nc.y_min >= nc.y_max) { int16_t t = nc.y_min; nc.y_min = nc.y_max; nc.y_max = t; }
 
         cal = nc;
         save_cal_to_nvs();

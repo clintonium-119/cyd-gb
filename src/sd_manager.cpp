@@ -68,9 +68,15 @@ bool sd_save_state(const char* rp, const uint8_t* data, uint32_t sz) {
 bool sd_load_state(const char* rp, uint8_t* data, uint32_t sz) {
     if(!ready||!data||!sz) return false;
     char sp[96]; sd_get_save_path(rp,sp,96);
-    if(!SD.exists(sp)) return false;
+    if(!SD.exists(sp)) {
+        Serial.printf("[SD] Load miss: %s\n", sp);
+        return false;
+    }
     File f=SD.open(sp,FILE_READ); if(!f) return false;
     size_t r=f.read(data,sz); f.close();
     Serial.printf("[SD] Load: %s (%u)\n",sp,r);
+    if (r != sz) {
+        Serial.printf("[SD] Load size mismatch: expected=%u got=%u\n", sz, (uint32_t)r);
+    }
     return r==sz;
 }

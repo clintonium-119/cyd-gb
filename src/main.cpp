@@ -56,9 +56,23 @@ static void save_ram() {
 
 static void load_ram() {
     if(!cur_path[0]) return;
-    uint32_t sz=0; emu_get_cart_ram(&sz);
-    if(sz>0) { uint8_t* t=(uint8_t*)malloc(sz);
-        if(t){if(sd_load_state(cur_path,t,sz))emu_set_cart_ram(t,sz);free(t);} }
+    uint32_t sz=0;
+    uint8_t* cart_ram = emu_get_cart_ram(&sz);
+    if (sz == 0) {
+        Serial.println("[SAVE] Load skipped: cart RAM size is 0");
+        return;
+    }
+
+    if (!cart_ram) {
+        Serial.println("[SAVE] Load failed: cart RAM pointer is null");
+        return;
+    }
+
+    if (sd_load_state(cur_path, cart_ram, sz)) {
+        Serial.printf("[SAVE] Loaded %u bytes\n", sz);
+    } else {
+        Serial.printf("[SAVE] No load for %s\n", cur_path);
+    }
 }
 
 // ─── Emulation loop ─────────────────────────────────────────────────────────

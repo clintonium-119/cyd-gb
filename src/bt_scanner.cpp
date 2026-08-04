@@ -126,6 +126,7 @@ static BeaconStation stations[4];
 static KeyboardState keyboardState{};
 static ScannerView scannerView = VIEW_LIST;
 static int selectedStationIndex = 0;
+static int selectedListIndex = 0;
 static int selectedEditChoice = 0;
 static unsigned long lastScanMs = 0;
 static bool needsScan = true;
@@ -136,6 +137,15 @@ static unsigned long touchPressStartMs = 0;
 static uint16_t touchPressX = 0;
 static uint16_t touchPressY = 0;
 static char morseWord[16] = "HINWEIS";
+
+static inline bool list_selection_is_morse() {
+    return selectedListIndex >= 4;
+}
+
+static inline void clamp_list_selection() {
+    if (selectedListIndex < 0) selectedListIndex = 0;
+    if (selectedListIndex > 4) selectedListIndex = 4;
+}
 
 static inline bool btn_pressed_edge(uint16_t now, uint16_t prev, uint16_t mask) {
     return (now & mask) && !(prev & mask);
@@ -351,14 +361,16 @@ static void draw_list_row(int index, bool selected) {
 static void draw_list_screen() {
     tft.fillScreen(COLOR_BG);
     draw_header("BT Scanner");
-    for (int i = 0; i < 4; ++i) draw_list_row(i, i == selectedStationIndex);
+    for (int i = 0; i < 4; ++i) draw_list_row(i, i == selectedListIndex);
 
-    tft.fillRoundRect(12, 256, SCREEN_WIDTH - 24, 28, 6, 0x0014);
-    tft.drawRoundRect(12, 256, SCREEN_WIDTH - 24, 28, 6, COLOR_ITEM_HL_TEXT);
-    tft.setTextColor(TFT_WHITE, 0x0014);
+    uint16_t morseBg = list_selection_is_morse() ? COLOR_ITEM_HL_BG : 0x0014;
+    uint16_t morseFg = list_selection_is_morse() ? COLOR_ITEM_HL_TEXT : TFT_WHITE;
+    tft.fillRoundRect(12, 256, SCREEN_WIDTH - 24, 28, 6, morseBg);
+    tft.drawRoundRect(12, 256, SCREEN_WIDTH - 24, 28, 6, morseFg);
+    tft.setTextColor(morseFg, morseBg);
     tft.setTextDatum(MC_DATUM);
     tft.drawString("Morse Sender", SCREEN_WIDTH / 2, 270, 2);
-    draw_footer("A Monitor  B ROM Menu  LongTouch Edit");
+    draw_footer("Up/Down Select  A Open  B ROM  LongTouch Edit");
 }
 
 static void draw_monitor_screen() {
@@ -415,7 +427,7 @@ static void draw_edit_menu_screen() {
         tft.drawString(labels[i], SCREEN_WIDTH / 2, top + 18, 2);
     }
 
-    draw_footer("Up/Down + A, B Back");
+    draw_footer("Up/Down + A, B Back, LongTouch Cal");
 }
 
 static void draw_morse_menu_screen() {
@@ -498,6 +510,33 @@ static void wait_for_touch_release() {
     uint16_t x = 0;
     uint16_t y = 0;
     while (read_touch(&x, &y)) delay(20);
+}
+
+static void show_pre_calibration_wait_screen() {
+    tft.fillScreen(COLOR_BG);
+    draw_header("Touch Setup");
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(TFT_WHITE, COLOR_BG);
+    tft.drawString("Kalibrierung startet", SCREEN_WIDTH / 2, 120, 2);
+    tft.drawString("Bitte kurz loslassen...", SCREEN_WIDTH / 2, 150, 2);
+    draw_footer("Warte kurz");
+
+    uint32_t start = millis();
+    while (millis() - start < 900) {
+        uint16_t x = 0;
+        uint16_t y = 0;
+        (void)read_touch(&x, &y);
+        (void)read_buttons();
+        delay(20);
+    }
+
+    wait_for_touch_release();
+
+    start = millis();
+    while (millis() - start < 250) {
+        (void)read_buttons();
+        delay(20);
+    }
 }
 
 static bool morse_stop_requested() {
@@ -753,16 +792,19 @@ static bool touch_tap(uint16_t x, uint16_t y) {
                 int top = 46 + (i * 52);
                 if (x >= 8 && x <= SCREEN_WIDTH - 80 && y >= top && y <= top + 46) {
                     selectedStationIndex = i;
+                    selectedListIndex = i;
                     enter_monitor();
                     return true;
                 }
                 if (x >= SCREEN_WIDTH - 72 && x <= SCREEN_WIDTH - 14 && y >= top + 8 && y <= top + 38) {
                     selectedStationIndex = i;
+                    selectedListIndex = i;
                     enter_morse_menu();
                     return true;
                 }
             }
             if (x >= 12 && x <= SCREEN_WIDTH - 12 && y >= 256 && y <= 284) {
+                selectedListIndex = 4;
                 enter_morse_menu();
                 return true;
             }
@@ -835,20 +877,26 @@ static bool handle_buttons() {
 
     if (scannerView == VIEW_LIST) {
         if ((changed & GB_BTN_UP) && btn_pressed_edge(buttons, lastButtons, GB_BTN_UP)) {
-            selectedStationIndex = (selectedStationIndex + 3) % 4;
+            selectedListIndex = (selectedListIndex + 4) % 5;
             draw_list_screen();
         }
         if ((changed & GB_BTN_DOWN) && btn_pressed_edge(buttons, lastButtons, GB_BTN_DOWN)) {
-            selectedStationIndex = (selectedStationIndex + 1) % 4;
+            selectedListIndex = (selectedListIndex + 1) % 5;
             draw_list_screen();
         }
         if ((changed & GB_BTN_A) && btn_pressed_edge(buttons, lastButtons, GB_BTN_A)) {
-            enter_monitor();
+            if (list_selection_is_morse()) {
+                enter_morse_menu();
+            } else {
+                selectedStationIndex = selectedListIndex;
+                enter_monitor();
+            }
         }
         if ((changed & GB_BTN_B) && btn_pressed_edge(buttons, lastButtons, GB_BTN_B)) {
             exitToMenu = true;
         }
         if ((changed & GB_BTN_RIGHT) && btn_pressed_edge(buttons, lastButtons, GB_BTN_RIGHT)) {
+            selectedListIndex = 4;
             enter_morse_menu();
         }
     } else if (scannerView == VIEW_MONITOR) {
@@ -922,6 +970,8 @@ void bt_scanner_enter() {
     load_stations();
     init_ble_scanner();
     selectedStationIndex = 0;
+    selectedListIndex = 0;
+    clamp_list_selection();
     selectedEditChoice = 0;
     scannerView = VIEW_LIST;
     needsScan = true;
@@ -953,6 +1003,13 @@ bool bt_scanner_loop() {
                    millis() - touchPressStartMs >= SETTINGS_LONGPRESS_MS) {
             touchLongHandled = true;
             enter_edit_menu();
+        } else if (!touchLongHandled &&
+                   scannerView == VIEW_EDIT_MENU &&
+                   millis() - touchPressStartMs >= SETTINGS_LONGPRESS_MS) {
+            touchLongHandled = true;
+            show_pre_calibration_wait_screen();
+            touch_run_calibration();
+            draw_edit_menu_screen();
         }
     } else {
         if (touchPressed && !touchLongHandled) touch_tap(touchPressX, touchPressY);
