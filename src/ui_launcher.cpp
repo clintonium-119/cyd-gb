@@ -148,10 +148,10 @@ int launcher_ingame_menu() {
 	tft.setTextColor(0xFFE0,TFT_BLACK); tft.setTextDatum(MC_DATUM);
 	tft.drawString("PAUSED",SCREEN_W/2,28,4);
 
-	#define MI 6
-	int yp[MI]={48,78,108,138,168,198};
-	const char* lb[MI]={"Resume","Save Game","Load Save","Settings","Calibrate","Quit"};
-	uint16_t fc[MI]={TFT_GREEN,0x07FF,0x07FF,0xFFE0,0xFFE0,TFT_RED};
+	#define MI 5
+	int yp[MI]={58,88,118,148,178};
+	const char* lb[MI]={"Resume","Save Game","Load Save","Settings","Quit"};
+	uint16_t fc[MI]={TFT_GREEN,0x07FF,0x07FF,0xFFE0,TFT_RED};
 	for(int i=0;i<MI;i++) mbtn(btn_x,btn_w,yp[i],lb[i],fc[i],false);
 	wait_release();
 
@@ -174,8 +174,8 @@ int launcher_ingame_menu() {
 		// A = select
 		if ((b & GB_BTN_A) && !(prev & GB_BTN_A)) {
 			int s = hl;
-			// 0=resume 1=save 2=load 3=settings 4=cal 5=quit
-			switch(s){case 0:return 0;case 1:return 1;case 2:return 2;case 3:return 5;case 4:return 4;case 5:return 3;}
+			// 0=resume 1=save 2=load 3=settings 4=quit
+			switch(s){case 0:return 0;case 1:return 1;case 2:return 2;case 3:return 5;case 4:return 3;}
 		}
 		// B = cancel -> resume
 		if ((b & GB_BTN_B) && !(prev & GB_BTN_B)) return 0;
@@ -190,10 +190,10 @@ void launcher_settings_menu(bool* show_fps_overlay, bool* show_save_overlay) {
 	uint8_t pal = emu_get_palette();
 	uint8_t fs = emu_get_frame_skip();
 	uint8_t bl = 255; // brightness
-	bool show_fps = show_fps_overlay ? *show_fps_overlay : false;
-	bool show_save = show_save_overlay ? *show_save_overlay : false;
+	(void)show_fps_overlay;
+	(void)show_save_overlay;
 
-	// Selected row: 0=palette,1=frameskip,2=brightness,3=fps,4=save,5=done
+	// Selected row: 0=palette,1=frameskip,2=brightness,3=done
 	int sel = 0;
 	uint16_t prev = 0;
 
@@ -240,24 +240,8 @@ void launcher_settings_menu(bool* show_fps_overlay, bool* show_save_overlay) {
 		tft.setTextDatum(ML_DATUM); tft.drawString("<",arrow_l,189,2);
 		tft.setTextDatum(MR_DATUM); tft.drawString(">",arrow_r,189,2);
 
-		// FPS overlay toggle
-		tft.setTextDatum(MC_DATUM);
-		tft.setTextColor(TFT_WHITE); tft.drawString("FPS Overlay:",SCREEN_W/2,215,2);
-		uint16_t fpsbg = (selrow==3)?0x2945:0x1082;
-		tft.fillRoundRect(row_x,230,row_w,24,5,fpsbg);
-		tft.setTextColor(show_fps ? TFT_GREEN : TFT_RED, fpsbg);
-		tft.drawString(show_fps ? "ON" : "OFF", SCREEN_W/2,242,2);
-
-		// SD-save toast toggle
-		tft.setTextDatum(MC_DATUM);
-		tft.setTextColor(TFT_WHITE); tft.drawString("SD Save Overlay:",SCREEN_W/2,262,2);
-		uint16_t svbg = (selrow==4)?0x2945:0x1082;
-		tft.fillRoundRect(row_x,277,row_w,24,5,svbg);
-		tft.setTextColor(show_save ? TFT_GREEN : TFT_RED, svbg);
-		tft.drawString(show_save ? "ON" : "OFF", SCREEN_W/2,289,2);
-
 		// Done button
-		uint16_t donebg = (selrow==5)?0x2945:0x07E0;
+		uint16_t donebg = (selrow==3)?0x2945:0x07E0;
 		tft.fillRoundRect(100,302,120,16,5,donebg);
 		tft.setTextColor(TFT_BLACK,donebg); tft.setTextDatum(MC_DATUM);
 		tft.drawString("DONE",SCREEN_W/2,310,1);
@@ -270,8 +254,8 @@ void launcher_settings_menu(bool* show_fps_overlay, bool* show_save_overlay) {
 		button_update();
 		uint16_t b = button_get_buttons();
 		// Navigation: up/down change selected row (edge detect)
-		if ((b & GB_BTN_UP) && !(prev & GB_BTN_UP)) { sel = (sel==0)?5:sel-1; draw_settings(sel); }
-		if ((b & GB_BTN_DOWN) && !(prev & GB_BTN_DOWN)) { sel = (sel+1)%6; draw_settings(sel); }
+		if ((b & GB_BTN_UP) && !(prev & GB_BTN_UP)) { sel = (sel==0)?3:sel-1; draw_settings(sel); }
+		if ((b & GB_BTN_DOWN) && !(prev & GB_BTN_DOWN)) { sel = (sel+1)%4; draw_settings(sel); }
 
 		// Row actions (use edge detection where appropriate)
 		if (sel==0) {
@@ -284,20 +268,8 @@ void launcher_settings_menu(bool* show_fps_overlay, bool* show_save_overlay) {
 			if ((b & GB_BTN_LEFT) && !(prev & GB_BTN_LEFT)) { if (bl>30) { bl-=25; display_set_backlight(bl); draw_settings(sel); } }
 			if ((b & GB_BTN_RIGHT) && !(prev & GB_BTN_RIGHT)) { if (bl<255) { bl=min(255,bl+25); display_set_backlight(bl); draw_settings(sel); } }
 		} else if (sel==3) {
-			if (((b & GB_BTN_LEFT) && !(prev & GB_BTN_LEFT)) || ((b & GB_BTN_RIGHT) && !(prev & GB_BTN_RIGHT)) || ((b & GB_BTN_A) && !(prev & GB_BTN_A))) {
-				show_fps = !show_fps;
-				draw_settings(sel);
-			}
-		} else if (sel==4) {
-			if (((b & GB_BTN_LEFT) && !(prev & GB_BTN_LEFT)) || ((b & GB_BTN_RIGHT) && !(prev & GB_BTN_RIGHT)) || ((b & GB_BTN_A) && !(prev & GB_BTN_A))) {
-				show_save = !show_save;
-				draw_settings(sel);
-			}
-		} else if (sel==5) {
 			if ((b & GB_BTN_A) && !(prev & GB_BTN_A)) {
-				if (show_fps_overlay) *show_fps_overlay = show_fps;
-				if (show_save_overlay) *show_save_overlay = show_save;
-				touch_save_settings(pal, fs, bl, show_fps, show_save);
+				touch_save_settings(pal, fs, bl, false, false);
 				wait_release();
 				return;
 			}
@@ -306,7 +278,7 @@ void launcher_settings_menu(bool* show_fps_overlay, bool* show_save_overlay) {
 		// A anywhere acts as confirm for done as well
 		if ((b & GB_BTN_A) && !(prev & GB_BTN_A) && sel>=0 && sel<=2) {
 			// if not on DONE, treat A as toggle to next row (optional)
-			sel = (sel+1)%6; draw_settings(sel);
+			sel = (sel+1)%4; draw_settings(sel);
 		}
 
 		prev = b;

@@ -13,66 +13,9 @@ static int rcnt = 0;
 static char cur_path[80] = {0};
 static TaskHandle_t ttask = nullptr;
 static volatile bool emu_on = false, menu_req = false;
-static const uint32_t AUTO_SAVE_DELAY_MS = 8000;
-static const uint32_t AUTO_SAVE_RETRY_MS = 3000;
-static const uint32_t AUTO_SAVE_MAX_DIRTY_MS = 30000;
-static const uint32_t HUD_REFRESH_MS = 200;
-static const uint32_t SAVE_TOAST_MS = 1200;
 static bool show_fps_overlay = false;
 static bool show_sd_save_overlay = false;
 static bool has_saved_settings = false;
-
-static void draw_runtime_hud(uint32_t now, bool show_saved_toast) {
-    static uint32_t last_draw = 0;
-    static uint32_t last_fps_refresh = 0;
-    static uint32_t cached_fps = 0;
-    static bool prev_fps_drawn = false;
-    static bool prev_save_drawn = false;
-    char fps_txt[16];
-
-    if ((uint32_t)(now - last_fps_refresh) >= 250) {
-        cached_fps = emu_get_fps();
-        last_fps_refresh = now;
-    }
-
-    bool draw_fps = show_fps_overlay;
-    bool draw_save = show_sd_save_overlay && show_saved_toast;
-
-    if (!draw_fps && !draw_save) {
-        if (prev_fps_drawn) tft.fillRect(SCREEN_W - 70, 2, 68, 14, TFT_BLACK);
-        if (prev_save_drawn) tft.fillRect(2, 2, 84, 14, TFT_BLACK);
-        prev_fps_drawn = false;
-        prev_save_drawn = false;
-        return;
-    }
-
-    bool need_redraw = (uint32_t)(now - last_draw) >= HUD_REFRESH_MS ||
-                       draw_fps != prev_fps_drawn ||
-                       draw_save != prev_save_drawn;
-
-    if (need_redraw) {
-        // Top-left save toast area
-        if (draw_save || prev_save_drawn) tft.fillRect(2, 2, 84, 14, TFT_BLACK);
-        if (draw_save) {
-            tft.setTextDatum(TL_DATUM);
-            tft.setTextColor(TFT_GREEN, TFT_BLACK);
-            tft.drawString("SD SAVED", 4, 4, 1);
-        }
-
-        // Top-right FPS area
-        if (draw_fps || prev_fps_drawn) tft.fillRect(SCREEN_W - 70, 2, 68, 14, TFT_BLACK);
-        if (draw_fps) {
-            snprintf(fps_txt, sizeof(fps_txt), "FPS:%lu", (unsigned long)cached_fps);
-            tft.setTextDatum(TR_DATUM);
-            tft.setTextColor(TFT_WHITE, TFT_BLACK);
-            tft.drawString(fps_txt, SCREEN_W - 4, 4, 1);
-        }
-
-        prev_fps_drawn = draw_fps;
-        prev_save_drawn = draw_save;
-        last_draw = now;
-    }
-}
 
 void input_task(void* p) {
     (void)p;
@@ -102,17 +45,15 @@ static void tt_start() {
 }
 static void tt_stop() { if(ttask) vTaskSuspend(ttask); }
 
-static bool save_ram() {
-    if(!cur_path[0]) return false;
+static void save_ram() {
+    if(!cur_path[0]) return;
     uint32_t sz=0; uint8_t* r=emu_get_cart_ram(&sz);
-    if(sz==0) return false;
-    bool ok = sd_save_state(cur_path,r,sz);
-    if(ok) {
-        emu_clear_cart_ram_dirty();
+    if(sz>0) {
+        sd_save_state(cur_path,r,sz);
         Serial.printf("[SAVE] %u bytes\n",sz);
     }
-    return ok;
 }
+
 static void load_ram() {
     if(!cur_path[0]) return;
     uint32_t sz=0; emu_get_cart_ram(&sz);
@@ -127,40 +68,8 @@ void run_emu() {
     display_clear(TFT_BLACK);
     display_draw_controls();
 
-    uint32_t ft=0;
-    uint32_t last_auto_try = 0;
-    uint32_t save_toast_until = 0;
-    uint32_t dirty_since = 0;
-    bool dirty_prev = false;
     while(emu_on) {
         emu_run_frame();
-
-        uint32_t n = millis();
-        bool show_saved_toast = (int32_t)(save_toast_until - n) > 0;
-
-        // Save after RAM has been idle for a short window to avoid SD write spam.
-        bool dirty_now = emu_cart_ram_dirty();
-        if (dirty_now && !dirty_prev) dirty_since = n;
-        if (!dirty_now) dirty_since = 0;
-        dirty_prev = dirty_now;
-
-        if (dirty_now) {
-            bool idle_due = (uint32_t)(n - emu_get_cart_ram_last_write_ms()) >= AUTO_SAVE_DELAY_MS;
-            bool max_dirty_due = dirty_since && (uint32_t)(n - dirty_since) >= AUTO_SAVE_MAX_DIRTY_MS;
-            bool retry_due = (uint32_t)(n - last_auto_try) >= AUTO_SAVE_RETRY_MS;
-            if ((idle_due || max_dirty_due) && retry_due) {
-                last_auto_try = n;
-                if (save_ram()) {
-                    Serial.println("[SAVE] Auto-save");
-                    save_toast_until = n + SAVE_TOAST_MS;
-                    show_saved_toast = true;
-                } else {
-                    Serial.println("[SAVE] Auto-save failed");
-                }
-            }
-        }
-
-        draw_runtime_hud(n, show_saved_toast);
 
         if (menu_req) {
             menu_req = false;
@@ -185,8 +94,6 @@ void run_emu() {
                     break;
                 case 3:  // quit
                     emu_on=false; save_ram(); tt_stop(); return;
-                case 4:  // calibrate
-                    touch_run_calibration(); break;
                 case 5:  // settings
                     launcher_settings_menu(&show_fps_overlay, &show_sd_save_overlay); break;
             }
@@ -195,8 +102,6 @@ void run_emu() {
             tt_start();
         }
 
-        // FPS log
-        if(n-ft>3000){ft=n;Serial.printf("[G] FPS:%u btn:0x%02X\n",emu_get_fps(),touch_get_buttons());}
         taskYIELD();
     }
 }
@@ -208,6 +113,7 @@ static void run_bt_scanner() {
         delay(10);
         taskYIELD();
     }
+    bt_scanner_shutdown();
     display_clear(TFT_BLACK);
 }
 

@@ -963,3 +963,14 @@ bool bt_scanner_loop() {
     if (handle_buttons()) return true;
     return false;
 }
+
+void bt_scanner_shutdown() {
+    if (bleScan) {
+        bleScan->stop();
+        bleScan->clearResults();
+        bleScan = nullptr;
+    }
+
+    // Release BLE stack memory so emulator init can reclaim heap.
+    BLEDevice::deinit(true);
+}
