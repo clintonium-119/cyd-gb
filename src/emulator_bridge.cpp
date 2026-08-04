@@ -127,9 +127,12 @@ static bool cp2spiffs(const char* sp, const char* dp) {
 
 // ─── API ────────────────────────────────────────────────────────────────────
 bool emu_open_rom(const char* path) {
-    if(!SPIFFS.begin(true)) Serial.println("[SPIFFS] format");
+    bool spiffs_ok = SPIFFS.begin(true);
+    if(!spiffs_ok) {
+        Serial.println("[SPIFFS] unavailable, fallback to SD");
+    }
     String sn="/rom.gb";
-    if(SPIFFS.exists(sn)){
+    if(spiffs_ok && SPIFFS.exists(sn)){
         File sc=SD.open(path,FILE_READ); uint32_t ssz=sc?sc.size():0; if(sc)sc.close();
         romf=SPIFFS.open(sn,FILE_READ);
         if(romf && romf.size()==ssz){romlen=romf.size();Serial.printf("[EMU] SPIFFS %uKB\n",romlen/1024);return true;}
@@ -137,7 +140,7 @@ bool emu_open_rom(const char* path) {
     }
     File sf=SD.open(path,FILE_READ); if(!sf) return false;
     uint32_t sz=sf.size(); sf.close();
-    if(sz<=SPIFFS.totalBytes()-SPIFFS.usedBytes()){
+    if(spiffs_ok && sz<=SPIFFS.totalBytes()-SPIFFS.usedBytes()){
         Serial.println("[EMU] Copying to SPIFFS...");
         if(SPIFFS.exists(sn)) SPIFFS.remove(sn);
         if(cp2spiffs(path,sn.c_str())){
