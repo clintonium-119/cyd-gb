@@ -89,21 +89,27 @@ static bool load_cal_from_nvs() {
 }
 
 // ─── Settings NVS ───────────────────────────────────────────────────────────
-void touch_save_settings(uint8_t palette, uint8_t fskip, uint8_t brightness) {
+void touch_save_settings(uint8_t palette, uint8_t fskip, uint8_t brightness,
+                         bool show_fps, bool show_save_overlay) {
     prefs.begin("settings", false);
     prefs.putUChar("pal", palette);
     prefs.putUChar("fskip", fskip);
     prefs.putUChar("bright", brightness);
+    prefs.putBool("ov_fps", show_fps);
+    prefs.putBool("ov_save", show_save_overlay);
     prefs.end();
 }
 
-bool touch_load_settings(uint8_t* palette, uint8_t* fskip, uint8_t* brightness) {
+bool touch_load_settings(uint8_t* palette, uint8_t* fskip, uint8_t* brightness,
+                         bool* show_fps, bool* show_save_overlay) {
     prefs.begin("settings", true);
     bool has = prefs.isKey("pal");
     if (has) {
         *palette = prefs.getUChar("pal", 0);
         *fskip = prefs.getUChar("fskip", 0);
         *brightness = prefs.getUChar("bright", 255);
+        if (show_fps) *show_fps = prefs.getBool("ov_fps", false);
+        if (show_save_overlay) *show_save_overlay = prefs.getBool("ov_save", false);
     }
     prefs.end();
     return has;
@@ -202,13 +208,13 @@ void touch_run_calibration() {
     tft.fillScreen(TFT_BLACK);
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(0xFFE0);
-    tft.drawString("CALIBRATION", 160, 12, 4);
+    tft.drawString("CALIBRATION", SCREEN_W/2, 16, 4);
     tft.setTextColor(0xAD55);
-    tft.drawString("Touch each + carefully", 160, 35, 2);
+    tft.drawString("Touch each + carefully", SCREEN_W/2, 46, 2);
 
     // 5 calibration points: 4 corners + center
     struct { int16_t sx, sy; } targets[5] = {
-        {30, 60}, {290, 60}, {30, 210}, {290, 210}, {160, 135}
+        {22, 80}, {218, 80}, {22, 280}, {218, 280}, {120, 180}
     };
     const char* labels[5] = {"Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right", "Center"};
     int16_t raw_x[5], raw_y[5];
@@ -216,11 +222,11 @@ void touch_run_calibration() {
 
     for (int i = 0; i < 5; i++) {
         // Clear instruction area
-        tft.fillRect(0, 42, 320, 20, TFT_BLACK);
+        tft.fillRect(0, 42, SCREEN_W, 28, TFT_BLACK);
         tft.setTextColor(TFT_WHITE);
         tft.setTextDatum(MC_DATUM);
         char msg[32]; snprintf(msg, 32, "%d/5: %s", i + 1, labels[i]);
-        tft.drawString(msg, 160, 52, 2);
+        tft.drawString(msg, SCREEN_W/2, 70, 2);
 
         // Draw crosshair with circle
         int tx = targets[i].sx, ty = targets[i].sy;
@@ -296,28 +302,58 @@ void touch_run_calibration() {
         nc.invert_x = (mx[0] > mx[1]);  // left has higher raw than right
         nc.invert_y = (my[0] > my[2]);  // top has higher raw than bottom
 
-        // Calculate ranges using all points for better accuracy
-        int16_t x_vals[5], y_vals[5];
-        for (int i = 0; i < 5; i++) { x_vals[i] = mx[i]; y_vals[i] = my[i]; }
-
-        // Sort to find range
-        for (int a = 0; a < 4; a++) for (int b = a+1; b < 5; b++) {
-            if (x_vals[a] > x_vals[b]) { int16_t t = x_vals[a]; x_vals[a] = x_vals[b]; x_vals[b] = t; }
-            if (y_vals[a] > y_vals[b]) { int16_t t = y_vals[a]; y_vals[a] = y_vals[b]; y_vals[b] = t; }
+        // Compute axis bounds from known calibration point geometry.
+        // This avoids symmetric "magic" extrapolation and improves Y accuracy.
+        int32_t ox[5], oy[5];
+        for (int i = 0; i < 5; i++) {
+            ox[i] = nc.invert_x ? -(int32_t)mx[i] : (int32_t)mx[i];
+            oy[i] = nc.invert_y ? -(int32_t)my[i] : (int32_t)my[i];
         }
 
-        // Use 2nd lowest and 2nd highest (outlier rejection)
-        int16_t xlo = x_vals[1], xhi = x_vals[3];
-        int16_t ylo = y_vals[1], yhi = y_vals[3];
+        // Pairwise averages from corner points in oriented space.
+        int32_t left_raw_o = (ox[0] + ox[2]) / 2;
+        int32_t right_raw_o = (ox[1] + ox[3]) / 2;
+        int32_t top_raw_o = (oy[0] + oy[1]) / 2;
+        int32_t bottom_raw_o = (oy[2] + oy[3]) / 2;
 
-        // Extrapolate to full screen (calibration points are not at edges)
-        // Points are at ~10% and ~90% of screen, so extend by ~12%
-        int16_t xspan = xhi - xlo;
-        int16_t yspan = yhi - ylo;
-        nc.x_min = xlo - xspan * 12 / 80;
-        nc.x_max = xhi + xspan * 12 / 80;
-        nc.y_min = ylo - yspan * 15 / 75;
-        nc.y_max = yhi + yspan * 15 / 75;
+        int32_t x_span_raw = max((int32_t)1, right_raw_o - left_raw_o);
+        int32_t y_span_raw = max((int32_t)1, bottom_raw_o - top_raw_o);
+        int32_t x_span_px = max((int32_t)1, (int32_t)targets[1].sx - (int32_t)targets[0].sx);
+        int32_t y_span_px = max((int32_t)1, (int32_t)targets[2].sy - (int32_t)targets[0].sy);
+
+        int32_t x_left_px = targets[0].sx;
+        int32_t x_right_px = (SCREEN_W - 1) - targets[1].sx;
+        int32_t y_top_px = targets[0].sy;
+        int32_t y_bottom_px = (SCREEN_H - 1) - targets[2].sy;
+
+        int32_t x_left_ext = (x_span_raw * x_left_px + x_span_px / 2) / x_span_px;
+        int32_t x_right_ext = (x_span_raw * x_right_px + x_span_px / 2) / x_span_px;
+        int32_t y_top_ext = (y_span_raw * y_top_px + y_span_px / 2) / y_span_px;
+        int32_t y_bottom_ext = (y_span_raw * y_bottom_px + y_span_px / 2) / y_span_px;
+
+        int32_t x_min_o = left_raw_o - x_left_ext;
+        int32_t x_max_o = right_raw_o + x_right_ext;
+        int32_t y_min_o = top_raw_o - y_top_ext;
+        int32_t y_max_o = bottom_raw_o + y_bottom_ext;
+
+        if (!nc.invert_x) {
+            nc.x_min = (int16_t)x_min_o;
+            nc.x_max = (int16_t)x_max_o;
+        } else {
+            nc.x_min = (int16_t)(-x_max_o);
+            nc.x_max = (int16_t)(-x_min_o);
+        }
+
+        if (!nc.invert_y) {
+            nc.y_min = (int16_t)y_min_o;
+            nc.y_max = (int16_t)y_max_o;
+        } else {
+            nc.y_min = (int16_t)(-y_max_o);
+            nc.y_max = (int16_t)(-y_min_o);
+        }
+
+        if (nc.x_min >= nc.x_max) { int16_t t = nc.x_min; nc.x_min = nc.x_max; nc.x_max = t; }
+        if (nc.y_min >= nc.y_max) { int16_t t = nc.y_min; nc.y_min = nc.y_max; nc.y_max = t; }
 
         cal = nc;
         save_cal_to_nvs();
@@ -332,21 +368,21 @@ void touch_run_calibration() {
         tft.fillScreen(TFT_BLACK);
         tft.setTextColor(0x07E0);
         tft.setTextDatum(MC_DATUM);
-        tft.drawString("VERIFY", 160, 10, 4);
+        tft.drawString("VERIFY", SCREEN_W/2, 13, 4);
         tft.setTextColor(0xAD55);
-        tft.drawString("Draw to test accuracy", 160, 35, 2);
+        tft.drawString("Draw to test accuracy", SCREEN_W/2, 46, 2);
         tft.setTextColor(0x7BEF);
-        tft.drawString("Wait 5s or lift to exit", 160, 228, 1);
+        tft.drawString("Wait 5s or lift to exit", SCREEN_W/2, 304, 1);
 
-        // Draw reference grid
-        for (int x = 0; x <= 320; x += 64) tft.drawFastVLine(x, 50, 170, 0x18C3);
-        for (int y = 50; y <= 220; y += 42) tft.drawFastHLine(0, y, 320, 0x18C3);
-        // Draw corner markers
-        tft.drawCircle(30, 60, 4, 0x4A69);
-        tft.drawCircle(290, 60, 4, 0x4A69);
-        tft.drawCircle(30, 210, 4, 0x4A69);
-        tft.drawCircle(290, 210, 4, 0x4A69);
-        tft.drawCircle(160, 135, 4, 0x4A69);
+        // Draw reference grid (scaled steps)
+        for (int x = 0; x <= SCREEN_W; x += 48) tft.drawFastVLine(x, 66, 228, 0x18C3);
+        for (int y = 66; y <= 293; y += 56) tft.drawFastHLine(0, y, SCREEN_W, 0x18C3);
+        // Draw corner markers (scaled)
+        tft.drawCircle(22, 80, 4, 0x4A69);
+        tft.drawCircle(218, 80, 4, 0x4A69);
+        tft.drawCircle(22, 280, 4, 0x4A69);
+        tft.drawCircle(218, 280, 4, 0x4A69);
+        tft.drawCircle(120, 180, 4, 0x4A69);
 
         uint32_t t0 = millis();
         uint32_t no_touch_since = 0;
@@ -371,7 +407,7 @@ void touch_run_calibration() {
     tft.fillScreen(TFT_BLACK);
     tft.setTextColor(0x07E0);
     tft.setTextDatum(MC_DATUM);
-    tft.drawString("Calibration Saved!", 160, 110, 4);
+    tft.drawString("Calibration Saved!", SCREEN_W/2, 146, 4);
     delay(1200);
     return;
 
@@ -379,8 +415,8 @@ cal_fail:
     tft.fillScreen(TFT_BLACK);
     tft.setTextColor(TFT_RED);
     tft.setTextDatum(MC_DATUM);
-    tft.drawString("Calibration Failed!", 160, 100, 4);
+    tft.drawString("Calibration Failed!", SCREEN_W/2, 133, 4);
     tft.setTextColor(0x7BEF);
-    tft.drawString("Using previous values", 160, 140, 2);
+    tft.drawString("Using previous values", SCREEN_W/2, 186, 2);
     delay(2000);
 }

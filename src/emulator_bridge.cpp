@@ -54,8 +54,9 @@ static uint8_t fskip = 0, fcnt = 0;
 static uint32_t fpsc = 0, fpst = 0, cfps = 0;
 static uint8_t jpad = 0;
 
-// ─── 20 Palettes (byte-swapped for pushImage) ──────────────────────────────
-#define SW(c) (uint16_t)(((c)>>8)|((c)<<8))
+// ─── 20 Palettes (SW is identity for testing; remove pre-swapped values) ──
+// Change this to identity to test driver-side byte ordering (use with setSwapBytes).
+#define SW(c) (uint16_t)(c)
 
 static const uint16_t pals[NUM_PALETTES][4] = {
     {SW(0x9FE5),SW(0x4F64),SW(0x2542),SW(0x0261)}, //  0 Classic Green
@@ -99,7 +100,8 @@ static uint8_t IRAM_ATTR gb_cram_r(struct gb_s* g, const uint_fast32_t a) {
     (void)g; return (a<MAXRAM)?cram[a]:0xFF;
 }
 static void IRAM_ATTR gb_cram_w(struct gb_s* g, const uint_fast32_t a, const uint8_t v) {
-    (void)g; if(a<MAXRAM) cram[a]=v;
+    (void)g;
+    if(a<MAXRAM) cram[a]=v;
 }
 static void gb_err(struct gb_s* g, const enum gb_error_e e, const uint16_t a) {
     (void)g; Serial.printf("[EMU] Err %d @0x%04X\n",(int)e,a);
@@ -125,9 +127,12 @@ static bool cp2spiffs(const char* sp, const char* dp) {
 
 // ─── API ────────────────────────────────────────────────────────────────────
 bool emu_open_rom(const char* path) {
-    if(!SPIFFS.begin(true)) Serial.println("[SPIFFS] format");
+    bool spiffs_ok = SPIFFS.begin(true);
+    if(!spiffs_ok) {
+        Serial.println("[SPIFFS] unavailable, fallback to SD");
+    }
     String sn="/rom.gb";
-    if(SPIFFS.exists(sn)){
+    if(spiffs_ok && SPIFFS.exists(sn)){
         File sc=SD.open(path,FILE_READ); uint32_t ssz=sc?sc.size():0; if(sc)sc.close();
         romf=SPIFFS.open(sn,FILE_READ);
         if(romf && romf.size()==ssz){romlen=romf.size();Serial.printf("[EMU] SPIFFS %uKB\n",romlen/1024);return true;}
@@ -135,7 +140,7 @@ bool emu_open_rom(const char* path) {
     }
     File sf=SD.open(path,FILE_READ); if(!sf) return false;
     uint32_t sz=sf.size(); sf.close();
-    if(sz<=SPIFFS.totalBytes()-SPIFFS.usedBytes()){
+    if(spiffs_ok && sz<=SPIFFS.totalBytes()-SPIFFS.usedBytes()){
         Serial.println("[EMU] Copying to SPIFFS...");
         if(SPIFFS.exists(sn)) SPIFFS.remove(sn);
         if(cp2spiffs(path,sn.c_str())){
@@ -181,6 +186,9 @@ void emu_run_frame() {
 void emu_set_joypad(uint8_t b){jpad=b;}
 uint8_t* emu_get_cart_ram(uint32_t* s){uint_fast32_t r=0;gb_get_save_size_s(gb,&r);if(s)*s=(uint32_t)r;return cram;}
 void emu_set_cart_ram(const uint8_t* d,uint32_t s){if(s>MAXRAM)s=MAXRAM;memcpy(cram,d,s);}
+bool emu_cart_ram_dirty(){return false;}
+uint32_t emu_get_cart_ram_last_write_ms(){return 0;}
+void emu_clear_cart_ram_dirty(){}
 void emu_set_frame_skip(uint8_t s){fskip=s;}
 uint8_t emu_get_frame_skip(){return fskip;}
 uint32_t emu_get_fps(){return cfps;}

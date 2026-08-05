@@ -28,5 +28,7 @@ TouchCalibration touch_get_default_calibration();
 void touch_run_calibration();
 
 // Settings persistence (NVS)
-void touch_save_settings(uint8_t palette, uint8_t fskip, uint8_t brightness);
-bool touch_load_settings(uint8_t* palette, uint8_t* fskip, uint8_t* brightness);
+void touch_save_settings(uint8_t palette, uint8_t fskip, uint8_t brightness,
+                         bool show_fps = false, bool show_save_overlay = false);
+bool touch_load_settings(uint8_t* palette, uint8_t* fskip, uint8_t* brightness,
+                         bool* show_fps = nullptr, bool* show_save_overlay = nullptr);
