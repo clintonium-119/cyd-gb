@@ -18,7 +18,7 @@ tags: [apovault, knowledge, playbooks]
 
 Team-owned recipes for repeatable tasks. Not extractable from the codebase — `/apo:init` does not invent
 them. The candidates below are drawn from the recurring shapes visible in this repository and in
-`ROADMAP.md` §10, but the steps themselves are unwritten.
+`reference/ORIGINAL_ROADMAP.md` §10, but the steps themselves are unwritten.
 
 > **(verify)** — the repeatable recipes an agent should follow.
 >
@@ -32,17 +32,17 @@ them. The candidates below are drawn from the recurring shapes visible in this r
 >       sync, and does the change need re-flashing all ten units?
 > - [ ] **Adding a palette.** Three parallel declarations must stay in agreement: `NUM_PALETTES`
 >       (`include/emulator_bridge.h:22`), `pals[]` and `palnames[]` (`src/emulator_bridge.cpp:61, 83`). Note
->       `ROADMAP.md:230-266` is about to reshape all three to `[N][3][4]` — write this playbook after that
+>       `reference/ORIGINAL_ROADMAP.md:230-266` is about to reshape all three to `[N][3][4]` — write this playbook after that
 >       lands, not before.
-> - [ ] **Making a rendering change.** `ROADMAP.md` §10 requires re-measuring after Phases 3, 4, 5 and 6.
+> - [ ] **Making a rendering change.** `reference/ORIGINAL_ROADMAP.md` §10 requires re-measuring after Phases 3, 4, 5 and 6.
 >       What is the standard measurement procedure — which ROM, which scene, how many frames, recorded where?
-> - [ ] **Deleting a fork subsystem.** `ROADMAP.md` §9 lists files to delete. `button_input.cpp:2` includes
+> - [ ] **Deleting a fork subsystem.** `reference/ORIGINAL_ROADMAP.md` §9 lists files to delete. `button_input.cpp:2` includes
 >       `touch_input.h` for the `GB_BTN_*` constants, so deleting touch breaks buttons
 >       ([[01_Knowledge/Code_Map]] § Module Boundaries). What is the general order — move shared constants
 >       first, then delete, then rebuild?
-> - [ ] **Flashing a unit.** `ROADMAP.md:634-637` mentions a pre-assembly flashing station using ESP Web
+> - [ ] **Flashing a unit.** `reference/ORIGINAL_ROADMAP.md:634-637` mentions a pre-assembly flashing station using ESP Web
 >       Tools over USB-C, flashing before the board goes in the shell. What is the per-unit procedure and
 >       what is verified before the shell closes?
 >
-> Look at: `ROADMAP.md:552-577` (delete list), `:579-637` (phases), `include/hw_config.h`,
+> Look at: `reference/ORIGINAL_ROADMAP.md:552-577` (delete list), `:579-637` (phases), `include/hw_config.h`,
 > `platformio.ini:19-71`.

@@ -25,17 +25,17 @@ fork of `artanergin44-collab/cyd-gb`, whose stated goal is "the first GB emulato
 
 The `poc-gb` branch is repurposing that fork toward a different product: ten hand-built Game Boy DMG-01 units
 on a *different* board, driven by physical buttons, with games selected by NFC cartridge rather than a
-browser. **Source:** `ROADMAP.md:9-23` (read 2026-08-27).
+browser. **Source:** `reference/ORIGINAL_ROADMAP.md:9-23` (read 2026-08-27).
 
-**These two descriptions conflict on purpose.** `README.md` documents the inherited fork; `ROADMAP.md`
+**These two descriptions conflict on purpose.** `README.md` documents the inherited fork; `reference/ORIGINAL_ROADMAP.md`
 documents the settled target design and calls itself "the settled design for a group build."
-`ROADMAP.md` §9 lists the fork files to delete or replace. Treat `ROADMAP.md` as authoritative for intent and
-the current `src/` tree as the starting point being replaced. **Source:** `ROADMAP.md:11, 552-577` (read
+`reference/ORIGINAL_ROADMAP.md` §9 lists the fork files to delete or replace. Treat `reference/ORIGINAL_ROADMAP.md` as authoritative for intent and
+the current `src/` tree as the starting point being replaced. **Source:** `reference/ORIGINAL_ROADMAP.md:11, 552-577` (read
 2026-08-27).
 
 ## Two governing constraints
 
-Recorded verbatim in scope because `ROADMAP.md:14-23` instructs any agent planning work to internalise them
+Recorded verbatim in scope because `reference/ORIGINAL_ROADMAP.md:14-23` instructs any agent planning work to internalise them
 first:
 
 1. **The cartridge system is the product, not a feature.** Choosing a game must be a deliberate physical act.
@@ -45,7 +45,7 @@ first:
    in NVS, and diagnostics that let a builder self-diagnose. Avoid anything needing a rework station or
    per-unit firmware variation.
 
-**Source:** `ROADMAP.md:14-23` (read 2026-08-27).
+**Source:** `reference/ORIGINAL_ROADMAP.md:14-23` (read 2026-08-27).
 
 ## High-Level Architecture
 
@@ -61,8 +61,8 @@ Concurrency in the current code is one pinned FreeRTOS task: `input_task` on cor
 buttons every 12 ms, with the emulation loop running on the main Arduino task.
 **Source:** `src/main.cpp:19-43` (read 2026-08-27).
 
-`ROADMAP.md` §3.3 specifies a different target split — Peanut-GB on core 1, display push on core 0 behind a
-queue — which is not yet implemented. **Source:** `ROADMAP.md:331-336` (read 2026-08-27).
+`reference/ORIGINAL_ROADMAP.md` §3.3 specifies a different target split — Peanut-GB on core 1, display push on core 0 behind a
+queue — which is not yet implemented. **Source:** `reference/ORIGINAL_ROADMAP.md:331-336` (read 2026-08-27).
 
 ## Key Components
 
@@ -104,27 +104,27 @@ The board has no PSRAM. The fork's answer is a paged ROM cache in SPIFFS: 16 pag
 32-entry hash index and LRU eviction, plus bank 0 (first 32 KB) permanently resident in a `malloc`'d buffer.
 **Source:** `src/emulator_bridge.cpp:14-46, 152-163` (read 2026-08-27).
 
-`ROADMAP.md` §3.2 names this cache "the biggest risk": the hit path is ~15 cycles but a miss is a 4 KB SPIFFS
+`reference/ORIGINAL_ROADMAP.md` §3.2 names this cache "the biggest risk": the hit path is ~15 cycles but a miss is a 4 KB SPIFFS
 read estimated at 1.5–4 ms against a 16.75 ms frame budget, so a bank-switch storm stutters. The proposed fix
 is to store the ROM in a raw flash partition and `esp_partition_mmap` it, collapsing `gb_rom_read` to a
-pointer dereference. **Source:** `ROADMAP.md:302-329` (read 2026-08-27).
+pointer dereference. **Source:** `reference/ORIGINAL_ROADMAP.md:302-329` (read 2026-08-27).
 
-The frame budget and its breakdown in `ROADMAP.md:287-300` are explicitly flagged as *estimated, not
+The frame budget and its breakdown in `reference/ORIGINAL_ROADMAP.md:287-300` are explicitly flagged as *estimated, not
 measured* — the emulation figure "could be off by 50% either way." Do not plan against those numbers as if
-they were data. **Source:** `ROADMAP.md:293-300` (read 2026-08-27).
+they were data. **Source:** `reference/ORIGINAL_ROADMAP.md:293-300` (read 2026-08-27).
 
 ## Open bench items
 
-`ROADMAP.md` §11 lists eight unresolved questions, each with a bench test and a stated consequence if it goes
+`reference/ORIGINAL_ROADMAP.md` §11 lists eight unresolved questions, each with a bench test and a stated consequence if it goes
 badly. They gate design decisions in the rendering, power, audio and performance sections. Summarised:
 board runs from a 3.7 V cell; identity of the 4th EXP-header pad; onboard amp usability; whether BAT actually
 powers the system; actual pixel pitch; IO34 divider ratio; max reliable `SPI_FREQUENCY`; real emulation frame
-time. **Source:** `ROADMAP.md:639-652` (read 2026-08-27).
+time. **Source:** `reference/ORIGINAL_ROADMAP.md:639-652` (read 2026-08-27).
 
-`ROADMAP.md:26-29` states plainly: "Do not treat flagged values as settled."
+`reference/ORIGINAL_ROADMAP.md:26-29` states plainly: "Do not treat flagged values as settled."
 
 ## Verification status
 
 Every claim above is cited. The one section that is not directly verifiable from this repository is the
-hardware pin map in `ROADMAP.md` §1.2, which the document itself marks per-row as `proposed` versus
+hardware pin map in `reference/ORIGINAL_ROADMAP.md` §1.2, which the document itself marks per-row as `proposed` versus
 `confirmed`. Carry that distinction forward rather than flattening it.

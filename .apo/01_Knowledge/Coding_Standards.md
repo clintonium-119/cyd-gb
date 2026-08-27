@@ -55,20 +55,20 @@ adding or editing a palette, all three of `NUM_PALETTES`, `pals[]` and `palnames
 no test framework in `lib_deps`. **Source:** `find` for test/spec files returned nothing; `ls .github` → not
 present; `platformio.ini:73-76` (read 2026-08-27).
 
-Verification in this project is by bench measurement on hardware, not automated tests. `ROADMAP.md` §10 gives
+Verification in this project is by bench measurement on hardware, not automated tests. `reference/ORIGINAL_ROADMAP.md` §10 gives
 each phase an explicit **Exit:** condition, and §11 lists eight bench tests with their consequences. Treat
 those as the acceptance criteria a step's Validation section should cite.
-**Source:** `ROADMAP.md:579-652` (read 2026-08-27).
+**Source:** `reference/ORIGINAL_ROADMAP.md:579-652` (read 2026-08-27).
 
 > **(verify)** — whether automated tests are wanted at all for this project.
 >
 > Expected answers when this section is filled:
-> - [ ] Should any logic be extracted for host-side unit testing (e.g. NDEF parsing per `ROADMAP.md` §6.3,
+> - [ ] Should any logic be extracted for host-side unit testing (e.g. NDEF parsing per `reference/ORIGINAL_ROADMAP.md` §6.3,
 >       filename normalisation per §6.4 — both pure functions with clear inputs)?
 > - [ ] If so, PlatformIO `test/` with Unity, or a separate host build?
 > - [ ] Is a CI build (compile-only, no hardware) wanted to catch breakage?
 >
-> Look at: `platformio.ini` (`test_framework`), `ROADMAP.md` §6.3–6.4 for the pure-function candidates.
+> Look at: `platformio.ini` (`test_framework`), `reference/ORIGINAL_ROADMAP.md` §6.3–6.4 for the pure-function candidates.
 
 ---
 

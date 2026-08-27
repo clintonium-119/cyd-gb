@@ -24,7 +24,7 @@ Team-owned. Not extractable from the codebase — `/apo:init` does not invent it
 > - [ ] **Severity ladder:** what do sev-1 through sev-4 mean in this project's terms? Firmware suggests
 >       candidates worth defining explicitly — boot failure or brick, emulation hang, save-data corruption or
 >       loss, wrong rendering, audio artifact, cosmetic. Where does each land?
-> - [ ] **Data-loss weighting:** `ROADMAP.md:501-508` moves saving to automatic precisely because losing
+> - [ ] **Data-loss weighting:** `reference/ORIGINAL_ROADMAP.md:501-508` moves saving to automatic precisely because losing
 >       progress is the worst outcome for the users. Should save-data bugs get their own severity floor?
 > - [ ] **Category enum:** which of `logic` / `integration` / `regression` / `performance` / `ux` / `docs` /
 >       `test` apply? Hardware-specific categories may need adding — e.g. `hardware` (a per-unit assembly
@@ -36,6 +36,6 @@ Team-owned. Not extractable from the codebase — `/apo:init` does not invent it
 > - [ ] **Primary tracker:** this vault (`apo item list`), GitHub issues on the fork, or something else?
 >       There is no issue tracker configured in-repo and no JIRA host set in `.apo/.config.json`.
 >
-> Look at: `ROADMAP.md` §8.2 (the diagnostic screen, which exists to turn "it doesn't work" into a specific
+> Look at: `reference/ORIGINAL_ROADMAP.md` §8.2 (the diagnostic screen, which exists to turn "it doesn't work" into a specific
 > failing signal), §11 (open bench items — note these are *unknowns*, not bugs, and should not be filed as
 > bugs), `.apo/.config.json`.

@@ -35,12 +35,12 @@ no HTTP clients, no API keys and no `.env` in the repository.
 Two supply-chain notes worth carrying into planning:
 
 - **The touch library is fetched from a GitHub URL, not the PlatformIO registry** (`platformio.ini:75`). It is
-  tag-pinned, but an offline or GitHub-unavailable build fails. `ROADMAP.md:556` deletes the touch subsystem,
+  tag-pinned, but an offline or GitHub-unavailable build fails. `reference/ORIGINAL_ROADMAP.md:556` deletes the touch subsystem,
   which removes this dependency.
 - **Peanut-GB has no pinned version.** `README.md` step 3 tells the user to `curl` it from `master`, while the
-  file is in fact committed here. `ROADMAP.md:587-588` requires Phase 1 to "fetch `peanut_gb.h` from upstream
+  file is in fact committed here. `reference/ORIGINAL_ROADMAP.md:587-588` requires Phase 1 to "fetch `peanut_gb.h` from upstream
   and pin the version" — so the pinning is an open action, not a solved problem.
-  **Sources:** `README.md` step 3, `ROADMAP.md:587-588` (read 2026-08-27).
+  **Sources:** `README.md` step 3, `reference/ORIGINAL_ROADMAP.md:587-588` (read 2026-08-27).
 
 ## Buses and peripherals (as currently coded)
 
@@ -58,11 +58,11 @@ display and SD card." **Source:** `README.md` (read 2026-08-27).
 `Wire.requestFrom()` with no register address and inverts the result — the PCF8574 quasi-bidirectional
 protocol. **Source:** `src/button_input.cpp:15-28` (read 2026-08-27).
 
-`ROADMAP.md:100-118` specifies an **MCP23017** at the same address `0x20`, with `GPPU = 0xFF` for pull-ups and
+`reference/ORIGINAL_ROADMAP.md:100-118` specifies an **MCP23017** at the same address `0x20`, with `GPPU = 0xFF` for pull-ups and
 buttons on GPA0–GPA7, at 400 kHz on pins IO27/IO1. Those are different parts with different protocols: the
 MCP23017 requires a register-address write before each read. **The current code will not drive the part the
 roadmap specifies.** This is a target-vs-current divergence, not a bug in either document.
-**Sources:** `src/button_input.cpp:15-28`, `ROADMAP.md:100-118, 379-400` (read 2026-08-27).
+**Sources:** `src/button_input.cpp:15-28`, `reference/ORIGINAL_ROADMAP.md:100-118, 379-400` (read 2026-08-27).
 
 ## Storage
 
@@ -76,7 +76,7 @@ Directories are created on first boot if absent (`src/sd_manager.cpp:15-18`). `S
 mount failure, and the code degrades to reading the ROM straight off SD when SPIFFS is unavailable
 (`src/emulator_bridge.cpp:118-122, 144-146`).
 
-`ROADMAP.md:320-329` proposes replacing the SPIFFS cache with a raw flash partition read via
+`reference/ORIGINAL_ROADMAP.md:320-329` proposes replacing the SPIFFS cache with a raw flash partition read via
 `esp_partition_mmap`, which requires editing `partitions.csv` (currently app0 2 MB / SPIFFS 1.98 MB).
 
 ## Data flow — ROM read path
@@ -86,7 +86,7 @@ gb_rom_read(addr)                       emulator_bridge.cpp:96
   ├─ addr >= romlen        → 0xFF
   ├─ addr <  32 KB         → b0[addr]          (RAM, always resident)
   └─ else → cget(addr)                  emulator_bridge.cpp:32
-       ├─ hash hit  → page byte                (~15 cycles per ROADMAP.md:311)
+       ├─ hash hit  → page byte                (~15 cycles per reference/ORIGINAL_ROADMAP.md:311)
        ├─ linear scan hit → page byte, reindex
        └─ miss → LRU evict, romf.seek + read 4 KB   ← SPIFFS or SD
 ```
@@ -102,13 +102,13 @@ through `pals[curpal][px & 3]`, and calls `display_push_gb_line()`, which scales
 duplicating every even pixel and calls `tft.pushImage()` once per destination row.
 **Sources:** `src/emulator_bridge.cpp:109-115`, `src/display.cpp:29-46` (read 2026-08-27).
 
-`ROADMAP.md` targets a materially different path — §2.4 replaces `px[x] & 3` with a 64-entry LUT, §2.3 adds
+`reference/ORIGINAL_ROADMAP.md` targets a materially different path — §2.4 replaces `px[x] & 3` with a 64-entry LUT, §2.3 adds
 `avg565` blending, §2.5 replaces per-line `pushImage` with one address window per frame and then
-`pushPixelsDMA`. **Source:** `ROADMAP.md:206-283` (read 2026-08-27).
+`pushPixelsDMA`. **Source:** `reference/ORIGINAL_ROADMAP.md:206-283` (read 2026-08-27).
 
 ## Planned integrations (not yet present in code)
 
-Named in `ROADMAP.md`, with no implementation in `src/` as of 2026-08-27:
+Named in `reference/ORIGINAL_ROADMAP.md`, with no implementation in `src/` as of 2026-08-27:
 
 | Target | Interface | Roadmap section |
 |---|---|---|
@@ -119,13 +119,13 @@ Named in `ROADMAP.md`, with no implementation in `src/` as of 2026-08-27:
 | Battery sense | IO34 ADC, divider ratio undocumented | §1.2, §11 item 6 |
 | Phone tag-writing web app | GitHub Pages + Web NFC (`NDEFReader`); off-device only | §6.6 |
 
-**Source:** `ROADMAP.md:98-118, 347-377, 402-490, 639-652`; absence confirmed by `grep` for `PN532`, `MCP23017`
+**Source:** `reference/ORIGINAL_ROADMAP.md:98-118, 347-377, 402-490, 639-652`; absence confirmed by `grep` for `PN532`, `MCP23017`
 and `MiniGB` across `src/` and `include/` (read 2026-08-27).
 
-`ROADMAP.md:404-415` states the firmware "must be physically incapable of writing tags" — writing is a
+`reference/ORIGINAL_ROADMAP.md:404-415` states the firmware "must be physically incapable of writing tags" — writing is a
 build-day activity on a separate phone app, never a device feature.
 
 ## Verification status
 
-All claims cited. Hardware pin assignments for the *target* board come from `ROADMAP.md` §1.2, which marks
+All claims cited. Hardware pin assignments for the *target* board come from `reference/ORIGINAL_ROADMAP.md` §1.2, which marks
 its own rows `proposed` / `confirmed`; §11 items 2 and 4 supersede them if the bench disagrees.

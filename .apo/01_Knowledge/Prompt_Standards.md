@@ -19,38 +19,38 @@ tags: [apovault, knowledge, standards]
 Agent-facing rails. Each is either cited to a source in this repository, or marked as confirmed by the user
 during `/apo:init`.
 
-## Project rails from `ROADMAP.md`
+## Project rails from `reference/ORIGINAL_ROADMAP.md`
 
-`ROADMAP.md:14-16` addresses agents directly: "Any agent planning work on this project should internalise
+`reference/ORIGINAL_ROADMAP.md:14-16` addresses agents directly: "Any agent planning work on this project should internalise
 them before proposing changes." These are therefore rails, not background.
 
 - **Do not add a ROM browser, a game-switching UI, a "recent games" list, or an on-device NFC tag writer.**
-  The cartridge system is the product. `ROADMAP.md:404-415` goes further than a preference: "The firmware
+  The cartridge system is the product. `reference/ORIGINAL_ROADMAP.md:404-415` goes further than a preference: "The firmware
   must be physically incapable of writing tags." Hiding such a feature behind a boot combo is explicitly
-  rejected as insufficient. **Source:** `ROADMAP.md:16-20, 404-415, 668` (read 2026-08-27).
+  rejected as insufficient. **Source:** `reference/ORIGINAL_ROADMAP.md:16-20, 404-415, 668` (read 2026-08-27).
 - **Do not switch the emulator to Retro-Go.** It is a launcher; adapting it means suppressing its central
   feature. Borrow its techniques — core split, DMA, single framebuffer push — not its architecture.
-  **Source:** `ROADMAP.md:338-345, 669-670` (read 2026-08-27).
+  **Source:** `reference/ORIGINAL_ROADMAP.md:338-345, 669-670` (read 2026-08-27).
 - **Do favour solder-free connections and per-unit adjustability in NVS.** Ten units are assembled once by
   kids. Anything needing a rework station or per-unit firmware variation is the wrong answer.
-  **Source:** `ROADMAP.md:21-23` (read 2026-08-27).
-- **Do not treat `ROADMAP.md`'s flagged numbers as settled.** The document says so directly at `:26-29`, and
+  **Source:** `reference/ORIGINAL_ROADMAP.md:21-23` (read 2026-08-27).
+- **Do not treat `reference/ORIGINAL_ROADMAP.md`'s flagged numbers as settled.** The document says so directly at `:26-29`, and
   §11 (`:639-652`) lists eight open bench items with the test that resolves each. Frame-time figures in §3.1
   are marked "estimated, not measured" and "could be off by 50% either way."
-  **Source:** `ROADMAP.md:26-29, 293-300, 639-652` (read 2026-08-27).
-- **Do read `ROADMAP.md` §13 before proposing anything that looks like an obvious improvement.** It is a
+  **Source:** `reference/ORIGINAL_ROADMAP.md:26-29, 293-300, 639-652` (read 2026-08-27).
+- **Do read `reference/ORIGINAL_ROADMAP.md` §13 before proposing anything that looks like an obvious improvement.** It is a
   list of ten things already considered and rejected, each with the reason: no ROM browser, no Retro-Go, no
   I²C on IO3, no reuse of IO4, no stretching to 240 rows, no blending byte-swapped pixels, no per-pixel
   cross-palette branch, no manual Save/Load, no kid-accessible tag locking, no per-line `pushImage`.
-  **Source:** `ROADMAP.md:666-679` (read 2026-08-27).
+  **Source:** `reference/ORIGINAL_ROADMAP.md:666-679` (read 2026-08-27).
 
-## `README.md` vs `ROADMAP.md` — which wins
+## `README.md` vs `reference/ORIGINAL_ROADMAP.md` — which wins
 
 `README.md` documents the **inherited fork** (2.8" ESP32-2432S028R, ILI9341, touchscreen, ROM browser).
-`ROADMAP.md` documents the **target** (2.4" ESP32-2432S024, ST7789, physical buttons, NFC cartridges) and
-calls itself "the settled design." **Source:** `README.md`; `ROADMAP.md:11` (read 2026-08-27).
+`reference/ORIGINAL_ROADMAP.md` documents the **target** (2.4" ESP32-2432S024, ST7789, physical buttons, NFC cartridges) and
+calls itself "the settled design." **Source:** `README.md`; `reference/ORIGINAL_ROADMAP.md:11` (read 2026-08-27).
 
-- **Do treat `ROADMAP.md` as authoritative for intent**, and the current `src/` tree plus `README.md` as the
+- **Do treat `reference/ORIGINAL_ROADMAP.md` as authoritative for intent**, and the current `src/` tree plus `README.md` as the
   starting point being replaced.
 - **Do not "fix" code to match `README.md`.** Several README statements are already stale for this fork — for
   example step 3 says `peanut_gb.h` "is **not included** in this repo", but it is committed and tracked.
@@ -67,7 +67,7 @@ calls itself "the settled design." **Source:** `README.md`; `ROADMAP.md:11` (rea
   `src/sd_manager.cpp:70-82` (both from commit `3dd6145`, 2026-08-04). **Confirmed during /apo:init on
   2026-08-27.**
 - **Do not add new compressed one-liner code** in the inherited fork style (`emulator_bridge.cpp` 44
-  multi-statement lines, `ui_launcher.cpp` 50, `touch_input.cpp` 35). It is legacy, and `ROADMAP.md` §9
+  multi-statement lines, `ui_launcher.cpp` 50, `touch_input.cpp` 35). It is legacy, and `reference/ORIGINAL_ROADMAP.md` §9
   marks most of those files for deletion or replacement anyway. **Confirmed during /apo:init on 2026-08-27.**
 - Reformatting untouched legacy code is not required and creates review noise — expand as you rewrite, not
   as a separate sweep.
@@ -90,9 +90,9 @@ calls itself "the settled design." **Source:** `README.md`; `ROADMAP.md:11` (rea
 - **Do not add work to `gb_rom_read`, `gb_cram_r`, `gb_cram_w`, `cget` or `lcd_line` without accounting for
   it in the frame budget.** All five are `IRAM_ATTR` and run per-access or per-scanline.
   **Source:** `src/emulator_bridge.cpp:32, 96, 99, 102, 109` (read 2026-08-27).
-- **Do state the per-frame cost of a rendering change in the step note.** `ROADMAP.md` does this throughout
+- **Do state the per-frame cost of a rendering change in the step note.** `reference/ORIGINAL_ROADMAP.md` does this throughout
   (§2.3 "~29k blends/frame, roughly 0.5 ms"; §2.4 "23,040 ANDs/frame"); match that standard.
-  **Source:** `ROADMAP.md:225-228, 254-258` (read 2026-08-27).
+  **Source:** `reference/ORIGINAL_ROADMAP.md:225-228, 254-258` (read 2026-08-27).
 - **Do not allocate in a frame loop.** Allocation happens once in `emu_init()` via `malloc` with null checks
   (`src/emulator_bridge.cpp:160-166`); `String` and heap churn belong in setup paths only.
 
@@ -104,9 +104,9 @@ calls itself "the settled design." **Source:** `README.md`; `ROADMAP.md:11` (rea
   **Source:** `include/hw_config.h:16-19`, `platformio.ini:64-68` (read 2026-08-27).
 - **Do not reference a pin number as a literal.** Use the `hw_config.h` macro; there is no second source of
   truth inside C++ code.
-- **Do treat `ROADMAP.md` §1.2 pin rows as `proposed` or `confirmed` per the row's own Status column**, and
+- **Do treat `reference/ORIGINAL_ROADMAP.md` §1.2 pin rows as `proposed` or `confirmed` per the row's own Status column**, and
   do not promote a `proposed` row to settled without the §11 bench test.
-  **Source:** `ROADMAP.md:58-74` (read 2026-08-27).
+  **Source:** `reference/ORIGINAL_ROADMAP.md:58-74` (read 2026-08-27).
 
 ## Theme tokens
 
@@ -117,9 +117,9 @@ rail concerns the palette table:
   literals with no named constants; there is nothing to guess correctly.
 - **Do keep `NUM_PALETTES` (`include/emulator_bridge.h:22`), `pals[]` (`:61`) and `palnames[]` (`:83`) in
   agreement.** They are three parallel declarations with no compile-time link between them.
-- **Do not assume the palette shape is stable.** `ROADMAP.md:230-266` widens it from `[N][4]` to `[N][3][4]`
-  and replaces the lookup with a flat 64-entry LUT; `ROADMAP.md:216-223` warns that byte-swap ordering
-  interacts with blending. **Source:** `ROADMAP.md:206-266` (read 2026-08-27).
+- **Do not assume the palette shape is stable.** `reference/ORIGINAL_ROADMAP.md:230-266` widens it from `[N][4]` to `[N][3][4]`
+  and replaces the lookup with a flat 64-entry LUT; `reference/ORIGINAL_ROADMAP.md:216-223` warns that byte-swap ordering
+  interacts with blending. **Source:** `reference/ORIGINAL_ROADMAP.md:206-266` (read 2026-08-27).
 
 ## Vault-artifact citations in generated content
 
@@ -134,5 +134,5 @@ rail concerns the palette table:
 
 ## Verification status
 
-Every rail above is cited to `ROADMAP.md`, to first-party source, or marked user-confirmed. No rail here is
+Every rail above is cited to `reference/ORIGINAL_ROADMAP.md`, to first-party source, or marked user-confirmed. No rail here is
 speculative.

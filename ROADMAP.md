@@ -1,680 +1,470 @@
-# CYD-GB — DMG Build Roadmap
+# CYD-GB — Workstream Roadmap
 
-**Branch:** `poc-gb`
-**Upstream fork:** [artanergin44-collab/cyd-gb](https://github.com/artanergin44-collab/cyd-gb) (MIT)
-**Emulator core:** [Peanut-GB](https://github.com/deltabeard/Peanut-GB) by Mahyar Koshkouei (MIT) — fetched by `curl`, not vendored
+**Design doc:** [`reference/ORIGINAL_ROADMAP.md`](reference/ORIGINAL_ROADMAP.md) — the settled design.
+Section references below (`§n.n`) point into it. This file is the *work breakdown*: how that design becomes a
+sequence of apo workstreams, in what order, with what exit criteria, and what each one defers to the bench.
 
----
-
-## 0. Read this first
-
-This document is the settled design for a group build of **ten Game Boy DMG-01 units**, each containing an
-ESP32-2432S024 board running a Game Boy emulator, with games selected by **physical NFC cartridges**.
-
-Two things constrain nearly every decision below. Any agent planning work on this project should internalise
-them before proposing changes:
-
-1. **The cartridge system is the product, not a feature.** The point is that choosing a game is a deliberate
-   physical act. Anything that lets a user browse and switch ROMs from the device — a ROM launcher, an
-   on-device NFC writer, a "recent games" list — defeats the design and must not be added. The upstream fork's
-   ROM browser is being deleted for exactly this reason.
-2. **Ten units, built by kids, assembled once.** Favour solder-free connections, per-unit adjustability stored
-   in NVS, and diagnostics that let a builder self-diagnose. Avoid anything that needs a rework station or
-   per-unit firmware variation.
-
-Several numbers below are **unverified** and flagged as such. They come from vendor datasheets of mixed
-quality or from measurements taken off product photos. Section 11 lists every open item with the bench test
-that resolves it. **Do not treat flagged values as settled.**
+**Status as of 2026-08-27:** no hardware on hand; all parts on order. Everything below is planned to reach
+*code-complete* without a board. Bench verification is collected into WS-11.
 
 ---
 
-## 1. Hardware
+## 0. How this maps onto apo
 
-### 1.1 Board
+- **One workstream = one git branch.** `poc-gb` is the umbrella/integration workstream: it holds project-wide
+  decisions, the bench-check results, and the mechanical/build-day tasks that aren't software. Feature
+  workstreams branch **off `poc-gb`** and merge back when their code-complete exit is met. `poc-gb → main` at
+  the end.
+- **Branch naming:** `ws/<slug>` (e.g. `ws/strip-boot`). The apo workstream folder takes the same name.
+- **Each workstream is planned with `/apo:plan`** once its dependencies are merged. This file gives the plan
+  its scope, exit, and deferred-verification list; the plan supplies the phases and steps.
+- **Two exits per workstream.**
+  - **Code-complete** — the gate for merging: builds warning-free for `env:cyd`, `pio test -e native` passes,
+    every bench-dependent value is a named constant, the deferred checks are written down.
+  - **Bench-verified** — the §10 Exit line of the design doc, run on real hardware in WS-11. A workstream is
+    not *done* until WS-11 ticks it, but it can *merge* before that.
+- **Bench-dependent constants** live in `include/hw_config.h` (pins, expander, addresses, clock) and
+  `include/render_config.h` (scale, `GAME_X/Y` defaults). A bench result that changes one of them is a
+  one-line commit on `poc-gb`, not a reopened workstream.
+- **Decisions** that this document pre-empts (branching model, expander part, saves-on-SD, tooling in-repo)
+  should be recorded as `DEC-` notes in `poc-gb/decisions/` when planning starts.
 
-**ESP32-2432S024 / E32R24P** — 2.4" CYD variant. *Not* the more common 2.8" ESP32-2432S028R; pinouts differ.
+### Proposed Definition of Done (answers `KNOW-0008`'s open questions)
 
-| | |
+| Gate | Proposal |
 |---|---|
-| MCU | ESP32-D0WD-V3 (WROOM-32E), 240 MHz dual-core |
-| RAM | 520 KB SRAM, **no PSRAM** |
-| Flash | 4 MB QSPI |
-| Panel | ST7789, 240×320, TFT |
-| Active area | 36.20 (W) × 49.00 (H) mm |
-| Pixel pitch | ~0.153 mm (see note) |
-| PCB | 74.33 × 42.89 mm, 5.44 mm thick, 4.63 mm max SMD height |
-| Mounting | 4 × Ø3.2 on 34.89 × 66.33 mm centres |
-
-> **Datasheet inconsistency:** the vendor lists pixel size as 0.15 × 0.15 mm, which implies an active area of
-> 36.00 × 48.00 mm, not the stated 36.20 × 49.00. Calculations here use the stated active area (0.1508 mm/px
-> vertical, 0.1531 mm/px horizontal). Difference is ~2%; confirm by filling the screen white and measuring the
-> lit area with calipers.
-
-> **Active area is not centred on the PCB.** It sits 4.00 mm from one edge and ~21 mm from the other. Account
-> for this in the mounting bracket or the image will sit off-axis behind the bezel.
-
-### 1.2 Pin map
-
-| Signal | Pin | Source | Status |
-|---|---|---|---|
-| I²C SDA | IO27 | SPI header pin 1 | proposed |
-| I²C SCL | IO1 | UART header (TX0) | proposed — see §1.3 |
-| 3.3 V / GND | — | EXP header | confirmed (silkscreen) |
-| Amp enable | IO4 | onboard | **HIGH = on** |
-| Audio DAC | IO26 | onboard | to amp |
-| Battery sense | IO34 | onboard ADC | divider ratio undocumented |
-| SD CS | IO5 | onboard | |
-| SD SPI | IO18 / IO19 / IO23 | onboard | now exclusive to SD |
-| LCD | IO15 / IO2 / IO14 / IO13 | CS / DC / SCK / MOSI | |
-| Backlight | IO21 | PWM | |
-| TFT_RST | −1 | panel reset ties to EN | **must be −1** |
-| Unused | IO35 | EXP header, input-only | |
-| Unknown | 4th EXP pad | unlabelled | **meter it** |
-
-Confirmed from the board photo silkscreen: SPI header carries **IO27 / IO18 / IO19 / IO23**. EXP header reads
-**GND / IO35 / 3.3V** plus one unlabelled pad.
-
-**`LED_R_PIN` in the fork's `hw_config.h` is set to 4.** On this board IO4 is the audio amplifier enable. If
-anything drives it as a status LED the amp will mute and unmute at random. **Remap it as part of Phase 1.**
-
-### 1.3 The I²C pin decision
-
-I²C needs two bidirectional pins. Only IO27 is cleanly available on a connector, so the second comes from the
-UART header.
-
-**SCL must be IO1, not SDA.** IO1 is TX0: the ROM bootloader prints on it at every power-up. With SCL there,
-that traffic is only clock transitions with no START condition, so every I²C device ignores it. Reversed, you
-would generate a burst of spurious STARTs and STOPs.
-
-**Never put I²C on IO3.** IO3 is RX0, driven push-pull by the USB-serial bridge whenever USB is powered —
-*including while charging*. Open-drain I²C cannot pull against it.
-
-Run bus recovery before `Wire.begin(27, 1)`: nine manual SCL pulses, then a STOP. 400 kHz is fine.
-
-> **Contingency:** if the 4th EXP pad meters out as **IO22**, use it for SCL instead. IO1 stays free, the boot
-> noise question disappears entirely, and no bus recovery is needed. Check this first — it is the better
-> outcome and costs 30 seconds.
-
-### 1.4 Peripherals
-
-| Device | Bus | Address | Notes |
-|---|---|---|---|
-| MCP23017 | I²C | **0x20** (A0–A2 → GND) | 16 GPIO; `RESET` → 3.3 V, never float |
-| PN532 | I²C | **0x24** | DIP switches to I²C mode |
-
-0x20 and 0x24 do not collide. Keep the expander off 0x24 if the address is ever changed. Fit 4.7 kΩ SDA/SCL
-pull-ups if neither breakout has them.
-
-**Button PCB** — existing 8-output + common-ground board, wired to GPA0–GPA7:
-
-| | | | |
-|---|---|---|---|
-| GPA0 | Up | GPA4 | A |
-| GPA1 | Down | GPA5 | B |
-| GPA2 | Left | GPA6 | Start |
-| GPA3 | Right | GPA7 | Select |
-
-Enable internal pull-ups (`GPPU = 0xFF`), active LOW. **INT is not used** — polling once per frame is one
-byte, ~60 µs at 400 kHz. GPB0–GPB7 are spare.
-
-### 1.5 Power
-
-```
-LiPo (+) ──> SPST SWITCH ──> CYD BAT +
-LiPo (−) ───────────────────> CYD BAT −
-```
-
-3.7 V pouch cell, ~2000 mAh, max ~60 × 35 × 7 mm (fits the AA bay), **with an integrated protection PCB** —
-the CYD's charger has no cell protection of its own.
-
-Charging uses the CYD's onboard charger via a short USB-C male-to-female pigtail routed into the battery
-compartment. The DMG battery door pops off without tools, so no shell machining is needed.
-
-**Charge with the switch ON.** The switch cuts the cell off from the entire board, charger included. Switch
-off means no charging. Note that plugging USB in powers the board on regardless of switch position.
-
-> **Meter cell polarity against the BAT silkscreen before first connection.** JST is not a polarity standard;
-> reversed, you can destroy the board, the cell, or both. Add this to the assembly checklist.
-
-### 1.6 Audio hardware
-
-Onboard amp on IO26 (8-bit internal DAC) with **hardware enable on IO4**.
-
-The Game Boy's own audio hardware is 4-bit, so an 8-bit DAC has more resolution than the source. The DAC is
-not the limiting factor; the amplifier is.
-
-Escalation path, in order:
-
-1. **Test first.** `tone()` on IO26 with the stock speaker. Square waves and noise are far more forgiving than
-   music. There is a real chance nothing is needed.
-2. **Resistor mod.** The known-bad 2.8" ST7789 CYD has fixed gain of ~×14.5 and an amp input impedance of
-   ~4.7 kΩ that loads the DAC buffer enough to clip half the waveform. Gain ≈ `2 × (Rf / Ri)`; raising Ri
-   fixes both problems at once. Designators on the 2.8" board are R7/R8/R9 — **these will not map to the 2.4"
-   board.** Trace the resistor pair between IO26 and the amp input, plus the feedback resistor. Passives
-   measure as **0603** (2.9 mm pad-to-pad, 1.6 mm pitch); an 0603 assortment is on hand.
-3. **MAX98357A I²S amp.** Last resort. Costs three GPIO (IO22 / IO16 / IO17, all RGB-LED pins requiring
-   soldering) *and* the IO4 hardware mute. See `assets/DMG-CYD-audio-mod.pdf`. Prefer the resistor mod.
-
-### 1.7 Mechanical
-
-DMG-01 shell, screen cutout measured with calipers at **47 × 42.5 mm**.
-
-The panel's short axis (36.2 mm) is smaller than the cutout height, so a border is unavoidable — roughly
-3.15 mm per edge minimum regardless of scale. The 3D-printed bezel masks it.
-
-The PCB is 42.89 mm on its short axis against a 42.5 mm cutout — about 0.2 mm margin per edge. **Design the
-bezel with a rear flange overlapping the cutout from behind**, 1–1.5 mm, so misalignment is absorbed by the
-print rather than showing as a bright sliver.
-
-The board is shifted **~4 mm toward the USB-C side** so a slot in the shell can reach the connector. This is
-compensated in software via `GAME_X` (see §2.2), not by moving the image physically.
+| Build | `pio run -e cyd` succeeds with zero warnings from first-party code (library warnings tolerated). Firmware size recorded in the step Outcome when it changes by >5%. |
+| Test | `pio test -e native` passes. Any pure-logic change adds or updates a test. |
+| Hardware | Deferred to WS-11 until parts arrive. Each workstream's "Deferred verification" list becomes WS-11 steps verbatim. |
+| Measurement | Where the design says "re-measure", the step Outcome records *how* to measure (the counter, the serial line) and leaves the number blank until WS-11. |
+| Commit | Subject ≤72 chars; body cites the design-doc section (`§2.3`) when implementing one. Direct commits on `ws/*`; merge to `poc-gb` via fast-forward or a local merge commit — no PR ceremony needed for a solo dev, but `git log poc-gb` must stay readable. |
+| Regression | Once WS-02 exists: the golden-frame test (render N frames of a test ROM to a buffer, compare hash) must pass before any rendering change merges. |
+| Bench-item gate | Not a merge gate. It is the WS-11 gate for calling the project done. |
 
 ---
 
-## 2. Rendering
-
-### 2.1 Orientation and scale
-
-**Landscape.** The panel is 320 px (49.0 mm) horizontal × 240 px (36.2 mm) vertical.
-
-Because 160 and 144 are both divisible by 16, any scale of the form **k/16** produces integer output on both
-axes. Vertical caps it: 9k ≤ 240 → k ≤ 26.
-
-| Scale | Output | Image (mm) | Rows used | SPI/frame | Bezel border |
-|---|---|---|---|---|---|
-| **24/16 (3/2)** | **240 × 216** | 36.75 × 32.58 | 90% | 103,680 B | 5.1 / 5.0 mm |
-| 26/16 (13/8) | 260 × 234 | 39.81 × 35.29 | 97.5% | 121,680 B | 3.6 mm all round |
-
-**Build 24/16 first**, then flip the constant and evaluate 26/16 once the core split is working. Both are
-aspect-correct. 24/16 has a more regular duplication rhythm (`1,2,1,2…` vs `1,2,1,2,2,1,2,2`); 26/16 is 17%
-more SPI, which is free if DMA overlap is working and costly if it isn't.
-
-**Do not stretch to fill 240 rows.** 240×240 would mean 1.5× horizontal and 1.667× vertical — an 11% vertical
-stretch. Game Boy art assumes square pixels.
-
-### 2.2 Positioning
-
-`GAME_X` and `GAME_Y` place the image within the panel's 320 × 240.
-
-- Centred: `GAME_X 40`, `GAME_Y 12`
-- With the 4 mm board shift: `GAME_X 14` (40 − 26 px)
-
-**These must be adjustable from the diagnostic screen and stored in NVS.** Ten hand-built units will each land
-slightly differently; a single hardcoded offset that suits the prototype will be wrong on the others. Provide a
-border test pattern and two-button nudging.
-
-### 2.3 Scaler
-
-2 source pixels → 3 destination, **both axes**, with the interpolated pixel **blended, not duplicated**:
+## 1. Dependency graph
 
 ```
-a, (a+b)/2, b
+                    ┌──────────────┐
+                    │ WS-01        │
+                    │ strip-boot   │
+                    └──────┬───────┘
+                           │
+             ┌─────────────┼─────────────────┐
+             ▼             ▼                 ▼
+      ┌────────────┐ ┌────────────┐   ┌────────────┐
+      │ WS-02      │ │ WS-05      │   │ WS-06      │
+      │ host-test  │ │ input      │   │ nfc-cart   │
+      └─────┬──────┘ └─────┬──────┘   └─────┬──────┘
+            ▼              │                │
+      ┌────────────┐       │                │
+      │ WS-03      │       │                │
+      │ render     │       │                │
+      └─────┬──────┘       │                │
+            ▼              │                │
+      ┌────────────┐       │                │
+      │ WS-04      │◀──────┘  (perf owns    │
+      │ perf+rom   │            the ROM     │
+      └─────┬──────┘            load path   │
+            │                   nfc calls)  │
+            ├────────────┬──────────────────┘
+            ▼            ▼
+      ┌────────────┐ ┌────────────┐
+      │ WS-08      │ │ WS-07      │
+      │ audio      │ │ menu-saves │
+      └─────┬──────┘ └─────┬──────┘
+            └──────┬───────┘
+                   ▼
+            ┌────────────┐     ┌────────────┐
+            │ WS-09      │     │ WS-10      │  (independent of firmware;
+            │ diagnostics│     │ build-tools│   can run any time after WS-06
+            └─────┬──────┘     └─────┬──────┘   fixes the NDEF/filename contract)
+                  └───────┬──────────┘
+                          ▼
+                   ┌────────────┐
+                   │ WS-11      │  ← needs hardware
+                   │ bench      │
+                   └────────────┘
 ```
 
-The pure pixels stay sharp; only the genuine seam softens. On a 4-shade palette this yields 7 shades and reads
-as natural anti-aliasing.
+**Recommended serial order for one developer:** 01 → 02 → 03 → 04 → 05 → 06 → 07 → 08 → 09 → 10 → 11.
+WS-05, WS-06 and WS-10 are independent of the render/perf chain and can be pulled forward if the render work
+stalls — they touch different files (`button_input.cpp`, a new `nfc_cart.cpp`, `tools/` + `web/`).
 
-```c
-static inline uint16_t avg565(uint16_t a, uint16_t b) {
-    return (((a ^ b) & 0xF7DEu) >> 1) + (a & b);
-}
-```
-
-**Order matters:** `avg565` assumes native RGB565 bit layout. The upstream fork pre-swaps palette bytes. Blend
-*before* swapping, or keep the palette native and let `setSwapBytes(true)` handle it at push time. Blending
-byte-swapped values averages across misaligned fields and produces colour fringing.
-
-Cost: ~29k blends/frame, roughly 0.5 ms at 240 MHz. This is the single best quality-per-millisecond change
-available and matters more than the choice between 24/16 and 26/16.
-
-### 2.4 Colour
-
-Peanut-GB is **DMG-only** — it will not emulate Game Boy Color hardware. But `PEANUT_GB_12_COLOUR` (on by
-default) packs the palette source into each output pixel: bits 1–0 are the shade, bits 5–4 identify the
-palette (BG `0x20`, OBJ0 `0x00`, OBJ1 `0x10`). Three palettes × four shades = **12 simultaneous colours**, the
-same mechanism a real Game Boy Color uses to colourise DMG cartridges.
-
-`gb_colour_hash()` returns the same cartridge hash the CGB boot ROM uses, so palettes can be auto-selected
-per title.
-
-**The fork currently discards all of this** — `lcd_line()` does `p[px[x] & 3]` and `pals[][4]` has only four
-entries.
-
-Replace with a **flat 64-entry LUT** indexed by the raw pixel byte (max value 0x23):
-
-```c
-static uint16_t lut[64];              // rebuilt on palette change
-
-void emu_set_palette(uint8_t i) {
-    curpal = i;
-    for (int p = 0; p < 3; p++)
-        for (int c = 0; c < 4; c++)
-            lut[(p << 4) | c] = pals[i][p][c];
-}
-
-// inner loop
-for (int x = 0; x < 160; x++) lbuf[x] = lut[px[x]];
-```
-
-This removes the `& 3` from the inner loop (23,040 ANDs/frame) and **guarantees `lbuf` contains pure RGB565
-with no palette bits riding along**, which is what makes the blend safe. Colorization therefore costs slightly
-*less* than the current code, not more.
-
-Design palettes whose three sub-ramps share a hue family. Cross-palette blending at sprite edges is real
-anti-aliasing and generally desirable, but far-apart hues will fringe. **Do not add a per-pixel branch to skip
-cross-palette blends** — the branch costs more than the blend.
-
-### 2.5 Push strategy
-
-The fork calls `tft.pushImage()` per destination line — ~216 address-window setups per frame. Replace with a
-single address window per frame:
-
-```c
-tft.startWrite();
-tft.setAddrWindow(GAME_X, GAME_Y, GAME_W, GAME_H);
-// per 2 source lines: tft.pushPixels(block, 3 * GAME_W);
-tft.endWrite();
-```
-
-Safe because Peanut-GB emits lines in order, and SD is on VSPI while the LCD is on HSPI — no bus contention.
-
-Then `pushPixelsDMA` with two alternating row buffers so the transfer overlaps emulation.
+Why this order rather than the design doc's Phase numbering: with no hardware, measurement-driven phases
+(perf, audio) can't close anyway, so deterministic, host-testable work (input, NFC, menu) is front-loaded, and
+perf's ROM-partition change goes before NFC because NFC's boot flow calls into the ROM load path.
 
 ---
 
-## 3. Performance
+## 2. Workstreams
 
-### 3.1 Budget
-
-Frame budget at 59.7 fps is **16.75 ms**.
-
-| | ms |
-|---|---|
-| Peanut-GB CPU + PPU | ~8–11 *(estimated, not measured)* |
-| MiniGB APU | ~1 |
-| Scale + blend | ~1.7 |
-| **Core 1 total** | **~11–14** |
-| SPI push @ 80 MHz (core 0, overlapped) | 10.4 |
-
-The emulation figure is reasoned from instruction counts, **not measured**, and could be off by 50% either
-way. Measure before optimising.
-
-### 3.2 The ROM cache is the biggest risk
-
-The fork reads ROM through a paged SPIFFS cache:
-
-```c
-#define PG_SZ 4096
-#define PG_N  16          // 64 KB of pages
-#define B0SZ  (32*1024)   // first 32 KB always resident
-...
-romf.seek(pb); romf.read(pg[lru].d, ...);
-```
-
-Hit path is fast (hash lookup, ~15 cycles). **Miss path is a 4 KB SPIFFS read — call it 1.5–4 ms.** In a
-16.75 ms frame, one miss is a visible hitch and a bank-switch storm is a stutter. This is why the project has a
-frameskip setting.
-
-A 32 KB or 64 KB game never misses. A 256 KB game misses occasionally. Large ROMs with aggressive bank
-switching will thrash.
-
-**Fix: memory-map the ROM.** Store it in a raw flash partition instead of SPIFFS and `esp_partition_mmap` it.
-`gb_rom_read` collapses to a pointer dereference through the hardware flash cache — no page management, no
-stalls, and ~96 KB of DRAM handed back for audio and row buffers.
-
-Cost is writing the ROM to a partition on cart insert (a few seconds, ~100k erase cycles per sector — a
-non-issue). Requires repartitioning; current table is app0 2 MB / SPIFFS 1.98 MB.
-
-> Reference reading: `ROM_PARTITION_FIX_COMPLETE.md` in `GodSpoon/cyd-gb-v2`. That repo is Espeon-based and
-> not a useful code base, but that document covers the pitfalls of this exact change.
-
-### 3.3 Core split
-
-Peanut-GB on core 1, display push on core 0 behind a queue. Serial at 80 MHz is ~12 + 10.4 ≈ 22 ms → frameskip
-1, ~30 fps. Overlapped it's max(12, 10.4) ≈ 12 ms → full 60 fps.
-
-Also try raising `SPI_FREQUENCY` to 80000000. Short traces usually take it, and it's free.
-
-### 3.4 Reference
-
-Retro-Go runs Game Boy at full speed with audio on the same silicon, so 60 fps DMG is settled as achievable.
-**Steal its techniques — core split, DMA, one framebuffer push — not its architecture.** Retro-Go is a ROM
-launcher, which is precisely what this project must not become, and adapting it would mean suppressing its
-central feature and writing a new target definition.
+Each entry: **Branch · Depends on · Design doc refs · Scope · Code-complete exit · Deferred verification ·
+Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-11 when it is planned.
 
 ---
 
-## 4. Audio
+### WS-01 · `ws/strip-boot` — Strip the fork, boot the 2.4" board
 
-Peanut-GB has **no sound emulation**. `ENABLE_SOUND` is `0` in the fork, and there is no `audio_read` /
-`audio_write` implementation anywhere in the repo — setting it to `1` produces link errors. Verified.
+**Depends on:** nothing. **Design:** §1.1–1.3, §9, §10 Phase 1.
 
-Integrate **MiniGB APU** (companion to Peanut-GB), set `ENABLE_SOUND 1`, wire the two callbacks, and feed the
-DAC on a timer. Output is 32768 Hz stereo.
+**Scope**
+- Delete `src/bt_scanner.cpp`, `include/bt_scanner.h`, and every call site; drop the BLE library.
+- Move `touch_load_settings()` / `touch_save_settings()` (NVS) into a new `src/settings.cpp` with a
+  `settings_t` struct (palette, frameskip, brightness, volume, `GAME_X`, `GAME_Y`), then delete
+  `src/touch_input.cpp`, `include/touch_input.h`, and the `XPT2046` dep and `TOUCH_*` build flags.
+- Stub `ui_launcher`: keep `launcher_ingame_menu()` / `launcher_settings_menu()` compiling (they are rewritten
+  in WS-07); delete `launcher_show()` and the ROM list. `loop()` temporarily loads a hard-coded
+  `/roms/gb/test.gb` so there is *something* to run until WS-06 lands. **This stub must not become a browser.**
+- `platformio.ini`: `-DILI9341_2_DRIVER` → `-DST7789_DRIVER`; confirm `TFT_RST=-1`, `TFT_BL=21`; board comment
+  → ESP32-2432S024; keep `SPI_FREQUENCY` at 40 MHz here (80 MHz is WS-04's experiment).
+- Rewrite `include/hw_config.h` for the 2.4" board per §1.2: `LED_R_PIN` off IO4; `AMP_EN_PIN 4`;
+  `I2C_SDA 27`, `I2C_SCL 1` with a comment pointing at the IO22 contingency; `BAT_ADC_PIN 34`; remove all
+  `TOUCH_*` and touch-zone defines; introduce `GAME_X/GAME_Y/GAME_W/GAME_H` as defaults (values from §2.2).
+- Pin `include/peanut_gb.h`: identify the upstream commit it matches (diff against Peanut-GB history), add a
+  header comment with the SHA and date, and a `scripts/update_peanut_gb.sh` that fetches a given SHA.
+- Update `README.md`: strip the touchscreen/2.8" marketing, point to the design doc, remove the `curl` step.
+- Record firmware size before and after.
 
-**Mono:** sum in software, `(l + r) >> 1`. Do not discard a channel — some games pan effects hard left or
-right and you would lose sounds entirely.
+**Code-complete exit**
+- `pio run -e cyd` builds warning-free; no `BLE*`, `XPT2046`, `touch_*` symbols in the map file.
+- Flash usage recorded in the step Outcome (expect ≥1 MB reclaimed).
+- `hw_config.h` has no pin assignment that isn't in §1.2.
 
-**Volume — high / med / low / off:**
+**Deferred verification**
+- Board boots on the 2.4" panel, black screen, no crash loop over 5 minutes of serial log.
+- IO4 is never toggled by anything but the audio path (scope/meter while booting).
 
-```c
-static const uint16_t vol_lut[3] = {256, 176, 128};   // high, med, low
-static uint8_t vol = 0;                                // 0-2, 3 = off
-```
-
-Med at 0.69 rather than 0.75 spaces the steps more evenly by ear (perceived loudness ≈ cube root of
-amplitude). Nothing drops below 7 bits, so quantisation grit never appears. **Off uses IO4 hardware mute**,
-not scaling to zero.
-
-Scale in 16-bit *before* truncating to 8, never on the 8-bit value.
-
-**Dither:** add ±1 LSB of noise before truncating. Converts quantisation grit into faint hiss, which is far
-less objectionable. Three lines; the best low-volume quality improvement available.
-
-**Auto-mute:** pull IO4 low after ~200 ms of APU silence, restore on the next sample. Removes idle hiss —
-often more noticeable than the audio itself — and saves current. Independent of the volume setting.
-
----
-
-## 5. Input
-
-Poll the MCP23017 once per frame — one I²C byte, ~60 µs. Debounce ~8 ms in software; the expander has no
-hardware filter.
-
-| Combo | Action |
-|---|---|
-| Start + Select | Menu |
-| Select + Up / Down | Volume (clamped, no wrap) |
-| Select + Left / Right | Brightness (IO21 PWM) |
-
-**Mask Up/Down/Left/Right out of the button word before it reaches Peanut-GB while Select is held**, or the
-character walks around during adjustment.
-
-Edge-trigger, don't level-trigger — a held press should step once. Optional repeat: ~200 ms after a ~400 ms
-initial delay. Persist volume and brightness to NVS.
-
-Do not bind anything to a bare Start or Select press; games use them constantly.
-
-The Start+Select menu combo is **already implemented** in the fork's `main.cpp`.
+**Notes/risks**
+- The fork's `button_input.cpp` stays as-is in this workstream (it compiles); WS-05 rewrites it.
+- Don't touch partitions here — that is WS-04's job and needs the post-BT size numbers this workstream produces.
 
 ---
 
-## 6. Cartridges and NFC
+### WS-02 · `ws/host-test` — Host-side test harness + CI
 
-### 6.1 Design intent
+**Depends on:** WS-01. **Design:** §0 (constraint 3), §10 Phase 0.5.
 
-Each kid gets **5 game cartridges (write-locked) + 1 wildcard (rewritable)**. Cartridges are NTAG215 25 mm
-discs inside empty DMG cartridge shells, with printed game-name stickers.
+**Scope**
+- `[env:native]` in `platformio.ini` (`platform = native`, `test_framework = unity` or `doctest`), with a
+  `lib/gbcore/` or `src/core/` split so pure-logic modules compile with no Arduino headers:
+  - `render/scaler.{c,h}` — 2→3 scaler, `avg565`, LUT (WS-03 fills these; WS-02 creates the seams and a
+    nearest-neighbour placeholder).
+  - `cart/ndef.{c,h}` — NDEF Text-record parser (WS-06 fills).
+  - `cart/match.{c,h}` — filename normaliser + matcher over an injected directory listing (WS-06 fills).
+  - `input/combo.{c,h}` — debounce + combo state machine over a raw button word (WS-05 fills).
+  - `audio/mix.{c,h}` — mono sum, volume scale, dither (WS-08 fills).
+- Headless Peanut-GB runner: `gb_init` with an in-memory ROM, run N frames, capture the 160×144 index buffer.
+  Needs a **freely redistributable test ROM** (e.g. a homebrew/test ROM with a permissive licence — decide and
+  record in a `DEC-`; do not commit commercial ROMs).
+- Golden-frame test: hash of frame N of the test ROM, checked in; fails if rendering changes unintentionally.
+- GitHub Actions: `pio run -e cyd` + `pio test -e native` on push/PR.
+- Document the module boundary in `01_Knowledge/Coding_Standards.md` (which today says there are no tests).
 
-**The device never writes tags.** This is deliberate, not an omission. An on-device writer would let a kid use
-diagnostic mode as a ROM launcher, which is the exact interaction the cartridge system exists to prevent.
-Hiding it behind a boot combo is not sufficient — in a group of ten, that becomes common knowledge within a
-week. **The firmware must be physically incapable of writing tags.**
+**Code-complete exit**
+- `pio test -e native` runs at least the Peanut-GB smoke test and one test per module seam.
+- CI green on `poc-gb`.
 
-Locking is likewise done off-device, before build day, because it is irreversible. Order of operations: write
-NDEF → read back and verify → **test in an actual unit** → apply sticker → lock.
+**Deferred verification** — none; this workstream is host-only.
 
-### 6.2 Reading
-
-PN532 in I²C mode at 0x24, read **once at boot / cart insert only**. Never polled during emulation —
-`InListPassiveTarget` blocks for tens of milliseconds.
-
-No re-read combo is needed: the DMG's mechanical interlock makes it impossible to remove a cartridge with the
-power on, so every cart change is followed by a boot.
-
-**Remove the DMG's internal RF shielding** or the read will fail.
-
-### 6.3 NDEF parsing
-
-Tags carry an NDEF Text record containing the ROM filename. The payload is **not** just the string:
-
-```
-03 <len> D1 01 <plen> 54 02 65 6E <filename...> FE
-│   │    │  │   │     │  │  └"en"┘
-│   │    │  │   │     │  └─ status byte
-│   │    │  │   │     └──── type 'T'
-│   │    │  │   └────────── payload length
-│   │    └──┴────────────── NDEF record header
-└───┴──────────────────── TLV
-```
-
-**Parse the language-code length from the status byte — do not assume 2:**
-
-```c
-uint8_t status  = payload[0];
-uint8_t langLen = status & 0x3F;
-const char *name = (const char *)&payload[1 + langLen];
-```
-
-Phones set their own language code by locale. Assuming 2 yields `nTetris.gb` on a French device.
-
-Read raw pages with `ntag2xx_ReadPage()` and parse these few bytes directly. A full NDEF library is more
-dependency than this warrants.
-
-### 6.4 Filename matching
-
-Tags are written by kids using a phone, so filenames arrive imperfect. Normalise before matching:
-
-1. lowercase
-2. trim whitespace
-3. append `.gb` if no extension
-4. substring search across the ROM directory as a last resort
-
-The fallback turns `tetris` into a hit even when the file is `Tetris (World).gb`. Cheap to write, and it
-converts a dead cartridge into a working one.
-
-**On failure, display the string that was actually read** — "Not found: tetrsi.gb" is fixable; a black screen
-isn't.
-
-### 6.5 SD card
-
-Every card is **identical** — one canonical library cloned ten times. This is required, because a traded
-cartridge must work in any unit. Every card therefore needs every game, including ones its owner didn't pick.
-
-Keep the game list in a JSON file in the repo, read by both the card-imaging script and the phone web app, so
-the two can never drift.
-
-### 6.6 Writing tags (off-device)
-
-- **Android:** QR sticker on the wildcard shell → GitHub Pages web app using Web NFC (`NDEFReader`). Chrome
-  only, HTTPS, user gesture, top level. Cannot lock tags, which is correct here.
-- **iOS:** Web NFC is unavailable and will not be. Use NFC Tools. The web app should detect the lack of
-  `NDEFReader` and offer a **clipboard fallback** — copy the exact filename for pasting into NFC Tools.
-  Call `navigator.clipboard.writeText()` **synchronously inside the tap handler**; iOS drops the gesture
-  context if anything is awaited first.
-- Copy only the filename (`tetris.gb`), never NDEF bytes — NFC Tools builds the record wrapper itself.
-- The page should **read before writing** (so a locked game cart is identified rather than failing
-  confusingly) and **read back after writing** to confirm.
-- Build day uses a single shared Android phone as the writing station.
+**Notes/risks**
+- Peanut-GB uses `uint_fast*` and some GCC-isms; native build on x86-64 is known to work upstream but check
+  `-DPEANUT_GB_IS_LITTLE_ENDIAN` handling.
+- Keep the Arduino-side files thin wrappers over the core modules so the tested code is the shipped code.
 
 ---
 
-## 7. Saves
+### WS-03 · `ws/render` — Scaler, 12-colour LUT, blend, single-window push
 
-**Battery saves only.** Peanut-GB has no state-serialization API; `gb_get_save_size_s()` is cartridge SRAM
-sizing, not snapshots. A save-state implementation would require serializing `struct gb_s`, whose first ~45
-lines are function pointers that change on every recompile — out of scope.
+**Depends on:** WS-02. **Design:** §2.1–2.5, §10 Phases 2–4.
 
-**Make saving automatic.** Manual Save/Load is a footgun with kids: one wrong menu press wipes an hour of
-progress with no undo. Real cartridges just save.
+**Scope**
+- Replace `src/display.cpp`: landscape rotation, `GAME_X/Y/W/H` from `render_config.h` + NVS override, one
+  `setAddrWindow` per frame, `pushPixels` per 2-source-line block (3 output rows). No DMA yet.
+- Scale factor as a compile-time constant `SCALE_K` (24 or 26 of 16) with both paths compiling; default 24.
+- Palette path in `emulator_bridge.cpp`: `pals[N][3][4]`, flat 64-entry `lut[]`, `emu_set_palette()` rebuilds
+  it, inner loop `lbuf[x] = lut[px[x]]`. Remove the `SW()` pre-swap; palette stays native RGB565 and
+  `setSwapBytes(true)` at push time.
+- Design the 20 palettes as 3-ramp sets sharing a hue family (§2.4). Keep names.
+- `avg565` blend on both axes in the scaler; unit tests prove `avg565(a,a)==a`, symmetry, and that blending
+  never produces a value outside the two inputs' channel ranges.
+- Instrumentation: FPS counter already exists (`cfps`); add per-frame `emu_us`, `scale_us`, `push_us` via
+  `esp_timer_get_time()`, printed once/second on serial and available to the WS-07 overlay.
+- Golden-frame test extended to the *scaled* output (240×216 buffer hash) so the blend is pinned.
 
-- auto-load on boot
-- auto-flush when SRAM is dirty and idle ~10 s
-- flush on menu open
-- flush on the low-battery threshold
+**Code-complete exit**
+- Golden tests pass for nearest-neighbour and blended output at both `SCALE_K` values.
+- No `pushImage` call remains in the frame path.
+- Frame-time counters are printed on serial (values blank in Outcome; filled in WS-11).
 
-Both Save and Load then disappear from the menu. `save_ram()` in the fork becomes the flush function; keep the
-"SAVED!" toast as brief confirmation.
+**Deferred verification**
+- Game renders correctly oriented, centred with default `GAME_X/Y`.
+- Baseline `emu_us / scale_us / push_us` recorded on the test ROM at 40 MHz SPI (§11 item 8).
+- Blend shows no colour fringing (byte-order check, §2.3).
+- 12-colour output visible on a sprite-heavy title.
 
----
-
-## 8. Menu and diagnostics
-
-### 8.1 In-game menu
-
-The fork already has `launcher_ingame_menu()` returning `0=resume 1=save 2=load 3=quit 4=calibrate 5=settings`,
-plus a settings submenu covering palette, frameskip, brightness and overlays.
-
-**Remove:**
-- **Quit** — returns to the ROM launcher. This is a full game browser one menu press away and dismantles the
-  cartridge system. Repurpose as **Reset Game** (`gb_reset()`) or drop.
-- **Calibrate** — touchscreen calibration, gone with the touch code.
-- **Save / Load** — replaced by automatic saving (§7).
-
-**Target menu:** Resume / Volume / Brightness / Palette / Cart Info / Reset.
-
-**Add Cart Info** — read-only display of tag UID and decoded filename. It cannot change which game is on a
-cart, so it doesn't undermine anything, and it's how a kid identifies an unlabelled cart after a trade and how
-you debug a failed write.
-
-The menu is currently drawn with touch buttons (`mbtn()`). Budget time to convert it to D-pad navigation
-rather than assuming it drops straight onto physical buttons.
-
-Keep frameskip as a diagnostic even after the core split.
-
-### 8.2 Diagnostic mode
-
-Entered by holding Start+Select at power-on. Essential across ten hand-assembled units — it turns "it doesn't
-work" into "GPA3 never goes low."
-
-- Every button, lighting up as pressed
-- SD card detected, ROM count
-- PN532 responding, live UID readout
-- Battery voltage from IO34
-- Audio test tone
-- Colour / scaling test pattern
-- **`GAME_X` / `GAME_Y` nudge**, saved to NVS
-
-**No tag writing. Ever.** See §6.1.
+**Notes/risks**
+- If §11 item 8 comes back with emulation alone >16 ms, the fallback (gnuboy core) is a new workstream — flag
+  early, don't absorb it here.
 
 ---
 
-## 9. What to delete from the fork
+### WS-04 · `ws/perf-rom` — Core split, DMA, ROM partition mmap
 
-| File | Lines | Action |
-|---|---|---|
-| `src/bt_scanner.cpp` | 1033 | **delete** — drags in the whole BT stack, ~1 MB flash |
-| `src/touch_input.cpp` | 422 | **delete** — physical buttons |
-| `src/ui_launcher.cpp` | 287 | replace — ROM browser must go (§6.1) |
-| `src/display.cpp` | 52 | replace entirely |
-| `src/emulator_bridge.cpp` | 196 | keep callbacks, rewrite palette path |
-| `src/main.cpp` | 209 | keep, restructure |
-| `src/sd_manager.cpp` | 82 | **keep as-is** |
-| `include/hw_config.h` | 67 | rewrite for this board |
+**Depends on:** WS-03. **Design:** §3.1–3.3, §10 Phase 5.
 
-Delete Bluetooth first — it reclaims real partition space, which matters for the ROM partition (§3.2).
+**Scope**
+- **ROM partition.** New `partitions.csv`: `nvs`, `otadata` (drop OTA — single app slot), `app0` sized to
+  WS-01's measured flash use + 25%, `romdata` (raw `data/0x40`) ≥ 2 MB for the rest, keep a small `spiffs` only
+  if something still needs it (nothing should). `rom_store.cpp`: `rom_store_write(File&)` (erase + write, with
+  a header `{magic, size, crc32, filename}` so an unchanged ROM is not rewritten), `rom_store_mmap()` →
+  `const uint8_t*`. `gb_rom_read` becomes `return rom[a]`. Delete the page cache and `cp2spiffs`.
+- **Core split.** Emulation task pinned to core 1; display push task on core 0 fed by a two-slot queue of
+  scaled row-block buffers (each `3 × GAME_W × 2` bytes). `pushPixelsDMA` with the two buffers alternating.
+  Menu/diagnostic drawing pauses the push task and takes the bus directly.
+- `SPI_FREQUENCY` as a single build flag; default stays 40 MHz until WS-11 sweeps it (§11 item 7).
+- Frameskip retained as a setting but default 0.
+- Free-heap accounting: record heap before/after removing the page cache (expected ~96 KB back).
 
-**Config changes:**
-- `platformio.ini` has `-DILI9341_2_DRIVER`. This panel is **ST7789**.
-- `TFT_RST` must be `-1`.
-- Try `SPI_FREQUENCY` 80000000.
-- Remap `LED_R_PIN` off IO4.
-- `ENABLE_SOUND` 0 → 1 (only after MiniGB APU is integrated).
+**Code-complete exit**
+- Builds with the new partition table; `rom_store` unit-tested on host with a fake flash backend (erase
+  granularity, CRC, unchanged-ROM short-circuit).
+- The queue/double-buffer logic is unit-tested for ordering (frames never interleave rows).
+- No SPIFFS symbol remains.
 
-**Stale comments:** `display.cpp` comments describe "2x horiz, ~1.33x vert" and 192 px, but `GAME_H` is
-currently 256. Trust the code, not the comments; all of it is being replaced anyway.
+**Deferred verification**
+- 60 fps, frameskip 0, on a 1 MB MBC5 title with heavy bank switching — no stutter.
+- `SPI_FREQUENCY` sweep 40/55/80 MHz, artifacts noted (§11 item 7).
+- 26/16 vs 24/16 flipped and compared; decision recorded as a `DEC-` (§2.1).
+- Write-to-partition time on cart insert measured (expect a few seconds; needs a "Loading…" screen — WS-06).
 
----
-
-## 10. Phased workstreams
-
-Phases 1–7 need nothing but the board on a desk. Phases 8+ need the ordered parts.
-
-### Phase 0 — Bench checks *(blocking; do first)*
-See §11. Three tests, ~30 minutes, each capable of changing the design.
-
-### Phase 1 — Strip and boot
-Delete Bluetooth and touch. Fix the driver define, `TFT_RST`, `LED_R_PIN`. Fetch `peanut_gb.h` from upstream
-and pin the version. **Exit: black screen, board boots, no crashes.**
-
-### Phase 2 — Scaler and baseline
-Replace `display.cpp`. `GAME_W`/`GAME_H`/`GAME_X`/`GAME_Y` as constants, 24/16, nearest-neighbour, one address
-window per frame. Add an FPS counter and a frame-time breakdown.
-**Exit: a game renders, and you have a measured baseline.** This number decides everything downstream.
-
-### Phase 3 — Colour
-64-entry LUT, `PEANUT_GB_12_COLOUR`, widen the palette table to `[N][3][4]`. Re-measure.
-**Exit: 12-colour output, frame time unchanged or slightly better.**
-
-### Phase 4 — Blend
-`avg565` on both axes. Verify byte-order handling (§2.3). Re-measure.
-**Exit: visibly smoother scaling, ~0.5 ms cost.**
-
-### Phase 5 — Performance
-Core split (emulation core 1, push core 0), `pushPixelsDMA` with double row buffers, `SPI_FREQUENCY` 80 MHz.
-Then mmap the ROM from a raw partition; repartition as needed. Re-measure after each.
-**Exit: 60 fps with no frameskip, no stalls on a large ROM.**
-Then flip to 26/16 and re-measure; decide 24/16 vs 26/16 on evidence.
-
-### Phase 6 — Audio
-MiniGB APU, `ENABLE_SOUND 1`, timer-fed DAC, mono sum, dither, IO4 mute, auto-mute on silence, 4-state volume.
-Re-measure.
-**Exit: audio at 60 fps, no idle hiss.**
-
-### Phase 7 — Input
-MCP23017 over I²C, bus recovery, per-frame poll, debounce, combos, D-pad masking, NVS persistence.
-**Exit: full control from physical buttons; touch code fully gone.**
-
-### Phase 8 — NFC
-PN532 I²C, boot-time read, NDEF parse with language-length handling, filename normalisation, `carts.txt`
-fallback, clear failure display.
-**Exit: tapping a cart at boot loads the right ROM.**
-
-### Phase 9 — Menu and saves
-Rebuild the menu for D-pad. Remove Quit/Calibrate/Save/Load. Add Cart Info. Automatic save flush including the
-low-battery path.
-**Exit: no path from the UI to browsing or switching ROMs.**
-
-### Phase 10 — Diagnostics
-Boot-combo diagnostic screen per §8.2, including `GAME_X`/`GAME_Y` nudge to NVS.
-**Exit: a builder can self-verify a unit without a computer.**
-
-### Phase 11 — Mechanical and build day
-Bezel print and fit, USB-C slot, battery harness, assembly checklist (including the polarity check), SD card
-imaging script, phone web app, pre-assembly flashing station (ESP Web Tools over USB-C — flash *before* the
-board goes in the shell).
+**Notes/risks**
+- Flash writes stall the *other* core's instruction fetch from flash unless code is in IRAM; do the partition
+  write before the emulation task starts, never during play.
+- Read `ROM_PARTITION_FIX_COMPLETE.md` in `GodSpoon/cyd-gb-v2` first (§3.2).
 
 ---
 
-## 11. Open items — resolve on the bench
+### WS-05 · `ws/input` — MCP23017 buttons, combos, NVS
 
-| # | Question | Test | Impact if it goes badly |
-|---|---|---|---|
-| 1 | Does the board run from a 3.7 V cell? | Bench supply, sweep 4.2 → 3.3 V, watch the display | Needs a boost module; changes the whole power section |
-| 2 | What is the 4th EXP-header pad? | Toggle IO22/16/17, meter the pad | If IO22: move SCL there, delete the IO1 boot handling |
-| 3 | Is the onboard amp usable? | `tone()` on IO26, stock speaker, at full volume | Resistor mod, then MAX98357A |
-| 4 | Does BAT actually power the system? | Cell connected, USB unplugged — does it boot? | Charge-only would need a boost + USB VBUS feed |
-| 5 | Actual pixel pitch | Fill screen white, caliper the lit area | Recompute all bezel and `GAME_X`/`GAME_Y` numbers |
-| 6 | IO34 divider ratio | Compare ADC reading to a meter across the cell range | Low-battery cutoff thresholds are wrong |
-| 7 | Max reliable `SPI_FREQUENCY` | Sweep 40 / 55 / 80 MHz, look for artifacts | Directly caps frame rate |
-| 8 | Real emulation frame time | Phase 2 FPS counter | May need Retro-Go's gnuboy core instead of Peanut-GB |
+**Depends on:** WS-01 (WS-02 for tests). **Design:** §1.3, §1.4, §5, §10 Phase 7.
+
+**Scope**
+- Rewrite `src/button_input.cpp` for MCP23017 at `BTN_I2C_ADDR 0x20`: `IODIRA=0xFF`, `GPPU=0xFF`, read `GPIOA`
+  once per frame. Keep the `button_init/update/get_buttons` interface.
+- I²C bring-up in a shared `i2c_bus.cpp` (PN532 in WS-06 uses the same bus): bus recovery (9 SCL pulses +
+  STOP) gated on `I2C_SCL == 1`, `Wire.begin(I2C_SDA, I2C_SCL)`, 400 kHz.
+- `input/combo.c` (host-testable): 8 ms debounce, edge detection, Start+Select → menu, Select+Up/Down →
+  volume, Select+Left/Right → brightness, D-pad masked out of the joypad word while Select is held,
+  optional key repeat (400 ms / 200 ms). Volume/brightness go through `settings.cpp` → NVS with a
+  write-coalescing delay so a held button doesn't hammer NVS.
+- Remove the fork's `input_task` 12 ms polling in favour of a per-frame poll from the emulation loop.
+
+**Code-complete exit**
+- Combo state machine unit tests: single-step on hold, masking, no wrap on volume clamp, debounce rejects
+  <8 ms glitches.
+- Expander driver isolated behind a 3-function interface; `hw_config.h` selects pins/address.
+
+**Deferred verification**
+- All eight buttons register (feeds WS-09's button test screen).
+- Bus recovery on a cold boot with SCL on IO1: no I²C errors in the first transaction.
+- If §11 item 2 finds IO22 on the EXP pad: change `I2C_SCL`, drop recovery, retest.
+
+**Notes/risks**
+- `Wire` and the display share no pins, but the PN532 read at boot and the button poll share the bus — the
+  read happens before emulation starts, so no arbitration is needed. Document that assumption.
 
 ---
 
-## 12. Assets
+### WS-06 · `ws/nfc-cart` — PN532 boot read, NDEF, filename matching
 
-| File | Contents |
-|---|---|
-| `assets/DMG-CYD-wiring.pdf` | Wiring diagram over the actual board photo, BOM, pin map, boot-order and power notes |
-| `assets/DMG-CYD-audio-mod.pdf` | MAX98357A fallback — solder points, blink-test identification procedure, wiring |
+**Depends on:** WS-04 (ROM load path), WS-05 (I²C bus). **Design:** §6.1–6.5, §10 Phase 8.
 
-Both are A3 landscape. Pin assignments in them are proposals derived from the vendor pin table and board
-photos; §11 items 2 and 4 supersede them if the bench says otherwise.
+**Scope**
+- `src/nfc_cart.cpp`: PN532 over I²C at 0x24, `SAMConfig`, one `InListPassiveTarget` with a ~1 s timeout at
+  boot, read NTAG pages 4..N via `ntag2xx_ReadPage`, hand the raw bytes to the parser. **Read-only API by
+  construction** — no write function exists in the module; add a unit test that greps the symbol table for
+  `WritePage`/`ntag2xx_Write` and fails if present.
+- `cart/ndef.c`: TLV walk → NDEF Text record → language-length from status byte → filename. Tests for `en`,
+  `fr`, 5-byte language codes, missing terminator, non-Text record, empty tag.
+- `cart/match.c`: normalise (lowercase, trim, append `.gb`), exact match, then substring fallback over an
+  injected listing. Tests including `tetris` → `Tetris (World).gb` and ambiguous matches (pick shortest name,
+  log it).
+- Boot flow in `main.cpp`: splash → read tag → match → if ROM differs from `rom_store` header, "Loading…" and
+  write → `emu_init` → `load_ram` → run. Failure screens show the *string read*: `No cartridge`,
+  `Unreadable tag`, `Not found: <name>`. No retry loop, no browser; power-cycle is the retry (§6.2).
+- Remove the WS-01 hard-coded ROM stub. Keep a **build-flag-only** `DEV_ROM_PATH` for bench work, off by
+  default, and fail the CI build if it is defined in the default env.
+- `games.json` schema defined here (filename, title, size, optional palette hash) — WS-10 consumes it.
+
+**Code-complete exit**
+- Parser and matcher tests pass; the read-only symbol test passes.
+- `main.cpp` has no code path from a running game back to ROM selection.
+
+**Deferred verification**
+- Tap → correct ROM on ≥3 different carts, one written from an iOS locale device.
+- Read succeeds with the DMG's RF shield removed; fails with it in place (confirm the §6.2 claim).
+- Time from power-on to game start recorded, with and without a partition rewrite.
+
+**Notes/risks**
+- Adafruit PN532 library pulls in SPI/HSU paths; consider a minimal I²C-only driver (~200 lines) to keep flash
+  down. Decide in `/apo:plan`.
 
 ---
 
-## 13. Things not to do
+### WS-07 · `ws/menu-saves` — D-pad menu, automatic saves, Cart Info
 
-Collected because each was considered and rejected for a reason that isn't obvious from the code.
+**Depends on:** WS-05, WS-06. **Design:** §7, §8.1, §10 Phase 9.
 
-- **Don't add a ROM browser or on-device tag writer.** §6.1.
-- **Don't switch to Retro-Go.** It's a launcher; adapting it means suppressing its central feature and writing
-  a new target definition. Steal techniques, not architecture. §3.4.
-- **Don't put I²C on IO3.** USB-serial drives it whenever USB is powered, including while charging. §1.3.
-- **Don't reuse IO4** for anything but the amp enable. §1.2.
-- **Don't stretch the image to 240 rows.** 11% vertical distortion. §2.1.
-- **Don't blend byte-swapped pixels**, and don't blend before the palette LUT. §2.3.
-- **Don't branch per-pixel to skip cross-palette blends.** Costs more than the blend. §2.4.
-- **Don't add manual Save/Load.** §7.
-- **Don't lock tags from any device the kids control.** Irreversible. §6.1.
-- **Don't use `pushImage` per line.** §2.5.
+**Scope**
+- Rewrite `ui_launcher.cpp` → `menu.cpp`: D-pad navigated list, items **Resume / Volume / Brightness /
+  Palette / Cart Info / Reset**. Remove Quit, Calibrate, Save, Load, the touch `mbtn()` code and the settings
+  submenu's frameskip/overlay entries move to WS-09's diagnostic screen (frameskip stays reachable there).
+- Auto-save: `gb_cram_w` sets `dirty` + `last_write_ms` (only inside the real save size); flush when dirty and
+  idle ≥10 s, on menu open, on Reset, and on the low-battery hook (`battery.cpp` reads IO34 with a
+  `BAT_DIVIDER` constant and a threshold that WS-11 calibrates — §11 item 6). Brief "SAVED" toast.
+- Auto-load on boot (already exists as `load_ram`; keep).
+- Cart Info: UID hex, raw filename read, matched path, ROM title from header, palette hash.
+- `Reset` → flush → `gb_reset()`.
+
+**Code-complete exit**
+- Dirty-flag logic unit-tested (writes outside save size don't dirty; idle timer; menu flush).
+- Menu navigation logic unit-tested as a state machine (no display involved).
+- `grep -n "quit\|launcher_show" src/` returns nothing.
+
+**Deferred verification**
+- Play, wait 10 s, power off, power on → progress retained.
+- Low-battery flush triggers at the calibrated threshold.
+- Menu usable with the physical D-pad with no touch fallback.
+
+---
+
+### WS-08 · `ws/audio` — MiniGB APU, DAC output, volume, auto-mute
+
+**Depends on:** WS-04 (needs the reclaimed heap and the core split). **Design:** §1.6, §4, §10 Phase 6.
+
+**Scope**
+- Vendor `minigb_apu.{c,h}` (pin SHA, same header convention as Peanut-GB). `ENABLE_SOUND 1`; implement
+  `audio_read`/`audio_write`.
+- `audio/mix.c` (host-testable): stereo→mono sum, 16-bit volume scale via `vol_lut`, ±1 LSB dither, truncate
+  to 8-bit. Tests: silence stays silent, full-scale doesn't wrap, dither bounded.
+- Output: timer-driven DAC on IO26 at 32768 Hz from a ring buffer filled once per frame by the APU; `AMP_EN`
+  (IO4) HIGH on start.
+- Volume states high/med/low/off; off = IO4 LOW, not zero samples. Auto-mute: IO4 LOW after 200 ms of
+  silence, HIGH on the next non-zero sample; independent of the volume setting.
+- Volume wired to WS-05's Select+Up/Down and WS-07's menu.
+
+**Code-complete exit**
+- Mixer tests pass; firmware builds with `ENABLE_SOUND 1`; ring buffer under/overflow counters exposed on
+  serial.
+
+**Deferred verification**
+- `tone()` on IO26 with the stock speaker first (§11 item 3) — decides whether the resistor mod or MAX98357A
+  path is needed; record as a `DEC-`.
+- Audio plays at 60 fps with no dropouts; frame-time impact recorded.
+- No idle hiss (auto-mute working); volume steps sound evenly spaced.
+
+**Notes/risks**
+- The MAX98357A fallback (I²S on IO22/16/17) is a separate small workstream if §11 item 3 fails twice; don't
+  pre-build it.
+
+---
+
+### WS-09 · `ws/diagnostics` — Boot-combo diagnostic screen
+
+**Depends on:** WS-05, WS-06, WS-07, WS-08. **Design:** §2.2, §8.2, §10 Phase 10.
+
+**Scope**
+- Hold Start+Select at power-on (sampled after WS-05's bus init, before the NFC read) → `diag.cpp`.
+- Pages, D-pad to switch: buttons (live, GPA bit labelled), SD (present, ROM count, free), NFC (PN532 firmware
+  version, live UID), battery (raw ADC + computed V using `BAT_DIVIDER`), audio (test tone, cycles volume
+  states), display (colour bars, 1-px border at `GAME_X/Y/W/H`, checkerboard for the blend), **nudge**
+  (`GAME_X/Y` ± with A to save to NVS, B to reset default), frameskip and FPS overlay toggles, firmware
+  version/build timestamp (from `scripts/post_build_timestamp.py`).
+- **No tag write path.** The read-only symbol test from WS-06 covers this module too.
+
+**Code-complete exit**
+- Every page renders on host in a framebuffer test (so layout is at least sane); nudge persistence
+  unit-tested through `settings.cpp`.
+
+**Deferred verification**
+- A second person can follow a one-page checklist and confirm each subsystem on a fresh unit without a
+  computer.
+- Nudge-saved `GAME_X/Y` survive a power cycle and are honoured in-game.
+
+---
+
+### WS-10 · `ws/build-tools` — games.json, SD imaging, phone web app, flasher
+
+**Depends on:** WS-06 (NDEF/filename contract). Firmware-independent otherwise. **Design:** §6.5, §6.6,
+§10 Phase 11 (software parts).
+
+**Scope**
+- `games.json` (schema from WS-06) as the single source of truth; a validator in CI (unique filenames, files
+  exist in the private ROM directory given by env var — ROMs themselves are never committed).
+- `tools/image_sd.py`: format-agnostic copy of `/roms/gb/*` + empty `/saves/` from a local library dir to a
+  mounted card, verify by hash, print a manifest; idempotent so ten cards come out identical.
+- `web/` on GitHub Pages: lists `games.json`; Android Chrome → Web NFC read-before-write, write Text record
+  with the filename, read back and show result; no `NDEFReader` → clipboard fallback (synchronous
+  `writeText` inside the tap handler) with NFC Tools instructions. QR code generator for the wildcard sticker
+  linking to the page. Never offers a lock action.
+- Flashing station: ESP Web Tools page under `web/flash/` with a `manifest.json` pointing at CI-built
+  `firmware.bin` + `bootloader` + `partitions` artefacts from a tagged release.
+- `docs/ASSEMBLY.md`: build-day checklist skeleton (polarity meter check, RF shield removal, switch-on-to-
+  charge, flash-before-shell), to be completed from WS-11 findings.
+
+**Code-complete exit**
+- Web app works against a real NTAG215 on an Android phone (this *is* testable now — tags and a phone don't
+  depend on the board order).
+- `image_sd.py` produces two byte-identical manifests from two runs.
+- Release workflow publishes flashable artefacts.
+
+**Deferred verification**
+- A card imaged by the tool boots a unit and every `games.json` entry is found by a cart.
+- ESP Web Tools flashes a bare board over USB-C.
+
+---
+
+### WS-11 · `ws/bench` — Bench checks and deferred verification *(hardware-gated)*
+
+**Depends on:** parts arriving; ideally all of WS-01..10 merged. **Design:** §10 Phase 0, §11, every Exit line.
+
+**Scope**
+- §11 items 1–8 in order, each a step whose Outcome records the measurement and the resulting constant change
+  (if any) as a commit on `poc-gb` plus a `DEC-`.
+- Then every workstream's "Deferred verification" list above, as steps grouped by workstream.
+- Audio escalation decision (§1.6). 24/16 vs 26/16 decision (§2.1). `SPI_FREQUENCY` decision (§3.3).
+- `BAT_DIVIDER` and low-battery threshold calibration (§11 item 6).
+- Complete `docs/ASSEMBLY.md` from what actually went wrong.
+- Mechanical items (bezel print/fit with rear flange, USB-C slot, battery harness, RF shield removal) are
+  tracked as **tasks** on `poc-gb` (`/apo:task-create`), not steps here — they're not software and don't
+  gate a merge.
+
+**Exit**
+- All eight §11 items answered; all deferred checks ticked or converted into bugs (`/apo:bug-create`) on the
+  owning workstream; one unit plays a cart end-to-end from a cold boot with audio.
+
+---
+
+## 3. Cross-cutting rules for every workstream
+
+1. **Never add** a ROM browser, a tag-write path, or a "recent games" feature. Re-read §6.1 and §13 before
+   planning. The WS-06 symbol test enforces the tag-write rule mechanically.
+2. **Bench-dependent values are constants**, named in one of two headers, defaulted to the design doc's value,
+   with a comment citing the § and the §11 item that verifies it.
+3. **Host tests for anything pure.** If a function has no `Arduino.h` dependency, it goes in the core modules
+   and gets a test.
+4. **Measurements are recorded, not remembered.** Frame times, heap, flash size go into the step Outcome, even
+   when the value is "deferred to WS-11".
+5. **Design-doc edits go to `reference/ORIGINAL_ROADMAP.md`** when a workstream learns something that changes
+   the design; this file only changes when the *work breakdown* changes.
+
+---
+
+## 4. Next actions
+
+1. Record the four pre-empted decisions as `DEC-` notes on `poc-gb` (branching model; MCP23017; saves on unit
+   SD; tooling in-repo).
+2. `git checkout -b ws/strip-boot poc-gb` → `/apo:plan` WS-01 using §2 above as the brief.
+3. On merge, proceed down the serial order in §1.

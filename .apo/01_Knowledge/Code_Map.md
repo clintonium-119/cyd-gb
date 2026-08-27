@@ -35,36 +35,36 @@ cyd-gb/
 ├── include/       9 headers — one per src/ module, plus hw_config.h and vendored peanut_gb.h
 ├── src/           8 .cpp modules, flat, no subdirectories
 ├── scripts/       post_build_timestamp.py — PlatformIO post-build hook
-├── reference/     DMG-CYD-wiring.pdf, DMG-CYD-audio-mod.pdf
+├── reference/     DMG-CYD-wiring.pdf, DMG-CYD-audio-mod.pdf, ORIGINAL_ROADMAP.md (design doc)
+├── ROADMAP.md     work breakdown — apo workstreams WS-01..11, dependency order, exits
 ├── platformio.ini single [env:cyd] environment; all pin config lives in build_flags
 ├── partitions.csv nvs / otadata / app0 (2 MB) / spiffs (1.98 MB)
-├── ROADMAP.md     the settled target design — authoritative for intent
 ├── README.md      documents the inherited fork, not the target
 └── LICENSE        MIT
 ```
 
 **Source:** `ls -F`, `ls -F include/ src/ scripts/ reference/` (read 2026-08-27).
 
-Note `ROADMAP.md` §12 refers to these PDFs as `assets/DMG-CYD-wiring.pdf` and `assets/DMG-CYD-audio-mod.pdf`.
-They actually live in `reference/`. **Source:** `ROADMAP.md:656-661` vs `ls -F reference/` (read 2026-08-27).
+Note `reference/ORIGINAL_ROADMAP.md` §12 refers to these PDFs as `assets/DMG-CYD-wiring.pdf` and `assets/DMG-CYD-audio-mod.pdf`.
+They actually live in `reference/`. **Source:** `reference/ORIGINAL_ROADMAP.md:656-661` vs `ls -F reference/` (read 2026-08-27).
 
 ## Key Files
 
 | File | Lines | What it is |
 |---|---|---|
 | `src/main.cpp` | 209 | Entry point. `setup()`/`loop()`, `run_emu()`, `input_task`, `save_ram()`/`load_ram()` |
-| `src/bt_scanner.cpp` | 1033 | Largest first-party file. BLE beacon scanner. Marked **delete** by `ROADMAP.md` §9 |
+| `src/bt_scanner.cpp` | 1033 | Largest first-party file. BLE beacon scanner. Marked **delete** by `reference/ORIGINAL_ROADMAP.md` §9 |
 | `src/touch_input.cpp` | 422 | Bit-bang XPT2046 driver + calibration + NVS settings. Marked **delete** |
 | `src/ui_launcher.cpp` | 287 | ROM browser, in-game menu, settings. Marked **replace** |
 | `src/emulator_bridge.cpp` | 196 | Peanut-GB glue. Marked keep-callbacks/rewrite-palette-path |
-| `src/sd_manager.cpp` | 82 | Marked **keep as-is** — the only file `ROADMAP.md` §9 leaves untouched |
+| `src/sd_manager.cpp` | 82 | Marked **keep as-is** — the only file `reference/ORIGINAL_ROADMAP.md` §9 leaves untouched |
 | `src/display.cpp` | 52 | Marked **replace entirely** |
 | `src/button_input.cpp` | 37 | I²C expander read. Not listed in §9 |
 | `include/hw_config.h` | 67 | All pin and geometry constants. Marked **rewrite for this board** |
 | `include/peanut_gb.h` | 4044 | Vendored emulator core. Do not edit; it is upstream |
 | `platformio.ini` | 76 | Board, build flags, `lib_deps`. §9 lists five config changes required |
 
-**Sources:** `wc -l src/*.cpp include/*.h`, `ROADMAP.md:554-577` (read 2026-08-27).
+**Sources:** `wc -l src/*.cpp include/*.h`, `reference/ORIGINAL_ROADMAP.md:554-577` (read 2026-08-27).
 
 ## Module Boundaries — `cyd-gb`
 
@@ -89,7 +89,7 @@ Boundaries are enforced by convention only; there is no build-level enforcement.
   twice by two names. **Treat this duplication as a known hazard** when changing boards.
 - **Button-code layering is inverted.** `button_input.cpp:2` includes `touch_input.h` solely to get the
   `GB_BTN_*` bit constants, which are defined at `touch_input.h:6-14`. The physical-button module therefore
-  depends on the touchscreen module it is meant to replace. `ROADMAP.md` §9 deletes `touch_input.cpp`; the
+  depends on the touchscreen module it is meant to replace. `reference/ORIGINAL_ROADMAP.md` §9 deletes `touch_input.cpp`; the
   constants must move first or `button_input.cpp` stops compiling.
 
 **Sources:** files and lines as cited above (read 2026-08-27).
@@ -103,10 +103,10 @@ Boundaries are enforced by convention only; there is no build-level enforcement.
 brightness from NVS (`main.cpp:164-172`). **Source:** `src/main.cpp:135-175` (read 2026-08-27).
 
 **`main.cpp:138` and `:141` drive `LED_R_PIN` as an output and set it HIGH at every boot.** `LED_R_PIN` is
-`4` (`include/hw_config.h:23`). On the target ESP32-2432S024 board, `ROADMAP.md:52` records IO4 as the audio
-amplifier enable, HIGH = on — and `ROADMAP.md:76-78` calls out this exact line as a defect to fix in Phase 1.
+`4` (`include/hw_config.h:23`). On the target ESP32-2432S024 board, `reference/ORIGINAL_ROADMAP.md:52` records IO4 as the audio
+amplifier enable, HIGH = on — and `reference/ORIGINAL_ROADMAP.md:76-78` calls out this exact line as a defect to fix in Phase 1.
 On the current board it is a status LED; on the target board it is the amp. **Sources:**
-`src/main.cpp:138,141`, `include/hw_config.h:23`, `ROADMAP.md:52,76-78` (read 2026-08-27).
+`src/main.cpp:138,141`, `include/hw_config.h:23`, `reference/ORIGINAL_ROADMAP.md:52,76-78` (read 2026-08-27).
 
 `loop()` is the per-game cycle, and it runs the ROM browser every iteration: `sd_scan_roms()` fills a fixed
 `RomEntry roms[64]` array (`main.cpp:178`, `sd_manager.h:8`), `launcher_show()` returns an index or the
@@ -116,12 +116,12 @@ calls `gb_init()` (`main.cpp:199`), then `run_emu()` loops on `emu_run_frame()` 
 opens the in-game menu (`main.cpp:206`, `:83-118`, `:24-30`).
 **Sources:** `src/main.cpp:177-209`, `src/emulator_bridge.cpp:117-176` (read 2026-08-27).
 
-**This `loop()` structure is itself the thing `ROADMAP.md` §6.1 forbids** — quitting a game returns to a full
-ROM browser. `ROADMAP.md:417-425` replaces it with a single boot-time NFC read, and §8.1 removes the menu's
-Quit entry for the same reason. **Source:** `ROADMAP.md:404-415, 513-524` (read 2026-08-27).
+**This `loop()` structure is itself the thing `reference/ORIGINAL_ROADMAP.md` §6.1 forbids** — quitting a game returns to a full
+ROM browser. `reference/ORIGINAL_ROADMAP.md:417-425` replaces it with a single boot-time NFC read, and §8.1 removes the menu's
+Quit entry for the same reason. **Source:** `reference/ORIGINAL_ROADMAP.md:404-415, 513-524` (read 2026-08-27).
 
 ## Verification status
 
 All structural claims cited to file and line. Not verified: whether `bt_scanner.cpp` and `ui_launcher.cpp`
 hold further cross-module dependencies beyond those listed — both were skimmed for structure rather than read
-in full, since `ROADMAP.md` §9 marks both for deletion or replacement.
+in full, since `reference/ORIGINAL_ROADMAP.md` §9 marks both for deletion or replacement.

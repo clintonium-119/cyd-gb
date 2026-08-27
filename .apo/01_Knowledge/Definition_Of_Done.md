@@ -23,7 +23,7 @@ Team-owned. Not extractable from the codebase — `/apo:init` does not invent it
 > Expected answers when this section is filled:
 > - [ ] **Build gate:** must `pio run` succeed warning-free, or are warnings tolerated? Is a successful build
 >       enough, or must the firmware be flashed and booted?
-> - [ ] **Hardware gate:** `ROADMAP.md` §10 gives each phase an explicit **Exit:** condition (e.g. Phase 2
+> - [ ] **Hardware gate:** `reference/ORIGINAL_ROADMAP.md` §10 gives each phase an explicit **Exit:** condition (e.g. Phase 2
 >       "a game renders, and you have a measured baseline"). Is meeting that Exit line the definition of done
 >       for the corresponding apo phase?
 > - [ ] **Measurement gate:** several phases say "re-measure" (§10 Phases 3–6). Must a frame-time number be
@@ -35,8 +35,8 @@ Team-owned. Not extractable from the codebase — `/apo:init` does not invent it
 >       step at all, or does `poc-gb` accumulate direct commits?
 > - [ ] **Regression check:** is there a canonical test ROM and a set of screens that must still render
 >       correctly before a rendering change is called done?
-> - [ ] **Bench-item gate:** `ROADMAP.md` §11 marks Phase 0 blocking. Must its open items be closed before
+> - [ ] **Bench-item gate:** `reference/ORIGINAL_ROADMAP.md` §11 marks Phase 0 blocking. Must its open items be closed before
 >       any dependent phase can be marked done?
 >
-> Look at: `ROADMAP.md:579-652` (phase Exit conditions and the open-items table), `git log --oneline` for
+> Look at: `reference/ORIGINAL_ROADMAP.md:579-652` (phase Exit conditions and the open-items table), `git log --oneline` for
 > the commit-message conventions used so far.

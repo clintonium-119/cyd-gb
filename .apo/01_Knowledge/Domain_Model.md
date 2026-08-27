@@ -41,7 +41,7 @@ External, owned by the vendored core. Allocated once with `malloc(sizeof(struct 
 initialised by `gb_init()` with five callbacks. Visible only inside `emulator_bridge.cpp`.
 **Source:** `src/emulator_bridge.cpp:49, 165-172`; `include/peanut_gb.h` (read 2026-08-27).
 
-`ROADMAP.md:494-499` records why this matters for saves: `struct gb_s`'s "first ~45 lines are function
+`reference/ORIGINAL_ROADMAP.md:494-499` records why this matters for saves: `struct gb_s`'s "first ~45 lines are function
 pointers that change on every recompile," which is the stated reason save-states are out of scope.
 
 ### Cartridge RAM (`cram`) â€” battery-backed save data
@@ -67,7 +67,7 @@ ROM address. 16 of them, indexed by a 32-entry direct-mapped hash `ht`.
 struct TouchCalibration { int16_t x_min, x_max, y_min, y_max; bool swapped, invert_x, invert_y; };
 ```
 
-Persisted to NVS. Slated for deletion with the touch subsystem (`ROADMAP.md:556`).
+Persisted to NVS. Slated for deletion with the touch subsystem (`reference/ORIGINAL_ROADMAP.md:556`).
 **Source:** `include/touch_input.h:16-19` (read 2026-08-27).
 
 ### Button word â€” a `uint16_t` bitmask
@@ -95,7 +95,7 @@ These constants live in `touch_input.h` but are consumed by `button_input.cpp` â
 - **Emulator 1:1 open ROM file.** `romf` is a single module-level `File`; the page cache reads through it.
   One game at a time, by construction. **Source:** `src/emulator_bridge.cpp:26-27, 40-44`.
 - **Palette index â†’ colour table.** `curpal` indexes `pals[NUM_PALETTES][4]`, 20 four-entry RGB565 tables
-  with a parallel `palnames[]`. `ROADMAP.md:230-266` widens this to `[N][3][4]` for 12-colour output.
+  with a parallel `palnames[]`. `reference/ORIGINAL_ROADMAP.md:230-266` widens this to `[N][3][4]` for 12-colour output.
   **Source:** `src/emulator_bridge.cpp:60-95`, `include/emulator_bridge.h:23-26`.
 
 ## Invariants
@@ -119,7 +119,7 @@ These constants live in `touch_input.h` but are consumed by `button_input.cpp` â
   `src/emulator_bridge.cpp:32, 96, 99, 102, 109`.
 - **Dirty-tracking is stubbed, not implemented.** `emu_cart_ram_dirty()` returns `false` unconditionally,
   `emu_get_cart_ram_last_write_ms()` returns `0`, and `emu_clear_cart_ram_dirty()` is empty. **Source:**
-  `src/emulator_bridge.cpp:189-191`. This matters directly: `ROADMAP.md:501-508` specifies automatic saving
+  `src/emulator_bridge.cpp:189-191`. This matters directly: `reference/ORIGINAL_ROADMAP.md:501-508` specifies automatic saving
   driven by "auto-flush when SRAM is dirty and idle ~10 s", which these three functions exist to support and
   currently cannot.
 
