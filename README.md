@@ -1,135 +1,73 @@
- # 🎮 CYD-GB
+# CYD-GB
 
-**Game Boy emulator for the $15 ESP32 Cheap Yellow Display — fully touchscreen controlled.**
+A Game Boy (DMG) emulator for the **ESP32-2432S024** — the 2.4" variant of the "Cheap Yellow Display"
+board. Ten of these are being built into original Game Boy shells, with physical buttons and games chosen
+by inserting an NFC-tagged cartridge. It replaces the upstream touchscreen fork's on-screen controls and
+ROM browser: on the finished units there is no way to pick a game from the device.
 
-The first GB emulator running on ESP32-2432S028R (CYD) without PSRAM and without any physical buttons. Just flash, insert SD card with ROMs, and play with your fingers.
+## Status
 
-## Features
-
-- **No extra hardware** — runs on a stock CYD board ($15)
-- **Touchscreen controls** — D-pad, A, B, Start, Select all on-screen
-- **SD card ROM browser** — touch to select and play
-- **20 color palettes** — Classic Green, DMG, Neon, Sepia and more
-- **Save system** — battery saves persist on SD card
-- **Smart calibration** — 5-point touch calibration saved to NVS
-- **Settings persist** — palette, frame skip, brightness remembered across reboots
-- **SPIFFS ROM cache** — copies ROM from SD to flash for faster reads
+Early. No hardware is on hand yet — every part is on order, so the firmware is being taken as far as it
+can go without a board. Right now it builds for the target and loads a single hard-coded test ROM at startup; the
+cartridge reader, the button driver for the real expander, audio, and the landscape renderer are all
+still ahead. See [`ROADMAP.md`](ROADMAP.md) for what is built, what is next, and what is waiting on the
+bench.
 
 ## Hardware
 
-**Required:** [ESP32-2432S028R](https://makeradvisor.com/tools/cyd-cheap-yellow-display-esp32-2432s028r/) + FAT32 microSD card. That's it.
+Full pin map and part choices are in [`reference/ORIGINAL_ROADMAP.md`](reference/ORIGINAL_ROADMAP.md) §1;
+the pins the firmware actually declares are in [`include/hw_config.h`](include/hw_config.h).
 
-## Quick Start
+| | |
+|---|---|
+| Board | ESP32-2432S024 (ESP32-D0WD-V3, 4 MB flash, no PSRAM) |
+| Panel | ST7789 240×320 SPI, backlight on IO21 |
+| SD card | onboard slot on IO5 / IO18 / IO19 / IO23 |
+| Buttons | 8-way PCB via an MCP23017 expander at I²C 0x20 — *planned*, the current driver still speaks PCF8574 |
+| Cartridges | PN532 NFC reader at I²C 0x24 — *planned* |
+| Audio | onboard amp, enable on IO4, DAC on IO26 — *planned, never driven yet* |
+| I²C bus | SDA IO27, SCL IO1 (proposed; see §1.3 for why SCL and not SDA goes on TX0) |
+| Power | 3.7 V LiPo with integrated protection, charged through the board's own charger |
 
-### 1. Clone or Download
+## Building
 
-```bash
-git clone https://github.com/artanergin44-collab/cyd-gb.git
-cd cyd-gb
+```sh
+pio run -e cyd            # build
+pio run -e cyd -t upload  # flash
+pio device monitor        # serial, 115200
 ```
 
-### 2. File Structure
+Note that with SCL on IO1 (UART TX0), `button_init()` takes over the serial transmit pin — serial output
+stops once the button bus comes up. Comment out `button_init()` if you need a full boot log.
 
-Make sure your project folder looks exactly like this:
+## SD card
 
-```
-cyd-gb/
-├── platformio.ini
-├── partitions.csv
-├── include/
-│   ├── hw_config.h
-│   ├── display.h
-│   ├── touch_input.h
-│   ├── sd_manager.h
-│   ├── ui_launcher.h
-│   └── emulator_bridge.h
-├── src/
-│   ├── main.cpp
-│   ├── display.cpp
-│   ├── touch_input.cpp
-│   ├── sd_manager.cpp
-│   ├── ui_launcher.cpp
-│   └── emulator_bridge.cpp
-└── lib/            (empty folder)
-```
-
-> **Important:** The `.cpp` files MUST be inside the `src/` folder and `.h` files inside `include/`. PlatformIO will not compile the project if files are in the wrong location. If you downloaded the files flat, create these folders and move the files accordingly.
-
-### 3. Download Peanut-GB
-
-[Peanut-GB](https://github.com/deltabeard/Peanut-GB) is the emulator core (MIT license). It is **not included** in this repo — you must download it:
-
-```bash
-curl -L -o include/peanut_gb.h \
-  "https://raw.githubusercontent.com/deltabeard/Peanut-GB/master/peanut_gb.h"
-```
-
-Or manually download `peanut_gb.h` from [here](https://github.com/deltabeard/Peanut-GB/blob/master/peanut_gb.h) and place it in the `include/` folder.
-
-### 4. Prepare SD Card
-
-Format as FAT32 and create this structure:
+FAT32. The firmware expects:
 
 ```
-SD Card/
-├── roms/
-│   ├── gb/     <- put .gb ROM files here
-│   └── gbc/    <- put .gbc ROM files here
-└── saves/      <- created automatically
+/roms/gb/     Game Boy ROMs
+/saves/       cartridge RAM saves, written on Save from the pause menu
 ```
 
-### 5. Build and Flash
+Until the cartridge reader lands, `loop()` loads exactly one path — `/roms/gb/test.gb` — and reloads it
+on quit. That stub is deliberately not a browser and is not meant to grow into one; it disappears when
+NFC cartridge matching arrives.
 
-```bash
-# First time only: erase flash to initialize SPIFFS partition
-pio run -t erase --upload-port /dev/ttyUSB0
+## Design docs
 
-# Build and upload
-pio run -t upload --upload-port /dev/ttyUSB0
-
-# Optional: serial monitor
-pio device monitor -b 115200 --port /dev/ttyUSB0
-```
-
-> On Windows replace `/dev/ttyUSB0` with `COM3` (or your port).
-> On macOS use `/dev/tty.usbserial-*`.
-
-## Controls
-
-| Button | Location |
-|--------|----------|
-| D-Pad | Bottom-left |
-| A / B | Bottom-right |
-| Start / Select | Bottom-center |
-| Pause Menu | Top-right **II** icon |
-
-**Pause menu:** Save, Load, Settings, Calibrate, Quit.
-
-**Settings:** 20 color palettes, frame skip (0-4), brightness control.
-
-## How It Works
-
-CYD has no PSRAM (only 320KB RAM), so a 1MB ROM can't fit in memory. CYD-GB solves this with:
-
-1. **SPIFFS cache** — ROM copied from SD to internal flash (10x faster reads)
-2. **Page cache** — 16x4KB LRU cache with hash lookup
-3. **Bank 0 pinning** — first 32KB always in RAM
-4. **Bit-bang touch SPI** — custom driver avoids bus conflicts with display and SD card
-
-## Troubleshooting
-
-| Problem | Fix |
-|---------|-----|
-| Black screen | Try `-DILI9341_DRIVER` instead of `-DILI9341_2_DRIVER` in platformio.ini |
-| Touch not working | Use Pause menu -> Calibrate |
-| SPIFFS mount failed | Run `pio run -t erase` then re-flash |
-| Compile error about peanut_gb.h | Download it (see step 3 above) |
-| Files won't compile | Make sure .cpp files are in `src/` and .h files in `include/` |
+- [`reference/ORIGINAL_ROADMAP.md`](reference/ORIGINAL_ROADMAP.md) — the settled design: hardware,
+  rendering, audio, the cartridge system, and the open questions that need a bench to answer.
+- [`ROADMAP.md`](ROADMAP.md) — the work breakdown: which workstream does what, in what order, and what
+  each one defers.
 
 ## Credits
 
-- [Peanut-GB](https://github.com/deltabeard/Peanut-GB) — emulator core by Mahyar Koshkouei
+- [Peanut-GB](https://github.com/deltabeard/Peanut-GB) — emulator core by Mahyar Koshkouei. Vendored at
+  `include/peanut_gb.h`, pinned to an upstream commit recorded in that file's header; refresh it with
+  `scripts/update_peanut_gb.sh <sha>`.
 - [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI) — display driver
+- [artanergin44-collab/cyd-gb](https://github.com/artanergin44-collab/cyd-gb) — the upstream fork this
+  started from
 - [CYD Community](https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display) — hardware docs
 
 ## License

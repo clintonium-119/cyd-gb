@@ -1,21 +1,20 @@
 #include <Arduino.h>
 #include "hw_config.h"
 #include "display.h"
-#include "touch_input.h"
 #include "button_input.h"
 #include "sd_manager.h"
 #include "ui_launcher.h"
 #include "emulator_bridge.h"
-#include "bt_scanner.h"
+#include "settings.h"
 
-static RomEntry roms[64];
-static int rcnt = 0;
+// Interim boot ROM. WS-06 replaces this with the NFC cartridge match; until then
+// there is exactly one path and no way to choose another.
+#define DEV_TEST_ROM_PATH "/roms/gb/test.gb"
+
 static char cur_path[80] = {0};
 static TaskHandle_t ttask = nullptr;
 static volatile bool emu_on = false, menu_req = false;
-static bool show_fps_overlay = false;
-static bool show_sd_save_overlay = false;
-static bool has_saved_settings = false;
+static settings_t settings;
 
 void input_task(void* p) {
     (void)p;
@@ -109,7 +108,7 @@ void run_emu() {
                 case 3:  // quit
                     emu_on=false; save_ram(); tt_stop(); return;
                 case 5:  // settings
-                    launcher_settings_menu(&show_fps_overlay, &show_sd_save_overlay); break;
+                    launcher_settings_menu(&settings); break;
             }
             display_clear(TFT_BLACK);
             display_draw_controls();
@@ -120,30 +119,18 @@ void run_emu() {
     }
 }
 
-static void run_bt_scanner() {
-    bt_scanner_enter();
-    while (true) {
-        if (bt_scanner_loop()) break;
-        delay(10);
-        taskYIELD();
-    }
-    bt_scanner_shutdown();
-    display_clear(TFT_BLACK);
-}
-
 // ─── Setup ──────────────────────────────────────────────────────────────────
 void setup() {
     Serial.begin(115200); delay(200);
     Serial.println("\n=== CYD-GB ===");
-    pinMode(LED_R_PIN, OUTPUT);
+    if (LED_R_PIN >= 0) pinMode(LED_R_PIN, OUTPUT);
     if (LED_G_PIN >= 0) pinMode(LED_G_PIN, OUTPUT);
     if (LED_B_PIN >= 0) pinMode(LED_B_PIN, OUTPUT);
-    digitalWrite(LED_R_PIN, HIGH);
+    if (LED_R_PIN >= 0) digitalWrite(LED_R_PIN, HIGH);
     if (LED_G_PIN >= 0) digitalWrite(LED_G_PIN, HIGH);
     if (LED_B_PIN >= 0) digitalWrite(LED_B_PIN, HIGH);
 
     display_init();
-    touch_init();
     button_init();
 
     if(!sd_init()) {
@@ -160,38 +147,27 @@ void setup() {
     delay(1200);
 
     // Load saved settings from NVS
-    uint8_t s_pal, s_fs, s_bl;
-    if (touch_load_settings(&s_pal, &s_fs, &s_bl, &show_fps_overlay, &show_sd_save_overlay)) {
-        has_saved_settings = true;
-        emu_set_palette(s_pal);
-        emu_set_frame_skip(s_fs);
-        display_set_backlight(s_bl);
-        Serial.printf("[INIT] Loaded settings: pal=%d fs=%d bl=%d fps_ov=%d save_ov=%d\n",
-                      s_pal, s_fs, s_bl, (int)show_fps_overlay, (int)show_sd_save_overlay);
-    }
+    settings_defaults(&settings);
+    bool stored = settings_load(&settings);
+    emu_set_palette(settings.palette);
+    emu_set_frame_skip(settings.frameskip);
+    display_set_backlight(settings.brightness);
+    Serial.printf("[INIT] Settings (%s): pal=%d fs=%d bl=%d vol=%d gx=%d gy=%d\n",
+                  stored ? "NVS" : "defaults",
+                  settings.palette, settings.frameskip, settings.brightness,
+                  settings.volume, settings.game_x, settings.game_y);
 
     Serial.printf("[INIT] Heap: %u\n",ESP.getFreeHeap());
 }
 
 // ─── Loop ───────────────────────────────────────────────────────────────────
 void loop() {
-    rcnt = sd_scan_roms(roms, 64);
-    int sel = launcher_show(roms, rcnt);
-    if (sel == LAUNCHER_SEL_BT_SCANNER) {
-        run_bt_scanner();
-        return;
-    }
-    if(sel<0||sel>=rcnt) return;
-
-    strncpy(cur_path,roms[sel].full_path,79);
-    cur_path[79] = 0;
+    strncpy(cur_path, DEV_TEST_ROM_PATH, sizeof cur_path - 1);
+    cur_path[sizeof cur_path - 1] = 0;
 
     // Loading screen
     tft.fillScreen(TFT_BLACK); tft.setTextDatum(MC_DATUM);
     tft.setTextColor(0x07E0); tft.drawString("Loading...",SCREEN_W/2,90,4);
-    char nm[30]; strncpy(nm,roms[sel].filename,28); nm[28]=0;
-    char* d=strrchr(nm,'.'); if(d)*d=0;
-    tft.setTextColor(TFT_WHITE); tft.drawString(nm,SCREEN_W/2,130,2);
 
     if(!emu_open_rom(cur_path)){
         tft.setTextColor(TFT_RED); tft.drawString("Open failed!",SCREEN_W/2,170,2); delay(2000); return;
@@ -201,7 +177,6 @@ void loop() {
     }
 
     load_ram();
-    if (!has_saved_settings) emu_set_frame_skip(2);
     if (LED_G_PIN >= 0) digitalWrite(LED_G_PIN, LOW);
     run_emu();
     if (LED_G_PIN >= 0) digitalWrite(LED_G_PIN, HIGH);

@@ -1,15 +1,10 @@
 #include "ui_launcher.h"
 #include "display.h"
-#include "touch_input.h"
 #include "button_input.h"
+#include "settings.h"
 #include "emulator_bridge.h"
 #include "hw_config.h"
 #include <Arduino.h>
-
-#define ITEMS_PP 5
-#define ITEM_H   34
-#define ITEM_Y0  44
-#define ITEM_X   8
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 static void wait_release() { 
@@ -17,113 +12,6 @@ static void wait_release() {
 	button_update();
 	while(button_get_buttons()) { button_update(); delay(10); }
 	delay(100);
-}
-
-static void draw_header(const char* t) {
-	tft.fillRect(0,0,SCREEN_W,36,0x18C3);
-	tft.setTextColor(TFT_WHITE,0x18C3); tft.setTextDatum(ML_DATUM);
-	tft.drawString(t,10,18,2);
-	tft.setTextDatum(MR_DATUM); tft.setTextColor(0x7BEF,0x18C3);
-	tft.drawString("CYD-GB",SCREEN_W-10,18,1);
-}
-
-// ─── ROM List ───────────────────────────────────────────────────────────────
-static void draw_list(RomEntry* r, int cnt, int pg, int sel) {
-	int total = cnt + 1; // extra entry: BT scanner
-	int s = pg*ITEMS_PP, e = min(s+ITEMS_PP, total);
-	tft.fillRect(0,38,SCREEN_W,202,TFT_BLACK);
-
-	for (int i=s; i<e; i++) {
-		int y = ITEM_Y0 + (i-s)*ITEM_H;
-		uint16_t bg = (i==sel) ? 0x0014 : 0x0000;
-		uint16_t fg = (i==sel) ? 0xFFE0 : TFT_WHITE;
-		tft.fillRoundRect(ITEM_X,y,SCREEN_W-ITEM_X-8,ITEM_H-4,4,bg);
-
-		if (i < cnt) {
-			// Badge
-			uint16_t bc = r[i].is_gbc ? 0x07E0 : 0x7BEF;
-			const char* bt = r[i].is_gbc ? "GBC" : "GB";
-			tft.fillRoundRect(ITEM_X+3,y+5,26,18,3,bc);
-			tft.setTextColor(TFT_BLACK,bc); tft.setTextDatum(MC_DATUM);
-			tft.drawString(bt,ITEM_X+16,y+14,1);
-
-			// Name (truncated, readable)
-			char nm[30]; strncpy(nm,r[i].filename,28); nm[28]=0;
-			char* dot=strrchr(nm,'.'); if(dot)*dot=0;
-			tft.setTextColor(fg,bg); tft.setTextDatum(ML_DATUM);
-			tft.drawString(nm,ITEM_X+34,y+ITEM_H/2-2,2);
-
-			// Size
-			char sz[12]; snprintf(sz,12,"%uK",r[i].size/1024);
-			tft.setTextColor(0x7BEF,bg); tft.setTextDatum(MR_DATUM);
-			tft.drawString(sz,SCREEN_W-12,y+ITEM_H/2-2,1);
-		} else {
-			// Virtual app entry: BT scanner
-			tft.fillRoundRect(ITEM_X+3,y+5,26,18,3,0x07FF);
-			tft.setTextColor(TFT_BLACK,0x07FF); tft.setTextDatum(MC_DATUM);
-			tft.drawString("BT",ITEM_X+16,y+14,1);
-
-			tft.setTextColor(fg,bg); tft.setTextDatum(ML_DATUM);
-			tft.drawString("Beacon Scanner",ITEM_X+34,y+ITEM_H/2-2,2);
-
-		tft.setTextColor(0x7BEF,bg); tft.setTextDatum(MR_DATUM);
-		tft.drawString("APP",SCREEN_W-12,y+ITEM_H/2-2,1);
-		}
-	}
-
-	// Nav bar
-	tft.fillRect(0,SCREEN_H-20,SCREEN_W,20,0x18C3);
-	int tp = (total+ITEMS_PP-1)/ITEMS_PP;
-	if (tp>1) {
-		tft.setTextColor(TFT_WHITE,0x18C3); tft.setTextDatum(MC_DATUM);
-		char ps[16]; snprintf(ps,16,"< %d/%d >",pg+1,tp);
-		tft.drawString(ps,SCREEN_W/2,SCREEN_H-10,1);
-	}
-	tft.setTextColor(0xFFE0,0x18C3); tft.setTextDatum(MR_DATUM);
-	tft.drawString("[CAL]",SCREEN_W-5,SCREEN_H-10,1);
-}
-
-int launcher_show(RomEntry* roms, int cnt) {
-	int pg=0, sel=0;
-	tft.fillScreen(TFT_BLACK);
-	draw_header("Game Boy ROMs");
-
-	draw_list(roms,cnt,pg,sel);
-	uint16_t prev = 0;
-	uint32_t dbg_t = 0;
-	int total = cnt + 1;
-	int tp = (total+ITEMS_PP-1)/ITEMS_PP;
-	while (true) {
-		button_update();
-		uint16_t b = button_get_buttons();
-		// Up
-		if ((b & GB_BTN_UP) && !(prev & GB_BTN_UP)) {
-			if (sel > 0) sel--; else if (pg>0) { pg--; sel = min(total-1, pg*ITEMS_PP+ITEMS_PP-1); }
-			draw_list(roms,cnt,pg,sel);
-		}
-		// Down
-		if ((b & GB_BTN_DOWN) && !(prev & GB_BTN_DOWN)) {
-			if (sel < total-1 && sel < (pg+1)*ITEMS_PP-1) sel++; else if (pg<tp-1) { pg++; sel = pg*ITEMS_PP; }
-			draw_list(roms,cnt,pg,sel);
-		}
-		// Left = prev page
-		if ((b & GB_BTN_LEFT) && !(prev & GB_BTN_LEFT)) {
-			if (pg>0) { pg--; sel = pg*ITEMS_PP; draw_list(roms,cnt,pg,sel); }
-		}
-		// Right = next page
-		if ((b & GB_BTN_RIGHT) && !(prev & GB_BTN_RIGHT)) {
-			if (pg<tp-1) { pg++; sel = pg*ITEMS_PP; draw_list(roms,cnt,pg,sel); }
-		}
-		// A = select
-		if ((b & GB_BTN_A) && !(prev & GB_BTN_A)) {
-			if (sel == cnt) return LAUNCHER_SEL_BT_SCANNER;
-			return sel;
-		}
-
-		prev = b;
-		if (millis()-dbg_t>3000) { dbg_t=millis(); Serial.printf("[LAUNCH] pg=%d sel=%d\n",pg,sel); }
-		delay(20);
-	}
 }
 
 // ─── In-game menu ───────────────────────────────────────────────────────────
@@ -186,12 +74,10 @@ int launcher_ingame_menu() {
 }
 
 // ─── Settings menu ──────────────────────────────────────────────────────────
-void launcher_settings_menu(bool* show_fps_overlay, bool* show_save_overlay) {
-	uint8_t pal = emu_get_palette();
-	uint8_t fs = emu_get_frame_skip();
-	uint8_t bl = 255; // brightness
-	(void)show_fps_overlay;
-	(void)show_save_overlay;
+void launcher_settings_menu(settings_t* s) {
+	uint8_t pal = s->palette;
+	uint8_t fs = s->frameskip;
+	uint8_t bl = s->brightness;
 
 	// Selected row: 0=palette,1=frameskip,2=brightness,3=done
 	int sel = 0;
@@ -269,7 +155,10 @@ void launcher_settings_menu(bool* show_fps_overlay, bool* show_save_overlay) {
 			if ((b & GB_BTN_RIGHT) && !(prev & GB_BTN_RIGHT)) { if (bl<255) { bl=min(255,bl+25); display_set_backlight(bl); draw_settings(sel); } }
 		} else if (sel==3) {
 			if ((b & GB_BTN_A) && !(prev & GB_BTN_A)) {
-				touch_save_settings(pal, fs, bl, false, false);
+				s->palette = pal;
+				s->frameskip = fs;
+				s->brightness = bl;
+				settings_save(s);
 				wait_release();
 				return;
 			}

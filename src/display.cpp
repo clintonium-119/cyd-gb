@@ -1,5 +1,6 @@
 #include "display.h"
 #include "hw_config.h"
+#include "render_config.h"
 #include <Arduino.h>
 
 TFT_eSPI tft = TFT_eSPI();
@@ -48,5 +49,4 @@ void display_push_gb_line(uint8_t y, uint16_t* buf) {
 // ─── Control bar (y=192..240) ───────────────────────────────────────────────
 void display_draw_controls() {
     // Touch GUI removed: we use physical I2C buttons instead.
-    (void)CTRL_Y; (void)CTRL_H; // keep unused vars quiet
 }

@@ -29,6 +29,13 @@
  * is Copyright (c) 2015-2019 Lior Halphon.
  */
 
+/*
+ * Vendored from https://github.com/deltabeard/Peanut-GB — upstream commit
+ * c13c99cd967d72dbd9e600795cd66169ca3945c7 (2025-11-08).
+ * Local modifications: none.
+ * Update with scripts/update_peanut_gb.sh <sha>.
+ */
+
 #ifndef PEANUT_GB_H
 #define PEANUT_GB_H
 

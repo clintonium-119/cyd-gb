@@ -128,7 +128,12 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
 - Record firmware size before and after.
 
 **Code-complete exit**
-- `pio run -e cyd` builds warning-free; no `BLE*`, `XPT2046`, `touch_*` symbols in the map file.
+- `pio run -e cyd` builds warning-free.
+- No Bluetooth or touchscreen code links into the firmware:
+  `xtensa-esp32-elf-nm .pio/build/cyd/firmware.elf | grep -E ' (T|t|D|d|B|b|R|r) .*(BLEDevice|BLEScan|XPT2046|touch_(init|update|get|save|load|run|set))' | wc -l`
+  returns 0. This replaces the original `firmware.map` grep, which counted ESP-IDF's capacitive
+  touch-sensor driver (`touch_pad_*`, a different peripheral) and so could never reach 0 — see WS-01's
+  DEC on the symbol-absence gate.
 - Flash usage recorded in the step Outcome (expect ≥1 MB reclaimed).
 - `hw_config.h` has no pin assignment that isn't in §1.2.
 

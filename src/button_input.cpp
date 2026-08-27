@@ -1,17 +1,16 @@
 #include "button_input.h"
-#include "touch_input.h"
 #include "hw_config.h"
 #include <Wire.h>
 
 static volatile uint16_t cur_btns = 0;
 
 void button_init() {
-    Wire.begin(BUTTON_I2C_SDA, BUTTON_I2C_SCL);
+    Wire.begin(I2C_SDA, I2C_SCL);
     Wire.setClock(100000);
 }
 
 static uint16_t read_pcf_buttons() {
-    Wire.requestFrom((uint8_t)BUTTON_I2C_ADDR, (uint8_t)1);
+    Wire.requestFrom((uint8_t)BTN_I2C_ADDR, (uint8_t)1);
     if (Wire.available() < 1) return 0;
     uint8_t raw = Wire.read();
     raw = ~raw;  // PCF8574 inputs are pulled high; pressed is low.
