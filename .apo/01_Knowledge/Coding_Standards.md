@@ -8,7 +8,7 @@ title: "Coding Standards"
 status: in_progress
 owner: ""
 created: '2026-08-27'
-updated: '2026-08-27'
+updated: '2026-08-31'
 reviewed_on: ""
 related_notes: ["[[01_Knowledge/Code_Map]]", "[[01_Knowledge/Prompt_Standards]]"]
 tags: [apovault, knowledge, standards]
@@ -173,6 +173,7 @@ Flat. `src/*.cpp` and `include/*.h`, no subdirectories, one header per implement
 
 New modules should follow the same pairing: `src/<name>.cpp` + `include/<name>.h`, prefix chosen to match the
 module's public API rather than the filename.
+- **Do:** for a `lib/` module that needs a vendored project header from `include/`, add it explicitly in the library's `library.json` via `"build": {"flags": ["-I../../include"]}` (path relative to the library root) — PlatformIO does not put the project `include/` dir on a library's search path automatically (unlike `src/`/`test/`). **Do not:** copy the vendored header into the library to work around the path.
 
 ## Verification status
 
