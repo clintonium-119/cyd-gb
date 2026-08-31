@@ -51,24 +51,30 @@ adding or editing a palette, all three of `NUM_PALETTES`, `pals[]` and `palnames
 
 ## Test conventions (observed)
 
-**No tests exist.** No `test/` directory, no file matching `*test*` or `*spec*`, no `.github/workflows/`, and
-no test framework in `lib_deps`. **Source:** `find` for test/spec files returned nothing; `ls .github` → not
-present; `platformio.ini:73-76` (read 2026-08-27).
+Host-side Unity tests run under PlatformIO's native environment: `pio test -e native`. One suite per
+module at `test/test_<name>/test_main.c`; suites cover the gbcore seams, a Peanut-GB toolchain check,
+a headless emulator smoke test, and a golden-frame hash regression over the committed
+`test/roms/dmg-acid2.gb` (MIT, provenance in `test/roms/README.md`). `.github/workflows/ci.yml` runs
+`pio run -e cyd` + `pio test -e native` on every push and PR.
+**Sources:** `platformio.ini` (`[env:native]`, `test_framework = unity`), `test/`,
+`.github/workflows/ci.yml` (read 2026-08-31).
 
-Verification in this project is by bench measurement on hardware, not automated tests. `reference/ORIGINAL_ROADMAP.md` §10 gives
+### Core module boundary and tests
+
+Any function with no `Arduino.h` (or ESP-IDF) dependency lives in `lib/gbcore/` as pure C and gets a
+Unity test (`ROADMAP.md` §3 rule 3: "host tests for anything pure"). `src/` files are thin Arduino
+wrappers over gbcore, so the tested code is the shipped code — PlatformIO's LDF builds the same
+sources for `env:cyd` and `env:native`. The test-only headless runner in `lib/gb_runner/` sits beside
+gbcore but must never be referenced from `src/`. `[env:native]`'s emulator build flags must mirror
+`[env:cyd]`'s exactly, or the golden-frame test pins the wrong configuration (comment at the
+`[env:native]` block).
+**Sources:** `lib/gbcore/`, `lib/gb_runner/gb_runner.h`, `platformio.ini`, `ROADMAP.md` §3
+(read 2026-08-31).
+
+On-target verification remains bench measurement on hardware. `reference/ORIGINAL_ROADMAP.md` §10 gives
 each phase an explicit **Exit:** condition, and §11 lists eight bench tests with their consequences. Treat
 those as the acceptance criteria a step's Validation section should cite.
 **Source:** `reference/ORIGINAL_ROADMAP.md:579-652` (read 2026-08-27).
-
-> **(verify)** — whether automated tests are wanted at all for this project.
->
-> Expected answers when this section is filled:
-> - [ ] Should any logic be extracted for host-side unit testing (e.g. NDEF parsing per `reference/ORIGINAL_ROADMAP.md` §6.3,
->       filename normalisation per §6.4 — both pure functions with clear inputs)?
-> - [ ] If so, PlatformIO `test/` with Unity, or a separate host build?
-> - [ ] Is a CI build (compile-only, no hardware) wanted to catch breakage?
->
-> Look at: `platformio.ini` (`test_framework`), `reference/ORIGINAL_ROADMAP.md` §6.3–6.4 for the pure-function candidates.
 
 ---
 
@@ -153,7 +159,8 @@ logging, bus access, allocation.
 
 ### Tests (subsystem-specific)
 
-None. See "Test conventions (observed)" above.
+`test/test_<module>/test_main.c`, one Unity suite per module, run with `pio test -e native`. See
+"Test conventions (observed)" above.
 
 ---
 
@@ -169,5 +176,6 @@ module's public API rather than the filename.
 
 ## Verification status
 
-Cited throughout. The formatting rail is user-confirmed rather than derived. The `(verify)` on test strategy
-is a genuine open question, not a gap in the scan.
+Cited throughout. The formatting rail is user-confirmed rather than derived. The former `(verify)` on test
+strategy was resolved 2026-08-31: host-side Unity tests under `[env:native]` with the pure logic in
+`lib/gbcore/` (see "Test conventions (observed)").

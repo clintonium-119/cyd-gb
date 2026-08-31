@@ -1,0 +1,7 @@
+{
+  "name": "gb_runner",
+  "version": "0.1.0",
+  "build": {
+    "flags": ["-I../../include"]
+  }
+}

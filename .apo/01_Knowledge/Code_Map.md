@@ -94,6 +94,22 @@ Boundaries are enforced by convention only; there is no build-level enforcement.
 
 **Sources:** files and lines as cited above (read 2026-08-27).
 
+The rules above describe the Arduino layer (`src/` + `include/`). Since the host-test workstream
+(scanned 2026-08-31) the tree has a second, pure-C layer they are scoped to sit above:
+
+- **Pure logic lives in `lib/gbcore/`** — Arduino-free C modules (`render/scaler`, `cart/ndef`,
+  `cart/match`, `input/combo`, `audio/mix`), each a `<dir>/<name>.c` + `<name>.h` pair with
+  `<module>_<verb>` free functions, built by PlatformIO's LDF for both `env:cyd` and `env:native`.
+  `src/<name>.cpp` + `include/<name>.h` pairing remains the rule for the Arduino wrappers only.
+  **Source:** `lib/gbcore/`, `platformio.ini` (`[env:native]`).
+- **`lib/gb_runner/` is test-only** — a headless Peanut-GB runner for the native suite; nothing under
+  `src/` may reference it, so it never links into firmware (checked by the unchanged `env:cyd` flash
+  size). **Source:** `lib/gb_runner/gb_runner.h` header comment.
+- **`peanut_gb.h` in one FIRMWARE translation unit still holds** — `emulator_bridge.cpp` remains the
+  only include under `src/`; the host-side includes (`lib/gb_runner/gb_runner.c`,
+  `test/test_toolchain/test_main.c`) never compile into `env:cyd`, so the emulator stays swappable.
+  **Source:** `grep -rn "peanut_gb.h" src/ lib/ test/` (read 2026-08-31).
+
 ## Boot and control flow
 
 `setup()` initialises in this order: Serial at 115200 (`main.cpp:136`), LED pins driven HIGH

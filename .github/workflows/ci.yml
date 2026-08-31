@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          # No requirements.txt exists; the workflow file pins the
+          # PlatformIO version, so it is the cache key.
+          cache-dependency-path: .github/workflows/ci.yml
+
+      # Pinned so CI doesn't drift from the local toolchain
+      # (espressif32@6.5.0 is pinned in platformio.ini).
+      - name: Install PlatformIO
+        run: pip install platformio==6.1.19
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: platformio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+      - name: Build firmware (env:cyd)
+        run: pio run -e cyd
+
+      - name: Run native tests (env:native)
+        run: pio test -e native
