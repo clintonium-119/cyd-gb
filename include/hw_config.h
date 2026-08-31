@@ -7,8 +7,16 @@
 
 // ─── Display (onboard) ──────────────────────────────────────────────────────
 #define TFT_PIN_BL     21   // Backlight PWM (§1.2, confirmed). Panel pins are set in platformio.ini.
-#define SCREEN_W       240
-#define SCREEN_H       320
+
+// Landscape: the panel is 320 px horizontal x 240 px vertical once rotated
+// (§2.1). TFT_WIDTH / TFT_HEIGHT in platformio.ini still describe the
+// controller's native portrait orientation — rotation, not those, decides
+// which way round the image sits.
+#define SCREEN_W      320
+#define SCREEN_H      240
+#define TFT_ROTATION_LANDSCAPE 1   // §11 confirms 1 vs 3 once a board sits in a shell;
+                                   // 3 is the same landscape flipped end for end, so this
+                                   // flips if the USB socket lands on the wrong side.
 
 // ─── SD card (onboard, VSPI, now exclusive to SD) ───────────────────────────
 #define SD_PIN_CS       5   // §1.2, confirmed

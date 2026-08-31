@@ -79,7 +79,6 @@ void run_emu() {
     emu_on = true; menu_req = false;
     tt_start();
     display_clear(TFT_BLACK);
-    display_draw_controls();
 
     while(emu_on) {
         emu_run_frame();
@@ -111,7 +110,6 @@ void run_emu() {
                     launcher_settings_menu(&settings); break;
             }
             display_clear(TFT_BLACK);
-            display_draw_controls();
             tt_start();
         }
 
@@ -151,6 +149,7 @@ void setup() {
     bool stored = settings_load(&settings);
     emu_set_palette(settings.palette);
     emu_set_frame_skip(settings.frameskip);
+    emu_set_viewport(settings.game_x, settings.game_y);
     display_set_backlight(settings.brightness);
     Serial.printf("[INIT] Settings (%s): pal=%d fs=%d bl=%d vol=%d gx=%d gy=%d\n",
                   stored ? "NVS" : "defaults",
