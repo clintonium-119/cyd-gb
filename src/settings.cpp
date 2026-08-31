@@ -6,7 +6,11 @@ static Preferences prefs;
 
 void settings_defaults(settings_t* s) {
     s->palette = 0;
-    s->frameskip = 2;
+    // 0, not the fork's 2: the mapped ROM removed the cache-miss hitches and
+    // the DMA push overlaps the transfer, so a skipped frame is no longer the
+    // normal case. The setting stays for bench sweeps and the diagnostic
+    // screen.
+    s->frameskip = 0;
     s->brightness = 255;
     s->volume = 0;
     s->game_x = GAME_X;

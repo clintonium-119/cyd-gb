@@ -82,12 +82,22 @@ void run_emu() {
     tt_start();
     display_clear(TFT_BLACK);
 
+    // loopTask is core 1 on arduino-esp32, which is what leaves core 0 to the
+    // push task. Logged once rather than assumed.
+    Serial.printf("[EMU] emulation on core %d\n", xPortGetCoreID());
+
     while(emu_on) {
         emu_run_frame();
 
         if (menu_req) {
             menu_req = false;
             tt_stop();
+
+            // Between frames, so nothing is half produced: stop the producer,
+            // wait for the queue to drain and take the bus before anything
+            // draws through `tft` directly. The quit case returns while still
+            // paused, which is what keeps the loading screen off the bus.
+            emu_pause_pipeline();
 
             int c = launcher_ingame_menu();
             switch(c) {
@@ -112,6 +122,7 @@ void run_emu() {
                     launcher_settings_menu(&settings); break;
             }
             display_clear(TFT_BLACK);
+            emu_resume_pipeline();
             tt_start();
         }
 
@@ -199,6 +210,11 @@ void loop() {
     if (!emu_init(rom, rom_len)) {
         tft.setTextColor(TFT_RED); tft.drawString("Init failed!",SCREEN_W/2,170,2); delay(2000); return;
     }
+
+    // After the ROM is in flash, never before: the push task makes core 0 a
+    // second consumer of the instruction cache, and a flash write stalls both
+    // cores' fetch. Started once; a later game reuses the same task.
+    emu_start_push_task();
 
     load_ram();
     if (LED_G_PIN >= 0) digitalWrite(LED_G_PIN, LOW);

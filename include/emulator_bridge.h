@@ -20,6 +20,27 @@ uint8_t emu_get_frame_skip();
 uint32_t emu_get_fps();
 void emu_reset();
 
+// ─── Pipeline ───────────────────────────────────────────────────────────────
+// Emulation and display transfer run on different cores so they overlap.
+// Peanut-GB, the scaler and this module's frame walk stay on the Arduino
+// loopTask (core 1); emu_start_push_task() creates a task on core 0 that pops
+// scaled blocks from an internal two-slot queue and pushes them over DMA.
+// Slot buffers belong to this module, and each is the producer's or the
+// consumer's exclusively, never both — the queue is the arbiter and its rules
+// are host-tested.
+//
+// Call once, after emu_init() succeeds and after anything that writes flash:
+// two cores executing from flash means a flash write stalls both.
+void emu_start_push_task();
+
+// Menu handover. Pause stops the producer, waits for the queue to drain and
+// takes the display bus, so `tft` may be drawn on directly; resume gives it
+// back. Both must be called from the emulation task, between frames — pausing
+// mid-frame would abandon the frame in progress. Every direct `tft` draw
+// during emulation belongs between them.
+void emu_pause_pipeline();
+void emu_resume_pipeline();
+
 // Viewport origin of the game image, per-unit nudgeable from NVS.
 void emu_set_viewport(int16_t x, int16_t y);
 
