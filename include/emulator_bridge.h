@@ -4,9 +4,10 @@
 
 #include "render/palette.h"
 
-bool emu_open_rom(const char* path);
-void emu_close_rom();
-bool emu_init(uint8_t* rom_data, uint32_t rom_size);
+// The ROM is not opened, copied or closed any more: the caller hands over a
+// pointer to the memory-mapped ROM partition, which must stay valid for the
+// whole session. rom_store's map guarantees that — there is no unmap.
+bool emu_init(const uint8_t* rom_data, uint32_t rom_size);
 void emu_run_frame();
 void emu_set_joypad(uint8_t buttons);
 uint8_t* emu_get_cart_ram(uint32_t* size);

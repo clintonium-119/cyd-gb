@@ -7,47 +7,20 @@
 #include <Arduino.h>
 #include <esp_timer.h>
 #include <string.h>
-#include <SD.h>
-#include <SPIFFS.h>
 
 #define ENABLE_LCD 1
 #define ENABLE_SOUND 0
 #define PEANUT_GB_HIGH_LCD_ACCURACY 0
 #include "peanut_gb.h"
 
-// ─── Page cache ─────────────────────────────────────────────────────────────
-#define PG_SZ 4096
-#define PG_N  16
-#define PG_MASK (PG_SZ-1)
-#define HASH_SZ 32
-#define HASH_M (HASH_SZ-1)
-
-struct Pg { uint32_t addr, acc; uint8_t* d; bool v; };
-static Pg pg[PG_N];
-static int8_t ht[HASH_SZ];
-static uint32_t acc = 0;
-static int npg = 0;
-static File romf;
+// ─── ROM ────────────────────────────────────────────────────────────────────
+// The ROM is a pointer into memory-mapped flash, owned by the rom_store
+// module and valid for the whole session. What used to be here — a sixteen
+// entry 4 KB page cache with its own hash table and LRU, plus a 32 KB copy of
+// bank 0 — is gone: the hardware flash cache does that job, in silicon, for
+// free (§3.2).
+static const uint8_t* rom = nullptr;
 static uint32_t romlen = 0;
-
-#define B0SZ (32*1024)
-static uint8_t* b0 = nullptr;
-
-static inline uint8_t* IRAM_ATTR cget(uint32_t a) {
-    uint32_t pb = a & ~PG_MASK;
-    int8_t i = ht[(pb>>12)&HASH_M];
-    if (i >= 0 && pg[i].v && pg[i].addr == pb) { pg[i].acc = ++acc; return &pg[i].d[a&PG_MASK]; }
-    for (int j=0;j<npg;j++) if (pg[j].v && pg[j].addr==pb) {
-        pg[j].acc=++acc; ht[(pb>>12)&HASH_M]=j; return &pg[j].d[a&PG_MASK];
-    }
-    int lru=0; uint32_t old=UINT32_MAX;
-    for (int j=0;j<npg;j++) { if (!pg[j].v){lru=j;break;} if(pg[j].acc<old){old=pg[j].acc;lru=j;} }
-    if (pg[lru].v) { int8_t oh=(pg[lru].addr>>12)&HASH_M; if(ht[oh]==lru) ht[oh]=-1; }
-    romf.seek(pb); size_t r=romf.read(pg[lru].d, min((uint32_t)PG_SZ,romlen-pb));
-    if (r<PG_SZ) memset(pg[lru].d+r,0xFF,PG_SZ-r);
-    pg[lru].addr=pb; pg[lru].acc=++acc; pg[lru].v=true; ht[(pb>>12)&HASH_M]=lru;
-    return &pg[lru].d[a&PG_MASK];
-}
 
 // ─── State ──────────────────────────────────────────────────────────────────
 static struct gb_s* gb = nullptr;
@@ -165,8 +138,13 @@ static void push_block(uint_fast8_t first, const uint16_t* lookahead)
 }
 
 // ─── Callbacks ──────────────────────────────────────────────────────────────
-static uint8_t IRAM_ATTR gb_rom_read(struct gb_s* g, const uint_fast32_t a) {
-    (void)g; if(a>=romlen) return 0xFF; if(a<B0SZ) return b0[a]; return *cget(a);
+static uint8_t IRAM_ATTR gb_rom_read(struct gb_s* g, const uint_fast32_t a)
+{
+    (void)g;
+    /* One compare more than a bare rom[a]: an out-of-range bank read from a
+     * corrupt ROM would otherwise fault through the flash cache, and this
+     * branch predicts perfectly. */
+    return (a < romlen) ? rom[a] : 0xFF;
 }
 static uint8_t IRAM_ATTR gb_cram_r(struct gb_s* g, const uint_fast32_t a) {
     (void)g; return (a<MAXRAM)?cram[a]:0xFF;
@@ -225,67 +203,59 @@ static void IRAM_ATTR lcd_line(struct gb_s* g, const uint8_t px[160], const uint
     }
 }
 
-// ─── SPIFFS copy ────────────────────────────────────────────────────────────
-static bool cp2spiffs(const char* sp, const char* dp) {
-    File s=SD.open(sp,FILE_READ); if(!s) return false;
-    File d=SPIFFS.open(dp,FILE_WRITE); if(!d){s.close();return false;}
-    uint8_t buf[512]; uint32_t tot=0;
-    while(s.available()){size_t r=s.read(buf,512);d.write(buf,r);tot+=r;
-        if(tot%65536==0) Serial.printf("[SPIFFS] %uKB\n",tot/1024);}
-    d.close();s.close();
-    Serial.printf("[SPIFFS] Done %u bytes\n",tot); return true;
-}
-
 // ─── API ────────────────────────────────────────────────────────────────────
-bool emu_open_rom(const char* path) {
-    bool spiffs_ok = SPIFFS.begin(true);
-    if(!spiffs_ok) {
-        Serial.println("[SPIFFS] unavailable, fallback to SD");
-    }
-    String sn="/rom.gb";
-    if(spiffs_ok && SPIFFS.exists(sn)){
-        File sc=SD.open(path,FILE_READ); uint32_t ssz=sc?sc.size():0; if(sc)sc.close();
-        romf=SPIFFS.open(sn,FILE_READ);
-        if(romf && romf.size()==ssz){romlen=romf.size();Serial.printf("[EMU] SPIFFS %uKB\n",romlen/1024);return true;}
-        if(romf) romf.close();
-    }
-    File sf=SD.open(path,FILE_READ); if(!sf) return false;
-    uint32_t sz=sf.size(); sf.close();
-    if(spiffs_ok && sz<=SPIFFS.totalBytes()-SPIFFS.usedBytes()){
-        Serial.println("[EMU] Copying to SPIFFS...");
-        if(SPIFFS.exists(sn)) SPIFFS.remove(sn);
-        if(cp2spiffs(path,sn.c_str())){
-            romf=SPIFFS.open(sn,FILE_READ);
-            if(romf){romlen=romf.size();return true;}
-        }
-    }
-    romf=SD.open(path,FILE_READ); if(!romf) return false;
-    romlen=romf.size(); return true;
-}
-void emu_close_rom(){if(romf)romf.close();romlen=0;}
+bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
+{
+    char title[17] = {0};
+    int i;
 
-bool emu_init(uint8_t*,uint32_t) {
-    if(!romf||!romlen) return false;
-    memset(ht,-1,sizeof(ht));
-    npg=0;
-    for(int i=0;i<PG_N;i++){pg[i].v=false;if(!pg[i].d)pg[i].d=(uint8_t*)malloc(PG_SZ);if(!pg[i].d)break;npg++;}
-    Serial.printf("[EMU] %d pages\n",npg);
-    if(!b0) b0=(uint8_t*)malloc(B0SZ); if(!b0) return false;
-    romf.seek(0); romf.read(b0,min(romlen,(uint32_t)B0SZ));
-    if(!cram) cram=(uint8_t*)malloc(MAXRAM); if(!cram) return false;
-    memset(cram,0xFF,MAXRAM);
-    if(!gb) gb=(struct gb_s*)malloc(sizeof(struct gb_s)); if(!gb) return false;
-    memset(gb,0,sizeof(struct gb_s));
-    enum gb_init_error_e r=gb_init(gb,gb_rom_read,gb_cram_r,gb_cram_w,gb_err,nullptr);
-    if(r!=GB_INIT_NO_ERROR){Serial.printf("[EMU] init fail %d\n",(int)r);return false;}
-    gb_init_lcd(gb,lcd_line);
+    if (!rom_data || rom_size == 0) {
+        return false;
+    }
+    rom = rom_data;
+    romlen = rom_size;
+
+    if (!cram) {
+        cram = (uint8_t*)malloc(MAXRAM);
+    }
+    if (!cram) {
+        return false;
+    }
+    memset(cram, 0xFF, MAXRAM);
+
+    if (!gb) {
+        gb = (struct gb_s*)malloc(sizeof(struct gb_s));
+    }
+    if (!gb) {
+        return false;
+    }
+    memset(gb, 0, sizeof(struct gb_s));
+
+    enum gb_init_error_e r = gb_init(gb, gb_rom_read, gb_cram_r, gb_cram_w,
+                                     gb_err, nullptr);
+    if (r != GB_INIT_NO_ERROR) {
+        Serial.printf("[EMU] init fail %d\n", (int)r);
+        return false;
+    }
+    gb_init_lcd(gb, lcd_line);
     /* Build the LUT here too: main() may never call emu_set_palette. */
     emu_set_palette(curpal);
     geom = scaler_geom_info(SCALE_GEOM);
-    if (!geom) return false;
-    fcnt=fpsc=cfps=0; fpst=millis(); acc=0;
-    char t[17]={0}; for(int i=0;i<16;i++){char c=(char)b0[0x134+i];t[i]=(c>=32&&c<127)?c:0;}
-    Serial.printf("[EMU] '%s' %uKB heap:%u\n",t,romlen/1024,ESP.getFreeHeap());
+    if (!geom) {
+        return false;
+    }
+    fcnt = fpsc = cfps = 0;
+    fpst = millis();
+
+    /* The cartridge title, read straight from the mapped bytes. */
+    if (romlen > 0x143) {
+        for (i = 0; i < 16; i++) {
+            char c = (char)rom[0x134 + i];
+            title[i] = (c >= 32 && c < 127) ? c : 0;
+        }
+    }
+    Serial.printf("[EMU] '%s' %uKB heap:%u\n", title, romlen / 1024,
+                  ESP.getFreeHeap());
     return true;
 }
 

@@ -5,7 +5,9 @@
 #include "sd_manager.h"
 #include "ui_launcher.h"
 #include "emulator_bridge.h"
+#include "rom_store.h"
 #include "settings.h"
+#include <SD.h>
 
 // Interim boot ROM. WS-06 replaces this with the NFC cartridge match; until then
 // there is exactly one path and no way to choose another.
@@ -168,16 +170,38 @@ void loop() {
     tft.fillScreen(TFT_BLACK); tft.setTextDatum(MC_DATUM);
     tft.setTextColor(0x07E0); tft.drawString("Loading...",SCREEN_W/2,90,4);
 
-    if(!emu_open_rom(cur_path)){
+    // Basename, not the path: it is what the store records and compares, and
+    // deriving it here keeps it in step with cur_path instead of repeating the
+    // file name as a second literal that could drift out of agreement.
+    const char* rom_name = strrchr(cur_path, '/');
+    rom_name = rom_name ? rom_name + 1 : cur_path;
+
+    File rom_file = SD.open(cur_path, FILE_READ);
+    if (!rom_file) {
         tft.setTextColor(TFT_RED); tft.drawString("Open failed!",SCREEN_W/2,170,2); delay(2000); return;
     }
-    if(!emu_init(0,0)){
-        tft.setTextColor(TFT_RED); tft.drawString("Init failed!",SCREEN_W/2,170,2); delay(2000); emu_close_rom(); return;
+
+    // Order is load-bearing, not incidental: a flash write stalls the other
+    // core's instruction fetch, so the ROM must be in the partition before any
+    // emulation task exists. Whatever replaces this boot flow has to keep the
+    // write here, ahead of run_emu().
+    bool in_flash = rom_store_init() && rom_store_write(rom_file, rom_name);
+    rom_file.close();
+    if (!in_flash) {
+        tft.setTextColor(TFT_RED); tft.drawString("ROM store failed!",SCREEN_W/2,170,2); delay(2000); return;
+    }
+
+    uint32_t rom_len = 0;
+    const uint8_t* rom = rom_store_mmap(&rom_len);
+    if (!rom) {
+        tft.setTextColor(TFT_RED); tft.drawString("Map failed!",SCREEN_W/2,170,2); delay(2000); return;
+    }
+    if (!emu_init(rom, rom_len)) {
+        tft.setTextColor(TFT_RED); tft.drawString("Init failed!",SCREEN_W/2,170,2); delay(2000); return;
     }
 
     load_ram();
     if (LED_G_PIN >= 0) digitalWrite(LED_G_PIN, LOW);
     run_emu();
     if (LED_G_PIN >= 0) digitalWrite(LED_G_PIN, HIGH);
-    emu_close_rom();
 }

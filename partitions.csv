@@ -1,5 +1,19 @@
-# Name,   Type, SubType, Offset,   Size, Flags
-nvs,      data, nvs,     0x9000,  0x5000,
-otadata,  data, ota,     0xe000,  0x2000,
-app0,     app,  ota_0,   0x10000, 0x200000,
-spiffs,   data, spiffs,  0x210000,0x1F0000,
+# Single-app flash layout for the memory-mapped ROM store (design §3.2).
+#
+# No otadata and no second app slot: units are flashed over USB, never OTA
+# (WS-10), so the bootloader boots the factory image directly. No spiffs: the
+# ROM no longer lives in a filesystem — it is written raw into `romdata` once
+# and read through the flash cache.
+#
+# `romdata` is looked up at runtime by the triple (type `data`, subtype 0x40,
+# label "romdata"). Changing any of the three here means changing it in
+# src/rom_store.cpp in the same commit.
+#
+# Sizes are provisional pending the WS-11 bench items that measure the linked
+# image and the largest supported ROM; the table must always sum to the 4 MB
+# flash (0xB0000 + 0x350000 = 0x400000).
+#
+# Name,   Type, SubType, Offset,   Size,     Flags
+nvs,      data, nvs,     0x9000,   0x5000,
+app0,     app,  factory, 0x10000,  0xA0000,
+romdata,  data, 0x40,    0xB0000,  0x350000,
