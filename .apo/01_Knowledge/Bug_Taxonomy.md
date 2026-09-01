@@ -8,7 +8,7 @@ title: "Bug Taxonomy"
 status: planned
 owner: ""
 created: '2026-08-27'
-updated: '2026-08-31'
+updated: '2026-09-01'
 reviewed_on: ""
 related_notes: ["[[01_Knowledge/Definition_Of_Done]]"]
 tags: [apovault, knowledge, taxonomy]
@@ -42,5 +42,5 @@ Team-owned. Not extractable from the codebase — `/apo:init` does not invent it
 
 ## Build & Toolchain Gotchas
 
-- **Do not:** treat a green `pio run -e <target>` as proof that a new `lib/gbcore/**` module compiles for that target. PlatformIO's `chain` dependency finder only links a `lib/` module into an environment once some `src/*.cpp` in that environment `#include`s its header; an as-yet-unconsumed module is silently absent from the build, and a passing `pio test -e native` doesn't cover it either, since that reaches the module through the test env instead. Until the target-side consumer lands, verify the module with a strict host compile (`gcc -std=c99 -Wall -Wextra -Werror -pedantic`) and say explicitly that target compilation is unproven.
 - **Do:** spell file-parameter types as `fs::File` (not bare `File`) in any `include/*.h`. TFT_eSPI's ESP32 processor header defines `FS_NO_GLOBALS` before including `FS.h`, which suppresses the global `File` alias project-wide once any translation unit reaches the display header first; a header using bare `File` then fails to compile only from `.cpp` files that include the display path first, while compiling fine elsewhere. Do not rely on `#include <FS.h>` or `<SD.h>`'s `using namespace fs;` to make unqualified `File` available in a header — that depends on what the includer pulled in first, which the header can't control.
+- **Do:** check for the object file (`find .pio/build/<env> -name "<module>*"`) to decide whether a `lib/gbcore/**` module compiles for a target. PlatformIO's `chain` dependency finder links per **library**, not per header: `lib/gbcore/` is one library, so once any `src/*.cpp` includes any gbcore header, the whole library is linked and every `.c` beneath it compiles — including modules nothing has included yet. Do not infer coverage either way from which headers are included: a library with no `src/` consumer at all is silently absent from the build (and a green `pio test -e native` does not cover it, reaching the module through the test env instead), while one with any consumer covers all of its modules. When target compilation really is unproven, a strict host compile (`gcc -std=c99 -Wall -Wextra -Werror -pedantic`) is the honest interim check.
