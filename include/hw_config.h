@@ -30,6 +30,15 @@
                             // 4th EXP pad as IO22, move SCL there and drop bus recovery.
 #define BTN_I2C_ADDR 0x20   // MCP23017, A0-A2 to GND (§1.4)
 
+// ─── Backlight adjustment ───────────────────────────────────────────────────
+// The Select+Left/Right combo steps the backlight by BL_STEP and clamps to
+// [BL_MIN, 255], giving 8 levels. The floor is not 0 on purpose: a unit
+// mounted in a shell at brightness 0 looks dead, and the operators cannot
+// recover it by sight. Whether BL_MIN is visible in daylight is §11 bench
+// work; raising it is a one-line change here.
+#define BL_STEP        32
+#define BL_MIN         32
+
 // ─── Audio ──────────────────────────────────────────────────────────────────
 #define AMP_EN_PIN      4   // Amplifier enable, HIGH = on (§1.2). Never drive this for
                             // anything else — §13. §11 item 3 rates the onboard amp.

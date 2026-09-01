@@ -2,6 +2,8 @@
 #include "hw_config.h"
 #include "display.h"
 #include "button_input.h"
+#include "i2c_bus.h"
+#include "input/combo.h"
 #include "sd_manager.h"
 #include "ui_launcher.h"
 #include "emulator_bridge.h"
@@ -14,37 +16,62 @@
 #define DEV_TEST_ROM_PATH "/roms/gb/test.gb"
 
 static char cur_path[80] = {0};
-static TaskHandle_t ttask = nullptr;
-static volatile bool emu_on = false, menu_req = false;
+static bool emu_on = false, menu_req = false;
 static settings_t settings;
+static combo_state_t combo;
 
-void input_task(void* p) {
-    (void)p;
-    bool prev_menu_combo = false;
-    for(;;) {
-        button_update();
-        if (emu_on) {
-            uint16_t b = button_get_buttons();
-            bool menu_combo = (b & (GB_BTN_START | GB_BTN_SELECT)) == (GB_BTN_START | GB_BTN_SELECT);
-            if (menu_combo && !prev_menu_combo) {
-                menu_req = true;
-            }
-            prev_menu_combo = menu_combo;
-            if (menu_combo) {
-                emu_set_joypad(b & ~(GB_BTN_START | GB_BTN_SELECT));
-            } else {
-                emu_set_joypad(b & 0xFF);
-            }
-        }
-        vTaskDelay(pdMS_TO_TICKS(12));
+/*
+ * One expander read per frame, fed to the combo state machine, which hands
+ * back the word the emulator sees and at most one combo event. This replaces
+ * the fork's 12 ms input task: at 60 fps the poll is more frequent than that
+ * task was, it costs one I2C byte (~60 us) on the core that is already
+ * running the emulation, and it removes a second writer of the joypad word.
+ *
+ * Every side effect of an event lives here rather than in the state machine,
+ * which is what keeps that machine host-testable.
+ */
+static void poll_input(uint32_t now_ms) {
+    uint8_t event = COMBO_EVENT_NONE;
+    uint8_t volume = settings.volume;
+    uint8_t brightness = settings.brightness;
+
+    button_update();
+    combo_update(&combo, button_get_buttons(), now_ms, &event);
+    emu_set_joypad(combo_joypad(&combo));
+
+    switch (event) {
+        case COMBO_EVENT_MENU:
+            menu_req = true;
+            return;
+        case COMBO_EVENT_VOL_UP:      // louder counts the index down towards 0
+            volume = combo_step_u8(volume, -1, SETTINGS_VOL_HIGH, SETTINGS_VOL_OFF, 1);
+            break;
+        case COMBO_EVENT_VOL_DOWN:
+            volume = combo_step_u8(volume, +1, SETTINGS_VOL_HIGH, SETTINGS_VOL_OFF, 1);
+            break;
+        case COMBO_EVENT_BRIGHT_UP:
+            brightness = combo_step_u8(brightness, +1, BL_MIN, 255, BL_STEP);
+            break;
+        case COMBO_EVENT_BRIGHT_DOWN:
+            brightness = combo_step_u8(brightness, -1, BL_MIN, 255, BL_STEP);
+            break;
+        default:
+            return;
     }
-}
 
-static void tt_start() {
-    if(!ttask) xTaskCreatePinnedToCore(input_task,"t",4096,0,2,&ttask,0);
-    else vTaskResume(ttask);
+    // Nothing moved means the combo is being held against an end of its
+    // range, so there is nothing to apply and nothing to write.
+    if (volume == settings.volume && brightness == settings.brightness) {
+        return;
+    }
+
+    settings.volume = volume;
+    if (brightness != settings.brightness) {
+        settings.brightness = brightness;
+        display_set_backlight(settings.brightness);
+    }
+    settings_save_coalesced(&settings, now_ms);
 }
-static void tt_stop() { if(ttask) vTaskSuspend(ttask); }
 
 static void save_ram() {
     if(!cur_path[0]) return;
@@ -79,25 +106,34 @@ static void load_ram() {
 // ─── Emulation loop ─────────────────────────────────────────────────────────
 void run_emu() {
     emu_on = true; menu_req = false;
-    tt_start();
+    combo_init(&combo);
     display_clear(TFT_BLACK);
 
     // loopTask is core 1 on arduino-esp32, which is what leaves core 0 to the
+    // push task. Input is polled here too, so core 0 hosts nothing but the
     // push task. Logged once rather than assumed.
     Serial.printf("[EMU] emulation on core %d\n", xPortGetCoreID());
 
     while(emu_on) {
+        uint32_t now = millis();
+        poll_input(now);
+        settings_flush(now, false);
+
         emu_run_frame();
 
         if (menu_req) {
             menu_req = false;
-            tt_stop();
 
             // Between frames, so nothing is half produced: stop the producer,
             // wait for the queue to drain and take the bus before anything
             // draws through `tft` directly. The quit case returns while still
             // paused, which is what keeps the loading screen off the bus.
             emu_pause_pipeline();
+
+            // The settings menu writes NVS itself, so a coalesced save still
+            // parked here has to land first or it would overwrite what the
+            // menu stores.
+            settings_flush(millis(), true);
 
             int c = launcher_ingame_menu();
             switch(c) {
@@ -117,13 +153,17 @@ void run_emu() {
                     delay(700);
                     break;
                 case 3:  // quit
-                    emu_on=false; save_ram(); tt_stop(); return;
+                    emu_on=false; save_ram(); return;
                 case 5:  // settings
                     launcher_settings_menu(&settings); break;
             }
             display_clear(TFT_BLACK);
             emu_resume_pipeline();
-            tt_start();
+
+            // The menu polled the buttons on its own, so the state machine's
+            // view of them is stale; start it clean rather than reporting the
+            // release of whatever exited the menu as fresh input.
+            combo_init(&combo);
         }
 
         taskYIELD();
@@ -142,6 +182,7 @@ void setup() {
     if (LED_B_PIN >= 0) digitalWrite(LED_B_PIN, HIGH);
 
     display_init();
+    i2c_bus_init();
     button_init();
 
     if(!sd_init()) {

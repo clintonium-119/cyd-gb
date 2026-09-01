@@ -225,10 +225,11 @@ static void push_block(uint_fast8_t first, const uint16_t* lookahead)
  *
  * A slot is released only after its transfer has completed, so the producer
  * can never refill a buffer the DMA engine is still reading. The wait when the
- * queue is empty is a task notification rather than a spin: this task sits
- * above input_task on core 0, and a busy loop here would starve that core's
- * idle task into a watchdog reset. The timeout is the belt to that braces — a
- * lost wakeup costs one late block, not a stalled pipeline.
+ * queue is empty is a task notification rather than a spin: this is the only
+ * task core 0 hosts — input is polled per frame from the emulation loop on
+ * core 1 — and a busy loop here would starve that core's idle task into a
+ * watchdog reset. The timeout is the belt to that braces — a lost wakeup costs
+ * one late block, not a stalled pipeline.
  */
 static void emu_push_task(void* arg)
 {
@@ -416,9 +417,9 @@ void emu_start_push_task()
     if (push_task) {
         return;
     }
-    /* Core 0, above input_task's 2 so a ready block always wins against the
-     * 12 ms button poll. 4096 bytes matches input_task; the high-water mark is
-     * a bench item. */
+    /* Core 0, which this task now has to itself: input is polled per frame
+     * from the emulation loop on core 1, so priority 3 only has to beat that
+     * core's idle task. 4096 bytes; the high-water mark is a bench item. */
     xTaskCreatePinnedToCore(emu_push_task, "gbpush", 4096, nullptr, 3,
                             &push_task, 0);
 }
