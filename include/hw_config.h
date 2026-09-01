@@ -25,9 +25,11 @@
 #define SD_PIN_SCK     18   // §1.2, confirmed
 
 // ─── I²C (buttons, NFC) ─────────────────────────────────────────────────────
-#define I2C_SDA        27   // SPI header pin 1 (§1.2, proposed)
-#define I2C_SCL         1   // UART TX0 (§1.2, proposed — §1.3). If §11 item 2 meters the
-                            // 4th EXP pad as IO22, move SCL there and drop bus recovery.
+// The whole bus lives on the CN1 plug: GND / IO22 / IO27 / 3.3V (§1.2, §1.3,
+// verified — wiring PDF rev C). Neither pin is shared with the UART, so no
+// bus recovery is needed.
+#define I2C_SDA        22   // CN1 (verified, rev C)
+#define I2C_SCL        27   // CN1 (verified, rev C)
 #define BTN_I2C_ADDR 0x20   // MCP23017, A0-A2 to GND (§1.4)
 
 // ─── Backlight adjustment ───────────────────────────────────────────────────
@@ -40,15 +42,17 @@
 #define BL_MIN         32
 
 // ─── Audio ──────────────────────────────────────────────────────────────────
-#define AMP_EN_PIN      4   // Amplifier enable, HIGH = on (§1.2). Never drive this for
-                            // anything else — §13. §11 item 3 rates the onboard amp.
+// No amp-enable pin exists. The vendor datasheet calls IO4 the amp enable, but
+// the bench proved it is not (§1.6, wiring PDF rev C); its real function is
+// unknown, so leave IO4 unused (§13). With no hardware mute, WS-08's volume
+// "off" holds the DAC at 128 (mid-scale) instead.
 
 // ─── Power ──────────────────────────────────────────────────────────────────
 #define BAT_ADC_PIN    34   // Battery sense (§1.2). Divider ratio undocumented — §11 item 6.
 
 // ─── Status LEDs ────────────────────────────────────────────────────────────
-// §1.2 gives no LED pin on this board. The fork drove IO4, which is AMP_EN_PIN
-// here; all three are -1 and every use site guards on >= 0.
+// §1.2 gives no LED pin on this board. The fork drove IO4, which must stay
+// unused (§13); all three are -1 and every use site guards on >= 0.
 #define LED_R_PIN      -1
 #define LED_G_PIN      -1
 #define LED_B_PIN      -1
