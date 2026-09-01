@@ -67,43 +67,39 @@ that resolves it. **Do not treat flagged values as settled.**
 
 | Signal | Pin | Source | Status |
 |---|---|---|---|
-| I²C SDA | IO27 | SPI header pin 1 | proposed |
-| I²C SCL | IO1 | UART header (TX0) | proposed — see §1.3 |
-| 3.3 V / GND | — | EXP header | confirmed (silkscreen) |
-| Amp enable | IO4 | onboard | **HIGH = on** |
-| Audio DAC | IO26 | onboard | to amp |
+| I²C SDA | IO22 | CN1 | **verified (rev C)** |
+| I²C SCL | IO27 | CN1 | **verified (rev C)** — see §1.3 |
+| 3.3 V / GND | — | CN1 | **verified (rev C)** |
+| Unused | IO4 | onboard | **not an amp enable** — see §1.6; leave it alone |
+| Audio DAC | IO26 | onboard | to amp (always live; no enable pin exists) |
 | Battery sense | IO34 | onboard ADC | divider ratio undocumented |
 | SD CS | IO5 | onboard | |
 | SD SPI | IO18 / IO19 / IO23 | onboard | now exclusive to SD |
 | LCD | IO15 / IO2 / IO14 / IO13 | CS / DC / SCK / MOSI | |
 | Backlight | IO21 | PWM | |
 | TFT_RST | −1 | panel reset ties to EN | **must be −1** |
-| Unused | IO35 | EXP header, input-only | |
-| Unknown | 4th EXP pad | unlabelled | **meter it** |
+| Spare | IO35 | P3 header, input-only | verified (rev C) |
 
-Confirmed from the board photo silkscreen: SPI header carries **IO27 / IO18 / IO19 / IO23**. EXP header reads
-**GND / IO35 / 3.3V** plus one unlabelled pad.
+Metered on the bench (wiring PDF rev C): **CN1 is a 4-pin 1.25 mm connector carrying GND / IO22 / IO27 /
+3.3 V** — the whole I²C bus, power included, on one plug. **P3 carries GND / IO35 / IO22 / IO21** and is
+spare (IO21 is the backlight — leave it alone; IO35 is input-only). The vendor pin table got the header
+pinout wrong; the silkscreen readings that previously stood here are superseded. Nothing is soldered to the
+CYD anywhere in this build.
 
-**`LED_R_PIN` in the fork's `hw_config.h` is set to 4.** On this board IO4 is the audio amplifier enable. If
-anything drives it as a status LED the amp will mute and unmute at random. **Remap it as part of Phase 1.**
+**`LED_R_PIN` in the fork's `hw_config.h` is set to 4.** The vendor datasheet calls IO4 the audio amplifier
+enable, but the bench says otherwise (§1.6) — its real function is unknown. Remap `LED_R_PIN` off it (done
+in Phase 1) and leave IO4 unused.
 
 ### 1.3 The I²C pin decision
 
-I²C needs two bidirectional pins. Only IO27 is cleanly available on a connector, so the second comes from the
-UART header.
+**Resolved on the bench (wiring PDF rev C): I²C lives entirely on CN1 — SDA on IO22, SCL on IO27, with
+3.3 V and GND on the same 4-pin 1.25 mm connector.** Both the MCP23017 and the PN532 hang off that one plug.
+`Wire.begin(22, 27)` at 400 kHz, and no bus recovery is needed.
 
-**SCL must be IO1, not SDA.** IO1 is TX0: the ROM bootloader prints on it at every power-up. With SCL there,
-that traffic is only clock transitions with no START condition, so every I²C device ignores it. Reversed, you
-would generate a burst of spurious STARTs and STOPs.
-
-**Never put I²C on IO3.** IO3 is RX0, driven push-pull by the USB-serial bridge whenever USB is powered —
-*including while charging*. Open-drain I²C cannot pull against it.
-
-Run bus recovery before `Wire.begin(27, 1)`: nine manual SCL pulses, then a STOP. 400 kHz is fine.
-
-> **Contingency:** if the 4th EXP pad meters out as **IO22**, use it for SCL instead. IO1 stays free, the boot
-> noise question disappears entirely, and no bus recovery is needed. Check this first — it is the better
-> outcome and costs 30 seconds.
+The earlier proposal put SDA on IO27 (SPI header) and SCL on IO1 (TX0), which dragged in bootloader-noise
+reasoning, a nine-pulse bus-recovery routine, and a never-use-IO3 warning. All of that is gone: neither UART
+pin carries I²C now, so the ROM bootloader's power-up output and the USB-serial bridge are irrelevant to the
+bus — and serial logging no longer conflicts with the buttons.
 
 ### 1.4 Peripherals
 
@@ -119,10 +115,14 @@ pull-ups if neither breakout has them.
 
 | | | | |
 |---|---|---|---|
-| GPA0 | Up | GPA4 | A |
-| GPA1 | Down | GPA5 | B |
-| GPA2 | Left | GPA6 | Start |
-| GPA3 | Right | GPA7 | Select |
+| GPA7 | Up | GPA3 | Start |
+| GPA6 | Down | GPA2 | Select |
+| GPA5 | Left | GPA1 | A |
+| GPA4 | Right | GPA0 | B |
+
+The bottom 8 header pins on the button PCB run in order to GPA7 → GPA0, so the harness is a **straight
+ribbon, not a crossed one** (rev C — this fixes the map above). The PCB's X/Y/L/R pads are unused — a DMG
+shell has no buttons for them — and its common ground is bridged separately from the header to module GND.
 
 Enable internal pull-ups (`GPPU = 0xFF`), active LOW. **INT is not used** — polling once per frame is one
 byte, ~60 µs at 400 kHz. GPB0–GPB7 are spare.
@@ -149,27 +149,29 @@ compartment. The DMG battery door pops off without tools, so no shell machining 
 **Charge with the switch ON.** The switch cuts the cell off from the entire board, charger included. Switch
 off means no charging. Note that plugging USB in powers the board on regardless of switch position.
 
+**Bridge SW1's two pads.** SW1 — the CYD's onboard power button — is a momentary that latches the battery
+rail on: one press after the battery is connected, and pressing it again does nothing. It has no off path,
+so without a bridge a sealed unit will not start. Before making the bridge permanent, hold SW1 while
+connecting the battery; if the unit boots, a permanent bridge is safe (§11 item 9). The DMG's original
+slide switch stays the real power switch, in series with the cell.
+
 > **Meter cell polarity against the BAT silkscreen before first connection.** JST is not a polarity standard;
 > reversed, you can destroy the board, the cell, or both. Add this to the assembly checklist.
 
 ### 1.6 Audio hardware
 
-Onboard amp on IO26 (8-bit internal DAC) with **hardware enable on IO4**.
+Onboard amp fed by IO26 (8-bit internal DAC). **Resolved on the bench (rev C): the onboard amp is good
+enough** — verified with real Game Boy music from SD, on battery. No resistor mod, no MAX98357A.
+
+**IO4 is not an amp enable.** The vendor datasheet says it is; on the bench the mute command printed and the
+audio kept playing. There is no hardware mute at all, so volume is software-only and "off" must hold the DAC
+at 128 (mid-scale, not 0) — see §4. Auto-mute-on-silence is likewise impossible.
 
 The Game Boy's own audio hardware is 4-bit, so an 8-bit DAC has more resolution than the source. The DAC is
-not the limiting factor; the amplifier is.
+not the limiting factor; the amplifier is — and it passed.
 
-Escalation path, in order:
-
-1. **Test first.** `tone()` on IO26 with the stock speaker. Square waves and noise are far more forgiving than
-   music. There is a real chance nothing is needed.
-2. **Resistor mod.** The known-bad 2.8" ST7789 CYD has fixed gain of ~×14.5 and an amp input impedance of
-   ~4.7 kΩ that loads the DAC buffer enough to clip half the waveform. Gain ≈ `2 × (Rf / Ri)`; raising Ri
-   fixes both problems at once. Designators on the 2.8" board are R7/R8/R9 — **these will not map to the 2.4"
-   board.** Trace the resistor pair between IO26 and the amp input, plus the feedback resistor. Passives
-   measure as **0603** (2.9 mm pad-to-pad, 1.6 mm pitch); an 0603 assortment is on hand.
-3. **MAX98357A I²S amp.** Last resort. Costs three GPIO (IO22 / IO16 / IO17, all RGB-LED pins requiring
-   soldering) *and* the IO4 hardware mute. See `reference/DMG-CYD-audio-mod.pdf`. Prefer the resistor mod.
+The rejected escalation path (resistor mod, then a MAX98357A on IO22/IO16/IO17) is preserved in
+`reference/DMG-CYD-audio-mod.pdf` for the record only; IO22 now carries I²C SDA in any case.
 
 ### 1.7 Mechanical
 
@@ -379,16 +381,17 @@ static uint8_t vol = 0;                                // 0-2, 3 = off
 ```
 
 Med at 0.69 rather than 0.75 spaces the steps more evenly by ear (perceived loudness ≈ cube root of
-amplitude). Nothing drops below 7 bits, so quantisation grit never appears. **Off uses IO4 hardware mute**,
-not scaling to zero.
+amplitude). Nothing drops below 7 bits, so quantisation grit never appears. **Off holds the DAC at 128**
+(mid-scale, not 0 — rev C), because no hardware mute exists (§1.6).
 
 Scale in 16-bit *before* truncating to 8, never on the 8-bit value.
 
 **Dither:** add ±1 LSB of noise before truncating. Converts quantisation grit into faint hiss, which is far
 less objectionable. Three lines; the best low-volume quality improvement available.
 
-**Auto-mute:** pull IO4 low after ~200 ms of APU silence, restore on the next sample. Removes idle hiss —
-often more noticeable than the audio itself — and saves current. Independent of the volume setting.
+**Auto-mute is gone.** It needed the IO4 hardware mute, which does not exist (rev C). The amp is always
+live; whatever idle hiss remains with the DAC parked at mid-scale is a bench observation for §11, not
+something the firmware can remove.
 
 ---
 
@@ -643,12 +646,13 @@ Then mmap the ROM from a raw partition; repartition as needed. Re-measure after 
 Then flip to 26/16 and re-measure; decide 24/16 vs 26/16 on evidence.
 
 ### Phase 6 — Audio
-MiniGB APU, `ENABLE_SOUND 1`, timer-fed DAC, mono sum, dither, IO4 mute, auto-mute on silence, 4-state volume.
+MiniGB APU, `ENABLE_SOUND 1`, timer-fed DAC, mono sum, dither, 4-state volume (off = DAC held at 128 —
+no hardware mute exists, rev C).
 Re-measure.
-**Exit: audio at 60 fps, no idle hiss.**
+**Exit: audio at 60 fps; idle hiss with the amp always live measured and judged acceptable.**
 
 ### Phase 7 — Input
-MCP23017 over I²C, bus recovery, per-frame poll, debounce, combos, D-pad masking, NVS persistence.
+MCP23017 over I²C, per-frame poll, debounce, combos, D-pad masking, NVS persistence.
 **Exit: full control from physical buttons; touch code fully gone.**
 
 ### Phase 8 — NFC
@@ -674,16 +678,20 @@ board goes in the shell).
 
 ## 11. Open items — resolve on the bench
 
-| # | Question | Test | Impact if it goes badly |
-|---|---|---|---|
-| 1 | Does the board run from a 3.7 V cell? | Bench supply, sweep 4.2 → 3.3 V, watch the display | Needs a boost module; changes the whole power section |
-| 2 | What is the 4th EXP-header pad? | Toggle IO22/16/17, meter the pad | If IO22: move SCL there, delete the IO1 boot handling |
-| 3 | Is the onboard amp usable? | `tone()` on IO26, stock speaker, at full volume | Resistor mod, then MAX98357A |
-| 4 | Does BAT actually power the system? | Cell connected, USB unplugged — does it boot? | Charge-only would need a boost + USB VBUS feed |
-| 5 | Actual pixel pitch | Fill screen white, caliper the lit area | Recompute all bezel and `GAME_X`/`GAME_Y` numbers |
-| 6 | IO34 divider ratio | Compare ADC reading to a meter across the cell range | Low-battery cutoff thresholds are wrong |
-| 7 | Max reliable `SPI_FREQUENCY` | Sweep 40 / 55 / 80 MHz, look for artifacts | Directly caps frame rate |
-| 8 | Real emulation frame time | Phase 2 FPS counter | May need Retro-Go's gnuboy core instead of Peanut-GB |
+| # | Question | Test | Impact if it goes badly | Bench status (rev C, 2026-09-01) |
+|---|---|---|---|---|
+| 1 | Does the board run from a 3.7 V cell? | Bench supply, sweep 4.2 → 3.3 V, watch the display | Needs a boost module; changes the whole power section | Runs and plays audio on the cell; the brownout sweep is still open |
+| 2 | What is the 4th EXP-header pad? | Toggle IO22/16/17, meter the pad | If IO22: move SCL there, delete the IO1 boot handling | **Moot** — I²C moved to CN1 (SDA IO22 / SCL IO27); P3 metered as GND / IO35 / IO22 / IO21 |
+| 3 | Is the onboard amp usable? | `tone()` on IO26, stock speaker, at full volume | Resistor mod, then MAX98357A | **Yes** — real GB music from SD, on battery; no mod needed |
+| 4 | Does BAT actually power the system? | Cell connected, USB unplugged — does it boot? | Charge-only would need a boost + USB VBUS feed | **Yes** — the amp test ran on battery |
+| 5 | Actual pixel pitch | Fill screen white, caliper the lit area | Recompute all bezel and `GAME_X`/`GAME_Y` numbers | open |
+| 6 | IO34 divider ratio | Compare ADC reading to a meter across the cell range | Low-battery cutoff thresholds are wrong | open |
+| 7 | Max reliable `SPI_FREQUENCY` | Sweep 40 / 55 / 80 MHz, look for artifacts | Directly caps frame rate | open |
+| 8 | Real emulation frame time | Phase 2 FPS counter | May need Retro-Go's gnuboy core instead of Peanut-GB | open |
+| 9 | Does SW1 bridge cleanly? | Hold SW1 while connecting the battery — does it boot? | A sealed unit cannot be started; rework the power path (§1.5) | open — new in rev C |
+
+The vendor datasheet has now been wrong twice — the header pinout and IO4. Meter anything sourced from it
+before building on it.
 
 ---
 
@@ -691,11 +699,11 @@ board goes in the shell).
 
 | File | Contents |
 |---|---|
-| `reference/DMG-CYD-wiring.pdf` | Wiring diagram over the actual board photo, BOM, pin map, boot-order and power notes |
-| `reference/DMG-CYD-audio-mod.pdf` | MAX98357A fallback — solder points, blink-test identification procedure, wiring |
+| `reference/DMG-CYD-wiring.pdf` | Rev C wiring diagram over the actual board photo, BOM, pin map, power notes — **bench-verified** |
+| `reference/DMG-CYD-audio-mod.pdf` | MAX98357A fallback — historical; the escalation path was rejected on the bench (rev C, §1.6) |
 
-Both are A3 landscape. Pin assignments in them are proposals derived from the vendor pin table and board
-photos; §11 items 2 and 4 supersede them if the bench says otherwise.
+Both are A3 landscape. Rev C of the wiring PDF records bench-verified assignments and now supersedes the
+vendor documentation, which has been wrong twice (header pinout, IO4).
 
 ---
 
@@ -706,8 +714,10 @@ Collected because each was considered and rejected for a reason that isn't obvio
 - **Don't add a ROM browser or on-device tag writer.** §6.1.
 - **Don't switch to Retro-Go.** It's a launcher; adapting it means suppressing its central feature and writing
   a new target definition. Steal techniques, not architecture. §3.4.
-- **Don't put I²C on IO3.** USB-serial drives it whenever USB is powered, including while charging. §1.3.
-- **Don't reuse IO4** for anything but the amp enable. §1.2.
+- **Don't drive IO4.** The vendor datasheet calls it the amp enable; the bench proved it is not, and its
+  real function is unknown. §1.6. (The old warning against I²C on IO3 is moot — I²C lives on CN1, §1.3.)
+- **Don't build on the vendor datasheet without metering.** It has been wrong twice — the header pinout and
+  IO4. §11.
 - **Don't stretch the image to 240 rows.** 11% vertical distortion. §2.1.
 - **Don't blend byte-swapped pixels**, and don't blend before the palette LUT. §2.3.
 - **Don't branch per-pixel to skip cross-palette blends.** Costs more than the blend. §2.4.

@@ -4,8 +4,11 @@
 Section references below (`§n.n`) point into it. This file is the *work breakdown*: how that design becomes a
 sequence of apo workstreams, in what order, with what exit criteria, and what each one defers to the bench.
 
-**Status as of 2026-08-27:** no hardware on hand; all parts on order. Everything below is planned to reach
-*code-complete* without a board. Bench verification is collected into WS-11.
+**Status as of 2026-09-01:** hardware is on the bench — `reference/DMG-CYD-wiring.pdf` rev C is
+bench-verified (I²C on CN1 with SDA IO22 / SCL IO27, onboard amp confirmed with no hardware mute, SW1
+bridge, straight-ribbon button map). Each workstream still reaches *code-complete* as planned; the formal
+deferred-verification pass stays collected in WS-11, minus the items rev C already answered (§11 items
+2, 3, 4).
 
 ---
 
@@ -120,7 +123,8 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
 - `platformio.ini`: `-DILI9341_2_DRIVER` → `-DST7789_DRIVER`; confirm `TFT_RST=-1`, `TFT_BL=21`; board comment
   → ESP32-2432S024; keep `SPI_FREQUENCY` at 40 MHz here (80 MHz is WS-04's experiment).
 - Rewrite `include/hw_config.h` for the 2.4" board per §1.2: `LED_R_PIN` off IO4; `AMP_EN_PIN 4`;
-  `I2C_SDA 27`, `I2C_SCL 1` with a comment pointing at the IO22 contingency; `BAT_ADC_PIN 34`; remove all
+  `I2C_SDA 27`, `I2C_SCL 1` with a comment pointing at the IO22 contingency *(as merged; rev C later moved
+  I²C to CN1 — SDA IO22 / SCL IO27 — and deleted `AMP_EN_PIN`)*; `BAT_ADC_PIN 34`; remove all
   `TOUCH_*` and touch-zone defines; introduce `GAME_X/GAME_Y/GAME_W/GAME_H` as defaults (values from §2.2).
 - Pin `include/peanut_gb.h`: identify the upstream commit it matches (diff against Peanut-GB history), add a
   header comment with the SHA and date, and a `scripts/update_peanut_gb.sh` that fetches a given SHA.
@@ -139,7 +143,8 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
 
 **Deferred verification**
 - Board boots on the 2.4" panel, black screen, no crash loop over 5 minutes of serial log.
-- IO4 is never toggled by anything but the audio path (scope/meter while booting).
+- IO4 is never toggled by anything (rev C: it is not an amp enable and its real function is unknown —
+  scope/meter while booting).
 
 **Notes/risks**
 - The fork's `button_input.cpp` stays as-is in this workstream (it compiles); WS-05 rewrites it.
@@ -259,7 +264,8 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
 - Rewrite `src/button_input.cpp` for MCP23017 at `BTN_I2C_ADDR 0x20`: `IODIRA=0xFF`, `GPPU=0xFF`, read `GPIOA`
   once per frame. Keep the `button_init/update/get_buttons` interface.
 - I²C bring-up in a shared `i2c_bus.cpp` (PN532 in WS-06 uses the same bus): bus recovery (9 SCL pulses +
-  STOP) gated on `I2C_SCL == 1`, `Wire.begin(I2C_SDA, I2C_SCL)`, 400 kHz.
+  STOP) gated on `I2C_SCL == 1`, `Wire.begin(I2C_SDA, I2C_SCL)`, 400 kHz. *(As merged; rev C moved the bus
+  to CN1 and the recovery routine was deleted with it.)*
 - `input/combo.c` (host-testable): 8 ms debounce, edge detection, Start+Select → menu, Select+Up/Down →
   volume, Select+Left/Right → brightness, D-pad masked out of the joypad word while Select is held,
   optional key repeat (400 ms / 200 ms). Volume/brightness go through `settings.cpp` → NVS with a
@@ -272,9 +278,9 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
 - Expander driver isolated behind a 3-function interface; `hw_config.h` selects pins/address.
 
 **Deferred verification**
-- All eight buttons register (feeds WS-09's button test screen).
-- Bus recovery on a cold boot with SCL on IO1: no I²C errors in the first transaction.
-- If §11 item 2 finds IO22 on the EXP pad: change `I2C_SCL`, drop recovery, retest.
+- All eight buttons register (feeds WS-09's button test screen) on the rev C straight-ribbon map
+  (Up=GPA7 … B=GPA0).
+- First I²C transaction on a cold boot succeeds on CN1 (SDA IO22 / SCL IO27) with no recovery step.
 
 **Notes/risks**
 - `Wire` and the display share no pins, but the PN532 read at boot and the button poll share the bus — the
@@ -345,7 +351,7 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
 
 ---
 
-### WS-08 · `ws/audio` — MiniGB APU, DAC output, volume, auto-mute
+### WS-08 · `ws/audio` — MiniGB APU, DAC output, volume
 
 **Depends on:** WS-04 (needs the reclaimed heap and the core split). **Design:** §1.6, §4, §10 Phase 6.
 
@@ -354,10 +360,10 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
   `audio_read`/`audio_write`.
 - `audio/mix.c` (host-testable): stereo→mono sum, 16-bit volume scale via `vol_lut`, ±1 LSB dither, truncate
   to 8-bit. Tests: silence stays silent, full-scale doesn't wrap, dither bounded.
-- Output: timer-driven DAC on IO26 at 32768 Hz from a ring buffer filled once per frame by the APU; `AMP_EN`
-  (IO4) HIGH on start.
-- Volume states high/med/low/off; off = IO4 LOW, not zero samples. Auto-mute: IO4 LOW after 200 ms of
-  silence, HIGH on the next non-zero sample; independent of the volume setting.
+- Output: timer-driven DAC on IO26 at 32768 Hz from a ring buffer filled once per frame by the APU. There
+  is no amp-enable pin — rev C proved IO4 is not one and no hardware mute exists.
+- Volume states high/med/low/off; off holds the DAC at 128 (mid-scale), not 0 and not zero samples. The
+  designed IO4 auto-mute is gone with the mute pin; the amp is always live.
 - Volume wired to WS-05's Select+Up/Down and WS-07's menu.
 
 **Code-complete exit**
@@ -365,14 +371,14 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
   serial.
 
 **Deferred verification**
-- `tone()` on IO26 with the stock speaker first (§11 item 3) — decides whether the resistor mod or MAX98357A
-  path is needed; record as a `DEC-`.
+- §11 item 3 is already answered (rev C): onboard amp verified with real GB music from SD, on battery —
+  recorded as a `DEC-` on `poc-gb`; no escalation path needed.
 - Audio plays at 60 fps with no dropouts; frame-time impact recorded.
-- No idle hiss (auto-mute working); volume steps sound evenly spaced.
+- Idle-hiss level with the amp always live and the DAC parked at 128 judged acceptable; volume steps sound
+  evenly spaced.
 
 **Notes/risks**
-- The MAX98357A fallback (I²S on IO22/16/17) is a separate small workstream if §11 item 3 fails twice; don't
-  pre-build it.
+- The MAX98357A fallback is dead: rev C verified the onboard amp, and IO22 now carries I²C SDA anyway.
 
 ---
 
@@ -436,10 +442,13 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
 **Depends on:** parts arriving; ideally all of WS-01..10 merged. **Design:** §10 Phase 0, §11, every Exit line.
 
 **Scope**
-- §11 items 1–8 in order, each a step whose Outcome records the measurement and the resulting constant change
-  (if any) as a commit on `poc-gb` plus a `DEC-`.
+- §11's still-open items in order — item 1's brownout sweep, items 5–8, and the new item 9 (SW1 bridge
+  check) — each a step whose Outcome records the measurement and the resulting constant change (if any) as
+  a commit on `poc-gb` plus a `DEC-`. Items 2, 3 and 4 were answered by wiring PDF rev C (2026-09-01) and
+  already have `DEC-` notes.
 - Then every workstream's "Deferred verification" list above, as steps grouped by workstream.
-- Audio escalation decision (§1.6). 24/16 vs 26/16 decision (§2.1). `SPI_FREQUENCY` decision (§3.3).
+- 24/16 vs 26/16 decision (§2.1). `SPI_FREQUENCY` decision (§3.3). (The audio escalation decision (§1.6)
+  was settled by rev C: onboard amp, no mod.)
 - `BAT_DIVIDER` and low-battery threshold calibration (§11 item 6).
 - Complete `docs/ASSEMBLY.md` from what actually went wrong.
 - Mechanical items (bezel print/fit with rear flange, USB-C slot, battery harness, RF shield removal) are
