@@ -115,11 +115,12 @@ they were data. **Source:** `reference/ORIGINAL_ROADMAP.md:293-300` (read 2026-0
 
 ## Open bench items
 
-`reference/ORIGINAL_ROADMAP.md` §11 lists eight unresolved questions, each with a bench test and a stated consequence if it goes
-badly. They gate design decisions in the rendering, power, audio and performance sections. Summarised:
-board runs from a 3.7 V cell; identity of the 4th EXP-header pad; onboard amp usability; whether BAT actually
-powers the system; actual pixel pitch; IO34 divider ratio; max reliable `SPI_FREQUENCY`; real emulation frame
-time. **Source:** `reference/ORIGINAL_ROADMAP.md:639-652` (read 2026-08-27).
+`reference/ORIGINAL_ROADMAP.md` §11 now lists nine questions, each with a bench test, a stated consequence
+and a status column. Wiring PDF rev C (bench-verified, 2026-09-01) answered three: the 4th-EXP-pad question
+is moot (I²C moved to CN1 — SDA IO22 / SCL IO27), the onboard amp is usable (no mod needed — but IO4 is not
+an amp enable, so no hardware mute exists), and BAT does power the system. Still open: the brownout sweep
+(item 1), actual pixel pitch, IO34 divider ratio, max reliable `SPI_FREQUENCY`, real emulation frame time,
+and the new SW1-bridge check (item 9). **Source:** `reference/ORIGINAL_ROADMAP.md:679-696` (read 2026-09-01).
 
 `reference/ORIGINAL_ROADMAP.md:26-29` states plainly: "Do not treat flagged values as settled."
 

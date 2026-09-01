@@ -49,7 +49,7 @@ Two supply-chain notes worth carrying into planning:
 | HSPI | MOSI 13, MISO 12, SCLK 14, CS 15, DC 2, RST −1, BL 21 | ILI9341 TFT at 40 MHz | `platformio.ini:22-36` |
 | VSPI | SCK 18, MISO 19, MOSI 23, CS 5 | SD card at 20 MHz | `src/sd_manager.cpp:7, 11-12`; `include/hw_config.h:16-19` |
 | Bit-banged SPI | CS 33, IRQ 36, MOSI 32, MISO 39, CLK 25 | XPT2046 touch | `include/hw_config.h:10-14`; `platformio.ini:58-62` |
-| I²C (`Wire`) | SDA 16, SCL 17, 100 kHz | GPIO expander at `0x20` | `src/button_input.cpp:9-12`; `include/hw_config.h:20-22` |
+| I²C (`Wire`) | SDA 22, SCL 27 (CN1), 400 kHz | MCP23017 at `0x20`; PN532 at `0x24` joins in WS-06 | `src/i2c_bus.cpp`; `include/hw_config.h:27-33` (updated 2026-09-01, wiring PDF rev C) |
 
 The bit-banged touch driver is deliberate: `README.md` § How It Works states it "avoids bus conflicts with
 display and SD card." **Source:** `README.md` (read 2026-08-27).
@@ -58,11 +58,12 @@ display and SD card." **Source:** `README.md` (read 2026-08-27).
 `Wire.requestFrom()` with no register address and inverts the result — the PCF8574 quasi-bidirectional
 protocol. **Source:** `src/button_input.cpp:15-28` (read 2026-08-27).
 
-`reference/ORIGINAL_ROADMAP.md:100-118` specifies an **MCP23017** at the same address `0x20`, with `GPPU = 0xFF` for pull-ups and
-buttons on GPA0–GPA7, at 400 kHz on pins IO27/IO1. Those are different parts with different protocols: the
-MCP23017 requires a register-address write before each read. **The current code will not drive the part the
-roadmap specifies.** This is a target-vs-current divergence, not a bug in either document.
-**Sources:** `src/button_input.cpp:15-28`, `reference/ORIGINAL_ROADMAP.md:100-118, 379-400` (read 2026-08-27).
+`reference/ORIGINAL_ROADMAP.md` §1.4 specifies an **MCP23017** at the same address `0x20`, with `GPPU = 0xFF` for pull-ups and
+buttons on GPA7–GPA0 (a straight ribbon — wiring PDF rev C), at 400 kHz on CN1 (SDA IO22 / SCL IO27).
+*Resolved 2026-09-01:* WS-05 rewrote `src/button_input.cpp` for the MCP23017 behind the shared
+`src/i2c_bus.cpp`, and the rev C pin/bit map is what the firmware now implements. The PCF8574 description
+above is the fork's history, kept for the record.
+**Sources:** `src/button_input.cpp`, `src/i2c_bus.cpp`, `reference/ORIGINAL_ROADMAP.md:104-135` (read 2026-09-01).
 
 ## Storage
 
@@ -115,7 +116,7 @@ Named in `reference/ORIGINAL_ROADMAP.md`, with no implementation in `src/` as of
 | PN532 NFC reader | I²C `0x24`, `ntag2xx_ReadPage()`, boot-time read only | §6.2–6.3 |
 | MCP23017 expander | I²C `0x20`, polled once per frame | §1.4, §5 |
 | MiniGB APU | Compile-time companion to Peanut-GB; `ENABLE_SOUND 1` | §4 |
-| Internal DAC audio | IO26, timer-fed, IO4 hardware mute | §1.6, §4 |
+| Internal DAC audio | IO26, timer-fed; no hardware mute exists — "off" holds the DAC at 128 (rev C) | §1.6, §4 |
 | Battery sense | IO34 ADC, divider ratio undocumented | §1.2, §11 item 6 |
 | Phone tag-writing web app | GitHub Pages + Web NFC (`NDEFReader`); off-device only | §6.6 |
 

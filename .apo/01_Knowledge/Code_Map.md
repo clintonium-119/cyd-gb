@@ -123,6 +123,9 @@ brightness from NVS (`main.cpp:164-172`). **Source:** `src/main.cpp:135-175` (re
 amplifier enable, HIGH = on — and `reference/ORIGINAL_ROADMAP.md:76-78` calls out this exact line as a defect to fix in Phase 1.
 On the current board it is a status LED; on the target board it is the amp. **Sources:**
 `src/main.cpp:138,141`, `include/hw_config.h:23`, `reference/ORIGINAL_ROADMAP.md:52,76-78` (read 2026-08-27).
+*Correction 2026-09-01 (wiring PDF rev C):* the bench proved IO4 is **not** the amp enable — its real
+function is unknown and it simply stays unused (`reference/ORIGINAL_ROADMAP.md` §1.6, §13). WS-01 had
+already remapped `LED_R_PIN` to `-1`, and the firmware no longer defines `AMP_EN_PIN` at all.
 
 `loop()` is the per-game cycle, and it runs the ROM browser every iteration: `sd_scan_roms()` fills a fixed
 `RomEntry roms[64]` array (`main.cpp:178`, `sd_manager.h:8`), `launcher_show()` returns an index or the

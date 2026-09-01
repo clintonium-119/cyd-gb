@@ -35,14 +35,18 @@ them before proposing changes." These are therefore rails, not background.
   kids. Anything needing a rework station or per-unit firmware variation is the wrong answer.
   **Source:** `reference/ORIGINAL_ROADMAP.md:21-23` (read 2026-08-27).
 - **Do not treat `reference/ORIGINAL_ROADMAP.md`'s flagged numbers as settled.** The document says so directly at `:26-29`, and
-  §11 (`:639-652`) lists eight open bench items with the test that resolves each. Frame-time figures in §3.1
+  §11 (`:679-696`) lists nine bench items with the test that resolves each — five still open as of wiring
+  PDF rev C (2026-09-01), which answered items 2, 3 and 4. Frame-time figures in §3.1
   are marked "estimated, not measured" and "could be off by 50% either way."
-  **Source:** `reference/ORIGINAL_ROADMAP.md:26-29, 293-300, 639-652` (read 2026-08-27).
+  **Source:** `reference/ORIGINAL_ROADMAP.md:26-29, 293-300, 679-696` (read 2026-09-01).
 - **Do read `reference/ORIGINAL_ROADMAP.md` §13 before proposing anything that looks like an obvious improvement.** It is a
-  list of ten things already considered and rejected, each with the reason: no ROM browser, no Retro-Go, no
-  I²C on IO3, no reuse of IO4, no stretching to 240 rows, no blending byte-swapped pixels, no per-pixel
-  cross-palette branch, no manual Save/Load, no kid-accessible tag locking, no per-line `pushImage`.
-  **Source:** `reference/ORIGINAL_ROADMAP.md:666-679` (read 2026-08-27).
+  list of things already considered and rejected, each with the reason: no ROM browser, no Retro-Go, no
+  driving IO4 (the bench proved it is not the amp enable and its real function is unknown), no building on
+  the vendor datasheet without metering (it has been wrong twice: the header pinout and IO4), no stretching
+  to 240 rows, no blending byte-swapped pixels, no per-pixel cross-palette branch, no manual Save/Load, no
+  kid-accessible tag locking, no per-line `pushImage`. (The old no-I²C-on-IO3 entry is moot — I²C lives
+  entirely on CN1 as of wiring PDF rev C.)
+  **Source:** `reference/ORIGINAL_ROADMAP.md:710-726` (read 2026-09-01).
 
 ## `README.md` vs `reference/ORIGINAL_ROADMAP.md` — which wins
 

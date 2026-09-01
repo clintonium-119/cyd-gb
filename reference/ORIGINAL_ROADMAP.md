@@ -83,8 +83,8 @@ that resolves it. **Do not treat flagged values as settled.**
 Metered on the bench (wiring PDF rev C): **CN1 is a 4-pin 1.25 mm connector carrying GND / IO22 / IO27 /
 3.3 V** — the whole I²C bus, power included, on one plug. **P3 carries GND / IO35 / IO22 / IO21** and is
 spare (IO21 is the backlight — leave it alone; IO35 is input-only). The vendor pin table got the header
-pinout wrong; the silkscreen readings that previously stood here are superseded. Nothing is soldered to the
-CYD anywhere in this build.
+pinout wrong; the silkscreen readings that previously stood here are superseded. No peripheral wiring is
+soldered to the CYD anywhere in this build — the SW1 bridge (§1.5) is the one solder joint.
 
 **`LED_R_PIN` in the fork's `hw_config.h` is set to 4.** The vendor datasheet calls IO4 the audio amplifier
 enable, but the bench says otherwise (§1.6) — its real function is unknown. Remap `LED_R_PIN` off it (done
