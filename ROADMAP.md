@@ -8,7 +8,10 @@ sequence of apo workstreams, in what order, with what exit criteria, and what ea
 bench-verified (I²C on CN1 with SDA IO22 / SCL IO27, onboard amp confirmed with no hardware mute, SW1
 bridge, straight-ribbon button map). Each workstream still reaches *code-complete* as planned; the formal
 deferred-verification pass stays collected in WS-11, minus the items rev C already answered (§11 items
-2, 3, 4).
+2, 3, 4). **2026-09-02:** cart writing moved on-device per
+[`reference/NFC_AMENDMENTS.md`](reference/NFC_AMENDMENTS.md) — WS-06 expanded to own the full tag
+protocol and boot state machine, WS-12 `ws/cart-writer` added for the writer UI, and WS-10 loses the phone
+web app.
 
 ---
 
@@ -29,8 +32,10 @@ deferred-verification pass stays collected in WS-11, minus the items rev C alrea
 - **Bench-dependent constants** live in `include/hw_config.h` (pins, expander, addresses, clock) and
   `include/render_config.h` (scale, `GAME_X/Y` defaults). A bench result that changes one of them is a
   one-line commit on `poc-gb`, not a reopened workstream.
-- **Decisions** that this document pre-empts (branching model, expander part, saves-on-SD, tooling in-repo)
-  should be recorded as `DEC-` notes in `poc-gb/decisions/` when planning starts.
+- **Decisions** that this document pre-empts (branching model, expander part, saves-on-SD, tooling in-repo,
+  and the 2026-09-02 NFC set: on-device writer behind a MENU cart, password protection instead of locking,
+  NTAG215 as the one part, catalog file instead of JSON, no two-sided disc, wildcard identified by prefix not
+  UID) should be recorded as `DEC-` notes in `poc-gb/decisions/` when planning starts.
 
 ### Proposed Definition of Done (answers `KNOW-0008`'s open questions)
 
@@ -71,19 +76,24 @@ deferred-verification pass stays collected in WS-11, minus the items rev C alrea
       │ perf+rom   │            the ROM     │
       └─────┬──────┘            load path   │
             │                   nfc calls)  │
-            ├────────────┬──────────────────┘
-            ▼            ▼
-      ┌────────────┐ ┌────────────┐
-      │ WS-08      │ │ WS-07      │
-      │ audio      │ │ menu-saves │
-      └─────┬──────┘ └─────┬──────┘
-            └──────┬───────┘
-                   ▼
-            ┌────────────┐     ┌────────────┐
-            │ WS-09      │     │ WS-10      │  (independent of firmware;
-            │ diagnostics│     │ build-tools│   can run any time after WS-06
-            └─────┬──────┘     └─────┬──────┘   fixes the NDEF/filename contract)
-                  └───────┬──────────┘
+            ├────────────┬──────────────────┤
+            ▼            ▼                  │
+      ┌────────────┐ ┌────────────┐         │
+      │ WS-08      │ │ WS-07      │         │
+      │ audio      │ │ menu-saves │         │
+      └─────┬──────┘ └─────┬──────┘         │
+            │              ▼                │
+            │        ┌────────────┐         │
+            │        │ WS-12      │◀────────┤  (writer UI: needs WS-03 render,
+            │        │ cart-writer│         │   WS-05 D-pad, WS-06 tag I/O,
+            │        └─────┬──────┘         │   WS-07 list state machine)
+            └──────┬───────┘                │
+                   ▼                        ▼
+            ┌────────────┐          ┌────────────┐
+            │ WS-09      │          │ WS-10      │  (firmware-independent; needs only
+            │ diagnostics│          │ build-tools│   WS-06's catalog/filename contract)
+            └─────┬──────┘          └─────┬──────┘
+                  └───────┬───────────────┘
                           ▼
                    ┌────────────┐
                    │ WS-11      │  ← needs hardware
@@ -91,9 +101,12 @@ deferred-verification pass stays collected in WS-11, minus the items rev C alrea
                    └────────────┘
 ```
 
-**Recommended serial order for one developer:** 01 → 02 → 03 → 04 → 05 → 06 → 07 → 08 → 09 → 10 → 11.
-WS-05, WS-06 and WS-10 are independent of the render/perf chain and can be pulled forward if the render work
-stalls — they touch different files (`button_input.cpp`, a new `nfc_cart.cpp`, `tools/` + `web/`).
+**Recommended serial order for one developer:** 01 → 02 → 03 → 04 → 05 → 06 → 07 → 12 → 08 → 09 → 10 → 11.
+WS-12's number is historical (it was added after WS-11 was named); its *position* is given by this serial
+order, and WS-11 stays the bench workstream that closes the project. WS-05, WS-06 and WS-10 are independent
+of the render/perf chain and can be pulled forward if the render work stalls — they touch different files
+(`button_input.cpp`, a new `nfc_cart.cpp`, `tools/`). WS-12 is *not* independent: it needs the render chain
+for the art and list drawing and WS-07's list state machine.
 
 Why this order rather than the design doc's Phase numbering: with no hardware, measurement-driven phases
 (perf, audio) can't close anyway, so deterministic, host-testable work (input, NFC, menu) is front-loaded, and
@@ -288,55 +301,113 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
 
 ---
 
-### WS-06 · `ws/nfc-cart` — PN532 boot read, NDEF, filename matching
+### WS-06 · `ws/nfc-cart` — PN532 boot read, NTAG protocol, boot state machine, provisioning
 
-**Depends on:** WS-04 (ROM load path), WS-05 (I²C bus). **Design:** §6.1–6.5, §10 Phase 8.
+**Depends on:** WS-04 (ROM load path), WS-05 (I²C bus). **Design:** §6.1–6.5, §10 Phase 8;
+`reference/NFC_AMENDMENTS.md` §0–§5.
 
 **Scope**
-- `src/nfc_cart.cpp`: PN532 over I²C at 0x24, `SAMConfig`, one `InListPassiveTarget` with a ~1 s timeout at
-  boot, read NTAG pages 4..N via `ntag2xx_ReadPage`, hand the raw bytes to the parser. **Read-only API by
-  construction** — no write function exists in the module; add a unit test that greps the symbol table for
-  `WritePage`/`ntag2xx_Write` and fails if present.
-- `cart/ndef.c`: TLV walk → NDEF Text record → language-length from status byte → filename. Tests for `en`,
-  `fr`, 5-byte language codes, missing terminator, non-Text record, empty tag.
-- `cart/match.c`: normalise (lowercase, trim, append `.gb`), exact match, then substring fallback over an
-  injected listing. Tests including `tetris` → `Tetris (World).gb` and ambiguous matches (pick shortest name,
-  log it).
-- Boot flow in `main.cpp`: splash → read tag → match → if ROM differs from `rom_store` header, "Loading…" and
-  write → `emu_init` → `load_ram` → run. Failure screens show the *string read*: `No cartridge`,
-  `Unreadable tag`, `Not found: <name>`. No retry loop, no browser; power-cycle is the retry (§6.2).
+- `src/nfc_cart.cpp`: a **minimal I²C-only PN532 driver** at 0x24 — `SAMConfig`, one `InListPassiveTarget`
+  with **`MaxTg = 2`** and a ~1 s timeout at boot, page reads, and a raw `InDataExchange` transceive for
+  `PWD_AUTH`. Two targets responding is a `Shielding fault` halt, never a guess. The read happens **before**
+  display and SD init, while the RF environment is quietest; one retry after the display is up, only so an
+  error can be shown.
+- `lib/gbcore/cart/ntag.c` (pure C over an **injected transceive function**, host-tested against a fake tag
+  model): NTAG215 page map as named constants in `include/hw_config.h` — user pages 0x04–0x81, dynamic lock
+  0x82, CFG0 0x83 (`AUTH0` byte 3, `CFGLCK` bit), CFG1 0x84 (`ACCESS`), `PWD` 0x85, `PACK` 0x86 — verified
+  against the NXP datasheet for the exact part, not a tutorial. A **page-write whitelist** that refuses pages
+  2, 3 and 0x82 and never sets `CFGLCK`; `PWD_AUTH` framing; the protect sequence (`AUTH0 = 0x04`, `PROT = 0`
+  write-only so reads stay open, `AUTHLIM = 0`, build-wide `PWD`/`PACK` constants **documented as not a
+  secret**); verification by `PWD_AUTH` + `PACK` compare, because `PWD`/`PACK` read back as zeros; the
+  writability check (`AUTH0 == 0xFF` → unprotected and writable; otherwise `PWD_AUTH` → ours or foreign).
+- `cart/ndef.c`: **parse** (TLV walk → Text record → language length from the low 6 bits of the status
+  byte, never assumed to be 2; classify factory-empty `03 00 FE` *and* all-zero user memory as `BLANK`) and
+  **compose** (Text record, language `en`). Tests for `en`, `fr`, 5-byte language codes, missing terminator,
+  non-Text record, both blank shapes, and a compose→parse round trip.
+- `cart/match.c`: **exact match is the rule** — tags are now device-written from the catalog, so the string
+  on the tag is the filename. The normaliser tests for the `.gb` *suffix*, not for any dot: tests over
+  `Snow Bros. Jr..gb`, `Dr. Mario.gb`, `Super R.C. Pro-Am.gb`, `Mr. Do!.gb`. The lowercase/trim/substring
+  fallback is kept as a legacy path for hand-written tags and is tested, not relied on.
+- `cart/catalog.c`: reader for `/catalog.txt` on the SD card — one entry per line, tab-separated
+  `filename`, `title`, `flags`, `description` (≤ 200 bytes, plain ASCII), generated by WS-10's imaging tool.
+  Builds a static index of at most `CATALOG_MAX` entries (`{offset, title, filename}`) and reads a
+  description on demand by offset. **No JSON parser in the firmware.**
+- **Boot state machine** in `main.cpp`, per `NFC_AMENDMENTS.md` §2. Order is load-bearing: **classify the
+  payload first** (`MENU` / `WILD:<rom>` / `<rom>` / `BLANK`), route `MENU` to the writer unconditionally so
+  **a MENU tag is never a write target**, then consider a pending write. A pending write executes only when
+  the presented tag matches `pending.target`: `WILDCARD` → any `WILD:` tag; `NEW_CART` → a blank tag;
+  `REWRITE` → any tag that authenticates with the build password and is not `MENU`. Sequence is
+  write → read-back verify → protect → clear pending → load, and it is **idempotent** — power loss anywhere
+  before "clear pending" simply repeats on the next boot. A blank tag after setup halts with
+  `Blank cart. Use your MENU cart.` Every boot with a pending record shows a `Pending: <TITLE> — insert your
+  wildcard` banner first. After a successful load, any valid tag that is still unprotected (`AUTH0 == 0xFF`)
+  is protected — a config-only write that heals a tag which lost power between write and protect. Failure
+  screens show the *string read*: `No cartridge`, `Shielding fault`, `Unreadable tag`, `Not found: <name>`,
+  `Insert your wildcard`. No retry loop, no browser; power-cycle is the retry (§6.2).
+- `src/cart_provision.cpp`: **the only translation unit that references tag-write symbols.** It executes
+  pending writes and the **first-boot wizard**: NVS flags `menu_done`, `wild_done`, `setup_done`; steps
+  MENU → wildcard → game carts → *Finish setup*, one write per boot (the DMG interlock forces a power cycle
+  per cart anyway). Each step accepts a blank tag **or** an existing MENU/WILD tag that authenticates, so
+  the wizard re-adopts a kid's carts after an NVS clear. The wizard is re-armed only by an NVS clear at the
+  flashing station — a computer-and-adult gate, not a button combo.
+- `pending_t { char rom[ROM_STORE_NAME_MAX]; uint8_t target; }` stored in NVS through `settings.cpp`, one
+  record, overwritten by a later selection.
+- `writer_open()` **stub** until WS-12 lands: in immediate (wizard) mode returns a fixed starter selection;
+  in pending mode halts with `Menu cart`. The single call site is in the boot state machine.
+- **Guard tests** (replace the old write-symbol-absence test, which the write path now contradicts):
+  (a) tag-write symbols are referenced only from `cart_provision.cpp`; (b) exactly one `writer_open()` call
+  site, inside the `MENU` branch of the boot state machine; (c) `cart_writer*` translation units reference no
+  write symbols, no `emu_*`, no `rom_store_*`; (d) the page-write whitelist unit test. (a)–(c) are
+  source-grep tests run under `pio test -e native`.
 - Remove the WS-01 hard-coded ROM stub. Keep a **build-flag-only** `DEV_ROM_PATH` for bench work, off by
   default, and fail the CI build if it is defined in the default env.
-- `games.json` schema defined here (filename, title, size, optional palette hash) — WS-10 consumes it.
+- **`games.json` schema defined here** — WS-10 consumes it: `filename` (the **frozen key**, ≤
+  `ROM_STORE_NAME_MAX`, appears verbatim on protected tags), `title`, `description`, `art`, `starter`,
+  `developer`, `publisher`, `year`, `genre`, `players`. **Catalog line format defined here** (above).
 
 **Code-complete exit**
-- Parser and matcher tests pass; the read-only symbol test passes.
+- `ntag`, `ndef`, `catalog` and `match` tests pass; guard tests (a)–(d) pass.
 - `main.cpp` has no code path from a running game back to ROM selection.
+- The wizard completes MENU → wildcard → game cart → Finish setup on host against the fake tag model.
 
 **Deferred verification**
-- Tap → correct ROM on ≥3 different carts, one written from an iOS locale device.
+- Tap → correct ROM on ≥3 different carts.
 - Read succeeds with the DMG's RF shield removed; fails with it in place (confirm the §6.2 claim).
 - Time from power-on to game start recorded, with and without a partition rewrite.
+- Wizard end-to-end on an assembled unit, through the shell.
+- Two tags presented → `Shielding fault`, exactly one target per single tag.
+- Protect-then-rewrite cycle on a sacrificial tag: write, protect, confirm a phone cannot write, confirm the
+  device can.
+- `GET_VERSION` on the first tag out of the bag matches NTAG215.
 
 **Notes/risks**
-- Adafruit PN532 library pulls in SPI/HSU paths; consider a minimal I²C-only driver (~200 lines) to keep flash
-  down. Decide in `/apo:plan`.
+- `PWD_AUTH` needs a raw transceive, which the Adafruit PN532 library does not expose cleanly, and it pulls
+  in SPI/HSU paths besides — the minimal I²C-only driver is the right shape, not just the smaller one.
+- The boot-flow order is load-bearing: `MENU` must be classified before the pending branch or a pending
+  write destroys the menu cart.
+- The password is shared by all ten units so carts stay tradeable. Its only job is stopping a stray phone
+  from clobbering a cart. Nothing here is a security boundary.
 
 ---
 
 ### WS-07 · `ws/menu-saves` — D-pad menu, automatic saves, Cart Info
 
-**Depends on:** WS-05, WS-06. **Design:** §7, §8.1, §10 Phase 9.
+**Depends on:** WS-05, WS-06. **Design:** §7, §8.1, §10 Phase 9; `NFC_AMENDMENTS.md` §8.
 
 **Scope**
 - Rewrite `ui_launcher.cpp` → `menu.cpp`: D-pad navigated list, items **Resume / Volume / Brightness /
   Palette / Cart Info / Reset**. Remove Quit, Calibrate, Save, Load, the touch `mbtn()` code and the settings
   submenu's frameskip/overlay entries move to WS-09's diagnostic screen (frameskip stays reachable there).
+  The menu gains nothing else — the cart writer is **not** reachable from it, and WS-12 does not touch it.
+- The **list state machine** (cursor, scroll window, wrap, page jump) is a pure module with no display
+  dependency; WS-12 reuses it for the writer, so design it for a 132-entry list, not a 6-entry one.
+- **Renders inside `GAME_X/Y/W/H`** (§3 rule 6): the bezel masks everything outside the game window.
 - Auto-save: `gb_cram_w` sets `dirty` + `last_write_ms` (only inside the real save size); flush when dirty and
   idle ≥10 s, on menu open, on Reset, and on the low-battery hook (`battery.cpp` reads IO34 with a
   `BAT_DIVIDER` constant and a threshold that WS-11 calibrates — §11 item 6). Brief "SAVED" toast.
 - Auto-load on boot (already exists as `load_ram`; keep).
-- Cart Info: UID hex, raw filename read, matched path, ROM title from header, palette hash.
+- Cart Info: UID hex, raw payload read, classification (`MENU` / `WILD:` / plain), protection state from
+  `AUTH0`, matched path, ROM title from header, palette hash.
 - `Reset` → flush → `gb_reset()`.
 
 **Code-complete exit**
@@ -384,16 +455,21 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
 
 ### WS-09 · `ws/diagnostics` — Boot-combo diagnostic screen
 
-**Depends on:** WS-05, WS-06, WS-07, WS-08. **Design:** §2.2, §8.2, §10 Phase 10.
+**Depends on:** WS-05, WS-06, WS-07, WS-08, WS-12. **Design:** §2.2, §8.2, §10 Phase 10;
+`NFC_AMENDMENTS.md` §8.
 
 **Scope**
 - Hold Start+Select at power-on (sampled after WS-05's bus init, before the NFC read) → `diag.cpp`.
-- Pages, D-pad to switch: buttons (live, GPA bit labelled), SD (present, ROM count, free), NFC (PN532 firmware
-  version, live UID), battery (raw ADC + computed V using `BAT_DIVIDER`), audio (test tone, cycles volume
+- Pages, D-pad to switch: buttons (live, GPA bit labelled), SD (present, ROM count, catalog entries, free),
+  NFC — a **read-only tag inspector**: PN532 firmware version, live UID, `GET_VERSION`, protection state
+  (`AUTH0`/`ACCESS`), raw NDEF hex, decoded payload and classification — battery (raw ADC + computed V
+  using `BAT_DIVIDER`), audio (test tone, cycles volume
   states), display (colour bars, 1-px border at `GAME_X/Y/W/H`, checkerboard for the blend), **nudge**
   (`GAME_X/Y` ± with A to save to NVS, B to reset default), frameskip and FPS overlay toggles, firmware
   version/build timestamp (from `scripts/post_build_timestamp.py`).
-- **No tag write path.** The read-only symbol test from WS-06 covers this module too.
+- **No tag write path.** WS-06's guard tests apply: the diagnostic translation units reference no tag-write
+  symbols (guard (a) already fails if they do), and `writer_open()` keeps its single call site (guard (b)).
+- **Renders inside `GAME_X/Y/W/H`** (§3 rule 6).
 
 **Code-complete exit**
 - Every page renders on host in a framebuffer test (so layout is at least sane); nudge persistence
@@ -406,34 +482,88 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
 
 ---
 
-### WS-10 · `ws/build-tools` — games.json, SD imaging, phone web app, flasher
+### WS-10 · `ws/build-tools` — games.json, catalog, SD imaging, flasher
 
-**Depends on:** WS-06 (NDEF/filename contract). Firmware-independent otherwise. **Design:** §6.5, §6.6,
-§10 Phase 11 (software parts).
+**Depends on:** WS-06 (catalog/filename contract only). Firmware-independent otherwise. **Design:** §6.5,
+§10 Phase 11 (software parts); `NFC_AMENDMENTS.md` §6, §8.
 
 **Scope**
-- `games.json` (schema from WS-06) as the single source of truth; a validator in CI (unique filenames, files
-  exist in the private ROM directory given by env var — ROMs themselves are never committed).
+- `games.json` (schema from WS-06) as the single source of truth; a validator in CI: unique filenames, every
+  `filename` ≤ `ROM_STORE_NAME_MAX`, every `description` ≤ 200 bytes plain ASCII, `art` present, files exist
+  in the private ROM directory given by env var (ROMs themselves are never committed), and a
+  **catalog round trip** — the emitted `/catalog.txt` parses back to the same entries.
+- `tools/seed_games_json.py`: **one-shot seed** of `games.json` from `~/ES-DE/gamelists/gb/gamelist.xml`.
+  Matches the curated ROM stems to `<name>` (85 of 132 match exactly; the 47 shortened names go through
+  `tools/esde_aliases.json`), pulls `desc`/`developer`/`publisher`/`releasedate`/`genre`/`players`, truncates
+  descriptions at a sentence boundary to fit 200 bytes, and points `art` at the ES-DE cover (74 match by
+  stem; the rest are filled by hand). After seeding, `games.json` is **hand-curated** — the seed is not
+  rerun over edits.
 - `tools/image_sd.py`: format-agnostic copy of `/roms/gb/*` + empty `/saves/` from a local library dir to a
-  mounted card, verify by hash, print a manifest; idempotent so ten cards come out identical.
-- `web/` on GitHub Pages: lists `games.json`; Android Chrome → Web NFC read-before-write, write Text record
-  with the filename, read back and show result; no `NDEFReader` → clipboard fallback (synchronous
-  `writeText` inside the tap handler) with NFC Tools instructions. QR code generator for the wildcard sticker
-  linking to the page. Never offers a lock action.
+  mounted card; converts each cover PNG → 96×96 `.565` (`rgb565le`, alpha flattened, via `ffmpeg`) into
+  `/art/<stem>.565`; emits `/catalog.txt` from `games.json`; verifies by hash; prints a manifest; idempotent
+  so ten cards come out identical. 132 ROMs at ~30 MB plus ~2.4 MB of art fits a 128 MB card with room.
 - Flashing station: ESP Web Tools page under `web/flash/` with a `manifest.json` pointing at CI-built
-  `firmware.bin` + `bootloader` + `partitions` artefacts from a tagged release.
+  `firmware.bin` + `bootloader` + `partitions` artefacts from a tagged release, plus a **factory reset**
+  action (NVS clear) that re-arms WS-06's first-boot wizard.
 - `docs/ASSEMBLY.md`: build-day checklist skeleton (polarity meter check, RF shield removal, switch-on-to-
-  charge, flash-before-shell), to be completed from WS-11 findings.
+  charge, flash-before-shell, wizard **after** the shell is closed so it doubles as the reader test, factory
+  reset reruns the wizard, `erase_flash` silently drops a pending write), to be completed from WS-11
+  findings.
 
 **Code-complete exit**
-- Web app works against a real NTAG215 on an Android phone (this *is* testable now — tags and a phone don't
-  depend on the board order).
-- `image_sd.py` produces two byte-identical manifests from two runs.
+- Validator green on the real `games.json`; `image_sd.py` produces two byte-identical manifests from two runs.
+- The emitted `/catalog.txt` is parsed by WS-06's `catalog.c` tests as a fixture.
 - Release workflow publishes flashable artefacts.
 
 **Deferred verification**
 - A card imaged by the tool boots a unit and every `games.json` entry is found by a cart.
-- ESP Web Tools flashes a bare board over USB-C.
+- ESP Web Tools flashes a bare board over USB-C; factory reset re-enters the wizard.
+
+**Notes/risks**
+- Filenames are frozen the day the first protected tag is written (§3 rule 7). Renaming a ROM afterwards
+  means rewriting every cart that names it — recoverable through the writer's rewrite mode, but tedious.
+  Freeze the 132 names before build day.
+
+---
+
+### WS-12 · `ws/cart-writer` — Writer UI and starter picker
+
+**Depends on:** WS-03 (render), WS-05 (D-pad), WS-06 (tag I/O, catalog, boot state machine), WS-07 (list
+state machine). **Serial position:** after WS-07, before WS-08 (§1). **Design:** `NFC_AMENDMENTS.md` §3,
+§3a, §6.
+
+**Scope**
+- `src/cart_writer.cpp`: a full-screen list drawn **inside `GAME_X/Y/W/H`** (§3 rule 6), built on WS-07's
+  list state machine. Up/Down move, **Left/Right page-jump**, WS-05's key repeat applies. The highlighted
+  entry shows its 96×96 `.565` box art (`rgb565le`, one static buffer, loaded only after the highlight has
+  been still for ~150 ms, placeholder drawn when the file is missing — never a failure) and its description
+  from the catalog.
+- **A** → confirmation screen naming the exact target and filename → **hold to confirm**. **B** backs out.
+- The writer **returns a selection `{rom, target}`. It never writes and never launches.** The boot state
+  machine decides what the selection means.
+- **Pending mode** (opened by a `MENU` tag): the game list plus **Cancel pending write** (when one is set),
+  **Rewrite a game cart** (`REWRITE`, heavier wording and confirmation) and **New cart** (`NEW_CART`).
+  Default target is `WILDCARD`. On confirm the caller records the pending write and the screen reads
+  `Power off, insert your wildcard, power on.`
+- **Immediate mode** (opened by the first-boot wizard with a blank tag present): shows `starter` entries
+  only, marks the carts already made this setup, and carries **Finish setup** (hold to confirm).
+- Layout is designed for the real catalog size (132 entries), inside 240×216.
+
+**Code-complete exit**
+- List and confirmation state machines unit-tested (cursor bounds, page jump, hold-to-confirm timing, cancel
+  paths) with no display involved.
+- Every screen renders on host in a framebuffer test and stays inside the window.
+- WS-06 guard test (c) passes: no write symbols, `emu_*` or `rom_store_*` referenced from `cart_writer*`.
+
+**Deferred verification**
+- Writer fully visible through the bezel on an assembled unit (§11 item 14).
+- Art load time on the highlighted entry recorded; scrolling 132 entries with the D-pad feels usable.
+
+**Notes/risks**
+- The writer never coexists with the emulator — every exit is a halt and a power cycle — so its buffers can
+  be static and generous; there is no heap contention with the ROM store or the audio ring buffer.
+- Friction is now a judgement call (`NFC_AMENDMENTS.md` §10): a kid with a menu cart reaches any game in
+  about twenty seconds. The lever is build-day policy on who holds menu carts, not firmware.
 
 ---
 
@@ -446,7 +576,15 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
   check) — each a step whose Outcome records the measurement and the resulting constant change (if any) as
   a commit on `poc-gb` plus a `DEC-`. Items 2, 3 and 4 were answered by wiring PDF rev C (2026-09-01) and
   already have `DEC-` notes.
-- Then every workstream's "Deferred verification" list above, as steps grouped by workstream.
+- The NFC items added 2026-09-02 (`NFC_AMENDMENTS.md` §9), appended to §11 of the design doc:
+  **10** anti-metal read range at final geometry, through the shell, backlight at full;
+  **11** protect-then-rewrite cycle on a sacrificial tag (phone cannot write, device can);
+  **12** config page addresses vs the NXP datasheet for the part ordered, `GET_VERSION` confirms the chip;
+  **13** cup retention — tabs at 0.20 / 0.30 / 0.40 mm overhang, pick the one that clicks without force;
+  **14** bezel window — writer, menu and diagnostics fully inside the visible aperture on an assembled unit;
+  **15** wizard end-to-end on an assembled unit, and two tags presented → `Shielding fault`.
+- Then every workstream's "Deferred verification" list above — WS-12's included — as steps grouped by
+  workstream.
 - 24/16 vs 26/16 decision (§2.1). `SPI_FREQUENCY` decision (§3.3). (The audio escalation decision (§1.6)
   was settled by rev C: onboard amp, no mod.)
 - `BAT_DIVIDER` and low-battery threshold calibration (§11 item 6).
@@ -456,15 +594,17 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
   gate a merge.
 
 **Exit**
-- All eight §11 items answered; all deferred checks ticked or converted into bugs (`/apo:bug-create`) on the
+- All §11 items (1–15) answered; all deferred checks ticked or converted into bugs (`/apo:bug-create`) on the
   owning workstream; one unit plays a cart end-to-end from a cold boot with audio.
 
 ---
 
 ## 3. Cross-cutting rules for every workstream
 
-1. **Never add** a ROM browser, a tag-write path, or a "recent games" feature. Re-read §6.1 and §13 before
-   planning. The WS-06 symbol test enforces the tag-write rule mechanically.
+1. **Never add** a path from a running game back to ROM selection, a "recent games" list, or any way to reach
+   the cart writer other than booting with a MENU cartridge (or the one-shot first-boot wizard, re-armed only
+   by an NVS clear at the flashing station). Selecting a ROM in the writer must never load it in the same
+   session. Re-read §6.1 and §13 before planning. WS-06's guard tests enforce the gating mechanically.
 2. **Bench-dependent values are constants**, named in one of two headers, defaulted to the design doc's value,
    with a comment citing the § and the §11 item that verifies it.
 3. **Host tests for anything pure.** If a function has no `Arduino.h` dependency, it goes in the core modules
@@ -473,12 +613,19 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
    when the value is "deferred to WS-11".
 5. **Design-doc edits go to `reference/ORIGINAL_ROADMAP.md`** when a workstream learns something that changes
    the design; this file only changes when the *work breakdown* changes.
+6. **All full-screen UI renders inside `GAME_X/Y/W/H`** — the writer, the WS-07 menu, and WS-09 diagnostics.
+   The bezel masks everything outside that window.
+7. **Tags are self-describing and filenames are frozen.** No UID is stored anywhere; the filename in
+   `games.json` is the permanent key on protected tags.
 
 ---
 
 ## 4. Next actions
 
-1. Record the four pre-empted decisions as `DEC-` notes on `poc-gb` (branching model; MCP23017; saves on unit
-   SD; tooling in-repo).
-2. `git checkout -b ws/strip-boot poc-gb` → `/apo:plan` WS-01 using §2 above as the brief.
-3. On merge, proceed down the serial order in §1.
+1. WS-01..05 are merged into `poc-gb`. Record the 2026-09-02 NFC decisions as `DEC-` notes on `poc-gb`:
+   on-device writer gated by a MENU cart; password protection, never permanent locking; NTAG215 as the one
+   part; catalog file, not JSON, in the firmware; two-sided disc dropped; wildcard identified by its `WILD:`
+   prefix, not a stored UID.
+2. `git checkout -b ws/nfc-cart poc-gb` → `/apo:plan` WS-06 using §2 above plus `reference/NFC_AMENDMENTS.md`
+   as the brief.
+3. On merge, proceed down the serial order in §1: 07 → 12 → 08 → 09 → 10 → 11.

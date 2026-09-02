@@ -187,6 +187,21 @@ print rather than showing as a bright sliver.
 The board is shifted **~4 mm toward the USB-C side** so a slot in the shell can reach the connector. This is
 compensated in software via `GAME_X` (see §2.2), not by moving the image physically.
 
+**Everything drawn full-screen — the in-game menu, the cart writer, diagnostics — must render inside
+`GAME_X`/`GAME_Y`/`GAME_W`×`GAME_H`.** The bezel masks the rest of the 320×240 panel on every unit (§8,
+§11 item 14).
+
+**Cartridge tags.** Single **anti-metal** NTAG215 25 mm discs — not plain tags plus ferrite stickers, which
+detune a tag that was not tuned for them. A printed cup glued into a 1.125" bore in the cart's label face,
+well depth 1.4 mm, three tabs at ~0.30 mm overhang to retain the disc (tab size verified in §11 item 13),
+Ø5 push-out hole in the floor. The two-sided menu/wildcard puck was considered and dropped.
+
+**PN532.** Antenna spiral toward the cart, ferrite sheet on the component side between module and CYD,
+mounted behind the cart slot as far from the CYD as the shell allows.
+
+**Disc storage.** A printed tray in the DMG battery bay, four discs per layer — **gated on the battery
+relocating below the button PCB; measure before designing.**
+
 ---
 
 ## 2. Rendering
@@ -422,33 +437,71 @@ The Start+Select menu combo is **already implemented** in the fork's `main.cpp`.
 
 ### 6.1 Design intent
 
-Each kid gets **5 game cartridges (write-locked) + 1 wildcard (rewritable)**. Cartridges are NTAG215 25 mm
-discs inside empty DMG cartridge shells, with printed game-name stickers.
+Each kid gets a **MENU cart, one wildcard, and a set of game carts**, all NTAG215 25 mm **anti-metal** discs
+inside empty DMG cartridge shells with printed game-name stickers. Choosing a game is still a deliberate
+physical act: you pick up a cart, put it in the slot, and power on.
 
-**The device never writes tags.** This is deliberate, not an omission. An on-device writer would let a kid use
-diagnostic mode as a ROM launcher, which is the exact interaction the cartridge system exists to prevent.
-Hiding it behind a boot combo is not sufficient — in a group of ten, that becomes common knowledge within a
-week. **The firmware must be physically incapable of writing tags.**
+**The device writes tags itself, on-device.** The 2026-09-02 amendments (`reference/NFC_AMENDMENTS.md`)
+replaced the earlier "physically incapable of writing" rule with four properties that preserve the same
+intent through a different mechanism:
 
-Locking is likewise done off-device, before build day, because it is irreversible. Order of operations: write
-NDEF → read back and verify → **test in an actual unit** → apply sticker → lock.
+1. **The writer is reachable only by booting with a MENU cart**, or through the one-shot first-boot
+   provisioning wizard (§6.6), which is re-armed only by clearing NVS at the flashing station over USB. No
+   button combo, no settings entry, no hidden path. The cart is the key; the wizard is an adult-with-a-
+   computer gate of the same class the phone station used to be.
+2. **Selecting a game in the writer never launches it.** From a MENU cart it records a *pending write* and
+   tells the kid to power off and swap carts; in the wizard it writes the blank cart in the slot and halts.
+   Playing the chosen game always costs a power cycle and a cart swap.
+3. **A running game has no path back to selection.** Unchanged, and still what the menu's exit criteria
+   protect (§8.1).
+4. **The device never writes content to a tag that carried a game at boot.** Writes land on the *next* cart
+   presented after a power cycle, or on a blank cart during setup.
+
+Property 2 does the real work. The writer is a browser in the literal sense, but it cannot be a launcher:
+a selection costs exactly the friction the cartridge system was built to impose.
+
+**Protection is by password, never by lock bits.** NTAG21x lock bits are irreversible; across ~60 tags
+written by kids, mistakes are certain, and an irreversible mistake is landfill. Password-protected tags are
+rewritable by any unit through the MENU cart (§6.6).
+
+**Tags are self-describing and the device stores no UIDs.** Carts stay tradeable — any kid's cart, wildcard
+or menu cart works in any unit — a reflash orphans nothing, and there is no per-tag table to corrupt. The
+ROM **filename is the permanent key** and is frozen once carts are written; the current 132-title library
+tops out at 30 characters, and every buffer follows `ROM_STORE_NAME_MAX` (64).
+
+| Payload | Meaning |
+|---|---|
+| `MENU` | Menu cart. Boots the writer. Never a write target. |
+| `WILD:<rom>` | Wildcard. Loads `<rom>`; flagged as expected-to-change so the UI can name it. |
+| `<rom>` | Ordinary game cart. Loads `<rom>`. |
+| *(blank)* | Factory tag — an empty NDEF message `03 00 FE` or all zeros both count. |
+
+The `WILD:` prefix is informational; protection is uniform across every tag the build writes.
 
 ### 6.2 Reading
 
 PN532 in I²C mode at 0x24, read **once at boot / cart insert only**. Never polled during emulation —
 `InListPassiveTarget` blocks for tens of milliseconds.
 
+**Call `InListPassiveTarget` with `MaxTg = 2`.** If two targets answer, halt with "Shielding fault" rather than
+pick one. This catches a real assembly-error class — a stray disc left in the shell, a tag stuck to the
+reader — for free, and it stays even though the two-sided disc it was first designed for was dropped.
+
+**Read before initialising the display and SD**, while the RF environment is quietest. Retry once after the
+display is up only so an error can be shown.
+
 No re-read combo is needed: the DMG's mechanical interlock makes it impossible to remove a cartridge with the
 power on, so every cart change is followed by a boot.
 
-**Remove the DMG's internal RF shielding** or the read will fail.
+**Remove the DMG's internal RF shielding** or the read will fail. Anti-metal discs have roughly **half the read
+range** of plain tags; the budget is verified at final geometry on the bench (§11 item 10).
 
-### 6.3 NDEF parsing
+### 6.3 NDEF parsing and composition
 
-Tags carry an NDEF Text record containing the ROM filename. The payload is **not** just the string:
+Tags carry an NDEF Text record containing the payload from §6.1. The payload is **not** just the string:
 
 ```
-03 <len> D1 01 <plen> 54 02 65 6E <filename...> FE
+03 <len> D1 01 <plen> 54 02 65 6E <payload...> FE
 │   │    │  │   │     │  │  └"en"┘
 │   │    │  │   │     │  └─ status byte
 │   │    │  │   │     └──── type 'T'
@@ -465,22 +518,27 @@ uint8_t langLen = status & 0x3F;
 const char *name = (const char *)&payload[1 + langLen];
 ```
 
-Phones set their own language code by locale. Assuming 2 yields `nTetris.gb` on a French device.
+Phones set their own language code by locale; a legacy hand-written tag from a French device would otherwise
+read as `nTetris.gb`. The device itself always composes with `en` (2 bytes).
 
-Read raw pages with `ntag2xx_ReadPage()` and parse these few bytes directly. A full NDEF library is more
-dependency than this warrants.
+**Compose** is the same layout in reverse: TLV, record header, status byte `0x02`, `en`, payload, terminator
+`FE`, padded to a 4-byte page boundary. **Classify blank** explicitly: an empty NDEF message (`03 00 FE`) and
+an all-zero user area are both "blank", and both are valid wizard targets.
+
+Read raw pages with `ReadPage` and parse these few bytes directly. A full NDEF library is more dependency than
+this warrants.
 
 ### 6.4 Filename matching
 
-Tags are written by kids using a phone, so filenames arrive imperfect. Normalise before matching:
+Tags are written by the device from the catalog (§6.5), so **exact match against the ROM directory is the
+rule.** The normaliser and substring fallback from the original design stay as a legacy path for tags that
+were hand-written from a phone:
 
 1. lowercase
 2. trim whitespace
-3. append `.gb` if no extension
+3. append `.gb` if the name does not **end in `.gb`** — test the suffix, not "contains a dot":
+   `Snow Bros. Jr..gb`, `Dr. Mario.gb` and `Super R.C. Pro-Am.gb` are all real library entries
 4. substring search across the ROM directory as a last resort
-
-The fallback turns `tetris` into a hit even when the file is `Tetris (World).gb`. Cheap to write, and it
-converts a dead cartridge into a working one.
 
 **On failure, display the string that was actually read** — "Not found: tetrsi.gb" is fixable; a black screen
 isn't.
@@ -490,21 +548,136 @@ isn't.
 Every card is **identical** — one canonical library cloned ten times. This is required, because a traded
 cartridge must work in any unit. Every card therefore needs every game, including ones its owner didn't pick.
 
-Keep the game list in a JSON file in the repo, read by both the card-imaging script and the phone web app, so
-the two can never drift.
+```
+/roms/gb/<name>.gb       132 ROMs, ~30 MB
+/art/<stem>.565          96×96 raw RGB565, little-endian, ~18 KB each, ~2.4 MB total
+/saves/<name>.sav
+/catalog.txt             generated — see below
+```
 
-### 6.6 Writing tags (off-device)
+Cards are 128 MB; the library uses under a quarter of that.
 
-- **Android:** QR sticker on the wildcard shell → GitHub Pages web app using Web NFC (`NDEFReader`). Chrome
-  only, HTTPS, user gesture, top level. Cannot lock tags, which is correct here.
-- **iOS:** Web NFC is unavailable and will not be. Use NFC Tools. The web app should detect the lack of
-  `NDEFReader` and offer a **clipboard fallback** — copy the exact filename for pasting into NFC Tools.
-  Call `navigator.clipboard.writeText()` **synchronously inside the tap handler**; iOS drops the gesture
-  context if anything is awaited first.
-- Copy only the filename (`tetris.gb`), never NDEF bytes — NFC Tools builds the record wrapper itself.
-- The page should **read before writing** (so a locked game cart is identified rather than failing
-  confusingly) and **read back after writing** to confirm.
-- Build day uses a single shared Android phone as the writing station.
+**Art is pre-converted, not decoded on the device.** PNG decoding on the ESP32 is slow and heap-hungry. The
+imaging tool flattens RGBA onto a solid background and emits raw RGB565 with `-pix_fmt rgb565le` — the same
+byte order the frame path pushes with `setSwapBytes(true)` (§2.3), so one push configuration serves both.
+Loading is `fread` into a static buffer and one `pushImage`. A missing art file draws a placeholder, never
+fails.
+
+**`games.json` is the single source of truth**, kept in the repo and validated in CI. Fields: `filename`,
+`title`, `description`, `art`, `starter`, `developer`, `publisher`, `year`, `genre`, `players`. It is seeded
+once from an ES-DE `gamelist.xml` through an alias map (the scraper's names and paths do not match the
+library's filenames), then hand-curated — scraped descriptions run 130–1050 characters and are not written
+for kids.
+
+**The firmware never parses `games.json`.** `tools/image_sd.py` generates `/catalog.txt` from it: TSV, one
+line per entry — `filename`, `title`, `flags` (`starter`), `description` — plain ASCII, description ≤ 200
+bytes, line length capped by the tool. It is never hand-edited, so the two cannot drift. The firmware reads it
+with a small pure-C reader in `lib/gbcore/cart/` that builds a static index of `{offset, filename, title}`
+and reads a line's description on demand. Reasons:
+
+- no ArduinoJson: no extra flash, no document heap;
+- bounded static memory on a board with no PSRAM;
+- `games.json` can grow fields freely without touching firmware;
+- a malformed library fails the CI validator on your machine, not a unit on build day.
+
+### 6.6 Writing tags (on-device)
+
+**Boot decision flow.** Classify the payload *first*; only then consider pending writes:
+
+```
+power on
+  └─ read tag (InListPassiveTarget, MaxTg = 2, ~1 s)
+       ├─ no target ................. "No cartridge"            (halt)
+       ├─ two targets ............... "Shielding fault"         (halt)
+       ├─ unreadable / not Text ..... "Unreadable tag"          (halt)
+       │
+       ├─ setup not finished ........ provisioning wizard (below)
+       │
+       ├─ MENU ...................... open writer — never a write target
+       ├─ pending write set?
+       │    ├─ tag matches target ... write → verify → protect → clear pending → load
+       │    └─ otherwise ............ "Insert your wildcard"    (halt)
+       ├─ blank ..................... "Blank cart. Use your MENU cart."  (halt)
+       ├─ WILD:<rom> / <rom> ........ resolve, load
+       └─ resolve failure ........... "Not found: <string read>" (halt)
+```
+
+**Halt means halt.** No retry loop, no fallback browser; power-cycle is the retry (§6.2). While a pending
+write is set, every boot first shows *"Pending: <TITLE> — insert your wildcard"* for a second or two so a kid
+who forgot what they were doing does not have to guess.
+
+**Pending record** — one NVS entry, overwritten by a later selection:
+
+```c
+struct pending_t {
+    char    rom[ROM_STORE_NAME_MAX];  // filename as it appears in the catalog
+    uint8_t target;                   // WILDCARD | NEW_CART | REWRITE
+};
+```
+
+| Target | Matches | Set from |
+|---|---|---|
+| `WILDCARD` (default) | any `WILD:` tag | selecting a game in the writer |
+| `NEW_CART` | a blank tag | "New cart" in the writer |
+| `REWRITE` | any tag that authenticates with the build password and is not `MENU` | "Rewrite a game cart" — heavier confirmation wording |
+
+The sequence write → read-back verify → protect → clear pending → load is **idempotent**: power loss before
+"clear pending" simply repeats it on the next boot.
+
+**First-boot provisioning wizard.** A fresh flash leaves three NVS flags unset: `menu_done`, `wild_done`,
+`setup_done`. Until `setup_done` is set, a boot with a blank tag enters the wizard. One write per boot — the
+DMG interlock forces a power cycle per cart anyway — so each line below is a boot:
+
+1. *"Make your MENU cart."* Write `MENU`, protect, "Power off."
+2. *"Pick your wildcard's first game."* Starter picker (§8.3). Write `WILD:<rom>`, protect, "Power off." The
+   wildcard is never empty.
+3. *"Make a game cart."* Starter picker, carts already made this setup marked. Write `<rom>`, protect,
+   "Power off." Repeat.
+4. **Finish setup** — an entry in the picker, hold to confirm. Sets `setup_done`; the wizard is unreachable
+   from then on.
+
+The wizard accepts a blank tag *or* an existing `MENU` / `WILD:` tag that authenticates with the build
+password, so re-running it after an NVS clear re-adopts the kid's existing carts rather than demanding new
+ones. **Run it after the shell is assembled** — it doubles as the per-unit NFC read test through the shell.
+A lost menu cart is not a brick: any unit's menu cart works, and failing that an adult clears NVS and the
+wizard runs again.
+
+**Protection.** After a successful write and read-back verification:
+
+- `AUTH0` → `0x04` (first user page: all user memory and the config pages are covered)
+- `ACCESS` `PROT` → 0 — **write-protect only**; reads stay open so a phone or the diagnostic inspector can
+  still see the tag
+- `AUTHLIM` → 0 — no lockout counter; a lockout would be as bad as a lock
+- `PWD` / `PACK` → build-wide constants in `hw_config.h`
+
+> **The password is not a secret.** It is shared across all ten units — it has to be, or carts would not be
+> tradeable — and it may live in the repo. Its only job is stopping a stray phone from clobbering a cart.
+> Nobody should later mistake it for a security boundary.
+
+Any valid tag found unprotected at boot is protected after the game loads (a config-only write, so property
+4 holds). That heals a tag that lost power between write and protect and needs no separate tooling.
+
+**Page whitelist, enforced in code and unit-tested.** Writable: user pages and the four config pages. Never
+page 2 (static lock bytes), page 3 (capability container — one-time programmable), or `0x82` (dynamic lock
+bytes). **Never set `CFGLCK`**, which freezes the configuration permanently. This whitelist is the mechanical
+replacement for the old "never write" rule.
+
+**Verification gotchas.** `PWD` and `PACK` read back as zeros — verify protection by issuing `PWD_AUTH` and
+comparing the returned `PACK`, not by reading the page. `PWD_AUTH` goes through the PN532's raw data-exchange
+command, not the page-read helper, which is one reason to write a minimal I²C-only driver rather than pull in
+the Adafruit library's SPI/HSU paths.
+
+**Part.** NTAG215 throughout. Config page addresses differ between NTAG213/215/216: hard-code the NTAG215 map,
+verified against the NXP datasheet for the exact part ordered — not a tutorial — and run `GET_VERSION` on the
+first tag out of the bag (§11 item 12).
+
+**Guard tests** replace the old "no write symbol" test:
+
+- write symbols (`nfc_write_*`, `PWD_AUTH`, config-page writes) are referenced only from `cart_provision.cpp`;
+- exactly one call site for `writer_open()`, inside the MENU / wizard branch of the boot state machine;
+- writer translation units reference no write, `emu_*` or `rom_store_*` symbols — the writer UI (§8.3)
+  returns a selection and never writes; the boot state machine decides write-now versus pending;
+- the page whitelist rejects pages 2, 3 and `0x82` and any config write that sets `CFGLCK`.
 
 ---
 
@@ -549,9 +722,14 @@ plus a settings submenu covering palette, frameskip, brightness and overlays.
 
 **Target menu:** Resume / Volume / Brightness / Palette / Cart Info / Reset.
 
-**Add Cart Info** — read-only display of tag UID and decoded filename. It cannot change which game is on a
-cart, so it doesn't undermine anything, and it's how a kid identifies an unlabelled cart after a trade and how
-you debug a failed write.
+**Add Cart Info** — read-only display of tag UID, decoded payload, its classification (`MENU` / `WILD:` /
+plain), and protection state. It cannot change which game is on a cart, so it doesn't undermine anything, and
+it's how a kid identifies an unlabelled cart after a trade and how you debug a failed write.
+
+**The menu is not a route to the writer.** The writer (§8.3) is reachable only through the boot flow in §6.6.
+
+**The menu renders inside `GAME_X`/`GAME_Y`/`GAME_W`×`GAME_H`.** The bezel masks everything outside that
+window (§1.7); a menu drawn to the full panel is partly hidden behind plastic on every unit.
 
 The menu is currently drawn with touch buttons (`mbtn()`). Budget time to convert it to D-pad navigation
 rather than assuming it drops straight onto physical buttons.
@@ -570,8 +748,30 @@ work" into "GPA3 never goes low."
 - Audio test tone
 - Colour / scaling test pattern
 - **`GAME_X` / `GAME_Y` nudge**, saved to NVS
+- **Read-only tag inspector** — UID, `GET_VERSION`, protection state, raw NDEF hex, decoded payload
 
-**No tag writing. Ever.** See §6.1.
+**No write path here.** The §6.6 guard tests cover this module: write symbols live only in
+`cart_provision.cpp`. The diagnostic screen renders inside the game window like everything else (§1.7).
+
+### 8.3 Cart writer
+
+Full-screen UI reached only through the boot flow of §6.6 — from a MENU cart (pending mode) or from the
+first-boot wizard (setup mode). It renders inside `GAME_X`/`GAME_Y`/`GAME_W`×`GAME_H`.
+
+- Scrolling list of titles from `/catalog.txt`, D-pad navigated with key repeat; Left/Right jump a page. The
+  library is 132 titles, so paging matters.
+- Setup mode lists **starters only** (`starter` flag); pending mode lists the whole catalog.
+- The highlighted entry shows its 96×96 art and description. **Debounce art loading** (~150 ms of stillness)
+  so holding Down doesn't trigger an SD read per row; a missing art file draws a placeholder.
+- **A** → confirmation screen naming the exact target and filename → **hold to confirm**. **B** backs out.
+- Pending mode also offers **Cancel pending write** (when one is set), **New cart** and **Rewrite a game
+  cart** (§6.6 targets). Setup mode offers **Finish setup**.
+- **The writer returns a selection and never writes.** The boot state machine decides write-now (setup) or
+  record-pending (menu cart). It references no `emu_*` or `rom_store_*` symbol — enforced by the §6.6 guard
+  tests.
+- It never coexists with the emulator: every exit is a halt or a power-off prompt. Art and list buffers are
+  therefore static and generous; heap contention is not a constraint here.
+- Reuses the in-game menu's D-pad list state machine rather than growing a second one.
 
 ---
 
@@ -616,7 +816,8 @@ is a named constant with the roadmap's default.
 
 ### Phase 0.5 — Host test harness
 Native PlatformIO env (`[env:native]`) that compiles Peanut-GB and the pure-logic modules (scaler, LUT, blend,
-NDEF parser, filename normaliser, input combo/debounce state machine) with a unit-test runner, plus a GitHub
+NDEF parser/composer, tag page whitelist, catalog reader, filename normaliser, input combo/debounce state
+machine) with a unit-test runner, plus a GitHub
 Actions job running `pio run` for both envs. **Exit: `pio test -e native` passes; firmware builds in CI.**
 This is what lets Phases 2–9 be verified without a board.
 
@@ -655,24 +856,34 @@ Re-measure.
 MCP23017 over I²C, per-frame poll, debounce, combos, D-pad masking, NVS persistence.
 **Exit: full control from physical buttons; touch code fully gone.**
 
-### Phase 8 — NFC
-PN532 I²C, boot-time read, NDEF parse with language-length handling, filename normalisation, `carts.txt`
-fallback, clear failure display.
-**Exit: tapping a cart at boot loads the right ROM.**
+### Phase 8 — NFC and tag protocol
+Minimal PN532 I²C driver, boot-time read with `MaxTg = 2`, NDEF parse *and compose*, page write, `PWD_AUTH`,
+config-page protection with the page whitelist, read-back verification, the §6.6 boot state machine, the
+pending-write record, the wizard's write steps, the catalog reader, clear failure display. Guard tests per
+§6.6. The writer UI is stubbed (a "Menu cart" halt screen) until Phase 8.5.
+**Exit: booting with a cart loads the right ROM; a pending write lands on the wildcard and nowhere else.**
 
 ### Phase 9 — Menu and saves
-Rebuild the menu for D-pad. Remove Quit/Calibrate/Save/Load. Add Cart Info. Automatic save flush including the
-low-battery path.
+Rebuild the menu for D-pad, inside the game window. Remove Quit/Calibrate/Save/Load. Add Cart Info with
+classification and protection state. Automatic save flush including the low-battery path.
 **Exit: no path from the UI to browsing or switching ROMs.**
+
+### Phase 8.5 — Cart writer *(after Phase 9, whose list state machine it reuses)*
+The §8.3 UI: catalog list, art and description, confirmation, pending / new-cart / rewrite / cancel entries,
+wizard steps end-to-end.
+**Exit: the wizard completes end-to-end on an assembled unit; the writer is fully visible inside the bezel
+window.**
 
 ### Phase 10 — Diagnostics
 Boot-combo diagnostic screen per §8.2, including `GAME_X`/`GAME_Y` nudge to NVS.
 **Exit: a builder can self-verify a unit without a computer.**
 
 ### Phase 11 — Mechanical and build day
-Bezel print and fit, USB-C slot, battery harness, assembly checklist (including the polarity check), SD card
-imaging script, phone web app, pre-assembly flashing station (ESP Web Tools over USB-C — flash *before* the
-board goes in the shell).
+Bezel print and fit, USB-C slot, battery harness, tag cups, assembly checklist (including the polarity check),
+SD card imaging script (ROMs, art conversion, catalog generation), pre-assembly flashing station (ESP Web
+Tools over USB-C — flash *before* the board goes in the shell — with a **factory-reset** action that clears NVS
+to re-arm the wizard). **The kids' first step after closing the shell is the provisioning wizard** (§6.6):
+menu cart, wildcard, starter carts. There is no phone writing station and no QR sticker.
 
 ---
 
@@ -689,6 +900,12 @@ board goes in the shell).
 | 7 | Max reliable `SPI_FREQUENCY` | Sweep 40 / 55 / 80 MHz, look for artifacts | Directly caps frame rate | open |
 | 8 | Real emulation frame time | Phase 2 FPS counter | May need Retro-Go's gnuboy core instead of Peanut-GB | open |
 | 9 | Does SW1 bridge cleanly? | Hold SW1 while connecting the battery — does it boot? | A sealed unit cannot be started; rework the power path (§1.5) | open — new in rev C |
+| 10 | Anti-metal read range | Read reliability at final geometry, through the shell, backlight at full | Move the PN532, change disc, or thin the shell behind the slot | open — new 2026-09-02 |
+| 11 | Protect-then-rewrite cycle | On one sacrificial tag: write, protect, confirm a phone cannot write, confirm the device can | Password scheme is wrong; carts are not recoverable | open — new 2026-09-02 |
+| 12 | NTAG215 config page addresses | Verify against the NXP datasheet for the exact part; `GET_VERSION` confirms the chip | Protection writes land on the wrong page — possibly a lock byte | open — new 2026-09-02 |
+| 13 | Cup tab retention | Print tabs at 0.20 / 0.30 / 0.40 mm overhang; pick the one that clicks without force | Discs fall out or cannot be swapped | open — new 2026-09-02 |
+| 14 | Bezel window | Writer and menu render fully inside the visible aperture on an assembled unit | UI hidden behind plastic; shrink the layouts | open — new 2026-09-02 |
+| 15 | Wizard end-to-end | Fresh unit, assembled: menu → wildcard → starter carts → finish; two tags in the field → shielding fault | Build-day first step fails in front of the kids | open — new 2026-09-02 |
 
 The vendor datasheet has now been wrong twice — the header pinout and IO4. Meter anything sourced from it
 before building on it.
@@ -701,6 +918,7 @@ before building on it.
 |---|---|
 | `reference/DMG-CYD-wiring.pdf` | Rev C wiring diagram over the actual board photo, BOM, pin map, power notes — **bench-verified** |
 | `reference/DMG-CYD-audio-mod.pdf` | MAX98357A fallback — historical; the escalation path was rejected on the bench (rev C, §1.6) |
+| `reference/NFC_AMENDMENTS.md` | 2026-09-02 brief that moved cart writing on-device (MENU cart, wizard, password protection) — folded into §6, §8, §10, §11, §13 |
 
 Both are A3 landscape. Rev C of the wiring PDF records bench-verified assignments and now supersedes the
 vendor documentation, which has been wrong twice (header pinout, IO4).
@@ -711,7 +929,11 @@ vendor documentation, which has been wrong twice (header pinout, IO4).
 
 Collected because each was considered and rejected for a reason that isn't obvious from the code.
 
-- **Don't add a ROM browser or on-device tag writer.** §6.1.
+- **Don't add a path from a running game to ROM selection, a recent-games list, or any writer entry other
+  than the MENU cart / first-boot wizard.** §6.1.
+- **Don't store tag UIDs.** Tags are self-describing. §6.1.
+- **Don't parse JSON on the device.** Read the generated catalog. §6.5.
+- **Don't draw full-screen UI outside `GAME_X`/`GAME_Y`/`GAME_W`×`GAME_H`.** The bezel hides it. §8.
 - **Don't switch to Retro-Go.** It's a launcher; adapting it means suppressing its central feature and writing
   a new target definition. Steal techniques, not architecture. §3.4.
 - **Don't drive IO4.** The vendor datasheet calls it the amp enable; the bench proved it is not, and its
@@ -722,5 +944,5 @@ Collected because each was considered and rejected for a reason that isn't obvio
 - **Don't blend byte-swapped pixels**, and don't blend before the palette LUT. §2.3.
 - **Don't branch per-pixel to skip cross-palette blends.** Costs more than the blend. §2.4.
 - **Don't add manual Save/Load.** §7.
-- **Don't lock tags from any device the kids control.** Irreversible. §6.1.
+- **Don't set lock bits or `CFGLCK` on any tag.** Password protection only — it is reversible. §6.6.
 - **Don't use `pushImage` per line.** §2.5.
