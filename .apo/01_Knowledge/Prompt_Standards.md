@@ -8,7 +8,7 @@ title: "Prompt Standards"
 status: in_progress
 owner: ""
 created: '2026-08-27'
-updated: '2026-08-27'
+updated: '2026-09-03'
 reviewed_on: ""
 related_notes: ["[[01_Knowledge/Coding_Standards]]", "[[01_Knowledge/System_Overview]]"]
 tags: [apovault, knowledge, standards]
@@ -140,3 +140,4 @@ rail concerns the palette table:
 
 Every rail above is cited to `reference/ORIGINAL_ROADMAP.md`, to first-party source, or marked user-confirmed. No rail here is
 speculative.
+- **Do:** write each acceptance criterion as the check that would fail if the property were false, naming the exact artifact it reads — the assertion and the field it checks, the grep and its expected count, the command and its output — not a comment, a constant's name, or a struct field that doesn't exist. **Do not:** tick a criterion whose only evidence is a comment claiming the property or a constant whose name implies the bound; if no observable exists yet for the property, say so explicitly so making it checkable becomes part of the work, not a discovery at review time.
