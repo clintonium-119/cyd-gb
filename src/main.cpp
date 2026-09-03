@@ -445,10 +445,12 @@ void setup() {
     // one read.
     i2c_bus_init();
     button_init();
+#ifndef DEV_ROM_PATH
     if (!nfc_init()) {
         Serial.println("[BOOT] NFC reader did not answer");
     }
     read_tag(&in);
+#endif
 
     settings_defaults(&settings);
     bool stored = settings_load(&settings);
@@ -465,11 +467,13 @@ void setup() {
                   settings.palette, settings.frameskip, settings.brightness,
                   settings.volume, settings.game_x, settings.game_y);
 
+#ifndef DEV_ROM_PATH
     // Exactly one retry, and only now that there is a screen to report the
     // outcome on. One, not a loop: a tag that does not read twice is a halt.
     if (in.tag != BOOT_TAG_OK) {
         read_tag(&in);
     }
+#endif
 
     if (!sd_init()) {
         halt_screen("SD Card Error!", "Insert FAT32 SD & reset");
@@ -487,8 +491,18 @@ void setup() {
 // Runs once. Every exit is a halt.
 void loop() {
 #ifdef DEV_ROM_PATH
-    // Bench bypass: loads one fixed ROM by file name and never looks at the
-    // tag. A build flag only — platformio.ini does not configure it and a
+    // Bench bypass: loads one fixed ROM by file name and issues no tag
+    // command at all. The guards are in setup(), not here — skipping this
+    // switch alone would still leave the reader polled and, worse, still hand
+    // a real tag to boot_should_heal() in load_and_run(), so a bench build
+    // would write protection to any unprotected cart put in front of it.
+    // With the acquisition guarded, `in` keeps its static zero-initialised
+    // value: in.tag is BOOT_TAG_NONE, which boot_should_heal() refuses, so
+    // the heal cannot fire and needs no guard of its own. Anything that moves
+    // `in` off file scope, or relaxes that predicate, has to guard the heal
+    // explicitly.
+    //
+    // A build flag only — platformio.ini does not configure it and a
     // guard test asserts it never will, so no default build can acquire it.
     // Pass it per invocation, naming a file under /roms/gb:
     //
