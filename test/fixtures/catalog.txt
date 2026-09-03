@@ -1,0 +1,6 @@
+Tetris.gb	Tetris	starter	Fit the falling blocks into complete rows. One of the best puzzle games ever made, and the one that sold the Game Boy.
+Dr. Mario.gb	Dr. Mario	starter	Drop coloured pills onto the viruses to line up four of a colour and clear them out.
+Snow Bros. Jr..gb	Snow Bros. Jr.		Roll your enemies into snowballs and send them flying down the level.
+Super R.C. Pro-Am.gb	Super R.C. Pro-Am		Race radio-controlled cars from above, collecting weapons and upgrades along the way.
+Mr. Do!.gb	Mr. Do!		Dig tunnels through the ground, drop apples on the monsters and collect the cherries.
+Alleyway.gb	Alleyway		

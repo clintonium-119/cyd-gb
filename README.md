@@ -56,6 +56,9 @@ NFC cartridge matching arrives.
   rendering, audio, the cartridge system, and the open questions that need a bench to answer.
 - [`ROADMAP.md`](ROADMAP.md) — the work breakdown: which workstream does what, in what order, and what
   each one defers.
+- [`docs/CATALOG_FORMAT.md`](docs/CATALOG_FORMAT.md) — the catalog contract: the `games.json` entry
+  schema, the generated `/catalog.txt` line format, the SD layout and art naming, and the cartridge tag
+  payload grammar.
 
 ## Credits
 
