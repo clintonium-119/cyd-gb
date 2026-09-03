@@ -140,14 +140,64 @@ void sd_get_save_path(const char* rp, char* sp, int mx) {
     snprintf(sp,mx,"%s/%s.sav",SAVE_PATH,base);
 }
 
+// The save is written to a sibling temp file and renamed over the real one,
+// so the card always holds one complete save. Writing in place would mean
+// removing the old file and then spending the whole write — up to 32 KB —
+// with nothing valid on the card, and the flush most likely to be cut short
+// is the low-battery one, which fires when power is about to go.
+//
+// The window is not closed, only narrowed: a power loss between the remove
+// and the rename still loses the save. Both are single directory-entry
+// operations, against a write that is thousands of times longer.
 bool sd_save_state(const char* rp, const uint8_t* data, uint32_t sz) {
-    if(!ready||!data||!sz) return false;
-    char sp[96]; sd_get_save_path(rp,sp,96);
-    if(SD.exists(sp)) SD.remove(sp);
-    File f=SD.open(sp,FILE_WRITE); if(!f) return false;
-    size_t w=f.write(data,sz); f.close();
-    Serial.printf("[SD] Save: %s (%u)\n",sp,w);
-    return w==sz;
+    if (!ready || !data || !sz) {
+        return false;
+    }
+
+    char sp[96];
+    sd_get_save_path(rp, sp, 96);
+
+    char tp[96 + 4];
+    int n = snprintf(tp, sizeof(tp), "%s%s", sp, SAVE_TMP_SUFFIX);
+    if (n < 0 || (size_t)n >= sizeof(tp)) {
+        return false;
+    }
+
+    // A temp file left by an earlier interrupted save is stale by definition.
+    // FILE_WRITE truncates, so this is belt and braces, not a correctness
+    // requirement — and it keeps the card from accumulating them.
+    if (SD.exists(tp)) {
+        SD.remove(tp);
+    }
+
+    File f = SD.open(tp, FILE_WRITE);
+    if (!f) {
+        return false;
+    }
+    size_t w = f.write(data, sz);
+    f.close();
+
+    // A short write never becomes the save file. The old one stays untouched
+    // and the caller keeps the RAM dirty for the next flush.
+    if (w != sz) {
+        Serial.printf("[SD] Save short: %s (%u of %u)\n", tp, (uint32_t)w, sz);
+        SD.remove(tp);
+        return false;
+    }
+
+    // rename() over an existing name is not portable across the FAT layers
+    // this could sit on, so the destination is removed first rather than
+    // relied on to be replaced.
+    if (SD.exists(sp)) {
+        SD.remove(sp);
+    }
+    if (!SD.rename(tp, sp)) {
+        Serial.printf("[SD] Save rename failed: %s -> %s\n", tp, sp);
+        return false;
+    }
+
+    Serial.printf("[SD] Save: %s (%u)\n", sp, (uint32_t)w);
+    return true;
 }
 
 bool sd_load_state(const char* rp, uint8_t* data, uint32_t sz) {

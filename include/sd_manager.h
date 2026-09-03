@@ -21,6 +21,12 @@
 #define ROM_PATH_GB     "/roms/gb"
 #define SAVE_PATH       "/saves"
 
+// Appended to a save path to name the file a save is written to before it is
+// renamed into place. Nothing but sd_save_state() ever creates or reads one,
+// and a leftover is stale by definition — the rename is the last step, so a
+// temp file that outlives its save means that save never completed.
+#define SAVE_TMP_SUFFIX ".tmp"
+
 // Generated from games.json by the build tooling and never hand-edited or
 // written by the firmware.
 #define CATALOG_PATH    "/catalog.txt"
@@ -43,7 +49,15 @@ bool sd_rom_find_legacy(const char* title, char* out_path, size_t out_sz);
 // flow treats as "no title available" rather than as a failure.
 bool sd_catalog_reader(catalog_reader_t* out);
 
-// Save/Load game state
+// Save/Load game state.
+//
+// sd_save_state() writes to <name>.sav.tmp and renames it over <name>.sav, so
+// an interrupted save leaves the previous one intact rather than leaving the
+// card with no save at all. It returns false without touching <name>.sav when
+// the write comes up short, which leaves the caller's RAM dirty for a retry.
+//
+// sd_load_state() reads <name>.sav and nothing else; a temp file left behind
+// by an interrupted save is not a save and is never loaded.
 bool sd_save_state(const char* rom_path, const uint8_t* sram, uint32_t size);
 bool sd_load_state(const char* rom_path, uint8_t* sram, uint32_t size);
 
