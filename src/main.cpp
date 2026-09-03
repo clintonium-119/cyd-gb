@@ -3,6 +3,7 @@
 #include "render_config.h"
 #include "display.h"
 #include "button_input.h"
+#include "battery.h"
 #include "i2c_bus.h"
 #include "input/combo.h"
 #include "sd_manager.h"
@@ -264,13 +265,64 @@ static void poll_input(uint32_t now_ms) {
     settings_save_coalesced(&settings, now_ms);
 }
 
-static void save_ram() {
-    if(!cur_path[0]) return;
-    uint32_t sz=0; uint8_t* r=emu_get_cart_ram(&sz);
-    if(sz>0) {
-        bool ok = sd_save_state(cur_path,r,sz);
-        Serial.printf("[SAVE] %u bytes (%s)\n",sz, ok ? "ok" : "fail");
+// ─── Automatic saves ───────────────────────────────────────────────────────
+// The minimum the toast stays up, measured from the draw rather than from the
+// write, so a fast card does not flash it too briefly to read. The game is
+// paused for this long: a save is the one moment the player is told about, and
+// a confirmation nobody can read is not a confirmation.
+#define SAVE_TOAST_MS 400
+
+// A strip across the bottom of the game window, never outside it. The next
+// emulated frame repaints the whole window, so there is nothing to clear.
+static void draw_toast(const char* text, uint16_t colour) {
+    int16_t top = settings.game_y + GAME_H - 32;
+
+    tft.fillRect(settings.game_x, top, GAME_W, 32, TFT_BLACK);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(colour, TFT_BLACK);
+    tft.drawString(text, settings.game_x + GAME_W / 2,
+                   settings.game_y + GAME_H - 16, 4);
+}
+
+// Write cartridge RAM to the card, with the toast that confirms it. Self
+// contained: it decides whether there is anything to do, takes the display
+// bus itself and gives it back, so every call site is one line.
+//
+// A failed write leaves the RAM dirty — it has not reached the card — and
+// defers the retry by a full idle period, so a bad card costs one toast every
+// ten seconds rather than one every frame.
+static void flush_save(const char* why) {
+    if (!cur_path[0] || !emu_cart_ram_dirty()) {
+        return;
     }
+
+    uint32_t sz = 0;
+    uint8_t* ram = emu_get_cart_ram(&sz);
+    if (sz == 0 || !ram) {
+        return;
+    }
+
+    emu_pause_pipeline();
+
+    uint32_t t0 = millis();
+    draw_toast("SAVED", 0x07E0);
+
+    bool ok = sd_save_state(cur_path, ram, sz);
+    if (ok) {
+        emu_clear_cart_ram_dirty();
+    } else {
+        draw_toast("SAVE FAILED", TFT_RED);
+        emu_autosave_defer(millis());
+    }
+    Serial.printf("[SAVE] %s: %u bytes (%s)\n", why, sz, ok ? "ok" : "fail");
+
+    // Signed difference so the hold survives the millis() rollover instead of
+    // parking the game for 49 days.
+    while ((int32_t)(millis() - t0) < SAVE_TOAST_MS) {
+        delay(10);
+    }
+
+    emu_resume_pipeline();
 }
 
 static void load_ram() {
@@ -312,8 +364,26 @@ void run_emu() {
 
         emu_run_frame();
 
+        // The write flag the cartridge-RAM callback set becomes the dirty
+        // state here, stamped with this frame's time: the callback is IRAM
+        // resident and may not read a clock.
+        emu_autosave_tick(now);
+        if (emu_autosave_idle_due(now)) {
+            flush_save("idle");
+        }
+
+        // One ADC read a second, and one save per crossing below the
+        // threshold — the latch in gbcore is what makes the second true.
+        uint16_t mv = 0;
+        if (battery_poll(now, &mv) && emu_autosave_battery(mv, BAT_LOW_MV, BAT_HYST_MV)) {
+            flush_save("battery");
+        }
+
         if (menu_req) {
             menu_req = false;
+
+            // Before the pause, because flush_save takes the bus itself.
+            flush_save("menu");
 
             // Between frames, so nothing is half produced: stop the producer,
             // wait for the queue to drain and take the bus before anything
@@ -326,25 +396,15 @@ void run_emu() {
             // menu stores.
             settings_flush(millis(), true);
 
+            // Saving and loading are not the player's job any more, so the
+            // menu has no arm for either: opening it has already saved.
             int c = launcher_ingame_menu();
             switch(c) {
                 case 0: break;  // resume
-                case 1:  // save
-                    save_ram();
-                    tft.fillRect(80,80,160,40,TFT_BLACK);
-                    tft.setTextDatum(MC_DATUM); tft.setTextColor(TFT_GREEN);
-                    tft.drawString("SAVED!",SCREEN_W/2,100,4);
-                    delay(700);
-                    break;
-                case 2:  // load
-                    load_ram(); emu_reset(); load_ram();
-                    tft.fillRect(80,80,160,40,TFT_BLACK);
-                    tft.setTextDatum(MC_DATUM); tft.setTextColor(0x07FF);
-                    tft.drawString("LOADED!",SCREEN_W/2,100,4);
-                    delay(700);
-                    break;
                 case 3:  // quit
-                    emu_on=false; save_ram(); return;
+                    emu_on = false;
+                    flush_save("quit");
+                    return;
                 case 5:  // settings
                     launcher_settings_menu(&settings); break;
             }
@@ -445,6 +505,7 @@ void setup() {
     // one read.
     i2c_bus_init();
     button_init();
+    battery_init();
 #ifndef DEV_ROM_PATH
     if (!nfc_init()) {
         Serial.println("[BOOT] NFC reader did not answer");

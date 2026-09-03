@@ -5,6 +5,7 @@
 #include "render/palette.h"
 #include "render/framequeue.h"
 #include "render/scaler.h"
+#include "save/autosave.h"
 #include <Arduino.h>
 #include <esp_timer.h>
 #include <string.h>
@@ -27,6 +28,9 @@ static uint32_t romlen = 0;
 static struct gb_s* gb = nullptr;
 #define MAXRAM (32*1024)
 static uint8_t* cram = nullptr;
+// When cartridge RAM is worth writing to the card is decided in gbcore,
+// not here: this module only reports writes and relays the answers.
+static autosave_state_t autosave;
 static uint8_t fskip = 0, fcnt = 0;
 static uint32_t fpsc = 0, fpst = 0, cfps = 0;
 static uint8_t jpad = 0;
@@ -277,7 +281,15 @@ static uint8_t IRAM_ATTR gb_cram_r(struct gb_s* g, const uint_fast32_t a) {
 }
 static void IRAM_ATTR gb_cram_w(struct gb_s* g, const uint_fast32_t a, const uint8_t v) {
     (void)g;
-    if(a<MAXRAM) cram[a]=v;
+    /* Autosave costs one compare against the cartridge's real save size and
+     * one byte store on the in-range path, and the compare alone on the
+     * out-of-range path. autosave_note_write() is inline in the header so
+     * this IRAM-resident callback never calls into flash, and it reads no
+     * clock: the per-frame tick stamps the time. */
+    if (a < MAXRAM) {
+        cram[a] = v;
+        autosave_note_write(&autosave, (uint32_t)a);
+    }
 }
 static void gb_err(struct gb_s* g, const enum gb_error_e e, const uint16_t a) {
     (void)g; Serial.printf("[EMU] Err %d @0x%04X\n",(int)e,a);
@@ -361,6 +373,16 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
         Serial.printf("[EMU] init fail %d\n", (int)r);
         return false;
     }
+    /* The cartridge's real save size, from the header gb_init just parsed.
+     * An unrecognised RAM-size code is -1, which becomes 0 — autosave off —
+     * rather than a guess at how much RAM to write to the card. */
+    size_t save_sz = 0;
+    if (gb_get_save_size_s(gb, &save_sz) != 0) {
+        save_sz = 0;
+        Serial.println("[EMU] unknown save size, autosave off");
+    }
+    autosave_init(&autosave, (uint32_t)save_sz);
+
     gb_init_lcd(gb, lcd_line);
     /* Build the LUT here too: main() may never call emu_set_palette. */
     emu_set_palette(curpal);
@@ -447,9 +469,42 @@ void emu_resume_pipeline()
 void emu_set_joypad(uint8_t b){jpad=b;}
 uint8_t* emu_get_cart_ram(uint32_t* s){uint_fast32_t r=0;gb_get_save_size_s(gb,&r);if(s)*s=(uint32_t)r;return cram;}
 void emu_set_cart_ram(const uint8_t* d,uint32_t s){if(s>MAXRAM)s=MAXRAM;memcpy(cram,d,s);}
-bool emu_cart_ram_dirty(){return false;}
-uint32_t emu_get_cart_ram_last_write_ms(){return 0;}
-void emu_clear_cart_ram_dirty(){}
+
+bool emu_cart_ram_dirty()
+{
+    return autosave_dirty(&autosave);
+}
+
+uint32_t emu_get_cart_ram_last_write_ms()
+{
+    return autosave.last_write_ms;
+}
+
+void emu_clear_cart_ram_dirty()
+{
+    autosave_flushed(&autosave);
+}
+
+void emu_autosave_tick(uint32_t now_ms)
+{
+    autosave_tick(&autosave, now_ms);
+}
+
+bool emu_autosave_idle_due(uint32_t now_ms)
+{
+    return autosave_idle_due(&autosave, now_ms);
+}
+
+void emu_autosave_defer(uint32_t now_ms)
+{
+    autosave_defer(&autosave, now_ms);
+}
+
+bool emu_autosave_battery(uint16_t mv, uint16_t low_mv, uint16_t hyst_mv)
+{
+    return autosave_battery(&autosave, mv, low_mv, hyst_mv);
+}
+
 void emu_set_frame_skip(uint8_t s){fskip=s;}
 uint8_t emu_get_frame_skip(){return fskip;}
 uint32_t emu_get_fps(){return cfps;}

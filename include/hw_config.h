@@ -78,6 +78,18 @@
 // ─── Power ──────────────────────────────────────────────────────────────────
 #define BAT_ADC_PIN    34   // Battery sense (§1.2). Divider ratio undocumented — §11 item 6.
 
+// The two bench-dependent numbers. Both are placeholders: the CYD's IO34
+// divider is undocumented (§1.2), so §11 item 6 meters the cell against the
+// [BAT] boot line and corrects them together in one commit.
+#define BAT_DIVIDER   2.0f  // (verify) Assumed 2:1 — §11 item 6 measures the real ratio.
+#define BAT_LOW_MV    3500  // (verify) Flush threshold — §11 item 6 sets it from the cell's cutoff.
+// Re-arm margin above BAT_LOW_MV, so a cell that sags under load and
+// recovers between samples does not save every second.
+#define BAT_HYST_MV    100
+// One ADC read per second is enough: the low-battery latch carries its own
+// hysteresis, so there is nothing for a faster sample to catch.
+#define BAT_SAMPLE_MS 1000
+
 // ─── Status LEDs ────────────────────────────────────────────────────────────
 // §1.2 gives no LED pin on this board. The fork drove IO4, which must stay
 // unused (§13); all three are -1 and every use site guards on >= 0.

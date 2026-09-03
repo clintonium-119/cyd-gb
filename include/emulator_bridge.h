@@ -20,6 +20,31 @@ uint8_t emu_get_frame_skip();
 uint32_t emu_get_fps();
 void emu_reset();
 
+// ─── Automatic saves ───────────────────────────────────────────────────────
+// Call emu_autosave_tick() once per frame, after emu_run_frame(). The
+// cartridge-RAM write callback only sets a flag — it is IRAM resident and
+// runs per access, so it may not read a clock — and the tick is what turns
+// that flag into the dirty state. So the dirty stamp is the frame's
+// timestamp, not the write's, which is at worst one frame stale and is what
+// emu_autosave_idle_due() measures from.
+//
+// The battery thresholds are passed in rather than read here, which keeps
+// this header free of hw_config.h: the constants live there and are applied
+// from main.cpp, alongside the ADC reading they are compared against.
+void emu_autosave_tick(uint32_t now_ms);
+
+// Whether cartridge RAM is dirty and has gone unwritten long enough to be
+// worth saving.
+bool emu_autosave_idle_due(uint32_t now_ms);
+
+// After a save that failed: the RAM stays dirty, but the idle clock restarts
+// so the retry waits a full idle period instead of firing every frame.
+void emu_autosave_defer(uint32_t now_ms);
+
+// True exactly once per crossing below low_mv; re-arms only above
+// low_mv + hyst_mv, so a cell sagging under load does not save repeatedly.
+bool emu_autosave_battery(uint16_t mv, uint16_t low_mv, uint16_t hyst_mv);
+
 // ─── Pipeline ───────────────────────────────────────────────────────────────
 // Emulation and display transfer run on different cores so they overlap.
 // Peanut-GB, the scaler and this module's frame walk stay on the Arduino
