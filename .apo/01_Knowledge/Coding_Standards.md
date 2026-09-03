@@ -8,7 +8,7 @@ title: "Coding Standards"
 status: in_progress
 owner: ""
 created: '2026-08-27'
-updated: '2026-08-31'
+updated: '2026-09-03'
 reviewed_on: ""
 related_notes: ["[[01_Knowledge/Code_Map]]", "[[01_Knowledge/Prompt_Standards]]"]
 tags: [apovault, knowledge, standards]
@@ -180,3 +180,7 @@ module's public API rather than the filename.
 Cited throughout. The formatting rail is user-confirmed rather than derived. The former `(verify)` on test
 strategy was resolved 2026-08-31: host-side Unity tests under `[env:native]` with the pure logic in
 `lib/gbcore/` (see "Test conventions (observed)").
+
+## API-Usage Patterns (Observed)
+
+- **Do:** write a card-file replacement to a temp path, verify the write is full-length, remove the destination, then rename the temp file into place; **do not** remove or truncate the destination first. FAT32 journals nothing and the device can lose power mid-write (battery-powered, no clean shutdown), so the destination must stay intact until the replacement is verified and ready to swap in.
