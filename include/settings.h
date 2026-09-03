@@ -2,6 +2,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "cart/boot.h"
+
 // Per-unit settings persisted in NVS. Ten hand-built units each need their own
 // game_x / game_y nudge, so these are stored per device, never compiled in.
 struct settings_t {
@@ -40,3 +42,37 @@ void settings_save(const settings_t* s);
 // writes NVS itself, and a save still parked here would land on top of it.
 void settings_save_coalesced(const settings_t* s, uint32_t now_ms);
 void settings_flush(uint32_t now_ms, bool force);
+
+// ─── Cartridge boot records ─────────────────────────────────────────────────
+// The two records the cartridge boot flow needs to survive a power cycle,
+// stored as exactly the gbcore types the decision table consumes so a
+// recorded selection needs no translation on the way back out.
+//
+// The pending record is the single write the user lined up in the writer and
+// has not carried out yet: which ROM, and what kind of cart it is aimed at.
+// There is one record, not a queue — a later selection overwrites it — and it
+// carries no timestamp on purpose, because millis() does not survive the
+// power cycle the record exists to span, and an age would only invite a
+// staleness rule the flow does not want.
+//
+// The three wizard flags record how far first-boot setup got: the menu cart
+// written or adopted, the wildcard written or adopted, and setup finished.
+// Nothing else about the wizard is kept — no UID, and no list of which game
+// carts it wrote.
+//
+// A full erase_flash drops a pending write silently, with no trace on the
+// next boot. That is an assembly-day note rather than a firmware concern, and
+// the flashing-station docs carry the warning.
+
+// False when no record is stored, in which case *out is left untouched.
+bool settings_pending_load(boot_selection_t* out);
+
+void settings_pending_save(const boot_selection_t* s);
+
+void settings_pending_clear();
+
+// Every flag reads false when nothing is stored, so an unset store and a
+// wizard that has not started are the same state.
+void settings_wizard_load(boot_flags_t* f);
+
+void settings_wizard_save(const boot_flags_t* f);

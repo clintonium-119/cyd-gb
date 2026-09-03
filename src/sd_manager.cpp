@@ -1,5 +1,6 @@
 #include "sd_manager.h"
 #include "hw_config.h"
+#include "cart/match.h"
 #include <SD.h>
 #include <SPI.h>
 #include <Arduino.h>
@@ -13,44 +14,128 @@ bool sd_init() {
 
     Serial.printf("[SD] Type:%d Size:%lluMB\n",SD.cardType(),SD.cardSize()/(1024*1024));
     if(!SD.exists(ROM_PATH_GB)) SD.mkdir(ROM_PATH_GB);
-    if(!SD.exists(ROM_PATH_GBC)) SD.mkdir(ROM_PATH_GBC);
     if(!SD.exists(SAVE_PATH)) SD.mkdir(SAVE_PATH);
     ready=true; return true;
 }
 
-static int scan_dir(const char* dir, bool gbc, RomEntry* l, int si, int mx) {
-    int c=si; File d=SD.open(dir); if(!d||!d.isDirectory()) return c;
+// ─── ROM resolution ─────────────────────────────────────────────────────────
+
+static bool has_gb_suffix(const char* name) {
+    size_t n = strlen(name);
+    if (n < 3) {
+        return false;
+    }
+    const char* s = name + n - 3;
+    return s[0] == '.' && tolower((unsigned char)s[1]) == 'g'
+           && tolower((unsigned char)s[2]) == 'b';
+}
+
+bool sd_rom_path(const char* filename, char* out, size_t out_sz) {
+    if (!ready || !filename || !out || !out_sz) {
+        return false;
+    }
+    // snprintf would truncate, and a truncated path can name a different
+    // file that really exists — so the length is checked before the build.
+    int n = snprintf(out, out_sz, "%s/%s", ROM_PATH_GB, filename);
+    if (n < 0 || (size_t)n >= out_sz) {
+        out[0] = '\0';
+        return false;
+    }
+    if (!SD.exists(out)) {
+        out[0] = '\0';
+        return false;
+    }
+    return true;
+}
+
+bool sd_rom_find_legacy(const char* title, char* out_path, size_t out_sz) {
+    if (!ready || !title || !out_path || !out_sz) {
+        return false;
+    }
+    char norm[ROM_STORE_NAME_MAX];
+    if (match_normalise(title, norm, sizeof(norm)) != MATCH_OK) {
+        return false;
+    }
+
+    File d = SD.open(ROM_PATH_GB);
+    if (!d || !d.isDirectory()) {
+        if (d) {
+            d.close();
+        }
+        return false;
+    }
+
+    bool found = false;
     File e;
-    while((e=d.openNextFile())&&c<mx) {
-        if(e.isDirectory()){e.close();continue;}
-        String n=e.name(); String lo=n; lo.toLowerCase();
-        if(lo.endsWith(".gb")||lo.endsWith(".gbc")){
-            strncpy(l[c].filename,n.c_str(),MAX_FILENAME-1);
-            snprintf(l[c].full_path,80,"%s/%s",dir,n.c_str());
-            l[c].size=e.size(); l[c].is_gbc=gbc; c++;
+    // One entry at a time: the predicate is per-entry precisely so no
+    // listing has to exist in RAM.
+    while (!found && (e = d.openNextFile())) {
+        if (!e.isDirectory()) {
+            const char* name = e.name();
+            if (has_gb_suffix(name) && match_legacy(norm, name)) {
+                found = sd_rom_path(name, out_path, out_sz);
+            }
         }
         e.close();
     }
-    d.close(); return c;
+    d.close();
+    return found;
 }
 
-int sd_scan_roms(RomEntry* l, int mx) {
-    if(!ready) return 0;
-    int c=scan_dir(ROM_PATH_GB,false,l,0,mx);
-    c=scan_dir(ROM_PATH_GBC,true,l,c,mx);
-    // Sort
-    for(int i=0;i<c-1;i++) for(int j=i+1;j<c;j++)
-        if(strcasecmp(l[i].filename,l[j].filename)>0){RomEntry t=l[i];l[i]=l[j];l[j]=t;}
-    Serial.printf("[SD] Found %d ROMs\n",c);
-    return c;
+// ─── Catalog ────────────────────────────────────────────────────────────────
+// Opened once and left open: the index build reads the whole file and every
+// later description read seeks back into it, so a per-call open would pay
+// the directory walk again for nothing.
+
+static File catalog_file;
+
+static int catalog_read(void* ctx, uint32_t off, void* dst, size_t cap,
+                        size_t* got) {
+    (void)ctx;
+    *got = 0;
+    if (!catalog_file) {
+        return -1;
+    }
+    // Reading at or past the end is end-of-file, not an error: seek() on a
+    // FAT file can refuse an offset past the end, and the reader contract
+    // spells that case *got == 0.
+    if (off >= (uint32_t)catalog_file.size()) {
+        return 0;
+    }
+    if (!catalog_file.seek(off)) {
+        return -1;
+    }
+    int n = catalog_file.read((uint8_t*)dst, cap);
+    if (n < 0) {
+        return -1;
+    }
+    *got = (size_t)n;
+    return 0;
 }
 
-bool sd_load_rom(const char* p, uint8_t** buf, uint32_t* sz) { return false; /* unused now */ }
-void sd_free_rom(uint8_t* b) { if(b) free(b); }
+bool sd_catalog_reader(catalog_reader_t* out) {
+    if (!ready || !out) {
+        return false;
+    }
+    if (!catalog_file) {
+        if (!SD.exists(CATALOG_PATH)) {
+            return false;
+        }
+        catalog_file = SD.open(CATALOG_PATH, FILE_READ);
+        if (!catalog_file) {
+            return false;
+        }
+    }
+    out->ctx = NULL;
+    out->read = catalog_read;
+    return true;
+}
 
 void sd_get_save_path(const char* rp, char* sp, int mx) {
     const char* fn=strrchr(rp,'/'); if(!fn)fn=rp; else fn++;
-    char base[MAX_FILENAME]; strncpy(base,fn,MAX_FILENAME-1); base[MAX_FILENAME-1]=0;
+    char base[ROM_STORE_NAME_MAX];
+    strncpy(base, fn, ROM_STORE_NAME_MAX - 1);
+    base[ROM_STORE_NAME_MAX - 1] = 0;
     char* dot=strrchr(base,'.'); if(dot)*dot=0;
     snprintf(sp,mx,"%s/%s.sav",SAVE_PATH,base);
 }

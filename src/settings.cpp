@@ -78,3 +78,60 @@ void settings_flush(uint32_t now_ms, bool force) {
     pending_valid = false;
     settings_save(&pending);
 }
+
+// ─── Cartridge boot records ─────────────────────────────────────────────────
+// Same "settings" namespace as the per-unit values above, deliberately: a
+// factory reset clears the device with one nvs_flash_erase whatever the
+// layout, and keeping one namespace leaves settings_load's isKey("pal") probe
+// meaningful as the "has this device ever been configured" test.
+
+bool settings_pending_load(boot_selection_t* out) {
+    prefs.begin("settings", true);
+    // Both halves or neither: a record with a ROM and no target, or the
+    // reverse, is not a selection anything could carry out.
+    bool has = prefs.isKey("p_rom") && prefs.isKey("p_tgt");
+    if (has) {
+        prefs.getString("p_rom", out->rom, ROM_STORE_NAME_MAX);
+        out->rom[ROM_STORE_NAME_MAX - 1] = '\0';
+        out->target = prefs.getUChar("p_tgt", BOOT_TARGET_WILDCARD);
+    }
+    prefs.end();
+
+    // Clamped on the way in, the same stance as volume: a target past the
+    // last enumerator would fall through boot_target_class's switch, so the
+    // one place that knows the encoding is the only place that has to.
+    if (has && out->target > BOOT_TARGET_REWRITE) {
+        out->target = BOOT_TARGET_WILDCARD;
+    }
+    return has;
+}
+
+void settings_pending_save(const boot_selection_t* s) {
+    prefs.begin("settings", false);
+    prefs.putString("p_rom", s->rom);
+    prefs.putUChar("p_tgt", s->target);
+    prefs.end();
+}
+
+void settings_pending_clear() {
+    prefs.begin("settings", false);
+    prefs.remove("p_rom");
+    prefs.remove("p_tgt");
+    prefs.end();
+}
+
+void settings_wizard_load(boot_flags_t* f) {
+    prefs.begin("settings", true);
+    f->menu_done = prefs.getBool("wz_menu", false);
+    f->wild_done = prefs.getBool("wz_wild", false);
+    f->setup_done = prefs.getBool("wz_done", false);
+    prefs.end();
+}
+
+void settings_wizard_save(const boot_flags_t* f) {
+    prefs.begin("settings", false);
+    prefs.putBool("wz_menu", f->menu_done);
+    prefs.putBool("wz_wild", f->wild_done);
+    prefs.putBool("wz_done", f->setup_done);
+    prefs.end();
+}
