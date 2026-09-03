@@ -8,12 +8,14 @@
  * Structural guards over the first-party sources.
  *
  * These replace an earlier test that asserted a single symbol's absence. They
- * exist because three properties of this firmware are load-bearing and none
+ * exist because five properties of this firmware are load-bearing and none
  * of them are expressible in C:
  *
  *   (a) exactly one translation unit can write a cartridge tag,
  *   (b) the cartridge writer is opened from exactly one place,
  *   (c) the writer reaches for nothing below itself,
+ *   (f) the in-game menu is not a route to the writer or to the tag,
+ *   (g) no source under src/ carries the removed exit-to-selection path,
  *
  * plus (e) the bench ROM bypass cannot be configured into a default build.
  * Guard (d), the tag layer's page whitelist, is a behavioural property and
@@ -51,6 +53,28 @@ static const char* const WRITER_FORBIDDEN[] = {
 };
 #define N_WRITER_FORBIDDEN \
     (sizeof(WRITER_FORBIDDEN) / sizeof(WRITER_FORBIDDEN[0]))
+
+/* Layers the in-game menu must not reach into either. It is handed a snapshot
+ * of the cartridge and shows it; it never reads a tag, resolves a path or
+ * writes anything. "sd_rom_" catching sd_rom_path and sd_rom_find_legacy is
+ * the intent, not a side effect. */
+static const char* const MENU_FORBIDDEN[] = {
+    "writer_open",
+    "ntag_",
+    "nfc_",
+    "rom_store_",
+    "sd_rom_",
+    "provision_",
+};
+#define N_MENU_FORBIDDEN (sizeof(MENU_FORBIDDEN) / sizeof(MENU_FORBIDDEN[0]))
+
+/* The two names the removed exit path went by. Literal and case-sensitive,
+ * because the grep this replaces was. */
+static const char* const GONE_SYMS[] = {
+    "quit",
+    "launcher_show",
+};
+#define N_GONE_SYMS (sizeof(GONE_SYMS) / sizeof(GONE_SYMS[0]))
 
 void setUp(void)
 {
@@ -285,6 +309,69 @@ static void test_platformio_ini_does_not_mention_the_rom_bypass(void)
         "acquire it");
 }
 
+/* ─── (f) the menu is not a route to the writer or the tag ────────────────── */
+
+static void test_the_menu_references_no_writer_or_tag_symbol(void)
+{
+    static const char* const paths[] = {
+        PROJECT_DIR "/src/menu.cpp",
+        PROJECT_DIR "/include/menu.h",
+    };
+    char msg[512];
+
+    for (size_t p = 0; p < sizeof(paths) / sizeof(paths[0]); p++) {
+        TEST_ASSERT_TRUE_MESSAGE(slurp(paths[p]), paths[p]);
+        for (size_t i = 0; i < N_MENU_FORBIDDEN; i++) {
+            snprintf(msg, sizeof(msg), "%s references %s", paths[p],
+                     MENU_FORBIDDEN[i]);
+            TEST_ASSERT_FALSE_MESSAGE(
+                file_contains(paths[p], MENU_FORBIDDEN[i]), msg);
+        }
+    }
+}
+
+/* The same scan, proved non-vacuous: a renamed or emptied menu would let the
+ * test above pass by scanning nothing of consequence. */
+static void test_the_menu_defines_menu_open(void)
+{
+    TEST_ASSERT_GREATER_THAN_MESSAGE(
+        0, file_count(PROJECT_DIR "/src/menu.cpp", "menu_open("),
+        "src/menu.cpp does not define menu_open, so guard (f) would pass "
+        "vacuously");
+}
+
+/* ─── (g) no exit-to-selection path under src/ ────────────────────────────── */
+
+static int g_offenders;
+static char g_first_offender[512];
+
+static void check_no_gone_syms(const char* dir, const char* name)
+{
+    const char* path = join(dir, name);
+    for (size_t i = 0; i < N_GONE_SYMS; i++) {
+        if (file_contains(path, GONE_SYMS[i])) {
+            if (g_offenders == 0) {
+                snprintf(g_first_offender, sizeof(g_first_offender),
+                         "%s references %s", path, GONE_SYMS[i]);
+            }
+            g_offenders++;
+        }
+    }
+}
+
+static void test_no_exit_path_symbol_under_src(void)
+{
+    g_offenders = 0;
+    g_first_offender[0] = '\0';
+
+    /* The project-root sanity test above already proves this scan finds
+     * files, so no separate vacuity twin is needed here. */
+    int src = visit_dir(PROJECT_DIR "/src", ".cpp", check_no_gone_syms);
+
+    TEST_ASSERT_GREATER_THAN_MESSAGE(0, src, "no .cpp files found under src/");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, g_offenders, g_first_offender);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -295,5 +382,8 @@ int main(void)
     RUN_TEST(test_writer_open_is_declared_once);
     RUN_TEST(test_the_writer_references_no_lower_layer);
     RUN_TEST(test_platformio_ini_does_not_mention_the_rom_bypass);
+    RUN_TEST(test_the_menu_references_no_writer_or_tag_symbol);
+    RUN_TEST(test_the_menu_defines_menu_open);
+    RUN_TEST(test_no_exit_path_symbol_under_src);
     return UNITY_END();
 }

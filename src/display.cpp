@@ -2,6 +2,7 @@
 #include "hw_config.h"
 #include "render_config.h"
 #include <Arduino.h>
+#include <string.h>
 
 TFT_eSPI tft = TFT_eSPI();
 
@@ -42,6 +43,44 @@ void display_set_backlight(uint8_t level)
 void display_clear(uint16_t color)
 {
     tft.fillScreen(color);
+}
+
+int16_t display_draw_wrapped(const char* s, int16_t cx, int16_t top,
+                             int16_t max_w, uint8_t max_rows, uint8_t font)
+{
+    char line[96];
+    size_t at = 0;
+    size_t len;
+    uint8_t row = 0;
+    int16_t row_h = tft.fontHeight(font) + 2;
+
+    if (!s) {
+        return top;
+    }
+    len = strlen(s);
+    while (row < max_rows && at < len) {
+        size_t n = 0;
+        // Grow the row one character at a time and keep the last one that
+        // still measured inside max_w. Measuring is the only way to know:
+        // font 2 is proportional, so a character count says nothing.
+        while (at + n < len && n < sizeof(line) - 1) {
+            line[n] = s[at + n];
+            line[n + 1] = '\0';
+            if (tft.textWidth(line, font) > max_w) {
+                line[n] = '\0';
+                break;
+            }
+            n++;
+        }
+        if (n == 0) {
+            break;
+        }
+        line[n] = '\0';
+        tft.drawString(line, cx, top + row * row_h, font);
+        at += n;
+        row++;
+    }
+    return (int16_t)(top + row * row_h);
 }
 
 void display_frame_begin(int16_t x, int16_t y)

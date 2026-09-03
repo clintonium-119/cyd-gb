@@ -7,7 +7,7 @@
 #include "i2c_bus.h"
 #include "input/combo.h"
 #include "sd_manager.h"
-#include "ui_launcher.h"
+#include "menu.h"
 #include "emulator_bridge.h"
 #include "rom_store.h"
 #include "settings.h"
@@ -21,7 +21,7 @@
 #include <SD.h>
 
 static char cur_path[80] = {0};
-static bool emu_on = false, menu_req = false;
+static bool menu_req = false;
 static settings_t settings;
 static combo_state_t combo;
 
@@ -40,49 +40,22 @@ static char tag_payload[NDEF_TEXT_MAX + 1];
 // Reads only. Every tag write in this firmware goes through cart_provision.
 static const ntag_dev_t tag_dev = { NULL, nfc_transceive };
 
+// Everything the Cart Info page shows, gathered once as the boot flow learns
+// it and never re-derived: nothing here re-reads the cartridge or re-decides
+// what it is. The UID lives in this struct for display and nowhere else — it
+// is not persisted, and nothing outside the menu reads it.
+static menu_cart_info_t cart_info;
+
 // ─── Boot screens ───────────────────────────────────────────────────────────
 // All boot drawing lands inside the game window. The printed bezel masks
 // everything outside GAME_X/GAME_Y x GAME_W/GAME_H, so a screen centred on
 // the 320x240 panel is partly hidden behind plastic on every unit.
 
 // A 63-character file name at font 2 runs to roughly 500-750 px depending on
-// which glyphs it uses, against a 240-px window, so the detail line wraps
+// which glyphs it uses, against a 240-px window, so a detail line wraps
 // instead of running under the bezel. Four rows covers the longest name the
 // store accepts even in all-wide glyphs, and still ends above the window's
-// bottom edge.
-#define HALT_WRAP_LINES 4
-#define HALT_WRAP_ROW_H 18
-
-// Draws s across up to HALT_WRAP_LINES rows of font 2, breaking wherever the
-// window runs out rather than at word boundaries — a file name has no useful
-// break points. Returns the y below the last row drawn.
-static int16_t draw_wrapped(const char* s, int16_t cx, int16_t top) {
-    char line[96];
-    size_t at = 0;
-    size_t len = strlen(s);
-    int row = 0;
-
-    while (row < HALT_WRAP_LINES && at < len) {
-        size_t n = 0;
-        while (at + n < len && n < sizeof(line) - 1) {
-            line[n] = s[at + n];
-            line[n + 1] = '\0';
-            if (tft.textWidth(line, 2) > GAME_W - 8) {
-                line[n] = '\0';
-                break;
-            }
-            n++;
-        }
-        if (n == 0) {
-            break;
-        }
-        line[n] = '\0';
-        tft.drawString(line, cx, top + row * HALT_WRAP_ROW_H, 2);
-        at += n;
-        row++;
-    }
-    return top + row * HALT_WRAP_ROW_H;
-}
+// bottom edge — which is what the arguments to the shared helper say below.
 
 // l1 is the condition, l2 the detail. l1 drops from font 4 to the wrapped
 // small font when the large one would not fit the window.
@@ -98,12 +71,12 @@ static void draw_boot_screen(const char* l1, uint16_t c1, const char* l2) {
     if (tft.textWidth(l1, 4) <= GAME_W - 8) {
         tft.drawString(l1, cx, cy - 20, 4);
     } else {
-        l2_top = draw_wrapped(l1, cx, cy - 28) + 6;
+        l2_top = display_draw_wrapped(l1, cx, cy - 28, GAME_W - 8, 4, 2) + 6;
     }
 
     if (l2 && l2[0]) {
         tft.setTextColor(0x7BEF, TFT_BLACK);
-        draw_wrapped(l2, cx, l2_top);
+        display_draw_wrapped(l2, cx, l2_top, GAME_W - 8, 4, 2);
     }
 }
 
@@ -130,6 +103,16 @@ static void read_tag(boot_input_t* b) {
     b->auth = BOOT_AUTH_UNKNOWN;
     tag_payload[0] = '\0';
 
+    // The snapshot's tag-derived half, cleared here for the same reason: the
+    // post-display retry calls this again. Its ROM-derived half belongs to
+    // load_and_run() and must not be touched from here.
+    cart_info.valid = false;
+    cart_info.uid_hex[0] = '\0';
+    cart_info.payload[0] = '\0';
+    cart_info.cls = BOOT_CLASS_BLANK;
+    cart_info.auth0 = 0;
+    cart_info.auth = BOOT_AUTH_UNKNOWN;
+
     uint8_t uid[7] = {0};
     uint8_t uid_len = 0;
     switch (nfc_detect(uid, &uid_len)) {
@@ -145,6 +128,14 @@ static void read_tag(boot_input_t* b) {
             return;
         case NFC_DETECT_ONE:
             break;
+    }
+
+    // Two hex digits per byte, for the Cart Info page to show. uid_hex is
+    // sized for the seven a double-size UID carries, so the last write has
+    // exactly its two digits and the terminator left.
+    for (uint8_t i = 0; i < uid_len && i < sizeof(uid); i++) {
+        snprintf(cart_info.uid_hex + i * 2,
+                 sizeof(cart_info.uid_hex) - i * 2, "%02X", uid[i]);
     }
 
     uint8_t raw[NDEF_BUF_MAX];
@@ -168,6 +159,12 @@ static void read_tag(boot_input_t* b) {
         return;
     }
 
+    // What was read and what it classified as, both straight from above: the
+    // menu shows the class the decision table derived, never one of its own.
+    strncpy(cart_info.payload, tag_payload, sizeof(cart_info.payload) - 1);
+    cart_info.payload[sizeof(cart_info.payload) - 1] = '\0';
+    cart_info.cls = b->cls;
+
     // The configuration read doubles as the part check: a foreign
     // read-protected tag, or something that is not an NTAG215, refuses it,
     // and that shows the unreadable screen rather than a guess.
@@ -178,6 +175,8 @@ static void read_tag(boot_input_t* b) {
     }
     b->auth = (auth0 == NTAG215_AUTH0_OPEN) ? BOOT_AUTH_OPEN : BOOT_AUTH_UNKNOWN;
     b->tag = BOOT_TAG_OK;
+    cart_info.auth0 = auth0;
+    cart_info.auth = b->auth;
     Serial.printf("[BOOT] tag cls=%d rom='%s' auth0=0x%02X\n", (int)b->cls,
                   b->rom, auth0);
 }
@@ -347,8 +346,11 @@ static void load_ram() {
 }
 
 // ─── Emulation loop ─────────────────────────────────────────────────────────
+// Never returns. A running game leads to the menu and back, and nowhere else:
+// there is no path from one back to cart selection, and adding one would
+// defeat the cartridge scheme.
 void run_emu() {
-    emu_on = true; menu_req = false;
+    menu_req = false;
     combo_init(&combo);
     display_clear(TFT_BLACK);
 
@@ -357,7 +359,7 @@ void run_emu() {
     // push task. Logged once rather than assumed.
     Serial.printf("[EMU] emulation on core %d\n", xPortGetCoreID());
 
-    while(emu_on) {
+    for (;;) {
         uint32_t now = millis();
         poll_input(now);
         settings_flush(now, false);
@@ -387,27 +389,20 @@ void run_emu() {
 
             // Between frames, so nothing is half produced: stop the producer,
             // wait for the queue to drain and take the bus before anything
-            // draws through `tft` directly. The quit case returns while still
-            // paused, which is what keeps the loading screen off the bus.
+            // draws through `tft` directly.
             emu_pause_pipeline();
 
-            // The settings menu writes NVS itself, so a coalesced save still
-            // parked here has to land first or it would overwrite what the
-            // menu stores.
+            // A coalesced save still parked here has to land before the menu
+            // reads the struct, or it would be written back over whatever the
+            // menu leaves in it.
             settings_flush(millis(), true);
 
-            // Saving and loading are not the player's job any more, so the
-            // menu has no arm for either: opening it has already saved.
-            int c = launcher_ingame_menu();
-            switch(c) {
-                case 0: break;  // resume
-                case 3:  // quit
-                    emu_on = false;
-                    flush_save("quit");
-                    return;
-                case 5:  // settings
-                    launcher_settings_menu(&settings); break;
-            }
+            // The menu edits the struct in place and applies backlight and
+            // palette as they change, so one write on the way out is all the
+            // persistence this path needs — and is the only NVS write in it.
+            enum menu_result_e r = menu_open(&settings, &cart_info);
+            settings_save(&settings);
+
             display_clear(TFT_BLACK);
             emu_resume_pipeline();
 
@@ -415,6 +410,16 @@ void run_emu() {
             // view of them is stale; start it clean rather than reporting the
             // release of whatever exited the menu as fresh input.
             combo_init(&combo);
+
+            // After the resume, because flush_save pauses the pipeline itself,
+            // and a no-op unless something dirtied cartridge RAM since the
+            // menu-open flush. Before the restart, not after: gb_reset leaves
+            // cartridge RAM alone, so the progress the player keeps is
+            // whatever reached the card here.
+            if (r == MENU_RESET) {
+                flush_save("reset");
+                emu_reset();
+            }
         }
 
         taskYIELD();
@@ -462,6 +467,15 @@ static void load_and_run(const char* name) {
         halt_screen("Init failed", "");
     }
 
+    // The snapshot's ROM-derived half: the path the tag's name matched, and
+    // the two header facts the mapped ROM has just made answerable. Gathered
+    // once, here, because nothing after this point changes any of them.
+    strncpy(cart_info.path, cur_path, sizeof(cart_info.path) - 1);
+    cart_info.path[sizeof(cart_info.path) - 1] = '\0';
+    emu_get_rom_title(cart_info.title, sizeof(cart_info.title));
+    cart_info.colour_hash = emu_get_colour_hash();
+    cart_info.valid = (in.tag == BOOT_TAG_OK);
+
     // Protection for a tag that carries valid content but lost power between
     // its write and its protect. Here on purpose: the buttons are not polled
     // until run_emu() and the push task does not exist yet, so the I2C bus is
@@ -480,12 +494,6 @@ static void load_and_run(const char* name) {
     load_ram();
     if (LED_G_PIN >= 0) digitalWrite(LED_G_PIN, LOW);
     run_emu();
-    if (LED_G_PIN >= 0) digitalWrite(LED_G_PIN, HIGH);
-
-    // The only thing after a finished game is a halt. There is no path from a
-    // running game back to cart selection, and adding one would defeat the
-    // cartridge scheme.
-    halt_screen("Power off", "");
 }
 
 // ─── Setup ──────────────────────────────────────────────────────────────────
@@ -578,6 +586,9 @@ void loop() {
         // Asked for, never volunteered: the password goes to a tag only when
         // the outcome actually depends on the answer.
         in.auth = provision_auth_state();
+        // The resolved state, so the page reports Ours or Foreign rather than
+        // the Unknown the configuration read alone could tell.
+        cart_info.auth = in.auth;
         action = boot_decide(&in);
     }
     Serial.printf("[BOOT] action=%d\n", (int)action);

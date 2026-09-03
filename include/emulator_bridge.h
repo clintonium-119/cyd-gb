@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "render/palette.h"
 
@@ -19,6 +20,15 @@ void emu_set_frame_skip(uint8_t skip);
 uint8_t emu_get_frame_skip();
 uint32_t emu_get_fps();
 void emu_reset();
+
+// ─── Cartridge header ───────────────────────────────────────────────────────
+// The two facts about the running cartridge that only the mapped ROM can
+// answer, so the boot flow can snapshot them once and never read the ROM
+// again. The title is the header's 16-character field filtered to printable
+// characters and NUL-terminated, so out_sz wants to be at least 17; the hash
+// is the sum of those same bytes, and is 0 before the emulator is up.
+void emu_get_rom_title(char* out, size_t out_sz);
+uint8_t emu_get_colour_hash();
 
 // ─── Automatic saves ───────────────────────────────────────────────────────
 // Call emu_autosave_tick() once per frame, after emu_run_frame(). The

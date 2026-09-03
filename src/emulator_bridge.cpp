@@ -340,10 +340,35 @@ static void IRAM_ATTR lcd_line(struct gb_s* g, const uint8_t px[160], const uint
 }
 
 // ─── API ────────────────────────────────────────────────────────────────────
+/*
+ * The cartridge title out of the mapped header bytes. A byte outside the
+ * printable range is padding or, on a Game Boy Color cartridge, part of the
+ * manufacturer and CGB fields that overlap the tail of the field — never part
+ * of a name — so it terminates the string rather than being kept. out_sz
+ * wants to be 17 for the whole field; a shorter buffer truncates.
+ */
+static void rom_title(char* out, size_t out_sz)
+{
+    size_t n;
+    size_t i;
+
+    if (!out || out_sz == 0) {
+        return;
+    }
+    memset(out, 0, out_sz);
+    if (!rom || romlen <= 0x143) {
+        return;
+    }
+    n = (out_sz > 17) ? 16 : (out_sz - 1);
+    for (i = 0; i < n; i++) {
+        char ch = (char)rom[0x134 + i];
+        out[i] = (ch >= 32 && ch < 127) ? ch : 0;
+    }
+}
+
 bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
 {
     char title[17] = {0};
-    int i;
 
     if (!rom_data || rom_size == 0) {
         return false;
@@ -398,13 +423,7 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     fcnt = fpsc = cfps = 0;
     fpst = millis();
 
-    /* The cartridge title, read straight from the mapped bytes. */
-    if (romlen > 0x143) {
-        for (i = 0; i < 16; i++) {
-            char c = (char)rom[0x134 + i];
-            title[i] = (c >= 32 && c < 127) ? c : 0;
-        }
-    }
+    rom_title(title, sizeof(title));
     Serial.printf("[EMU] '%s' %uKB heap:%u\n", title, romlen / 1024,
                   ESP.getFreeHeap());
     return true;
@@ -509,3 +528,15 @@ void emu_set_frame_skip(uint8_t s){fskip=s;}
 uint8_t emu_get_frame_skip(){return fskip;}
 uint32_t emu_get_fps(){return cfps;}
 void emu_reset(){gb_reset(gb);fcnt=0;}
+
+void emu_get_rom_title(char* out, size_t out_sz)
+{
+    rom_title(out, out_sz);
+}
+
+uint8_t emu_get_colour_hash()
+{
+    /* Reads the header through gb->gb_rom_read, so there is nothing to sum
+     * until the emulator has been initialised. */
+    return gb ? gb_colour_hash(gb) : 0;
+}

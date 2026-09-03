@@ -2,13 +2,25 @@
 #include <TFT_eSPI.h>
 #include <stddef.h>
 
-// Splash screens and the interim menus still draw through the driver
-// directly; WS-07's menu rewrite is what removes this.
+// Boot screens, the in-game menu and the save toast draw through the driver
+// directly, between display_bus_acquire() and display_bus_release().
 extern TFT_eSPI tft;
 
 void display_init();
 void display_set_backlight(uint8_t level);
 void display_clear(uint16_t color = TFT_BLACK);
+
+// ─── Wrapped text ───────────────────────────────────────────────────────────
+// Draws s across up to max_rows rows of `font`, breaking wherever max_w runs
+// out rather than at word boundaries — a file name has no useful break
+// points. The row pitch is the font's height plus two, so font 2 gives the
+// 18-px rows the boot screens have always used and font 1 gives 10.
+//
+// The text datum and colour are the caller's: cx is whatever x that datum
+// makes it (a centre for MC_DATUM, a left edge for TL_DATUM). Returns the y
+// below the last row drawn, so consecutive calls stack.
+int16_t display_draw_wrapped(const char* s, int16_t cx, int16_t top,
+                             int16_t max_w, uint8_t max_rows, uint8_t font);
 
 // ─── Frame path ─────────────────────────────────────────────────────────────
 // One address window per frame, then a pushPixels per scaled row block
