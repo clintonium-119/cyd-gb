@@ -71,6 +71,27 @@ void settings_pending_save(const boot_selection_t* s);
 
 void settings_pending_clear();
 
+// ─── Setup-progress record ──────────────────────────────────────────────────
+// Which carts the first-boot wizard has written this setup, so the picker can
+// mark the rows that are already done. One blob under the key "made", in the
+// same "settings" namespace as everything else here, holding exactly the
+// gbcore boot_made_t the picker consumes.
+//
+// The mark is a convenience, nothing more: it carries no routing, protection
+// or ordering meaning, and Finish setup clears it. A stored blob whose length
+// is not sizeof(boot_made_t) is treated as absent rather than as a partial
+// record — a shorter blob would be a record from a different build, and a
+// filename list is not worth a migration.
+
+// False when nothing is stored or the stored blob is the wrong length, in
+// which case *out is left as the empty record rather than untouched: every
+// caller wants a usable record either way.
+bool settings_made_load(boot_made_t* out);
+
+void settings_made_save(const boot_made_t* m);
+
+void settings_made_clear();
+
 // Every flag reads false when nothing is stored, so an unset store and a
 // wizard that has not started are the same state.
 void settings_wizard_load(boot_flags_t* f);

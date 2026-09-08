@@ -292,6 +292,23 @@ static void test_the_writer_references_no_lower_layer(void)
     }
 }
 
+/* The same scan, proved non-vacuous: while the writer's body was a stub it
+ * referenced nothing at all, so guard (c) would have passed over a file with
+ * no writer in it. A revert to a stub now fails here instead. */
+static void test_the_writer_drives_the_pure_picker(void)
+{
+    const char* path = PROJECT_DIR "/src/cart_writer.cpp";
+
+    TEST_ASSERT_GREATER_THAN_MESSAGE(
+        0, file_count(path, "picker_init("),
+        "src/cart_writer.cpp does not build a picker, so guard (c) would pass "
+        "vacuously");
+    TEST_ASSERT_GREATER_THAN_MESSAGE(
+        0, file_count(path, "picker_draw("),
+        "src/cart_writer.cpp does not draw a picker, so guard (c) would pass "
+        "vacuously");
+}
+
 /* ─── (e) the bypass is not configurable ──────────────────────────────────── */
 
 static void test_platformio_ini_does_not_mention_the_rom_bypass(void)
@@ -381,6 +398,7 @@ int main(void)
     RUN_TEST(test_writer_open_has_exactly_one_call_site);
     RUN_TEST(test_writer_open_is_declared_once);
     RUN_TEST(test_the_writer_references_no_lower_layer);
+    RUN_TEST(test_the_writer_drives_the_pure_picker);
     RUN_TEST(test_platformio_ini_does_not_mention_the_rom_bypass);
     RUN_TEST(test_the_menu_references_no_writer_or_tag_symbol);
     RUN_TEST(test_the_menu_defines_menu_open);

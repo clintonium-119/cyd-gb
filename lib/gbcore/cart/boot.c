@@ -299,3 +299,53 @@ bool boot_should_heal(const boot_input_t* in)
     return in->tag == BOOT_TAG_OK && in->cls != BOOT_CLASS_BLANK &&
            in->auth == BOOT_AUTH_OPEN;
 }
+
+/* ─── Setup-progress record ─────────────────────────────────────────────── */
+
+int boot_made_add(boot_made_t* m, const char* rom)
+{
+    size_t len;
+
+    if (m == NULL || rom == NULL || rom[0] == '\0') {
+        return BOOT_MADE_ERR_ARGS;
+    }
+    len = strlen(rom);
+    if (len >= ROM_STORE_NAME_MAX) {
+        return BOOT_MADE_ERR_ARGS;
+    }
+    if (boot_made_has(m, rom)) {
+        /* Already recorded. The cart was written again, which is normal, and
+         * the record says the same thing either way. */
+        return BOOT_MADE_OK;
+    }
+    if (m->count >= BOOT_MADE_MAX) {
+        return BOOT_MADE_FULL;
+    }
+    strncpy(m->rom[m->count], rom, ROM_STORE_NAME_MAX - 1);
+    m->rom[m->count][ROM_STORE_NAME_MAX - 1] = '\0';
+    m->count++;
+    return BOOT_MADE_OK;
+}
+
+bool boot_made_has(const boot_made_t* m, const char* rom)
+{
+    uint8_t i;
+
+    if (m == NULL || rom == NULL) {
+        return false;
+    }
+    for (i = 0; i < m->count && i < BOOT_MADE_MAX; i++) {
+        if (strcmp(m->rom[i], rom) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void boot_made_clear(boot_made_t* m)
+{
+    if (m == NULL) {
+        return;
+    }
+    memset(m, 0, sizeof(*m));
+}

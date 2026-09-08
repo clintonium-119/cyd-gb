@@ -131,6 +131,97 @@ bool sd_catalog_reader(catalog_reader_t* out) {
     return true;
 }
 
+// ─── Art ────────────────────────────────────────────────────────────────────
+// One pair of functions for both /art and /shot: the stem rule, the exact-size
+// check and the open-read-close shape are identical, and the directory is the
+// only thing that differs.
+//
+// Unlike the catalog above, a media file is not held open. The catalog is read
+// once for the index and then seeked into for every description; a cover or a
+// snapshot is read once when a title is opened and never again.
+
+bool sd_media_path(const char* dir, const char* rom_filename, char* out,
+                   size_t out_sz) {
+    if (!ready || !dir || !rom_filename || !out || !out_sz) {
+        return false;
+    }
+    out[0] = '\0';
+
+    // The stem is the filename without a trailing ".gb". Case-sensitive: the
+    // filename is the frozen key the cartridge carries, and a name that does
+    // not end in ".gb" is used whole.
+    size_t stem = strlen(rom_filename);
+    if (stem >= 3 && strcmp(rom_filename + stem - 3, ".gb") == 0) {
+        stem -= 3;
+    }
+    if (stem == 0) {
+        return false;
+    }
+
+    // Length checked through snprintf's return before the path is used, the
+    // same rule sd_rom_path() follows: a truncated path can name a different
+    // file that really exists.
+    int n = snprintf(out, out_sz, "%s/%.*s%s", dir, (int)stem, rom_filename,
+                     ART_SUFFIX);
+    if (n < 0 || (size_t)n >= out_sz) {
+        out[0] = '\0';
+        return false;
+    }
+    if (!SD.exists(out)) {
+        out[0] = '\0';
+        return false;
+    }
+    return true;
+}
+
+bool sd_media_read(const char* dir, const char* rom_filename, uint16_t* out,
+                   size_t px_count) {
+    char path[ART_PATH_MAX];
+
+    if (!out || !px_count) {
+        return false;
+    }
+    if (!sd_media_path(dir, rom_filename, path, sizeof(path))) {
+        // A missing file is the ordinary case, not worth a line of log per
+        // title the imaging tool has not covered yet.
+        return false;
+    }
+
+    File f = SD.open(path, FILE_READ);
+    if (!f) {
+        Serial.printf("[SD] art open failed: %s\n", path);
+        return false;
+    }
+
+    size_t want = px_count * sizeof(uint16_t);
+    if (f.size() != want) {
+        Serial.printf("[SD] art size %u, want %u: %s\n", (unsigned)f.size(),
+                      (unsigned)want, path);
+        f.close();
+        return false;
+    }
+
+    // The SD library may return a short read; loop until the buffer is full
+    // or a read stops making progress.
+    uint8_t* dst = (uint8_t*)out;
+    size_t got = 0;
+    while (got < want) {
+        int n = f.read(dst + got, want - got);
+        if (n <= 0) {
+            break;
+        }
+        got += (size_t)n;
+    }
+    f.close();
+
+    if (got != want) {
+        Serial.printf("[SD] art short read %u of %u: %s\n", (unsigned)got,
+                      (unsigned)want, path);
+        return false;
+    }
+    return true;
+}
+
 void sd_get_save_path(const char* rp, char* sp, int mx) {
     const char* fn=strrchr(rp,'/'); if(!fn)fn=rp; else fn++;
     char base[ROM_STORE_NAME_MAX];

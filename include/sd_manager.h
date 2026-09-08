@@ -31,6 +31,39 @@
 // written by the firmware.
 #define CATALOG_PATH    "/catalog.txt"
 
+// ─── Art ────────────────────────────────────────────────────────────────────
+// Two images per game, both raw RGB565, 96x96, little-endian, no header —
+// exactly 18,432 bytes each (design §6 "Art"). The box art identifies the
+// game and the gameplay snapshot shows what playing it looks like; the
+// writer's detail page reads both.
+//
+// Produced by the imaging tool from games.json and NEVER written by the
+// firmware, which is why sd_init() does not create either directory: a card
+// with no /shot at all simply draws placeholders. Either file missing is an
+// ordinary case, not a failure.
+#define ART_PATH        "/art"
+#define SHOT_PATH       "/shot"
+#define ART_SUFFIX      ".565"
+
+// The longest media path: "/shot" (5) + a 63-character name less its ".gb"
+// (60) + ".565" (4) + the NUL is 70, rounded up.
+#define ART_PATH_MAX    80
+
+// Build <dir>/<stem>.565 in out, where <stem> is `rom_filename` without a
+// trailing ".gb". The match is case-sensitive because the filename is the
+// frozen key the cartridge carries. False when the path does not fit out_sz
+// or no such file exists — never a truncated path, because a truncation would
+// name a different, possibly real, file.
+bool sd_media_path(const char* dir, const char* rom_filename, char* out,
+                   size_t out_sz);
+
+// Read one media file whole into `out`, which must hold px_count pixels. The
+// file has to be exactly px_count * 2 bytes: a file of any other size is a
+// file from a different imaging run, and padding it would paint garbage.
+// False on a missing, mis-sized or short-reading file, logged once.
+bool sd_media_read(const char* dir, const char* rom_filename, uint16_t* out,
+                   size_t px_count);
+
 bool sd_init();
 
 // Build /roms/gb/<filename> in out. False when the name does not fit out_sz

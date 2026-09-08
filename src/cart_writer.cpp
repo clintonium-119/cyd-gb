@@ -1,47 +1,216 @@
 #include "cart_writer.h"
-#include <string.h>
 
-// The writer stub.
+#include "button_input.h"
+#include "display.h"
+#include "render_config.h"
+#include "sd_manager.h"
+#include "settings.h"
+#include "ui/picker.h"
+#include "ui/picker_draw.h"
+
+#include <Arduino.h>
+
+// The writer's binding.
 //
-// The full writer — the title list, the cover art, the confirmation screen
-// and the New cart / Rewrite / Cancel entries — is a later workstream. It
-// replaces this body and keeps the interface in cart_writer.h exactly as it
-// stands, so the boot state machine needs no change when it lands.
+// Everything the writer decides is in lib/gbcore/ui/picker.c and everything it
+// lays out is in lib/gbcore/ui/picker_draw.c, both pure C and both host-tested.
+// This file supplies the four things they cannot have: a clock, the expander,
+// the panel and the SD card.
 //
-// What the stub is for: it makes the wizard's exit reachable today. Booting a
-// fresh device with a blank tag writes the menu cart, then the wildcard, then
-// finishes setup — the whole first-boot path runs end to end without a UI.
-// The starter it picks is read from the catalog rather than written in here,
-// so the stub follows the real library instead of drifting from it.
+//   * poll  — one expander read every WRITER_POLL_MS, fed to the picker as a
+//             button word and a millis() timestamp
+//   * draw  — the three canvas calls bound to tft, offset by the per-unit
+//             game_x / game_y so the writer renders inside the game window
+//   * read  — the catalog index, a title's description, and its two images
 //
-// It draws nothing, polls nothing, and holds no cursor.
+// It reaches for nothing below itself. The names it must not mention are the
+// guard test's list, not repeated here, because that test scans this file's
+// comments too.
+//
+// Every exit is a halt, so the buffers below are static and generous (rule 5
+// in cart_writer.h). The two image buffers are separate rather than shared
+// because the detail page's band scrolls over both at once.
+
+// One expander read every WRITER_POLL_MS, matching the in-game menu. That is
+// longer than the input module's debounce window, so two successive samples
+// are already stable and the picker's edge detection needs no filter.
+#define WRITER_POLL_MS 16
+
+static catalog_index_t idx;                 // about 19 KB
+static uint16_t art[PICKER_ART_PX];         // 18,432 B — the box art
+static uint16_t shot[PICKER_ART_PX];        // 18,432 B — the gameplay snapshot
+static char desc[CATALOG_DESC_MAX];
+static picker_t picker;
+static boot_made_t made;
+static picker_layout_t geom;
+static settings_t cfg;
+
+// The window origin, from NVS: ten hand-built units each land slightly
+// differently behind the bezel.
+static int16_t ox;
+static int16_t oy;
+
+// ─── the canvas ─────────────────────────────────────────────────────────────
+// Window-relative coordinates in, panel coordinates out. The layout module
+// knows nothing of the origin.
+
+static void cv_fill(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
+                    uint16_t color) {
+    (void)ctx;
+    tft.fillRect(ox + x, oy + y, w, h, color);
+}
+
+static void cv_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
+                    uint8_t rows, uint8_t font, uint8_t align, uint16_t fg,
+                    uint16_t bg) {
+    (void)ctx;
+    int16_t anchor = x;
+
+    tft.setTextColor(fg, bg);
+    switch (align) {
+        case UI_ALIGN_CENTER:
+            tft.setTextDatum(TC_DATUM);
+            anchor = (int16_t)(x + w / 2);
+            break;
+        case UI_ALIGN_RIGHT:
+            tft.setTextDatum(TR_DATUM);
+            anchor = (int16_t)(x + w);
+            break;
+        default:
+            tft.setTextDatum(TL_DATUM);
+            break;
+    }
+    display_draw_wrapped(s, (int16_t)(ox + anchor), (int16_t)(oy + y), w, rows,
+                         font);
+}
+
+static void cv_image(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
+                     const uint16_t* px, int16_t row0, int16_t rows) {
+    (void)ctx;
+    (void)h;
+    // The row range is how the scrolling band clips an image at its edge: the
+    // driver is handed the first visible row and told how many follow.
+    //
+    // display_init() leaves setSwapBytes(true) in force and the .565 files are
+    // little-endian, so there is no per-pixel swap to do here.
+    tft.pushImage(ox + x, oy + y, w, rows, (uint16_t*)(px + (size_t)row0 * w));
+}
+
+static const ui_canvas_t canvas = { NULL, cv_fill, cv_text, cv_image };
+
+// ─── the writer ─────────────────────────────────────────────────────────────
 
 enum boot_pick_e writer_open(enum writer_mode_e mode,
                              const catalog_reader_t* cat,
                              const boot_flags_t* flags, bool pending_set,
                              boot_selection_t* out) {
-    (void)pending_set;  // the Cancel entry it drives is the full writer's
+    bool immediate = (mode == WRITER_MODE_IMMEDIATE);
+    uint32_t drawn_us = 0;
+    bool logged = false;
+    int rc;
 
-    if (mode != WRITER_MODE_IMMEDIATE) {
-        // Pending mode has no picker to show yet, so the caller halts on the
-        // menu cart it booted from.
+    if (!out || !cat) {
+        // No catalog to show. The caller halts on whatever it booted from,
+        // exactly as it did when this body was a stub.
         return BOOT_PICK_NONE;
-    }
-    if (!cat || !flags || !out) {
-        return BOOT_PICK_NONE;
-    }
-    if (flags->wild_done) {
-        // The wildcard is written; there is nothing else the stub offers, so
-        // the wizard's remaining step is to finish.
-        return BOOT_PICK_FINISH;
     }
 
-    catalog_entry_t e;
-    if (catalog_first_flagged(cat, CATALOG_FLAG_STARTER, &e) != CATALOG_OK) {
+    rc = catalog_index_build(cat, &idx);
+    if (rc != CATALOG_OK && rc != CATALOG_ERR_FULL) {
+        // ERR_FULL is fine: the first CATALOG_MAX entries are intact.
+        Serial.printf("[WRITER] catalog build failed (%d)\n", rc);
         return BOOT_PICK_NONE;
     }
-    strncpy(out->rom, e.filename, sizeof(out->rom) - 1);
-    out->rom[sizeof(out->rom) - 1] = '\0';
-    out->target = BOOT_TARGET_WILDCARD;
-    return BOOT_PICK_ROM;
+
+    if (!settings_load(&cfg)) {
+        settings_defaults(&cfg);
+    }
+    ox = cfg.game_x;
+    oy = cfg.game_y;
+
+    rc = picker_layout(GAME_W, GAME_H, &geom);
+    if (rc != PICKER_OK) {
+        // Cannot happen at either SCALE_K, so it is logged rather than
+        // handled: a window this small means render_config.h changed.
+        Serial.printf("[WRITER] layout refused %dx%d (%d)\n", GAME_W, GAME_H,
+                      rc);
+        return BOOT_PICK_NONE;
+    }
+
+    if (immediate) {
+        // Which starters this setup has already written, so their rows show a
+        // mark. Absent is the empty record, not a failure.
+        if (!settings_made_load(&made)) {
+            boot_made_clear(&made);
+        }
+    }
+
+    rc = picker_init(&picker, immediate ? PICKER_MODE_IMMEDIATE
+                                        : PICKER_MODE_PENDING,
+                     &idx, flags ? flags->wild_done : false, pending_set,
+                     immediate ? &made : NULL, geom.rows);
+    if (rc != PICKER_OK) {
+        Serial.printf("[WRITER] no rows to show (%d)\n", rc);
+        return BOOT_PICK_NONE;
+    }
+
+    desc[0] = '\0';
+    tft.fillScreen(TFT_BLACK);
+    picker_draw(&picker, &geom, NULL, art, shot, &canvas);
+
+    for (;;) {
+        button_update();
+
+        uint8_t word = (uint8_t)button_get_buttons();
+        uint32_t now = millis();
+        uint8_t ev = picker_input(&picker, word, now);
+        uint16_t ci = 0;
+
+        if (ev == PICKER_EVENT_DONE) {
+            break;
+        }
+
+        // A title was opened: its cover, its snapshot and its description are
+        // wanted once, behind the screen transition rather than mid-scroll.
+        if (picker_media_due(&picker, &ci)) {
+            bool have_art =
+                sd_media_read(ART_PATH, idx.e[ci].filename, art, PICKER_ART_PX);
+            bool have_shot = sd_media_read(SHOT_PATH, idx.e[ci].filename, shot,
+                                           PICKER_ART_PX);
+
+            if (catalog_read_desc(cat, idx.e[ci].offset, desc, sizeof desc) !=
+                CATALOG_OK) {
+                desc[0] = '\0';
+            }
+            // How far this page can scroll depends on the description that
+            // just arrived, so the span is handed over before the redraw.
+            picker_set_scroll_span(
+                &picker, picker_page_lines(&geom, desc[0] ? desc : NULL),
+                geom.band_rows);
+
+            if (picker_media_loaded(&picker, ci, have_art, have_shot) ==
+                PICKER_EVENT_REDRAW) {
+                ev = PICKER_EVENT_REDRAW;
+            }
+        }
+
+        if (ev == PICKER_EVENT_REDRAW) {
+            uint32_t began = micros();
+
+            picker_draw(&picker, &geom, desc[0] ? desc : NULL, art, shot,
+                        &canvas);
+            drawn_us = micros() - began;
+            if (!logged) {
+                // Once per session: the figure the bench needs, without a
+                // line per keypress.
+                Serial.printf("[WRITER] redraw %lu us\n",
+                              (unsigned long)drawn_us);
+                logged = true;
+            }
+        }
+
+        delay(WRITER_POLL_MS);
+    }
+
+    return picker_result(&picker, out);
 }

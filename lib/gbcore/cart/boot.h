@@ -84,6 +84,49 @@ typedef struct boot_flags_s {
     bool setup_done;
 } boot_flags_t;
 
+/* ─── Setup-progress record ─────────────────────────────────────────────────
+ * Which carts the first-boot wizard has written this setup, so the picker can
+ * mark the titles that are already done. Persisted in NVS beside the other
+ * two records above.
+ *
+ * The key is the ROM filename, not the catalog position. The filename is what
+ * the tag itself carries and is frozen once written; the catalog is generated
+ * and can come back in another order, at which point every stored index would
+ * name a different game. Nothing here records a UID, a target or a time — the
+ * mark is a convenience for the list, and carries no routing or protection
+ * meaning.
+ */
+
+/* The wizard offers `starter` titles only and writes one cart per boot, so 24
+ * is headroom over any plausible starter set. 1 + 24 * 64 = 1537 bytes, which
+ * is one NVS blob. */
+#define BOOT_MADE_MAX 24
+
+/* `count` first, so a zero-filled struct is the empty record. */
+typedef struct boot_made_s {
+    uint8_t count;
+    char rom[BOOT_MADE_MAX][ROM_STORE_NAME_MAX];
+} boot_made_t;
+
+enum boot_made_result_e {
+    BOOT_MADE_OK = 0,
+    BOOT_MADE_ERR_ARGS = -1, /* NULL, empty, or a name that does not fit */
+    BOOT_MADE_FULL = -2,     /* the record is full and the name is new   */
+};
+
+/*
+ * Record that `rom` has been written this setup. A name that is already in
+ * the record is BOOT_MADE_OK with `count` unchanged: writing the same cart
+ * twice is normal and is not an error.
+ */
+int boot_made_add(boot_made_t* m, const char* rom);
+
+/* Byte-for-byte membership. False for a NULL record or a NULL name. */
+bool boot_made_has(const boot_made_t* m, const char* rom);
+
+/* Back to the empty record. NULL-safe. */
+void boot_made_clear(boot_made_t* m);
+
 typedef struct boot_input_s {
     enum boot_tag_e tag;
     enum boot_class_e cls;

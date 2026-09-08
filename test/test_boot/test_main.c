@@ -1079,6 +1079,94 @@ static void test_a_loaded_but_unprotected_cart_is_flagged_for_healing(void)
     assert_tag_payload(&tag, "Tetris.gb");
 }
 
+/* ─── Setup-progress record ──────────────────────────────────────────────── */
+/* The bounded list of filenames the wizard has written this setup. Neither
+ * caller — the provisioner that appends to it nor the picker that reads its
+ * marks — is host-testable, so the shared behaviour is pinned here. */
+
+/* The empty record. Zero-filled is the empty record by construction, which is
+ * the property the NVS path relies on when nothing is stored. */
+static boot_made_t fresh_made(void)
+{
+    boot_made_t m;
+
+    memset(&m, 0, sizeof(m));
+    return m;
+}
+
+static void test_a_made_name_is_stored_and_found(void)
+{
+    boot_made_t m = fresh_made();
+
+    TEST_ASSERT_EQUAL_INT(BOOT_MADE_OK, boot_made_add(&m, "Tetris.gb"));
+    TEST_ASSERT_EQUAL_UINT8(1, m.count);
+    TEST_ASSERT_TRUE(boot_made_has(&m, "Tetris.gb"));
+    TEST_ASSERT_FALSE(boot_made_has(&m, "Zelda.gb"));
+
+    /* 1 + 24 * 64: the blob length settings_made_load checks against. */
+    TEST_ASSERT_EQUAL_size_t(1537, sizeof(boot_made_t));
+}
+
+static void test_adding_a_made_name_twice_does_not_grow_the_record(void)
+{
+    boot_made_t m = fresh_made();
+
+    TEST_ASSERT_EQUAL_INT(BOOT_MADE_OK, boot_made_add(&m, "Tetris.gb"));
+    /* Writing the same cart again is normal, not an error. */
+    TEST_ASSERT_EQUAL_INT(BOOT_MADE_OK, boot_made_add(&m, "Tetris.gb"));
+    TEST_ASSERT_EQUAL_UINT8(1, m.count);
+}
+
+static void test_the_twenty_fifth_made_name_is_refused(void)
+{
+    boot_made_t m = fresh_made();
+    char name[16];
+    int i;
+
+    for (i = 0; i < BOOT_MADE_MAX; i++) {
+        snprintf(name, sizeof(name), "g%02d.gb", i);
+        TEST_ASSERT_EQUAL_INT(BOOT_MADE_OK, boot_made_add(&m, name));
+    }
+    TEST_ASSERT_EQUAL_UINT8(BOOT_MADE_MAX, m.count);
+
+    snprintf(name, sizeof(name), "g%02d.gb", BOOT_MADE_MAX);
+    TEST_ASSERT_EQUAL_INT(BOOT_MADE_FULL, boot_made_add(&m, name));
+    TEST_ASSERT_EQUAL_UINT8(BOOT_MADE_MAX, m.count);
+    TEST_ASSERT_FALSE(boot_made_has(&m, name));
+}
+
+static void test_made_names_compare_byte_for_byte(void)
+{
+    boot_made_t m = fresh_made();
+
+    TEST_ASSERT_EQUAL_INT(BOOT_MADE_OK, boot_made_add(&m, "Tetris.gb"));
+    /* The filename is the key the tag carries; case is part of it. */
+    TEST_ASSERT_FALSE(boot_made_has(&m, "tetris.gb"));
+}
+
+static void test_clearing_the_record_forgets_every_name(void)
+{
+    boot_made_t m = fresh_made();
+
+    TEST_ASSERT_EQUAL_INT(BOOT_MADE_OK, boot_made_add(&m, "Tetris.gb"));
+    boot_made_clear(&m);
+    TEST_ASSERT_EQUAL_UINT8(0, m.count);
+    TEST_ASSERT_FALSE(boot_made_has(&m, "Tetris.gb"));
+}
+
+static void test_made_helpers_reject_null_arguments(void)
+{
+    boot_made_t m = fresh_made();
+
+    TEST_ASSERT_EQUAL_INT(BOOT_MADE_ERR_ARGS, boot_made_add(NULL, "x"));
+    TEST_ASSERT_EQUAL_INT(BOOT_MADE_ERR_ARGS, boot_made_add(&m, NULL));
+    TEST_ASSERT_EQUAL_INT(BOOT_MADE_ERR_ARGS, boot_made_add(&m, ""));
+    TEST_ASSERT_FALSE(boot_made_has(NULL, "x"));
+    TEST_ASSERT_FALSE(boot_made_has(&m, NULL));
+    boot_made_clear(NULL);
+    TEST_ASSERT_EQUAL_UINT8(0, m.count);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -1107,5 +1195,11 @@ int main(void)
     RUN_TEST(test_pending_write_executes_end_to_end);
     RUN_TEST(test_a_pending_write_repeats_after_a_failed_protect);
     RUN_TEST(test_a_loaded_but_unprotected_cart_is_flagged_for_healing);
+    RUN_TEST(test_a_made_name_is_stored_and_found);
+    RUN_TEST(test_adding_a_made_name_twice_does_not_grow_the_record);
+    RUN_TEST(test_the_twenty_fifth_made_name_is_refused);
+    RUN_TEST(test_made_names_compare_byte_for_byte);
+    RUN_TEST(test_clearing_the_record_forgets_every_name);
+    RUN_TEST(test_made_helpers_reject_null_arguments);
     return UNITY_END();
 }

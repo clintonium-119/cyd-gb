@@ -26,7 +26,8 @@ specified here.
 
 ```
 /roms/gb/<filename>        the ROM, named exactly as games.json says
-/art/<stem>.565            96x96 raw RGB565, little-endian
+/art/<stem>.565            box art, 96x96 raw RGB565, little-endian
+/shot/<stem>.565           gameplay snapshot, same format
 /saves/<stem>.sav          battery save, written by the emulator
 /catalog.txt               generated; never hand-edited
 ```
@@ -34,8 +35,8 @@ specified here.
 `<stem>` is `<filename>` with the `.gb` extension removed. There is no `/desc/` directory —
 descriptions live in the catalog. `games.json` stays in the repository and is **not** copied to the card.
 
-Library facts as of this writing: 132 ROMs, about 30 MB; cards are 128 MB; art at 96x96 is 18,432 bytes
-per image, about 2.4 MB in total.
+Library facts as of this writing: 132 ROMs, about 30 MB; cards are 128 MB; each image at 96x96 is
+18,432 bytes, so two per game is about 4.9 MB in total.
 
 ## `games.json` entry
 
@@ -99,8 +100,13 @@ Alleyway.gb→Alleyway→→
 
 ## Art
 
+Two images per game, both in the same format and both optional. The writer's detail page shows the box
+art beside the description and the gameplay snapshot below it, so a kid choosing a game sees the cover
+that identifies it and a frame of what playing it looks like.
+
 - 96x96 pixels, raw RGB565, **little-endian**, no header: exactly 18,432 bytes.
-- Named `<stem>.565`, the ROM filename without its `.gb`.
+- Named `<stem>.565`, the ROM filename without its `.gb`, under `/art` for the box art and `/shot` for
+  the gameplay snapshot.
 - Pre-converted during imaging, never decoded on the device — PNG decoding on the ESP32 is slow and
   heap-hungry. Loading is one `fread` into a static buffer and one `pushImage`.
 - Little-endian is the same byte order the frame path pushes with `setSwapBytes(true)`, so one push
@@ -112,7 +118,12 @@ ffmpeg -i tetris.png -vf "scale=96:96:force_original_aspect_ratio=decrease,pad=9
        -f rawvideo -pix_fmt rgb565le /art/Tetris.565
 ```
 
-- A missing art file draws a placeholder. It is never a failure.
+The snapshot is the same command against the screenshot source and a `/shot` output path. The ES-DE
+media set the imaging tool seeds from carries `covers` and `screenshots` for the same stems, so the two
+directories gain and lose games together.
+
+- Either file missing draws the same placeholder. It is never a failure, and one image present with the
+  other absent is an ordinary case.
 
 ## Tag payload grammar
 

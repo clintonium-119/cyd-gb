@@ -120,6 +120,41 @@ void settings_pending_clear() {
     prefs.end();
 }
 
+bool settings_made_load(boot_made_t* out) {
+    if (!out) {
+        return false;
+    }
+    boot_made_clear(out);
+    prefs.begin("settings", true);
+    // A blob of the wrong length is a record from another build, not a
+    // partial one: the caller gets the empty record and starts again.
+    bool has = prefs.getBytesLength("made") == sizeof(boot_made_t);
+    if (has) {
+        prefs.getBytes("made", out, sizeof(boot_made_t));
+    }
+    prefs.end();
+
+    // Clamped on the way in, the same stance as the pending target: a count
+    // past the array's end could only come from a corrupt blob, and every
+    // reader would otherwise have to defend against it.
+    if (has && out->count > BOOT_MADE_MAX) {
+        boot_made_clear(out);
+    }
+    return has;
+}
+
+void settings_made_save(const boot_made_t* m) {
+    prefs.begin("settings", false);
+    prefs.putBytes("made", m, sizeof(boot_made_t));
+    prefs.end();
+}
+
+void settings_made_clear() {
+    prefs.begin("settings", false);
+    prefs.remove("made");
+    prefs.end();
+}
+
 void settings_wizard_load(boot_flags_t* f) {
     prefs.begin("settings", true);
     f->menu_done = prefs.getBool("wz_menu", false);

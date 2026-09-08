@@ -68,6 +68,22 @@ static int write_cart(enum boot_class_e cls, const char* rom) {
     return rc;
 }
 
+// Append a verified write to the setup-progress record. The record exists so
+// the wizard's picker can mark the titles that are already done; it carries
+// no protection or routing meaning, and a full record is not a write failure
+// — the cart is on the tag either way.
+static void record_made(const char* rom) {
+    boot_made_t made;
+    if (!settings_made_load(&made)) {
+        boot_made_clear(&made);
+    }
+    if (boot_made_add(&made, rom) == BOOT_MADE_FULL) {
+        Serial.println("[CART] made record full");
+        return;
+    }
+    settings_made_save(&made);
+}
+
 int provision_wizard_menu(boot_flags_t* flags) {
     if (!flags) {
         return NTAG_ERR_ARGS;
@@ -109,14 +125,21 @@ int provision_wizard_write(enum boot_pick_action_e pick_action,
         if (rc != NTAG_OK) {
             return rc;
         }
+        record_made(pick->rom);
         flags->wild_done = true;
         settings_wizard_save(flags);
         return NTAG_OK;
     }
     if (pick_action == BOOT_PICK_WRITE_GAME) {
-        // No flag: which game carts the wizard wrote is deliberately not
-        // recorded anywhere.
-        return write_cart(BOOT_CLASS_GAME, pick->rom);
+        // No flag — one game cart does not advance the wizard — but the
+        // filename goes into the setup-progress record so the picker can mark
+        // the row. The record says which titles are done this setup and
+        // nothing else about them.
+        int rc = write_cart(BOOT_CLASS_GAME, pick->rom);
+        if (rc == NTAG_OK) {
+            record_made(pick->rom);
+        }
+        return rc;
     }
     return NTAG_ERR_ARGS;
 }
@@ -127,6 +150,9 @@ int provision_wizard_finish(boot_flags_t* flags) {
     }
     flags->setup_done = true;
     Serial.println("[CART] setup finished");
+    // Setup is over, so the "made this setup" marks have nothing left to
+    // mark.
+    settings_made_clear();
     settings_wizard_save(flags);
     return NTAG_OK;
 }
