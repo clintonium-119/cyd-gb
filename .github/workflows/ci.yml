@@ -14,14 +14,24 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          # No requirements.txt exists; the workflow file pins the
-          # PlatformIO version, so it is the cache key.
+          # No requirements.txt exists; the workflow file pins both the
+          # PlatformIO and the pytest version, so it is the cache key.
           cache-dependency-path: .github/workflows/ci.yml
 
       # Pinned so CI doesn't drift from the local toolchain
       # (espressif32@6.5.0 is pinned in platformio.ini).
       - name: Install PlatformIO
         run: pip install platformio==6.1.19
+
+      # Pinned for the same reason PlatformIO is: the host tools under tools/
+      # are the only thing that needs it.
+      - name: Install pytest
+        run: pip install pytest==9.1.1
+
+      # The imaging tool shells out to ffmpeg to make the .565 art; its tests
+      # convert real PNGs.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Cache PlatformIO
         uses: actions/cache@v4
@@ -34,3 +44,11 @@ jobs:
 
       - name: Run native tests (env:native)
         run: pio test -e native
+
+      - name: Run tools tests (pytest)
+        run: pytest tools/tests -q
+
+      # No CYD_ROM_DIR or CYD_MEDIA_DIR on the runner, so the existence checks
+      # are skipped and reported rather than failed.
+      - name: Validate games.json
+        run: python tools/validate_games.py

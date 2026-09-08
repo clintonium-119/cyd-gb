@@ -406,6 +406,247 @@ static FILE* open_fixture(void)
     return NULL;
 }
 
+/* The generated library catalog: the exact bytes a card carries, emitted from
+ * games.json by `tools/image_sd.py --catalog-only`. The six-line fixture above
+ * covers the format's edge cases; this one covers the real library. Nothing
+ * here hard-codes the entry count or any description text, because both are
+ * curated in games.json — every expectation is derived from the file. */
+
+static const char* library_path_used = NULL;
+
+static FILE* open_library_fixture(void)
+{
+    FILE* f;
+
+    f = fopen("test/fixtures/catalog_library.txt", "rb");
+    if (f != NULL) {
+        library_path_used = "working directory";
+        return f;
+    }
+#ifdef PROJECT_DIR
+    f = fopen(PROJECT_DIR "/test/fixtures/catalog_library.txt", "rb");
+    if (f != NULL) {
+        library_path_used = "PROJECT_DIR";
+        return f;
+    }
+#endif
+    return NULL;
+}
+
+/* A whole catalog line plus its newline and a NUL. */
+#define LINE_SZ (CATALOG_LINE_MAX + 2)
+
+/* Strip a trailing CRLF or LF in place and return the remaining length. */
+static size_t chomp(char* line)
+{
+    size_t len = strlen(line);
+
+    while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+        len--;
+    }
+    line[len] = '\0';
+    return len;
+}
+
+/* What the reader should index: every line that is not empty. */
+static size_t count_non_empty_lines(FILE* f)
+{
+    char line[LINE_SZ];
+    size_t count = 0;
+
+    rewind(f);
+    while (fgets(line, (int)sizeof(line), f) != NULL) {
+        if (chomp(line) > 0) {
+            count++;
+        }
+    }
+    return count;
+}
+
+/* The start of the field after the third tab, which is the description. */
+static const char* description_of(const char* line)
+{
+    int tabs = 0;
+    const char* p;
+
+    for (p = line; *p != '\0'; p++) {
+        if (*p != '\t') {
+            continue;
+        }
+        tabs++;
+        if (tabs == 3) {
+            return p + 1;
+        }
+    }
+    return NULL;
+}
+
+/* Copy the line whose first field is exactly `filename`. 1 when found. */
+static int read_line_for(FILE* f, const char* filename, char* out,
+                         size_t out_sz)
+{
+    char line[LINE_SZ];
+    size_t n = strlen(filename);
+    size_t len;
+
+    rewind(f);
+    while (fgets(line, (int)sizeof(line), f) != NULL) {
+        if (strncmp(line, filename, n) != 0 || line[n] != '\t') {
+            continue;
+        }
+        len = chomp(line);
+        if (len >= out_sz) {
+            return 0;
+        }
+        memcpy(out, line, len + 1);
+        return 1;
+    }
+    return 0;
+}
+
+/* Whether any line carries the starter token in its flags field, so the
+ * expectation below holds however the user curates the starter set. */
+static int library_has_starter(FILE* f)
+{
+    char line[LINE_SZ];
+
+    rewind(f);
+    while (fgets(line, (int)sizeof(line), f) != NULL) {
+        const char* flags;
+        const char* desc;
+        int tabs = 0;
+        const char* p;
+
+        chomp(line);
+        flags = NULL;
+        desc = description_of(line);
+        for (p = line; *p != '\0'; p++) {
+            if (*p != '\t') {
+                continue;
+            }
+            tabs++;
+            if (tabs == 2) {
+                flags = p + 1;
+                break;
+            }
+        }
+        if (flags == NULL || desc == NULL) {
+            continue;
+        }
+        /* Search the flags field only: "starter" inside a description is not
+         * a flag. desc - 1 is the third tab, which ends the flags field. */
+        if ((size_t)(desc - 1 - flags) == strlen("starter") &&
+            strncmp(flags, "starter", strlen("starter")) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void test_library_fixture_indexes_with_no_rejections(void)
+{
+    catalog_reader_t rd;
+    size_t expected;
+    FILE* f = open_library_fixture();
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(
+        f, "test/fixtures/catalog_library.txt not found; regenerate it with "
+           "tools/image_sd.py --catalog-only");
+    rd.ctx = f;
+    rd.read = file_read;
+
+    expected = count_non_empty_lines(f);
+    TEST_ASSERT_TRUE_MESSAGE(expected > 0, "the library fixture is empty");
+    TEST_ASSERT_TRUE_MESSAGE(expected <= CATALOG_MAX,
+                             "the library no longer fits CATALOG_MAX");
+
+    /* Not CATALOG_ERR_FULL and not CATALOG_ERR_LINE: every line the emitter
+     * wrote is one the reader accepts. */
+    TEST_ASSERT_EQUAL_INT(CATALOG_OK, catalog_index_build(&rd, &idx));
+    TEST_ASSERT_EQUAL_size_t(expected, idx.count);
+
+    fclose(f);
+}
+
+static void test_library_fixture_every_filename_has_the_gb_suffix(void)
+{
+    catalog_reader_t rd;
+    size_t i;
+    FILE* f = open_library_fixture();
+
+    TEST_ASSERT_NOT_NULL(f);
+    rd.ctx = f;
+    rd.read = file_read;
+    TEST_ASSERT_EQUAL_INT(CATALOG_OK, catalog_index_build(&rd, &idx));
+
+    for (i = 0; i < idx.count; i++) {
+        size_t n = strlen(idx.e[i].filename);
+        TEST_ASSERT_TRUE_MESSAGE(n > 3, idx.e[i].filename);
+        TEST_ASSERT_EQUAL_STRING_MESSAGE(".gb", idx.e[i].filename + n - 3,
+                                         idx.e[i].filename);
+        TEST_ASSERT_TRUE_MESSAGE(idx.e[i].title[0] != '\0',
+                                 idx.e[i].filename);
+    }
+
+    fclose(f);
+}
+
+static void test_library_fixture_finds_a_known_entry(void)
+{
+    static const char known[] = "Tetris.gb";
+    char line[LINE_SZ];
+    catalog_reader_t rd;
+    catalog_entry_t e;
+    const char* want;
+    FILE* f = open_library_fixture();
+
+    TEST_ASSERT_NOT_NULL(f);
+    rd.ctx = f;
+    rd.read = file_read;
+
+    /* The expectation comes out of the file, so rewording a description in
+     * games.json cannot break this test. */
+    TEST_ASSERT_TRUE_MESSAGE(read_line_for(f, known, line, sizeof(line)),
+                             "Tetris.gb is not in the library fixture");
+    want = description_of(line);
+    TEST_ASSERT_NOT_NULL(want);
+
+    TEST_ASSERT_EQUAL_INT(CATALOG_OK, catalog_find(&rd, known, &e));
+    TEST_ASSERT_EQUAL_STRING(known, e.filename);
+    TEST_ASSERT_TRUE(e.title[0] != '\0');
+
+    TEST_ASSERT_EQUAL_INT(CATALOG_OK,
+        catalog_read_desc(&rd, e.offset, desc, sizeof(desc)));
+    TEST_ASSERT_EQUAL_STRING(want, desc);
+
+    fclose(f);
+}
+
+static void test_library_fixture_first_starter_when_any(void)
+{
+    catalog_reader_t rd;
+    catalog_entry_t e;
+    int expect_one;
+    FILE* f = open_library_fixture();
+
+    TEST_ASSERT_NOT_NULL(f);
+    rd.ctx = f;
+    rd.read = file_read;
+
+    expect_one = library_has_starter(f);
+    if (expect_one) {
+        TEST_ASSERT_EQUAL_INT(CATALOG_OK,
+            catalog_first_flagged(&rd, CATALOG_FLAG_STARTER, &e));
+        TEST_ASSERT_EQUAL_HEX8(CATALOG_FLAG_STARTER,
+                               e.flags & CATALOG_FLAG_STARTER);
+    } else {
+        TEST_ASSERT_EQUAL_INT(CATALOG_NOT_FOUND,
+            catalog_first_flagged(&rd, CATALOG_FLAG_STARTER, &e));
+    }
+
+    fclose(f);
+}
+
 static void test_fixture_file_builds_six_entries(void)
 {
     catalog_reader_t rd;
@@ -463,6 +704,9 @@ static void test_index_size_is_recorded(void)
            (unsigned)sizeof(catalog_index_t));
     printf("fixture opened via: %s\n",
            fixture_path_used ? fixture_path_used : "(not opened)");
+    printf("library fixture opened via: %s\n",
+           library_path_used ? library_path_used : "(not opened)");
+    printf("library entries indexed: %u\n", (unsigned)idx.count);
     TEST_ASSERT_TRUE(sizeof(catalog_index_t) < 24u * 1024u);
 }
 
@@ -487,6 +731,10 @@ int main(void)
     RUN_TEST(test_first_flagged);
     RUN_TEST(test_read_desc_truncates_and_terminates);
     RUN_TEST(test_fixture_file_builds_six_entries);
+    RUN_TEST(test_library_fixture_indexes_with_no_rejections);
+    RUN_TEST(test_library_fixture_every_filename_has_the_gb_suffix);
+    RUN_TEST(test_library_fixture_finds_a_known_entry);
+    RUN_TEST(test_library_fixture_first_starter_when_any);
     RUN_TEST(test_index_size_is_recorded);
     return UNITY_END();
 }

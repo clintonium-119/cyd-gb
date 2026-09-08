@@ -7,11 +7,11 @@ ROM browser: on the finished units there is no way to pick a game from the devic
 
 ## Status
 
-Early. No hardware is on hand yet — every part is on order, so the firmware is being taken as far as it
-can go without a board. Right now it builds for the target and loads a single hard-coded test ROM at startup; the
-cartridge reader, the button driver for the real expander, audio, and the landscape renderer are all
-still ahead. See [`ROADMAP.md`](ROADMAP.md) for what is built, what is next, and what is waiting on the
-bench.
+In progress, and still ahead of the hardware. The cartridge reader, the button driver, the landscape
+renderer, the menu and saves, and the on-device cartridge writer have landed; the host tooling that images
+the SD cards and flashes the boards is built. Audio and the diagnostics screen are next, and a set of
+items are parked until there is a board on the bench. See [`ROADMAP.md`](ROADMAP.md) for what is built,
+what is next, and what is waiting on the bench.
 
 ## Hardware
 
@@ -39,16 +39,42 @@ pio device monitor        # serial, 115200
 
 ## SD card
 
-FAT32. The firmware expects:
+FAT32, and every card is identical — a traded cartridge has to work in any unit. The firmware expects:
 
 ```
-/roms/gb/     Game Boy ROMs
-/saves/       cartridge RAM saves, written on Save from the pause menu
+/roms/gb/<filename>        the ROM, named exactly as games.json says
+/art/<stem>.565            box art, 96x96 raw RGB565, little-endian
+/shot/<stem>.565           gameplay snapshot, same format
+/saves/<stem>.sav          battery save, written by the emulator
+/catalog.txt               generated; never hand-edited
 ```
 
-Until the cartridge reader lands, `loop()` loads exactly one path — `/roms/gb/test.gb` — and reloads it
-on quit. That stub is deliberately not a browser and is not meant to grow into one; it disappears when
-NFC cartridge matching arrives.
+A card is produced by `tools/image_sd.py`, never by hand: it copies the ROMs, converts the art, emits
+`/catalog.txt` from `games.json`, removes anything the catalog does not name, and prints a manifest so
+two cards can be compared. It never touches `/saves`. The full contract — the caps, the line format and
+the tag payload grammar — is in [`docs/CATALOG_FORMAT.md`](docs/CATALOG_FORMAT.md).
+
+## Tools
+
+Host-side, standard library only, run from the project root. The ROMs and the scraped art are private
+and are never committed: `CYD_ROM_DIR` names the curated ROM directory and `CYD_MEDIA_DIR` the ES-DE
+media directory, and `art`/`shot` paths in `games.json` are relative to the latter.
+
+| | |
+|---|---|
+| `tools/gamesdb.py` | the shared library: the caps mirrored from the C headers, `games.json` validation, catalog emission, and a parser mirroring the firmware's reader |
+| `tools/seed_games_json.py` | one-shot seed of `games.json` from an ES-DE gamelist through `tools/esde_aliases.json`; after it, the file is hand-curated |
+| `tools/validate_games.py` | what CI runs; `--strict` before imaging a card, where both directories are present |
+| `tools/image_sd.py` | images a card idempotently; `--check` verifies one, `--catalog-only` writes just the catalog |
+| `tools/flash.py` | flashes a board from a local build or a tagged release, verifying `SHA256SUMS` first |
+| `tools/factory_reset.py` | erases only the `nvs` region, re-arming the first-boot wizard without a reflash |
+
+```sh
+python tools/validate_games.py                          # what CI runs
+python tools/image_sd.py --target /run/media/you/GB     # image a card
+python tools/flash.py --release v0.1.0                  # flash a board
+pytest tools/tests                                      # the host test suite
+```
 
 ## Design docs
 
@@ -59,6 +85,8 @@ NFC cartridge matching arrives.
 - [`docs/CATALOG_FORMAT.md`](docs/CATALOG_FORMAT.md) — the catalog contract: the `games.json` entry
   schema, the generated `/catalog.txt` line format, the SD layout and art naming, and the cartridge tag
   payload grammar.
+- [`docs/ASSEMBLY.md`](docs/ASSEMBLY.md) — the build-day checklist: what to check before the shell goes
+  on, what the first boot should do, and how to get a unit back to the wizard.
 
 ## Credits
 

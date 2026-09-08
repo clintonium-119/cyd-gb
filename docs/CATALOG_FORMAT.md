@@ -47,13 +47,14 @@ One object per game, in an array. Field order is not significant.
 | `filename` | string | **The key.** Unique across the file. Ends in `.gb`. At most 63 bytes (`ROM_STORE_NAME_MAX - 1`). Appears **verbatim** on protected tags. |
 | `title` | string | Display name. At most 47 bytes (`CATALOG_TITLE_MAX - 1`). Plain ASCII, no tab and no newline. |
 | `description` | string | At most 200 bytes. Plain ASCII, no tab and no newline. May be empty. |
-| `art` | string | Path to the source image, relative to the repository root. |
+| `art` | string | Path to the cover source, relative to the media directory named by `CYD_MEDIA_DIR`; empty when no source exists. |
+| `shot` | string | Path to the gameplay snapshot source, relative to the media directory named by `CYD_MEDIA_DIR`; empty when no source exists. |
 | `starter` | bool | Offered during first-boot setup. |
 | `developer` | string | For the record; not emitted to the catalog. |
 | `publisher` | string | For the record; not emitted to the catalog. |
-| `year` | number | For the record; not emitted to the catalog. |
+| `year` | number | Integer or null. For the record; not emitted to the catalog. |
 | `genre` | string | For the record; not emitted to the catalog. |
-| `players` | number | For the record; not emitted to the catalog. |
+| `players` | number | Integer or null; the upper bound of a range such as ES-DE's `1-2`. For the record; not emitted to the catalog. |
 
 ### `filename` is frozen once the first tag is written
 
@@ -118,7 +119,8 @@ ffmpeg -i tetris.png -vf "scale=96:96:force_original_aspect_ratio=decrease,pad=9
        -f rawvideo -pix_fmt rgb565le /art/Tetris.565
 ```
 
-The snapshot is the same command against the screenshot source and a `/shot` output path. The ES-DE
+The imaging tool runs that command twice per game — the `covers` source to `/art` and the
+`screenshots` source to `/shot` — the source and the output path being the only difference. The ES-DE
 media set the imaging tool seeds from carries `covers` and `screenshots` for the same stems, so the two
 directories gain and lose games together.
 
@@ -179,7 +181,21 @@ because each constant includes room for the NUL.
 
 ## Fixture
 
-`test/fixtures/catalog.txt` is a hand-written six-line catalog that follows this specification, used by
-`test/test_catalog/`. It covers a flagged entry, the dotted library names, and an entry with an empty
-description. **WS-10 replaces it with a generated file**; until then it is the only conforming example in
-the tree.
+There are two, and `test/test_catalog/` reads both.
+
+- **`test/fixtures/catalog.txt`** is hand-written: six lines covering a flagged entry, the dotted
+  library names, and an entry with an empty description. It exists for the format's edge cases, which
+  the real library does not necessarily contain. It is **never edited** — the six-entry assertions in
+  `test/test_catalog/test_main.c` depend on its exact contents.
+- **`test/fixtures/catalog_library.txt`** is generated from `games.json`, and is the exact bytes a card
+  carries:
+
+  ```
+  python tools/image_sd.py --catalog-only test/fixtures/catalog_library.txt
+  ```
+
+  It is **never hand-edited**, and it is regenerated in the same commit as any change to `games.json`:
+  `tools/tests/test_catalog_fixture.py` re-emits the catalog and requires byte-identical output, so a
+  stale fixture fails CI. The reader's cases over it derive every expectation from the file — the entry
+  count, the descriptions and the starter set are all curated in `games.json`, so none of them is
+  hard-coded in a test.

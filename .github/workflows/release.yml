@@ -1,0 +1,75 @@
+name: Release
+
+# Only a v* tag publishes. Nothing else in this repository creates tags or
+# releases, and build day flashes units from a named release rather than from
+# an unversioned local build.
+on:
+  push:
+    tags:
+      - 'v*'
+
+# gh release create needs to write to the repository; github.token is enough
+# with this, and no personal token is involved.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          # Same pin and cache key as ci.yml; keep the two identical so a
+          # release is built by the toolchain CI already gated.
+          cache-dependency-path: .github/workflows/ci.yml
+
+      # Pinned so CI doesn't drift from the local toolchain
+      # (espressif32@6.5.0 is pinned in platformio.ini).
+      - name: Install PlatformIO
+        run: pip install platformio==6.1.19
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: platformio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+      - name: Build firmware (env:cyd)
+        run: pio run -e cyd
+
+      # The four images tools/flash.py writes, at the offsets PlatformIO uses.
+      # boot_app0.bin comes from the Arduino framework package rather than the
+      # build directory, and it is written even though partitions.csv has no
+      # otadata — so a release without it is missing an image a local flash
+      # writes. The names here are tools/flash.py's constants; they must match.
+      - name: Collect the flashable images
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp .pio/build/cyd/firmware.bin dist/
+          cp .pio/build/cyd/bootloader.bin dist/
+          cp .pio/build/cyd/partitions.bin dist/
+          cp ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin dist/
+          cd dist
+          sha256sum ./*.bin > SHA256SUMS
+          cat SHA256SUMS
+
+      # The roadmap's Definition of Done records firmware size changes over 5%,
+      # so the number is in the job log of every release.
+      - name: Report the firmware size
+        run: |
+          bytes=$(stat -c %s dist/firmware.bin)
+          echo "firmware.bin is ${bytes} bytes ($((bytes / 1024)) KiB)"
+          echo "firmware.bin: ${bytes} bytes" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes

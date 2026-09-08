@@ -7,6 +7,11 @@
 *.pioenvs/
 .DS_Store
 
+# Host tooling under tools/ is the only Python in the tree.
+__pycache__/
+*.pyc
+.pytest_cache/
+
 # ApoVault — ignore all local state; commit only team-owned knowledge + shared templates.
 # Allowlist approach: everything under .apo/ is ignored except 01_Knowledge/ (minus _pending/),
 # 04_Templates/, and gating.json. New transient dirs (inbox/, outbox/, log/, _quarantine-*,

@@ -101,7 +101,9 @@ web app.
                    └────────────┘
 ```
 
-**Recommended serial order for one developer:** 01 → 02 → 03 → 04 → 05 → 06 → 07 → 12 → 08 → 09 → 10 → 11.
+**Recommended serial order for one developer:** 01 → 02 → 03 → 04 → 05 → 06 → 07 → 12 → 10 → 08 → 09 → 11.
+WS-10 was pulled ahead of WS-08 on 2026-09-08: the host tooling gates build day, and neither audio nor
+diagnostics blocks it.
 WS-12's number is historical (it was added after WS-11 was named); its *position* is given by this serial
 order, and WS-11 stays the bench workstream that closes the project. WS-05, WS-06 and WS-10 are independent
 of the render/perf chain and can be pulled forward if the render work stalls — they touch different files
@@ -495,29 +497,35 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
 - `tools/seed_games_json.py`: **one-shot seed** of `games.json` from `~/ES-DE/gamelists/gb/gamelist.xml`.
   Matches the curated ROM stems to `<name>` (85 of 132 match exactly; the 47 shortened names go through
   `tools/esde_aliases.json`), pulls `desc`/`developer`/`publisher`/`releasedate`/`genre`/`players`, truncates
-  descriptions at a sentence boundary to fit 200 bytes, and points `art` at the ES-DE cover (74 match by
-  stem; the rest are filled by hand). After seeding, `games.json` is **hand-curated** — the seed is not
-  rerun over edits.
+  descriptions at a sentence boundary to fit 200 bytes, and points `art` at the ES-DE cover and `shot` at
+  the screenshot, both as paths relative to `CYD_MEDIA_DIR` with an empty string meaning no source.
+  Media is resolved through the gamelist `<path>`, which is how ES-DE files it, so aliased titles get art
+  too. After seeding, `games.json` is **hand-curated** — the seed is not rerun over edits.
 - `tools/image_sd.py`: format-agnostic copy of `/roms/gb/*` + empty `/saves/` from a local library dir to a
-  mounted card; converts each cover PNG → 96×96 `.565` (`rgb565le`, alpha flattened, via `ffmpeg`) into
-  `/art/<stem>.565`; emits `/catalog.txt` from `games.json`; verifies by hash; prints a manifest; idempotent
-  so ten cards come out identical. 132 ROMs at ~30 MB plus ~2.4 MB of art fits a 128 MB card with room.
-- Flashing station: ESP Web Tools page under `web/flash/` with a `manifest.json` pointing at CI-built
-  `firmware.bin` + `bootloader` + `partitions` artefacts from a tagged release, plus a **factory reset**
-  action (NVS clear) that re-arms WS-06's first-boot wizard.
+  mounted card; converts each cover and screenshot PNG → 96×96 `.565` (`rgb565le`, alpha flattened, via
+  `ffmpeg`) into `/art/<stem>.565` and `/shot/<stem>.565`; emits `/catalog.txt` from `games.json`; verifies
+  by hash; prunes strays from the managed directories while never touching `/saves`; prints a manifest;
+  idempotent so ten cards come out identical. 132 ROMs at ~30 MB plus ~4.8 MB of art and snapshots fits a
+  128 MB card with room.
+- Flashing station: `tools/flash.py` and `tools/factory_reset.py`, both wrappers over the esptool
+  PlatformIO already ships. `flash.py` writes a board from a local `env:cyd` build or from a tagged
+  release, verifying `SHA256SUMS` before it writes anything; `factory_reset.py` erases only the `nvs`
+  region, offset and size read from `partitions.csv`, which re-arms WS-06's first-boot wizard without
+  disturbing the firmware or the ROM store. No web page, no manifest, no Pages deploy.
 - `docs/ASSEMBLY.md`: build-day checklist skeleton (polarity meter check, RF shield removal, switch-on-to-
   charge, flash-before-shell, wizard **after** the shell is closed so it doubles as the reader test, factory
-  reset reruns the wizard, `erase_flash` silently drops a pending write), to be completed from WS-11
+  reset reruns the wizard, the NVS erase silently drops a pending write), to be completed from WS-11
   findings.
 
 **Code-complete exit**
 - Validator green on the real `games.json`; `image_sd.py` produces two byte-identical manifests from two runs.
-- The emitted `/catalog.txt` is parsed by WS-06's `catalog.c` tests as a fixture.
+- The emitted `/catalog.txt` is parsed by WS-06's `catalog.c` tests as a fixture, beside the hand-written
+  one, with a drift test pinning it to `games.json`.
 - Release workflow publishes flashable artefacts.
 
 **Deferred verification**
 - A card imaged by the tool boots a unit and every `games.json` entry is found by a cart.
-- ESP Web Tools flashes a bare board over USB-C; factory reset re-enters the wizard.
+- `tools/flash.py` flashes a bare board over USB-C; `tools/factory_reset.py` re-enters the wizard.
 
 **Notes/risks**
 - Filenames are frozen the day the first protected tag is written (§3 rule 7). Renaming a ROM afterwards
@@ -628,4 +636,4 @@ state machine). **Serial position:** after WS-07, before WS-08 (§1). **Design:*
    prefix, not a stored UID.
 2. `git checkout -b ws/nfc-cart poc-gb` → `/apo:plan` WS-06 using §2 above plus `reference/NFC_AMENDMENTS.md`
    as the brief.
-3. On merge, proceed down the serial order in §1: 07 → 12 → 08 → 09 → 10 → 11.
+3. On merge, proceed down the serial order in §1: 07 → 12 → 10 → 08 → 09 → 11.
