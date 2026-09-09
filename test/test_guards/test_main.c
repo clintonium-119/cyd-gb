@@ -16,6 +16,8 @@
  *   (c) the writer reaches for nothing below itself,
  *   (f) the in-game menu is not a route to the writer or to the tag,
  *   (g) no source under src/ carries the removed exit-to-selection path,
+ *   (h) the diagnostic mode is a reader and a viewer, never a route to the
+ *       writer, the tag write path, the ROM store or the emulator,
  *
  * plus (e) the bench ROM bypass cannot be configured into a default build.
  * Guard (d), the tag layer's page whitelist, is a behavioural property and
@@ -67,6 +69,28 @@ static const char* const MENU_FORBIDDEN[] = {
     "provision_",
 };
 #define N_MENU_FORBIDDEN (sizeof(MENU_FORBIDDEN) / sizeof(MENU_FORBIDDEN[0]))
+
+/* Layers the diagnostic mode must not reach into. It reads a tag, the card,
+ * the ADC and the panel, and shows what it found; it never resolves a
+ * cartridge to a file, picks a game, or touches the emulator.
+ *
+ * Unlike the menu's list this names sd_rom_path and sd_rom_find_legacy rather
+ * than the sd_rom_ prefix, because sd_rom_count() is the SD page's own data
+ * provider and the prefix would forbid it. Resolving a path is the route this
+ * guard is about; a count is a number.
+ *
+ * ntag_ and nfc_ are deliberately absent: the inspector reads through both,
+ * and guard (a) already forbids the four write names everywhere but the
+ * provisioner. */
+static const char* const DIAG_FORBIDDEN[] = {
+    "writer_open",
+    "provision_",
+    "rom_store_",
+    "sd_rom_path",
+    "sd_rom_find_legacy",
+    "emu_",
+};
+#define N_DIAG_FORBIDDEN (sizeof(DIAG_FORBIDDEN) / sizeof(DIAG_FORBIDDEN[0]))
 
 /* The two names the removed exit path went by. Literal and case-sensitive,
  * because the grep this replaces was. */
@@ -389,6 +413,46 @@ static void test_no_exit_path_symbol_under_src(void)
     TEST_ASSERT_EQUAL_INT_MESSAGE(0, g_offenders, g_first_offender);
 }
 
+/* ─── (h) the diagnostic mode is a reader and a viewer ────────────────────── */
+
+static void test_the_diagnostics_reference_no_forbidden_layer(void)
+{
+    /* Six explicit paths rather than a directory walk: lib/ holds the modules
+     * that define these names, and only the diagnostic ones are in scope. */
+    static const char* const paths[] = {
+        PROJECT_DIR "/src/diag.cpp",
+        PROJECT_DIR "/include/diag.h",
+        PROJECT_DIR "/lib/gbcore/ui/diag.c",
+        PROJECT_DIR "/lib/gbcore/ui/diag.h",
+        PROJECT_DIR "/lib/gbcore/ui/diag_draw.c",
+        PROJECT_DIR "/lib/gbcore/ui/diag_draw.h",
+    };
+    char msg[512];
+
+    for (size_t p = 0; p < sizeof(paths) / sizeof(paths[0]); p++) {
+        TEST_ASSERT_TRUE_MESSAGE(slurp(paths[p]), paths[p]);
+        for (size_t i = 0; i < N_DIAG_FORBIDDEN; i++) {
+            snprintf(msg, sizeof(msg), "%s references %s", paths[p],
+                     DIAG_FORBIDDEN[i]);
+            TEST_ASSERT_FALSE_MESSAGE(
+                file_contains(paths[p], DIAG_FORBIDDEN[i]), msg);
+        }
+    }
+}
+
+/* The same scan, proved non-vacuous: a renamed or emptied binding would let
+ * the test above pass by scanning nothing of consequence. */
+static void test_the_diagnostics_define_the_mode(void)
+{
+    TEST_ASSERT_GREATER_THAN_MESSAGE(
+        0, file_count(PROJECT_DIR "/src/diag.cpp", "diag_run("),
+        "src/diag.cpp does not define diag_run, so guard (h) would pass "
+        "vacuously");
+    TEST_ASSERT_GREATER_THAN_MESSAGE(
+        0, file_count(PROJECT_DIR "/src/diag.cpp", "diag_draw("),
+        "src/diag.cpp never draws, so guard (h) would pass vacuously");
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -403,5 +467,7 @@ int main(void)
     RUN_TEST(test_the_menu_references_no_writer_or_tag_symbol);
     RUN_TEST(test_the_menu_defines_menu_open);
     RUN_TEST(test_no_exit_path_symbol_under_src);
+    RUN_TEST(test_the_diagnostics_reference_no_forbidden_layer);
+    RUN_TEST(test_the_diagnostics_define_the_mode);
     return UNITY_END();
 }

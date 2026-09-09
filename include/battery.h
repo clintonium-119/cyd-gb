@@ -20,6 +20,13 @@ void battery_init();
 // board's divider. 0 if the reading failed.
 uint16_t battery_read_mv();
 
+// The uncalibrated reading behind that number: 12-bit ADC counts as the
+// return, and the eFuse-calibrated pin millivolts in *pin_mv when it is not
+// NULL. Raw counts are what §11 item 6 compares against a meter on IO34 —
+// battery_read_mv() has already scaled by the placeholder divider, so it
+// cannot settle the divider itself.
+uint16_t battery_read_raw(uint16_t* pin_mv);
+
 // One reading per BAT_SAMPLE_MS. Returns true with fresh cell millivolts in
 // *mv when a sample was due, and false with *mv untouched otherwise, so the
 // emulation loop can call it every frame and pay for one ADC read a second.

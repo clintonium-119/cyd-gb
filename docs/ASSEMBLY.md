@@ -53,6 +53,9 @@ Deliberately **after** the shell is closed, because the first-boot wizard exerci
 reader end to end. If the wizard completes, the reader works at final geometry — which is the thing a
 bench test on an open board cannot tell you.
 
+- [ ] **Diagnostics first.** Hold Start+Select while switching on and work through
+      [`DIAGNOSTICS.md`](DIAGNOSTICS.md). It reads no cartridge and changes nothing but the window nudge,
+      so a fault found here is found before the wizard writes anything. Then power off. Result: `____`.
 - [ ] Power on. The wizard runs because NVS is empty on a freshly flashed unit.
 - [ ] **MENU cartridge.** The wizard writes it, or adopts one that already carries `MENU`. Result:
       `____`.

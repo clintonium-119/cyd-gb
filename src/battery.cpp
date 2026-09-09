@@ -29,6 +29,14 @@ uint16_t battery_read_mv() {
     return (uint16_t)cell_mv;
 }
 
+uint16_t battery_read_raw(uint16_t* pin_mv) {
+    if (pin_mv != nullptr) {
+        uint32_t mv = analogReadMilliVolts(BAT_ADC_PIN);
+        *pin_mv = (mv > UINT16_MAX) ? (uint16_t)UINT16_MAX : (uint16_t)mv;
+    }
+    return (uint16_t)analogRead(BAT_ADC_PIN);
+}
+
 bool battery_poll(uint32_t now_ms, uint16_t* mv) {
     if (mv == nullptr) {
         return false;

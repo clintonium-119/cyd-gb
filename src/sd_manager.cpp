@@ -48,6 +48,47 @@ bool sd_rom_path(const char* filename, char* out, size_t out_sz) {
     return true;
 }
 
+uint16_t sd_rom_count() {
+    if (!ready) {
+        return 0;
+    }
+
+    File d = SD.open(ROM_PATH_GB);
+    if (!d || !d.isDirectory()) {
+        if (d) {
+            d.close();
+        }
+        return 0;
+    }
+
+    uint16_t n = 0;
+    File e;
+    // One entry at a time, for the same reason the legacy lookup does it that
+    // way: a listing of the 132-title library has no business existing in RAM
+    // on a board with no PSRAM.
+    while ((e = d.openNextFile())) {
+        if (!e.isDirectory() && has_gb_suffix(e.name())) {
+            n++;
+        }
+        e.close();
+    }
+    d.close();
+    return n;
+}
+
+bool sd_card_stats(uint32_t* total_mb, uint32_t* used_mb) {
+    if (!ready) {
+        return false;
+    }
+    if (total_mb) {
+        *total_mb = (uint32_t)(SD.totalBytes() / (1024ULL * 1024ULL));
+    }
+    if (used_mb) {
+        *used_mb = (uint32_t)(SD.usedBytes() / (1024ULL * 1024ULL));
+    }
+    return true;
+}
+
 bool sd_rom_find_legacy(const char* title, char* out_path, size_t out_sz) {
     if (!ready || !title || !out_path || !out_sz) {
         return false;

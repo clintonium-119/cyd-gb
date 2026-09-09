@@ -123,6 +123,67 @@ void display_dma_wait()
     tft.dmaWait();
 }
 
+// ─── Canvas ─────────────────────────────────────────────────────────────────
+// The window origin, from NVS: ten hand-built units each land slightly
+// differently behind the bezel. Stored rather than passed per primitive,
+// because the seam's signature is fixed by two layout modules and a host test.
+static int16_t ox;
+static int16_t oy;
+
+// Window-relative coordinates in, panel coordinates out. Neither layout
+// module knows anything of the origin.
+
+static void cv_fill(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
+                    uint16_t color) {
+    (void)ctx;
+    tft.fillRect(ox + x, oy + y, w, h, color);
+}
+
+static void cv_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
+                    uint8_t rows, uint8_t font, uint8_t align, uint16_t fg,
+                    uint16_t bg) {
+    (void)ctx;
+    int16_t anchor = x;
+
+    tft.setTextColor(fg, bg);
+    switch (align) {
+        case UI_ALIGN_CENTER:
+            tft.setTextDatum(TC_DATUM);
+            anchor = (int16_t)(x + w / 2);
+            break;
+        case UI_ALIGN_RIGHT:
+            tft.setTextDatum(TR_DATUM);
+            anchor = (int16_t)(x + w);
+            break;
+        default:
+            tft.setTextDatum(TL_DATUM);
+            break;
+    }
+    display_draw_wrapped(s, (int16_t)(ox + anchor), (int16_t)(oy + y), w, rows,
+                         font);
+}
+
+static void cv_image(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
+                     const uint16_t* px, int16_t row0, int16_t rows) {
+    (void)ctx;
+    (void)h;
+    // The row range is how the scrolling band clips an image at its edge: the
+    // driver is handed the first visible row and told how many follow.
+    //
+    // display_init() leaves setSwapBytes(true) in force and the .565 files are
+    // little-endian, so there is no per-pixel swap to do here.
+    tft.pushImage(ox + x, oy + y, w, rows, (uint16_t*)(px + (size_t)row0 * w));
+}
+
+static const ui_canvas_t canvas = { NULL, cv_fill, cv_text, cv_image };
+
+const ui_canvas_t* display_canvas(int16_t x, int16_t y)
+{
+    ox = x;
+    oy = y;
+    return &canvas;
+}
+
 void display_bus_acquire()
 {
     // Close whatever the frame path left open. endWrite() is safe unbalanced -

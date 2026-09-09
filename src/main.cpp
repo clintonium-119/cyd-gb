@@ -16,6 +16,7 @@
 #include "nfc_cart.h"
 #include "cart_provision.h"
 #include "cart_writer.h"
+#include "diag.h"
 #include "cart/boot.h"
 #include "cart/catalog.h"
 #include "cart/ndef.h"
@@ -536,6 +537,37 @@ void setup() {
     i2c_bus_init();
     button_init();
     battery_init();
+
+    // Diagnostic mode: Start+Select held at power-on, sampled here because the
+    // expander is up and the tag has not been read. Two samples 10 ms apart,
+    // the same stability the combo module asks for, so a bounce on the first
+    // I2C read of a cold boot cannot enter it. Entering skips the tag read
+    // entirely and never returns; the power switch is the exit.
+    //
+    // Deliberately outside the DEV_ROM_PATH guard: a bench build needs the
+    // diagnostic screen as much as a shipped one does.
+    const uint16_t diag_combo = GB_BTN_START | GB_BTN_SELECT;
+    button_update();
+    bool diag = (button_get_buttons() & diag_combo) == diag_combo;
+    if (diag) {
+        delay(10);
+        button_update();
+        diag = (button_get_buttons() & diag_combo) == diag_combo;
+    }
+    if (diag) {
+        Serial.println("[BOOT] diagnostics");
+        // The reader comes up for the inspector's sake; no tag is read here.
+        bool nfc_ok = nfc_init();
+        settings_defaults(&settings);
+        settings_load(&settings);
+        display_init();
+        display_set_backlight(settings.brightness);
+        // A missing card is a page result in this mode, not a halt: a unit
+        // whose card is the fault is exactly the unit a builder is holding.
+        bool sd_ok = sd_init();
+        diag_run(&settings, nfc_ok, sd_ok);
+    }
+
 #ifndef DEV_ROM_PATH
     if (!nfc_init()) {
         Serial.println("[BOOT] NFC reader did not answer");

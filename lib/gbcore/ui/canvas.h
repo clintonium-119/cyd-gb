@@ -1,0 +1,72 @@
+#pragma once
+// The injected draw seam, and the three font ids that go with it.
+//
+// Two layout modules in this library paint through it — the cartridge writer's
+// and the diagnostic mode's — and one Arduino binding implements it against
+// the panel. It lives in its own header for exactly that reason: it is the
+// boundary between the pure layout code and the driver, and neither of the
+// layout modules owns it.
+//
+// Every coordinate that crosses it is window-relative. The host tests paint a
+// w x h buffer and the binding adds the per-unit game_x / game_y origin, and
+// the same layout code serves both.
+//
+// Pure C, no Arduino/ESP-IDF headers, no allocation.
+
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+enum ui_align_e {
+    UI_ALIGN_LEFT = 0,
+    UI_ALIGN_CENTER,
+    UI_ALIGN_RIGHT,
+};
+
+/*
+ * The injected draw seam. Three calls, in the shape catalog_reader_t
+ * established for gbcore: a ctx the caller owns plus function pointers.
+ *
+ * `text` is a box, not a baseline: top-left x, y, width w, up to `rows` lines
+ * of `font`, aligned within the box. The implementation clips at w and rows,
+ * which is what display_draw_wrapped() already does.
+ *
+ * `image` takes a row range so the scrolling band can clip an image at its
+ * edge: draw rows [row0, row0 + rows) of a w-wide image, with the top of that
+ * range landing at y. The binding hands the driver px + row0 * w.
+ */
+typedef struct ui_canvas_s {
+    void* ctx;
+    void (*fill)(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
+                 uint16_t color);
+    void (*text)(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
+                 uint8_t rows, uint8_t font, uint8_t align, uint16_t fg,
+                 uint16_t bg);
+    void (*image)(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
+                  const uint16_t* px, int16_t row0, int16_t rows);
+} ui_canvas_t;
+
+/* TFT_eSPI built-in font ids. */
+#define UI_FONT_SMALL 1
+#define UI_FONT_ROW   2
+#define UI_FONT_TITLE 4
+
+/*
+ * Font 1 is GLCD: a FIXED 6-pixel advance per glyph. This is the one glyph
+ * width a layout module may assume, and it is what makes the writer's word
+ * wrap exact — a line of `cols` characters measures cols * 6 pixels, so the
+ * break points a layout computes and the ones display_draw_wrapped() arrives
+ * at by measuring agree to the pixel. Fonts 2 and 4 are proportional and are
+ * never measured by a layout; the driver clips them at the box it is given.
+ */
+#define UI_FONT_SMALL_ADV 6
+
+/* Heights of the three fonts, and the row pitch display_draw_wrapped() uses. */
+uint8_t ui_font_height(uint8_t font);
+#define UI_ROW_PITCH(font_h) ((font_h) + 2)
+
+#ifdef __cplusplus
+}
+#endif

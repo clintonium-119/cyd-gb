@@ -769,6 +769,41 @@ work" into "GPA3 never goes low."
 **No write path here.** The §6.6 guard tests cover this module: write symbols live only in
 `cart_provision.cpp`. The diagnostic screen renders inside the game window like everything else (§1.7).
 
+**Amended in build (2026-09-09): eight pages, Select+Left/Right to switch, and the mode is a halt.**
+
+The list above is one screen's worth of readouts; built, it is eight pages, and how they are navigated
+turned out to matter. Pages move on **Select+Left/Right**, through the combo module's existing events, so
+the **bare D-pad belongs to whichever page is up** — which is the only way the `GAME_X`/`GAME_Y` nudge can
+step a single pixel. Start is not a page control either: it is one half of the combo that got here.
+
+**The mode is a halt.** Start+Select is sampled as soon as the button expander is up and *before* the tag
+is read, so entering it reads no cartridge at all; `diag_run()` never returns, and the power switch is the
+exit. There is no back-to-boot path, which is what keeps this screen from becoming a second route into the
+firmware's other modes.
+
+**The UID readout is on demand, not live.** A detect with no tag in the field blocks for about a second
+while the PN532 retries, and a page that polled would answer no buttons for that second. The inspector
+scans once on entering its page and again on every **A**, drawing "Scanning…" first. The information is the
+same; the screen stays responsive.
+
+**The checkerboard goes through the real scaler.** It is generated at Game Boy resolution and pushed
+through `scaler_scale_block()` in blend mode, so the blend a builder judges by eye is the blend the game
+path produces. If the two ever look different, the difference is in the push, not in the scaler.
+
+**The firmware version and build time are compiled in by a pre-build script.** `git describe` and a UTC
+stamp are written into one generated translation unit under the build directory at the start of every
+build, and the copy in `builds/` is named from the same two values — so the string on the system page and
+the file on disk agree by inspection. Not `__DATE__`/`__TIME__`, and not a project-wide `-D` flag, either
+of which would rebuild every translation unit for a timestamp.
+
+**There is no FPS overlay.** The system page carries frameskip and nothing else adjustable; the
+once-a-second `[PERF]` serial line is the fps readout. An overlay would mean drawing on the DMA frame path,
+which is the one path this design keeps clear.
+
+The read-only rule is now pinned by a guard of its own as well as by §6.6's: the diagnostic translation
+units reference no writer, provisioner, ROM-store, ROM-path-resolving or emulator symbol, comments
+included.
+
 ### 8.3 Cart writer
 
 Full-screen UI reached only through the boot flow of §6.6 — from a MENU cart (pending mode) or from the

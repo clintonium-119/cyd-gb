@@ -8,7 +8,9 @@
 // gets one answer; the legacy fuzzy lookup walks the directory an entry at a
 // time rather than holding the 132-title library in RAM on a board with no
 // PSRAM. Anything that wants to present the library reads /catalog.txt
-// through the reader below.
+// through the reader below. A count is not a listing: sd_rom_count() is the
+// one walk here that returns a number rather than a name, and it holds no
+// entry while it does it.
 #pragma once
 
 #include <stdint.h>
@@ -70,6 +72,17 @@ bool sd_init();
 // or no such file exists — never a truncated path, because a truncation
 // would name a different, possibly real, file.
 bool sd_rom_path(const char* filename, char* out, size_t out_sz);
+
+// How many .gb files ROM_PATH_GB holds. The same one-entry-at-a-time walk
+// sd_rom_find_legacy() uses, counting instead of matching, so nothing is held
+// in RAM but the running total. 0 when the card is not mounted or the
+// directory is missing — the diagnostic page reports "not mounted" from
+// sd_init()'s own result, so a 0 here is never mistaken for a verdict.
+uint16_t sd_rom_count();
+
+// Card capacity and how much of it is in use, in whole megabytes. False with
+// both untouched when the card is not mounted. Either pointer may be NULL.
+bool sd_card_stats(uint32_t* total_mb, uint32_t* used_mb);
 
 // Legacy lookup for tags hand-written from a phone before the device could
 // write them: normalises `title`, then walks ROM_PATH_GB and returns the

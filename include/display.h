@@ -2,6 +2,8 @@
 #include <TFT_eSPI.h>
 #include <stddef.h>
 
+#include "ui/canvas.h"
+
 // Boot screens, the in-game menu and the save toast draw through the driver
 // directly, between display_bus_acquire() and display_bus_release().
 extern TFT_eSPI tft;
@@ -21,6 +23,19 @@ void display_clear(uint16_t color = TFT_BLACK);
 // below the last row drawn, so consecutive calls stack.
 int16_t display_draw_wrapped(const char* s, int16_t cx, int16_t top,
                              int16_t max_w, uint8_t max_rows, uint8_t font);
+
+// ─── Canvas ─────────────────────────────────────────────────────────────────
+// The injected draw seam bound to `tft`: window-relative coordinates in,
+// panel coordinates out. Both layout modules in gbcore paint through it, and
+// this is the only implementation of it — the origin is stored rather than
+// passed per primitive, because the seam's signature is fixed by two layout
+// modules and a host test.
+//
+// A later call with a new origin re-points the same canvas, so a caller that
+// has one pointer never has a stale origin. Valid between
+// display_bus_acquire() and display_bus_release(), or before the frame path
+// exists.
+const ui_canvas_t* display_canvas(int16_t ox, int16_t oy);
 
 // ─── Frame path ─────────────────────────────────────────────────────────────
 // One address window per frame, then a pushPixels per scaled row block

@@ -4,11 +4,11 @@
 #include <Wire.h>
 
 // MCP23017 button expander (design §1.4): the button PCB's eight switches are
-// on GPA7-GPA0, active LOW against the expander's internal pull-ups. The
-// PCB's bottom 8 header pins run in order to GPA7..GPA0 (a straight ribbon,
-// wiring PDF rev C), which puts Up on the high bit and B on bit 0. Only
-// three registers are needed, so this is raw Wire traffic rather than a
-// library. Port B is unused and its registers are never touched.
+// on port A, active LOW against the expander's internal pull-ups. The ribbon
+// order is the BTN_GPA_* map in hw_config.h, which the diagnostic buttons
+// page reports alongside each switch. Only three registers are needed, so
+// this is raw Wire traffic rather than a library. Port B is unused and its
+// registers are never touched.
 //
 // Register addresses below are the BANK=0 map (the power-on default, which
 // nothing here changes).
@@ -54,14 +54,14 @@ void button_update() {
     raw = ~raw;  // active LOW: a pressed switch pulls its GPA pin to ground.
 
     uint16_t buttons = 0;
-    if (raw & (1 << 7)) buttons |= GB_BTN_UP;
-    if (raw & (1 << 6)) buttons |= GB_BTN_DOWN;
-    if (raw & (1 << 5)) buttons |= GB_BTN_LEFT;
-    if (raw & (1 << 4)) buttons |= GB_BTN_RIGHT;
-    if (raw & (1 << 3)) buttons |= GB_BTN_START;
-    if (raw & (1 << 2)) buttons |= GB_BTN_SELECT;
-    if (raw & (1 << 1)) buttons |= GB_BTN_A;
-    if (raw & (1 << 0)) buttons |= GB_BTN_B;
+    if (raw & (1u << BTN_GPA_UP)) buttons |= GB_BTN_UP;
+    if (raw & (1u << BTN_GPA_DOWN)) buttons |= GB_BTN_DOWN;
+    if (raw & (1u << BTN_GPA_LEFT)) buttons |= GB_BTN_LEFT;
+    if (raw & (1u << BTN_GPA_RIGHT)) buttons |= GB_BTN_RIGHT;
+    if (raw & (1u << BTN_GPA_START)) buttons |= GB_BTN_START;
+    if (raw & (1u << BTN_GPA_SELECT)) buttons |= GB_BTN_SELECT;
+    if (raw & (1u << BTN_GPA_A)) buttons |= GB_BTN_A;
+    if (raw & (1u << BTN_GPA_B)) buttons |= GB_BTN_B;
     cur_btns = buttons;
 }
 

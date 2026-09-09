@@ -647,6 +647,106 @@ static void test_library_fixture_first_starter_when_any(void)
     fclose(f);
 }
 
+/* ---- counting without an index ------------------------------------------ */
+
+/*
+ * catalog_count() answers the same question catalog_index_build() does, for a
+ * caller that cannot spare the index. Every case below pins the two against
+ * each other rather than against a literal, so the file's own content is what
+ * decides.
+ */
+
+static void test_count_matches_the_index_over_the_hand_written_fixture(void)
+{
+    catalog_reader_t rd;
+    FILE* f = open_fixture();
+    size_t n = 0;
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(f, "test/fixtures/catalog.txt not found");
+    rd.ctx = f;
+    rd.read = file_read;
+
+    TEST_ASSERT_EQUAL_INT(CATALOG_OK, catalog_index_build(&rd, &idx));
+    TEST_ASSERT_EQUAL_INT(CATALOG_OK, catalog_count(&rd, &n));
+    TEST_ASSERT_EQUAL_size_t(idx.count, n);
+    fclose(f);
+}
+
+static void test_count_matches_the_index_over_the_library_fixture(void)
+{
+    catalog_reader_t rd;
+    FILE* f = open_library_fixture();
+    size_t n = 0;
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(
+        f, "test/fixtures/catalog_library.txt not found; regenerate it with "
+           "tools/image_sd.py --catalog-only");
+    rd.ctx = f;
+    rd.read = file_read;
+
+    TEST_ASSERT_EQUAL_INT(CATALOG_OK, catalog_index_build(&rd, &idx));
+    TEST_ASSERT_TRUE_MESSAGE(idx.count > 0, "the library fixture is empty");
+    TEST_ASSERT_EQUAL_INT(CATALOG_OK, catalog_count(&rd, &n));
+    TEST_ASSERT_EQUAL_size_t(idx.count, n);
+    fclose(f);
+}
+
+static void test_count_of_an_empty_file_is_zero(void)
+{
+    mem_src_t s;
+    catalog_reader_t rd = mem_reader(&s, "");
+    size_t n = 99;
+
+    TEST_ASSERT_EQUAL_INT(CATALOG_OK, catalog_count(&rd, &n));
+    TEST_ASSERT_EQUAL_size_t(0, n);
+
+    /* A file that is nothing but blank lines has no entries either. */
+    rd = mem_reader(&s, "\n\n\n");
+    n = 99;
+    TEST_ASSERT_EQUAL_INT(CATALOG_OK, catalog_count(&rd, &n));
+    TEST_ASSERT_EQUAL_size_t(0, n);
+}
+
+static void test_count_reports_the_same_line_error_the_index_build_does(void)
+{
+    mem_src_t s;
+    catalog_reader_t rd;
+    size_t i;
+    size_t n = 99;
+
+    for (i = 0; i < CATALOG_LINE_MAX + 16; i++) {
+        gen[i] = 'a';
+    }
+    gen[i] = '\0';
+
+    rd = mem_reader(&s, gen);
+    TEST_ASSERT_EQUAL_INT(CATALOG_ERR_LINE, catalog_index_build(&rd, &idx));
+    TEST_ASSERT_EQUAL_INT(CATALOG_ERR_LINE, catalog_count(&rd, &n));
+    /* A refused count is 0, not a partial tally: a page showing half a
+     * catalog would read as a smaller library rather than a broken file. */
+    TEST_ASSERT_EQUAL_size_t(0, n);
+}
+
+static void test_count_rejects_null_arguments(void)
+{
+    mem_src_t s;
+    catalog_reader_t rd = mem_reader(&s, "Tetris.gb\tTetris\t\t\n");
+    size_t n = 99;
+    catalog_reader_t broken;
+
+    TEST_ASSERT_EQUAL_INT(CATALOG_ERR_ARGS, catalog_count(NULL, &n));
+    TEST_ASSERT_EQUAL_INT(CATALOG_ERR_ARGS, catalog_count(&rd, NULL));
+
+    broken.ctx = &s;
+    broken.read = NULL;
+    TEST_ASSERT_EQUAL_INT(CATALOG_ERR_ARGS, catalog_count(&broken, &n));
+
+    /* The usable reader still counts its one entry, so the rejections above
+     * are about the arguments and not about the fixture. */
+    TEST_ASSERT_EQUAL_INT(CATALOG_OK, catalog_count(&rd, &n));
+    TEST_ASSERT_EQUAL_size_t(1, n);
+}
+
 static void test_fixture_file_builds_six_entries(void)
 {
     catalog_reader_t rd;
@@ -725,6 +825,11 @@ int main(void)
     RUN_TEST(test_index_offsets_survive_chunk_boundaries);
     RUN_TEST(test_index_build_past_capacity_is_full);
     RUN_TEST(test_over_long_line_is_rejected_and_indexes_nothing);
+    RUN_TEST(test_count_matches_the_index_over_the_hand_written_fixture);
+    RUN_TEST(test_count_matches_the_index_over_the_library_fixture);
+    RUN_TEST(test_count_of_an_empty_file_is_zero);
+    RUN_TEST(test_count_reports_the_same_line_error_the_index_build_does);
+    RUN_TEST(test_count_rejects_null_arguments);
     RUN_TEST(test_reader_errors_propagate);
     RUN_TEST(test_null_arguments_are_rejected);
     RUN_TEST(test_find_is_exact_and_case_sensitive);

@@ -1,0 +1,360 @@
+#include "diag.h"
+
+#include "battery.h"
+#include "build_info.h"
+#include "button_input.h"
+#include "display.h"
+#include "hw_config.h"
+#include "nfc_cart.h"
+#include "render_config.h"
+#include "sd_manager.h"
+#include "speaker.h"
+#include "audio/mix.h"
+#include "audio/tone.h"
+#include "cart/boot.h"
+#include "cart/catalog.h"
+#include "cart/ndef.h"
+#include "cart/ntag.h"
+#include "input/combo.h"
+#include "ui/diag.h"
+#include "ui/diag_draw.h"
+
+#include <Arduino.h>
+
+// The diagnostic screen's binding.
+//
+// Everything the mode decides is in lib/gbcore/ui/diag.c and everything it
+// lays out is in lib/gbcore/ui/diag_draw.c, both pure C and both host-tested.
+// This file supplies the seven things they cannot have: a clock, the button
+// expander through the combo module, the tag reader, the card, the ADC, the
+// speaker and the panel.
+//
+//   * poll  — one expander read every DIAG_POLL_MS, fed through the combo
+//             module so Select+Left/Right arrive as events and the bare D-pad
+//             arrives as a masked word
+//   * draw  — the display module's canvas, asked for at the WORKING origin
+//             rather than the stored one, so the nudge page moves the window
+//             live
+//   * read  — the card once at entry, the ADC once a second on its own page,
+//             and the tag only when someone asks
+//
+// It reaches for nothing above or below itself. The names it must not mention
+// are the guard test's list, not repeated here, because that test scans this
+// file's comments too.
+//
+// Every exit is a power cycle (rule 2 in diag.h), so the buffers below are
+// static and generous.
+
+// One expander read every DIAG_POLL_MS, matching the in-game menu and the
+// writer. Longer than the input module's debounce window, so two successive
+// samples are already stable.
+#define DIAG_POLL_MS 16
+
+// UID bytes as hex, which is what the page shows. NTAG215's is seven.
+#define DIAG_UID_BYTES 7
+
+static combo_state_t combo;
+static diag_t d;
+static diag_data_t data;                       // about 300 B
+static diag_layout_t geom;
+static diag_checker_t checker;                 // 8,062 B — the scaled block
+// Named for the state rather than the tone, because Arduino.h already
+// declares a tone().
+static tone_state_t tone_st;
+static mix_state_t mixer;
+static int16_t stereo[2 * SPEAKER_SAMPLES_PER_FRAME];  // 2,192 B
+static uint8_t mono[SPEAKER_SAMPLES_PER_FRAME];        //   548 B
+
+// The tag layer talks through the reader's transceive and knows nothing else
+// about it. Read-only use throughout: nothing here composes a write.
+static const ntag_dev_t tag_dev = { NULL, nfc_transceive };
+
+// The origin the last draw used, so a moved window can be cleared before the
+// next one paints — otherwise the old border stays on the panel.
+static int16_t drawn_ox = -1;
+static int16_t drawn_oy = -1;
+
+// ─── data gathering ─────────────────────────────────────────────────────────
+
+static void hex_uid(const uint8_t* uid, uint8_t len, char* out, size_t out_sz)
+{
+    size_t at = 0;
+    uint8_t i;
+
+    out[0] = '\0';
+    for (i = 0; i < len && at + 2 < out_sz; i++) {
+        at += (size_t)snprintf(out + at, out_sz - at, "%02X", uid[i]);
+    }
+}
+
+// The card is read once, at entry: a diagnostic page that re-walked the
+// directory every redraw would take longer than the redraw itself.
+static void gather_sd(bool sd_ok)
+{
+    catalog_reader_t cat;
+    size_t n = 0;
+
+    data.sd_ok = sd_ok;
+    if (!sd_ok) {
+        return;
+    }
+
+    data.rom_count = sd_rom_count();
+    data.sd_stats_ok = sd_card_stats(&data.sd_total_mb, &data.sd_used_mb);
+
+    if (sd_catalog_reader(&cat) && catalog_count(&cat, &n) == CATALOG_OK) {
+        data.catalog_ok = true;
+        data.catalog_count = (uint16_t)n;
+    }
+}
+
+// One look at whatever is in the field, on entry to the page and on each A.
+// Never from the loop: nfc_detect() blocks for about a second with no tag
+// present, and a page that polled would answer no buttons while it did.
+static void scan_tag()
+{
+    uint8_t uid[DIAG_UID_BYTES] = { 0 };
+    uint8_t uid_len = 0;
+    uint8_t cfg[NTAG_PAGE_SIZE] = { 0 };
+    char rom[ROM_STORE_NAME_MAX];
+    enum boot_class_e cls = BOOT_CLASS_BLANK;
+
+    // Everything the previous cart left behind goes first, so a failed scan
+    // cannot show the last tag's numbers as if they were this one's.
+    data.uid_hex[0] = '\0';
+    data.version_ok = false;
+    data.cfg_ok = false;
+    data.auth0 = 0;
+    data.access = 0;
+    data.ndef_read_ok = false;
+    data.ndef_rc = 0;
+    data.payload[0] = '\0';
+    data.cls = BOOT_CLASS_BLANK;
+    memset(data.ndef_raw, 0, sizeof(data.ndef_raw));
+
+    switch (nfc_detect(uid, &uid_len)) {
+    case NFC_DETECT_NONE:
+        data.nfc_state = DIAG_NFC_NONE;
+        break;
+    case NFC_DETECT_MULTI:
+        data.nfc_state = DIAG_NFC_MULTI;
+        break;
+    case NFC_DETECT_ERR:
+        data.nfc_state = DIAG_NFC_ERR;
+        break;
+    case NFC_DETECT_ONE:
+        data.nfc_state = DIAG_NFC_ONE;
+        break;
+    }
+
+    if (data.nfc_state != DIAG_NFC_ONE) {
+        Serial.printf("[DIAG] tag state=%u\n", (unsigned)data.nfc_state);
+        return;
+    }
+
+    hex_uid(uid, uid_len, data.uid_hex, sizeof(data.uid_hex));
+    data.version_ok =
+        ntag_get_version(&tag_dev, data.version) == NTAG_OK;
+
+    if (ntag_read_pages(&tag_dev, NTAG215_PAGE_USER_FIRST,
+                        NDEF_BUF_MAX / NTAG_PAGE_SIZE, data.ndef_raw)
+        == NTAG_OK) {
+        data.ndef_read_ok = true;
+        data.ndef_rc = ndef_parse_text(data.ndef_raw, sizeof(data.ndef_raw),
+                                       data.payload, sizeof(data.payload));
+        if (data.ndef_rc == NDEF_OK
+            && boot_classify(data.payload, &cls, rom, sizeof(rom))
+                   == BOOT_CLASSIFY_OK) {
+            data.cls = (uint8_t)cls;
+        }
+    }
+
+    data.cfg_ok = ntag_read_auth0(&tag_dev, &data.auth0) == NTAG_OK
+                  && ntag_read_pages(&tag_dev, NTAG215_PAGE_CFG1, 1, cfg)
+                         == NTAG_OK;
+    if (data.cfg_ok) {
+        data.access = cfg[NTAG215_CFG1_ACCESS];
+    }
+
+    Serial.printf("[DIAG] tag state=%u uid=%s auth0=0x%02X access=0x%02X\n",
+                  (unsigned)data.nfc_state, data.uid_hex, data.auth0,
+                  data.access);
+}
+
+// ─── drawing ────────────────────────────────────────────────────────────────
+
+static void redraw(uint32_t now_ms)
+{
+    int16_t ox = 0;
+    int16_t oy = 0;
+
+    diag_origin(&d, &ox, &oy);
+
+    // A window that moved leaves its old border behind, and on the one page
+    // whose whole job is showing that border, a stale one is worse than a
+    // slow redraw.
+    if (ox != drawn_ox || oy != drawn_oy) {
+        tft.fillScreen(TFT_BLACK);
+        drawn_ox = ox;
+        drawn_oy = oy;
+    }
+
+    diag_draw(&d, &data, &geom, &checker, now_ms, display_canvas(ox, oy));
+}
+
+// The one line the page cannot draw itself, because it has to be on the panel
+// before the reader blocks rather than after it answers.
+static void say_scanning()
+{
+    int16_t ox = 0;
+    int16_t oy = 0;
+    const ui_canvas_t* cv;
+
+    diag_origin(&d, &ox, &oy);
+    cv = display_canvas(ox, oy);
+    cv->fill(cv->ctx, 0, geom.footer_y, geom.w, DIAG_ROW_H, TFT_BLACK);
+    cv->text(cv->ctx, "Scanning...", 4, geom.footer_y,
+             (int16_t)(geom.w - 8), 1, UI_FONT_SMALL, UI_ALIGN_LEFT,
+             TFT_WHITE, TFT_BLACK);
+}
+
+// ─── the mode ───────────────────────────────────────────────────────────────
+
+void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
+{
+    uint32_t next_bat_ms = 0;
+    uint8_t last_buttons = 0;
+    bool logged = false;
+
+    // The eight expander bits behind the eight joypad bits, in joypad order,
+    // so the buttons page can name the pin a dead switch is on.
+    static const uint8_t GPA_BY_GB_BIT[8] = {
+        BTN_GPA_RIGHT, BTN_GPA_LEFT, BTN_GPA_UP, BTN_GPA_DOWN,
+        BTN_GPA_A, BTN_GPA_B, BTN_GPA_SELECT, BTN_GPA_START,
+    };
+
+    memcpy(data.gpa, GPA_BY_GB_BIT, sizeof(data.gpa));
+    strncpy(data.fw_version, BUILD_FW_VERSION, sizeof(data.fw_version) - 1);
+    data.fw_version[sizeof(data.fw_version) - 1] = '\0';
+    strncpy(data.build_time, BUILD_TIME_UTC, sizeof(data.build_time) - 1);
+    data.build_time[sizeof(data.build_time) - 1] = '\0';
+
+    data.palette = s->palette;
+    // The divider as the firmware actually used it, so the page reports the
+    // placeholder rather than implying a measured ratio.
+    data.bat_divider_x100 = (uint16_t)(BAT_DIVIDER * 100.0f);
+    data.nfc_fw = nfc_firmware_version();
+    data.nfc_state = nfc_ok ? DIAG_NFC_NOT_SCANNED : DIAG_NFC_NO_READER;
+
+    gather_sd(sd_ok);
+
+    if (diag_layout(GAME_W, GAME_H, &geom) != DIAG_OK) {
+        // Cannot happen at either SCALE_K, so it is logged rather than
+        // handled: a window this small means render_config.h changed.
+        Serial.printf("[DIAG] layout refused %dx%d\n", GAME_W, GAME_H);
+        return;
+    }
+    if (diag_init(&d, SCREEN_W, SCREEN_H, GAME_W, GAME_H, s->game_x,
+                  s->game_y, GAME_X, GAME_Y, s->volume, s->frameskip)
+        != DIAG_OK) {
+        Serial.println("[DIAG] state refused the window");
+        return;
+    }
+    combo_init(&combo);
+    mix_init(&mixer, (uint32_t)micros());
+    tone_init(&tone_st, TONE_HZ, SPEAKER_SAMPLE_RATE);
+
+    Serial.printf("[DIAG] enter %s built %s\n", BUILD_FW_VERSION,
+                  BUILD_TIME_UTC);
+
+    tft.fillScreen(TFT_BLACK);
+    redraw(millis());
+
+    for (;;) {
+        uint32_t now = millis();
+        uint8_t ev = COMBO_EVENT_NONE;
+        uint16_t flags;
+        uint8_t page;
+        bool dirty = false;
+
+        button_update();
+        combo_update(&combo, button_get_buttons(), now, &ev);
+
+        flags = diag_input(&d, ev, combo_joypad(&combo), now);
+        flags |= diag_tick(&d, now);
+        page = diag_page(&d);
+
+        // The raw word, not the masked one: the buttons page exists to show
+        // what the expander reports, and the combo module's masking is the
+        // very thing a builder needs to see through.
+        data.buttons = (uint8_t)button_get_buttons();
+
+        if (flags & DIAG_EV_PAGE) {
+            Serial.printf("[DIAG] page %s\n", diag_page_title(page));
+        }
+        if (flags & DIAG_EV_SAVE_NUDGE) {
+            diag_origin(&d, &s->game_x, &s->game_y);
+            settings_save(s);
+            Serial.printf("[DIAG] nudge saved gx=%d gy=%d\n", s->game_x,
+                          s->game_y);
+        }
+        if (flags & DIAG_EV_FRAMESKIP) {
+            s->frameskip = diag_frameskip(&d);
+            settings_save(s);
+            Serial.printf("[DIAG] frameskip %u\n", (unsigned)s->frameskip);
+        }
+        if ((flags & DIAG_EV_TONE) && !diag_tone_on(&d)) {
+            speaker_silence();
+        }
+        if (flags & DIAG_EV_NFC_SCAN) {
+            if (nfc_ok) {
+                say_scanning();
+                scan_tag();
+            }
+            dirty = true;
+        }
+
+        // Live data. Only the page showing it pays for the read.
+        if (page == DIAG_PAGE_BUTTONS && data.buttons != last_buttons) {
+            dirty = true;
+        }
+        last_buttons = data.buttons;
+
+        if (page == DIAG_PAGE_BATTERY && (int32_t)(now - next_bat_ms) >= 0) {
+            uint16_t cell = 0;
+
+            next_bat_ms = now + BAT_SAMPLE_MS;
+            data.bat_raw = battery_read_raw(&data.bat_pin_mv);
+            if (battery_poll(now, &cell)) {
+                data.bat_cell_mv = cell;
+            }
+            dirty = true;
+        }
+
+        if ((flags & DIAG_EV_REDRAW) || dirty) {
+            uint32_t began = micros();
+
+            redraw(now);
+            if (!logged) {
+                // Once per session: the figure the bench needs, without a
+                // per-frame print in the way of it.
+                Serial.printf("[DIAG] redraw %lu us\n",
+                              (unsigned long)(micros() - began));
+                logged = true;
+            }
+        }
+
+        if (diag_tone_on(&d)) {
+            // One frame per pass, so the DMA queue paces the loop at about
+            // 16.7 ms — near enough the poll interval that button response is
+            // the same either way.
+            tone_fill(&tone_st, TONE_AMPLITUDE, stereo,
+                      SPEAKER_SAMPLES_PER_FRAME);
+            mix_mono(&mixer, stereo, SPEAKER_SAMPLES_PER_FRAME,
+                     diag_volume(&d), mono);
+            speaker_write_frame(mono, SPEAKER_SAMPLES_PER_FRAME);
+        } else {
+            delay(DIAG_POLL_MS);
+        }
+    }
+}

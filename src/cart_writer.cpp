@@ -19,7 +19,7 @@
 //
 //   * poll  — one expander read every WRITER_POLL_MS, fed to the picker as a
 //             button word and a millis() timestamp
-//   * draw  — the three canvas calls bound to tft, offset by the per-unit
+//   * draw  — the display module's canvas, asked for at the per-unit
 //             game_x / game_y so the writer renders inside the game window
 //   * read  — the catalog index, a title's description, and its two images
 //
@@ -44,59 +44,6 @@ static picker_t picker;
 static boot_made_t made;
 static picker_layout_t geom;
 static settings_t cfg;
-
-// The window origin, from NVS: ten hand-built units each land slightly
-// differently behind the bezel.
-static int16_t ox;
-static int16_t oy;
-
-// ─── the canvas ─────────────────────────────────────────────────────────────
-// Window-relative coordinates in, panel coordinates out. The layout module
-// knows nothing of the origin.
-
-static void cv_fill(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
-                    uint16_t color) {
-    (void)ctx;
-    tft.fillRect(ox + x, oy + y, w, h, color);
-}
-
-static void cv_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
-                    uint8_t rows, uint8_t font, uint8_t align, uint16_t fg,
-                    uint16_t bg) {
-    (void)ctx;
-    int16_t anchor = x;
-
-    tft.setTextColor(fg, bg);
-    switch (align) {
-        case UI_ALIGN_CENTER:
-            tft.setTextDatum(TC_DATUM);
-            anchor = (int16_t)(x + w / 2);
-            break;
-        case UI_ALIGN_RIGHT:
-            tft.setTextDatum(TR_DATUM);
-            anchor = (int16_t)(x + w);
-            break;
-        default:
-            tft.setTextDatum(TL_DATUM);
-            break;
-    }
-    display_draw_wrapped(s, (int16_t)(ox + anchor), (int16_t)(oy + y), w, rows,
-                         font);
-}
-
-static void cv_image(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
-                     const uint16_t* px, int16_t row0, int16_t rows) {
-    (void)ctx;
-    (void)h;
-    // The row range is how the scrolling band clips an image at its edge: the
-    // driver is handed the first visible row and told how many follow.
-    //
-    // display_init() leaves setSwapBytes(true) in force and the .565 files are
-    // little-endian, so there is no per-pixel swap to do here.
-    tft.pushImage(ox + x, oy + y, w, rows, (uint16_t*)(px + (size_t)row0 * w));
-}
-
-static const ui_canvas_t canvas = { NULL, cv_fill, cv_text, cv_image };
 
 // ─── the writer ─────────────────────────────────────────────────────────────
 
@@ -125,8 +72,6 @@ enum boot_pick_e writer_open(enum writer_mode_e mode,
     if (!settings_load(&cfg)) {
         settings_defaults(&cfg);
     }
-    ox = cfg.game_x;
-    oy = cfg.game_y;
 
     rc = picker_layout(GAME_W, GAME_H, &geom);
     if (rc != PICKER_OK) {
@@ -156,7 +101,8 @@ enum boot_pick_e writer_open(enum writer_mode_e mode,
 
     desc[0] = '\0';
     tft.fillScreen(TFT_BLACK);
-    picker_draw(&picker, &geom, NULL, art, shot, &canvas);
+    picker_draw(&picker, &geom, NULL, art, shot,
+                display_canvas(cfg.game_x, cfg.game_y));
 
     for (;;) {
         button_update();
@@ -198,7 +144,7 @@ enum boot_pick_e writer_open(enum writer_mode_e mode,
             uint32_t began = micros();
 
             picker_draw(&picker, &geom, desc[0] ? desc : NULL, art, shot,
-                        &canvas);
+                        display_canvas(cfg.game_x, cfg.game_y));
             drawn_us = micros() - began;
             if (!logged) {
                 // Once per session: the figure the bench needs, without a

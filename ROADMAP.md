@@ -14,6 +14,10 @@ protocol and boot state machine, WS-12 `ws/cart-writer` added for the writer UI,
 web app. **2026-09-08:** the audio output path is settled as I2S0 in built-in-DAC mode with a DMA chain
 rather than the design's sample timer — the chain is the queue, one frame is written per emulated frame,
 and that write is the only pacing audio applies. §4 of the design doc carries the amendment.
+**2026-09-09:** WS-09's diagnostic screen is code-complete. Pages switch with Select+Left/Right so the bare
+D-pad belongs to the page; the mode is a halt entered before the tag read and left by the power switch; the
+tag inspector scans on demand rather than continuously; the firmware version and UTC build time are
+compiled in by a pre-build script; there is no FPS overlay. §8.2 of the design doc carries the amendment.
 
 ---
 
@@ -401,7 +405,8 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
 **Scope**
 - Rewrite `ui_launcher.cpp` → `menu.cpp`: D-pad navigated list, items **Resume / Volume / Brightness /
   Palette / Cart Info / Reset**. Remove Quit, Calibrate, Save, Load, the touch `mbtn()` code and the settings
-  submenu's frameskip/overlay entries move to WS-09's diagnostic screen (frameskip stays reachable there).
+  submenu's frameskip entry moves to WS-09's diagnostic screen (there is no overlay entry; the `[PERF]`
+  serial line is the fps readout).
   The menu gains nothing else — the cart writer is **not** reachable from it, and WS-12 does not touch it.
 - The **list state machine** (cursor, scroll window, wrap, page jump) is a pure module with no display
   dependency; WS-12 reuses it for the writer, so design it for a 132-entry list, not a 6-entry one.
@@ -483,26 +488,44 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
 `NFC_AMENDMENTS.md` §8.
 
 **Scope**
-- Hold Start+Select at power-on (sampled after WS-05's bus init, before the NFC read) → `diag.cpp`.
-- Pages, D-pad to switch: buttons (live, GPA bit labelled), SD (present, ROM count, catalog entries, free),
-  NFC — a **read-only tag inspector**: PN532 firmware version, live UID, `GET_VERSION`, protection state
-  (`AUTH0`/`ACCESS`), raw NDEF hex, decoded payload and classification — battery (raw ADC + computed V
-  using `BAT_DIVIDER`), audio (test tone, cycles volume
-  states), display (colour bars, 1-px border at `GAME_X/Y/W/H`, checkerboard for the blend), **nudge**
-  (`GAME_X/Y` ± with A to save to NVS, B to reset default), frameskip and FPS overlay toggles, firmware
-  version/build timestamp (from `scripts/post_build_timestamp.py`).
+- Hold Start+Select at power-on (sampled after WS-05's bus init, before the NFC read) → `diag.cpp`. The
+  mode is a halt: there is no way back, and the power switch is the exit.
+- **Eight pages, Select+Left/Right to switch**, so the bare D-pad belongs to the page — which is what makes
+  a one-pixel nudge possible. Buttons (live, GPA bit labelled), SD (mounted, ROM count, catalog entries,
+  used of total), NFC — a **read-only tag inspector**: PN532 firmware version, UID, `GET_VERSION`,
+  protection state (`AUTH0`/`ACCESS`), raw NDEF hex, decoded payload and classification, **scanned on page
+  entry and on A** rather than polled, because a detect with no tag in the field blocks for about a second
+  — battery (raw ADC, pin mV, cell mV through `BAT_DIVIDER`), audio (test tone through the mixer's own
+  volume path, stepping the four volume states), display (colour bars, 1-px border at `GAME_X/Y/W/H`,
+  checkerboard pushed through the real scaler so the blend judged is the blend the game uses), **nudge**
+  (`GAME_X/Y` ± with A to save to NVS, B to reset default), and a system page: frameskip, firmware version
+  and UTC build time, both compiled in by `scripts/pre_build_info.py`.
+- **No FPS overlay.** The once-a-second `[PERF]` serial line is the fps readout; an overlay would mean
+  drawing on the DMA frame path, which is the one path this design keeps clear.
 - **No tag write path.** WS-06's guard tests apply: the diagnostic translation units reference no tag-write
   symbols (guard (a) already fails if they do), and `writer_open()` keeps its single call site (guard (b)).
+  Guard (h) adds the shape of this mode: it is a reader and a viewer, never a route to the writer, the
+  provisioner, the ROM store, the ROM path resolver or the emulator.
 - **Renders inside `GAME_X/Y/W/H`** (§3 rule 6).
 
 **Code-complete exit**
-- Every page renders on host in a framebuffer test (so layout is at least sane); nudge persistence
-  unit-tested through `settings.cpp`.
+- `test_diag` — the page machine: paging with wrap, the nudge's clamp and key repeat at both window sizes,
+  the scan-on-entry rule, the tone and volume steps, frameskip's range, the saved toast.
+- `test_diag_draw` — every page at every pattern in a 240×216 and a 260×234 framebuffer with zero
+  out-of-window primitives, plus the border's four one-pixel edges and the checkerboard's block geometry.
+- `test_tone` — the square wave's period, amplitude and phase continuity, and what the mixer does with it
+  at each volume index.
+- `test_guards` (h) and its vacuity twin.
 
 **Deferred verification**
 - A second person can follow a one-page checklist and confirm each subsystem on a fresh unit without a
-  computer.
+  computer — `docs/DIAGNOSTICS.md`.
 - Nudge-saved `GAME_X/Y` survive a power cycle and are honoured in-game.
+- The tone is audible at high, quieter at med and low, and silent at off, with no click on the transition.
+- The border pattern is fully visible through the bezel after nudging, with no black gap and no cut edge.
+- The ADC raw count and pin millivolts match a meter on IO34, within the calibration item 6 records.
+- A cold boot with Start+Select held enters diagnostics on the first try, and Start alone, Select alone or
+  nothing held does not.
 
 ---
 
@@ -658,4 +681,6 @@ state machine). **Serial position:** after WS-07, before WS-08 (§1). **Design:*
    prefix, not a stored UID.
 2. `git checkout -b ws/nfc-cart poc-gb` → `/apo:plan` WS-06 using §2 above plus `reference/NFC_AMENDMENTS.md`
    as the brief.
-3. On merge, proceed down the serial order in §1: 07 → 12 → 10 → 08 → 09 → 11.
+3. On merge, proceed down the serial order in §1: 07 → 12 → 10 → 08 → 09 → 11. WS-09 is code-complete as
+   of 2026-09-09; WS-11 — the collected bench pass — is what remains, and every workstream's deferred
+   verification list is its input.

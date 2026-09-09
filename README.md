@@ -10,8 +10,8 @@ ROM browser: on the finished units there is no way to pick a game from the devic
 In progress, and still ahead of the hardware. The cartridge reader, the button driver, the landscape
 renderer, the menu and saves, and the on-device cartridge writer have landed; the host tooling that images
 the SD cards and flashes the boards is built. Audio has landed — the emulated APU reaches the onboard
-amplifier — and the diagnostics screen is next; a set of items are parked until there is a board on the
-bench. See [`ROADMAP.md`](ROADMAP.md) for what is built, what is next, and what is waiting on the bench.
+amplifier — and the boot-combo diagnostics screen has landed. A set of items are parked until there is a
+board on the bench, and that bench pass is what is next. See [`ROADMAP.md`](ROADMAP.md) for what is built, what is next, and what is waiting on the bench.
 
 ## Hardware
 
@@ -37,6 +37,10 @@ pio run -e cyd -t upload  # flash
 pio device monitor        # serial, 115200
 ```
 
+Every `cyd` build stamps a version from `git describe --tags --always --dirty` and a UTC build time into
+the firmware, and names the copy in `builds/` from the same two values. Both show on the diagnostic
+screen's System page, so a unit in hand can be matched to a commit without a computer.
+
 ## SD card
 
 FAT32, and every card is identical — a traded cartridge has to work in any unit. The firmware expects:
@@ -53,6 +57,34 @@ A card is produced by `tools/image_sd.py`, never by hand: it copies the ROMs, co
 `/catalog.txt` from `games.json`, removes anything the catalog does not name, and prints a manifest so
 two cards can be compared. It never touches `/saves`. The full contract — the caps, the line format and
 the tag payload grammar — is in [`docs/CATALOG_FORMAT.md`](docs/CATALOG_FORMAT.md).
+
+## Diagnostics
+
+Hold **Start + Select while switching the unit on** to enter the diagnostic screen. It is a halt: there is
+no way back, and the power switch is the way out. No computer is needed, and no cartridge is read on the
+way in.
+
+**Select + Left/Right** moves between eight pages; the bare D-pad belongs to whichever page is up.
+
+| Page | Shows |
+|---|---|
+| Buttons | All eight switches live, each with the expander pin behind it, so a dead button names its GPA line |
+| SD card | Whether the card mounted, how many ROMs it holds, how many catalog entries, and how full it is |
+| NFC tag | The reader's firmware, and — on **A** — one cart's UID, `GET_VERSION`, `AUTH0`/`ACCESS`, raw NDEF and class. It reads; it has no way to write |
+| Battery | Raw ADC counts, pin millivolts and cell millivolts through the divider |
+| Audio | A test tone through the same mixer the emulator uses. **A** toggles it, **Up/Down** step the four volume states — "off" parks the DAC at mid-scale, because the board has no hardware mute |
+| Display | Colour bars, a one-pixel border on the window's edge, and a checkerboard pushed through the real scaler so the blend you judge is the blend a game gets. **Up/Down** cycle them |
+| Nudge | Moves the game window a pixel at a time with the D-pad, so it sits square behind the shell's bezel. **A** saves to NVS, **B** restores the compile-time default |
+| System | Frameskip (**Up/Down**), the firmware version and the UTC build time |
+
+The version and build time come from `scripts/pre_build_info.py`, which stamps `git describe` and a UTC
+time into every `cyd` build and names the copy in `builds/` from the same two values — so a unit in hand can
+be matched to a commit.
+
+There is no in-game FPS overlay: the once-a-second `[PERF]` serial line is the fps readout.
+
+[`docs/DIAGNOSTICS.md`](docs/DIAGNOSTICS.md) is the one-page checklist to work through on a freshly built
+unit.
 
 ## Tools
 

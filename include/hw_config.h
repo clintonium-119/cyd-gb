@@ -31,6 +31,21 @@
 #define I2C_SDA        22   // CN1 (verified, rev C)
 #define I2C_SCL        27   // CN1 (verified, rev C)
 #define BTN_I2C_ADDR 0x20   // MCP23017, A0-A2 to GND (§1.4)
+
+// Button expander bit map. The button PCB's bottom eight header pins run in
+// order to GPA7..GPA0 — a straight ribbon, no crossover (§1.4, wiring PDF
+// rev C) — which puts Up on the high bit and B on bit 0. Each switch is
+// active LOW against the expander's internal pull-ups. §11's "all eight
+// buttons register" item is what verifies the order on a built unit.
+#define BTN_GPA_UP      7   // §1.4, rev C
+#define BTN_GPA_DOWN    6   // §1.4, rev C
+#define BTN_GPA_LEFT    5   // §1.4, rev C
+#define BTN_GPA_RIGHT   4   // §1.4, rev C
+#define BTN_GPA_START   3   // §1.4, rev C
+#define BTN_GPA_SELECT  2   // §1.4, rev C
+#define BTN_GPA_A       1   // §1.4, rev C
+#define BTN_GPA_B       0   // §1.4, rev C
+
 #define PN532_I2C_ADDR 0x24 // PN532 breakout, DIP switches to I²C (§1.4)
 // One InListPassiveTarget must come back inside this window with no tag
 // present; the PN532's MxRtyPassiveActivation is set to match (§6.2 "~1 s",

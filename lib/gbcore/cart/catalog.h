@@ -98,6 +98,19 @@ int catalog_parse_line(const char* line, size_t len, catalog_entry_t* out,
 int catalog_index_build(const catalog_reader_t* rd, catalog_index_t* out);
 
 /*
+ * How many entries the file holds, for a caller that wants the size and
+ * cannot afford the index — the diagnostic screen. Walks the same lines with
+ * the same parser and stores no entry, so it costs one line buffer instead of
+ * a catalog_index_t.
+ *
+ * Reports whatever the index build would: CATALOG_ERR_ARGS for a NULL reader
+ * or out, CATALOG_ERR_IO from the reader, CATALOG_ERR_LINE for a malformed
+ * line. There is no CATALOG_ERR_FULL here — counting past CATALOG_MAX costs
+ * nothing.
+ */
+int catalog_count(const catalog_reader_t* rd, size_t* count);
+
+/*
  * Read the description of the line at `offset` into out, truncated to
  * out_sz - 1 bytes and always NUL-terminated.
  */

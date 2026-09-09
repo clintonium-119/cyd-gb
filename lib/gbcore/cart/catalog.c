@@ -227,6 +227,38 @@ int catalog_index_build(const catalog_reader_t* rd, catalog_index_t* out)
     return c.full ? CATALOG_ERR_FULL : CATALOG_OK;
 }
 
+static int count_cb(void* user, uint32_t offset, const char* line, size_t len)
+{
+    size_t* count = (size_t*)user;
+    catalog_entry_t e;
+    int rc;
+
+    (void)offset;
+    rc = catalog_parse_line(line, len, &e, NULL, NULL);
+    if (rc != CATALOG_OK) {
+        return rc;
+    }
+    (*count)++;
+    return 0;
+}
+
+int catalog_count(const catalog_reader_t* rd, size_t* count)
+{
+    int rc;
+
+    if (!reader_usable(rd) || count == NULL) {
+        return CATALOG_ERR_ARGS;
+    }
+    *count = 0;
+
+    rc = for_each_line(rd, count_cb, count);
+    if (rc != CATALOG_OK) {
+        *count = 0;
+        return rc;
+    }
+    return CATALOG_OK;
+}
+
 int catalog_read_desc(const catalog_reader_t* rd, uint32_t offset, char* out,
                       size_t out_sz)
 {
