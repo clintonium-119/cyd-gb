@@ -11,7 +11,9 @@ deferred-verification pass stays collected in WS-11, minus the items rev C alrea
 2, 3, 4). **2026-09-02:** cart writing moved on-device per
 [`reference/NFC_AMENDMENTS.md`](reference/NFC_AMENDMENTS.md) — WS-06 expanded to own the full tag
 protocol and boot state machine, WS-12 `ws/cart-writer` added for the writer UI, and WS-10 loses the phone
-web app.
+web app. **2026-09-08:** the audio output path is settled as I2S0 in built-in-DAC mode with a DMA chain
+rather than the design's sample timer — the chain is the queue, one frame is written per emulated frame,
+and that write is the only pacing audio applies. §4 of the design doc carries the amendment.
 
 ---
 
@@ -429,19 +431,25 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
 **Depends on:** WS-04 (needs the reclaimed heap and the core split). **Design:** §1.6, §4, §10 Phase 6.
 
 **Scope**
-- Vendor `minigb_apu.{c,h}` (pin SHA, same header convention as Peanut-GB). `ENABLE_SOUND 1`; implement
-  `audio_read`/`audio_write`.
+- Vendor MiniGB APU as `lib/minigb_apu/`, pinned to the same upstream commit as `include/peanut_gb.h`
+  (it ships inside the Peanut-GB tree) with its own update script. `ENABLE_SOUND 1` in both build
+  environments; implement `audio_read`/`audio_write` over a bridge-owned APU context.
 - `audio/mix.c` (host-testable): stereo→mono sum, 16-bit volume scale via `vol_lut`, ±1 LSB dither, truncate
   to 8-bit. Tests: silence stays silent, full-scale doesn't wrap, dither bounded.
-- Output: timer-driven DAC on IO26 at 32768 Hz from a ring buffer filled once per frame by the APU. There
-  is no amp-enable pin — rev C proved IO4 is not one and no hardware mute exists.
+- Output: I2S0 in built-in-DAC mode on IO26 at 32768 Hz, one frame of samples written per emulated frame
+  into a DMA chain — the chain *is* the queue, so there is no first-party ring buffer and no sample
+  timer ISR. There is no amp-enable pin — rev C proved IO4 is not one and no hardware mute exists.
+- Pacing: the per-frame write blocks only while the DMA queue is full, which happens only when the
+  emulator is ahead of real time. It is the only throttle audio applies and never lowers a frame rate
+  the pipeline could otherwise reach. Built-in-DAC mode reports no fill level, so the underflow counter
+  is derived from the write clock in a separate host-tested module.
 - Volume states high/med/low/off; off holds the DAC at 128 (mid-scale), not 0 and not zero samples. The
   designed IO4 auto-mute is gone with the mute pin; the amp is always live.
 - Volume wired to WS-05's Select+Up/Down and WS-07's menu.
 
 **Code-complete exit**
-- Mixer tests pass; firmware builds with `ENABLE_SOUND 1`; ring buffer under/overflow counters exposed on
-  serial.
+- Mixer tests pass; firmware builds with `ENABLE_SOUND 1`; DMA-queue under/overflow counters and the
+  pacing wait exposed on serial.
 
 **Deferred verification**
 - §11 item 3 is already answered (rev C): onboard amp verified with real GB music from SD, on battery —
@@ -449,6 +457,20 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
 - Audio plays at 60 fps with no dropouts; frame-time impact recorded.
 - Idle-hiss level with the amp always live and the DAC parked at 128 judged acceptable; volume steps sound
   evenly spaced.
+- `apu_us` recorded on a music-heavy title: the APU callback plus the mix, per frame, on the real board.
+  If emulation + scaling + APU exceed the frame budget, that is a performance finding, not an audio bug.
+- The `[PERF]` pair read together: a non-zero `await` with `aunder` at 0 means the pipeline is ahead and
+  pacing is doing its job; `aunder` climbing with `await` at 0 means it is behind.
+- IO26 meters about 1.65 V with the game paused (the DAC parked at mid-scale).
+- Opening the menu mid-music gives no pop and no looping fragment — the starved DMA chain repeats the
+  silence the pause wrote, because the buffers are never zero-filled.
+- Output latency, four frames deep (about 67 ms), judged against on-screen events; the depth is one
+  constant if it is too long.
+- Select+Up/Down steps audibly through the four volume states with no click at the off transition;
+  changing Volume in the menu takes effect on Resume; the setting survives a power cycle.
+- Whether the I2S0 DMA interrupt, installed from `setup()` on the emulation core, shows up as `[PERF]`
+  jitter — about 60 descriptor completions a second. If it does, install it from a core-0 context.
+- Serial boot order on a real unit: the banner, the `[SPK]` line, then the first `[BOOT]` line.
 
 **Notes/risks**
 - The MAX98357A fallback is dead: rev C verified the onboard amp, and IO22 now carries I²C SDA anyway.

@@ -6,14 +6,39 @@
 #include "render/framequeue.h"
 #include "render/scaler.h"
 #include "save/autosave.h"
+#include "speaker.h"
+#include "audio/mix.h"
+/* The vendored APU header is plain C with no linkage guard of its own, and it
+ * is kept byte-identical to upstream, so the guard goes here. */
+extern "C" {
+#include "minigb_apu.h"
+}
 #include <Arduino.h>
 #include <esp_timer.h>
 #include <string.h>
 
+/* Peanut-GB calls these when ENABLE_SOUND is non-zero and expects the
+ * including translation unit to provide them. static is right here: the
+ * header calls them by name from this same unit, and nothing else may link
+ * to them. Declared ahead of the include because the header's use precedes
+ * their definitions below. */
+static uint8_t audio_read(uint16_t addr);
+static void audio_write(uint16_t addr, uint8_t val);
+
 #define ENABLE_LCD 1
-#define ENABLE_SOUND 0
+#define ENABLE_SOUND 1
 #define PEANUT_GB_HIGH_LCD_ACCURACY 0
 #include "peanut_gb.h"
+
+/* The two-places rule, made a compile error rather than a comment: the APU
+ * derives its rate and frame length from platformio.ini's AUDIO_SAMPLE_RATE,
+ * and the speaker sizes its DMA buffers from hw_config.h. */
+static_assert(AUDIO_SAMPLE_RATE == SPEAKER_SAMPLE_RATE,
+              "AUDIO_SAMPLE_RATE in platformio.ini and SPEAKER_SAMPLE_RATE in "
+              "hw_config.h disagree");
+static_assert(AUDIO_SAMPLES == SPEAKER_SAMPLES_PER_FRAME,
+              "the APU's samples per frame and SPEAKER_SAMPLES_PER_FRAME "
+              "disagree");
 
 // ─── ROM ────────────────────────────────────────────────────────────────────
 // The ROM is a pointer into memory-mapped flash, owned by the rom_store
@@ -90,6 +115,11 @@ static int16_t vp_y = GAME_Y;
 //                      display path, releases each slot only after its
 //                      transfer has completed.
 //
+// The APU callback, the mixer and the speaker's DMA write all run on core 1
+// inside emu_run_frame(), beside the emulation that feeds them: the APU's
+// state is written by audio_write() from that same core, so moving the
+// callback to core 0 would need a lock the design never asked for.
+//
 // The two never touch the same slot at the same time; framequeue is what makes
 // that a checked property rather than a convention, and it is host-tested. The
 // only shared mutable state outside the queue is the timing counters, single
@@ -128,6 +158,21 @@ static volatile uint32_t push_us = 0;
 // the bottleneck, zero stall with a full max_depth means emulation is.
 static uint32_t q_stall_us = 0;
 static uint32_t q_stall_acc = 0;
+
+// ─── Audio ──────────────────────────────────────────────────────────────────
+// One APU context, one frame of its interleaved stereo output, one frame of
+// mixed 8-bit mono, and the dither state that carries across frames. All
+// static, so all internal DRAM and none of it allocated per frame: 2192 B for
+// the stereo frame, 548 B for the mono one, and the context itself.
+static struct minigb_apu_ctx apu;
+static audio_sample_t apu_buf[AUDIO_SAMPLES_TOTAL];
+static uint8_t mono_buf[AUDIO_SAMPLES];
+static mix_state_t mix;
+// Off until main() applies the stored setting, so a unit is never loud before
+// its own volume is read.
+static uint8_t vol_idx = MIX_VOL_OFF;
+// The APU callback plus the mix, for the [PERF] line.
+static uint32_t apu_us = 0;
 
 void emu_get_frame_times(uint32_t* out_emu_us, uint32_t* out_scale_us,
                          uint32_t* out_push_us)
@@ -291,6 +336,18 @@ static void IRAM_ATTR gb_cram_w(struct gb_s* g, const uint_fast32_t a, const uin
         autosave_note_write(&autosave, (uint32_t)a);
     }
 }
+/* Not IRAM_ATTR: these run only on an APU register access, a handful of times
+ * per frame, and nothing writes flash during play. */
+static uint8_t audio_read(uint16_t addr)
+{
+    return minigb_apu_audio_read(&apu, addr);
+}
+
+static void audio_write(uint16_t addr, uint8_t val)
+{
+    minigb_apu_audio_write(&apu, addr, val);
+}
+
 static void gb_err(struct gb_s* g, const enum gb_error_e e, const uint16_t a) {
     (void)g; Serial.printf("[EMU] Err %d @0x%04X\n",(int)e,a);
 }
@@ -408,6 +465,9 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     }
     autosave_init(&autosave, (uint32_t)save_sz);
 
+    minigb_apu_audio_init(&apu);
+    mix_init(&mix, 0x2545F491u);
+
     gb_init_lcd(gb, lcd_line);
     /* Build the LUT here too: main() may never call emu_set_palette. */
     emu_set_palette(curpal);
@@ -437,6 +497,17 @@ void emu_run_frame() {
     int64_t t = esp_timer_get_time();
     gb_run_frame(gb);
     emu_us = (uint32_t)(esp_timer_get_time() - t);
+
+    /* Every frame, skipped display frame or not: the sound has to stay
+     * continuous, and the write is also what paces emulation — it blocks
+     * only while the DMA queue is full, which happens only when the emulator
+     * is ahead of real time. */
+    t = esp_timer_get_time();
+    minigb_apu_audio_callback(&apu, apu_buf);
+    mix_mono(&mix, apu_buf, AUDIO_SAMPLES, vol_idx, mono_buf);
+    apu_us = (uint32_t)(esp_timer_get_time() - t);
+    speaker_write_frame(mono_buf, AUDIO_SAMPLES);
+
     fcnt++; fpsc++;
     uint32_t n=millis();
     if (n - fpst >= 1000) {
@@ -446,10 +517,14 @@ void emu_run_frame() {
         /* Last completed frame, once a second. qstall is core 1's wait for a
          * free slot and qovf the running count of times it found none: with
          * the split, those two are what say which core is the bottleneck. */
+        uint32_t aunder = 0, aover = 0, await_us = 0;
+        speaker_get_stats(&aunder, &aover, &await_us);
         Serial.printf("[PERF] emu=%uus scale=%uus push=%uus qstall=%uus "
-                      "qovf=%u fps=%u\n",
+                      "qovf=%u apu=%uus await=%uus aunder=%u aover=%u "
+                      "fps=%u\n",
                       emu_us, scale_us, push_us, q_stall_us,
-                      framequeue_overflows(&fq), cfps);
+                      framequeue_overflows(&fq), apu_us, await_us, aunder,
+                      aover, cfps);
     }
 }
 
@@ -476,6 +551,10 @@ void emu_pause_pipeline()
         taskYIELD();
     }
     display_bus_acquire();
+    /* The queue holds mid-scale for as long as the menu is up, so a starved
+     * DMA chain repeats silence rather than the last fragment of music.
+     * Resume needs nothing: the next frame's write refills. */
+    speaker_silence();
 }
 
 void emu_resume_pipeline()
@@ -524,10 +603,37 @@ bool emu_autosave_battery(uint16_t mv, uint16_t low_mv, uint16_t hyst_mv)
     return autosave_battery(&autosave, mv, low_mv, hyst_mv);
 }
 
+void emu_set_volume(uint8_t idx)
+{
+    vol_idx = (idx > MIX_VOL_OFF) ? MIX_VOL_OFF : idx;
+}
+
+uint8_t emu_get_volume()
+{
+    return vol_idx;
+}
+
+void emu_get_audio_times(uint32_t* out_apu_us, uint32_t* out_wait_us)
+{
+    if (out_apu_us) {
+        *out_apu_us = apu_us;
+    }
+    if (out_wait_us) {
+        speaker_get_stats(nullptr, nullptr, out_wait_us);
+    }
+}
+
 void emu_set_frame_skip(uint8_t s){fskip=s;}
 uint8_t emu_get_frame_skip(){return fskip;}
 uint32_t emu_get_fps(){return cfps;}
-void emu_reset(){gb_reset(gb);fcnt=0;}
+void emu_reset()
+{
+    /* gb_reset() does not touch the APU, so a reset would otherwise resume
+     * with whatever the previous game left in the sound registers. */
+    gb_reset(gb);
+    minigb_apu_audio_init(&apu);
+    fcnt = 0;
+}
 
 void emu_get_rom_title(char* out, size_t out_sz)
 {

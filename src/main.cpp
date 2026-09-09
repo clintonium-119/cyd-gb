@@ -11,6 +11,8 @@
 #include "emulator_bridge.h"
 #include "rom_store.h"
 #include "settings.h"
+#include "speaker.h"
+#include "audio/mix.h"
 #include "nfc_cart.h"
 #include "cart_provision.h"
 #include "cart_writer.h"
@@ -19,6 +21,11 @@
 #include "cart/ndef.h"
 #include "cart/ntag.h"
 #include <SD.h>
+
+// The stored volume index IS the mixer's index; the two lists are declared in
+// different modules and nothing links them but this.
+static_assert(SETTINGS_VOL_HIGH == MIX_VOL_HIGH && SETTINGS_VOL_OFF == MIX_VOL_OFF,
+              "volume index encodings must agree");
 
 static char cur_path[80] = {0};
 static bool menu_req = false;
@@ -256,7 +263,10 @@ static void poll_input(uint32_t now_ms) {
         return;
     }
 
-    settings.volume = volume;
+    if (volume != settings.volume) {
+        settings.volume = volume;
+        emu_set_volume(settings.volume);
+    }
     if (brightness != settings.brightness) {
         settings.brightness = brightness;
         display_set_backlight(settings.brightness);
@@ -402,6 +412,9 @@ void run_emu() {
             // persistence this path needs — and is the only NVS write in it.
             enum menu_result_e r = menu_open(&settings, &cart_info);
             settings_save(&settings);
+            // The menu's Volume row edits the struct without applying it, so
+            // the new index reaches the mixer here, on the way back to play.
+            emu_set_volume(settings.volume);
 
             display_clear(TFT_BLACK);
             emu_resume_pipeline();
@@ -500,6 +513,15 @@ static void load_and_run(const char* name) {
 void setup() {
     Serial.begin(115200); delay(200);
     Serial.println("\n=== CYD-GB ===");
+
+    // First, so the DAC is parked at mid-scale for the whole boot instead of
+    // floating into an amplifier that is always live. Nothing about the DAC
+    // or I2S0 touches the I2C bus, the panel or the card, so there is no
+    // ordering cost. A refusal is logged and the unit plays silently — sound
+    // is never a halt.
+    if (!speaker_init()) {
+        Serial.println("[SPK] no audio output");
+    }
     if (LED_R_PIN >= 0) pinMode(LED_R_PIN, OUTPUT);
     if (LED_G_PIN >= 0) pinMode(LED_G_PIN, OUTPUT);
     if (LED_B_PIN >= 0) pinMode(LED_B_PIN, OUTPUT);
@@ -531,6 +553,7 @@ void setup() {
     emu_set_palette(settings.palette);
     emu_set_frame_skip(settings.frameskip);
     emu_set_viewport(settings.game_x, settings.game_y);
+    emu_set_volume(settings.volume);
     Serial.printf("[INIT] Settings (%s): pal=%d fs=%d bl=%d vol=%d gx=%d gy=%d\n",
                   stored ? "NVS" : "defaults",
                   settings.palette, settings.frameskip, settings.brightness,

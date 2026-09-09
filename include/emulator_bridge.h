@@ -84,6 +84,21 @@ void emu_set_viewport(int16_t x, int16_t y);
 void emu_get_frame_times(uint32_t* emu_us, uint32_t* scale_us,
                          uint32_t* push_us);
 
+// ─── Audio ──────────────────────────────────────────────────────────────────
+// The volume index, in settings_t::volume's own encoding: 0 is high, 3 is
+// off, so louder counts down. Applied from the next frame onward. The bridge
+// starts at off, so a unit is silent until main() applies the stored setting;
+// off is not a hardware mute — none exists — it holds the DAC at mid-scale.
+// An index past off is clamped rather than rejected.
+void emu_set_volume(uint8_t idx);
+uint8_t emu_get_volume();
+
+// Microseconds of the last completed frame's audio work: apu_us covers the
+// APU callback and the mix, wait_us is what the speaker's write spent blocked
+// on a full DMA queue — which happens only when emulation is ahead of real
+// time. Any pointer may be NULL, like emu_get_frame_times().
+void emu_get_audio_times(uint32_t* apu_us, uint32_t* wait_us);
+
 // Palette
 // Alias kept so existing callers (the settings menu) compile unchanged; the
 // count itself belongs to the gbcore palette module.

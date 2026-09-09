@@ -34,6 +34,15 @@ int gb_runner_run_frames(unsigned n);
  * successful init. */
 const uint8_t* gb_runner_frame(void);
 
+/* The APU output captured after the last emulated frame: interleaved stereo,
+ * left then right, gb_runner_audio_samples() frames long. NULL before a
+ * successful init. minigb_apu.h is deliberately not included here — callers
+ * would inherit its mandatory sample-format define. */
+const int16_t* gb_runner_audio(void);
+
+/* Samples per channel in one captured frame. */
+unsigned gb_runner_audio_samples(void);
+
 /* Number of times the Peanut-GB error callback fired since init. */
 unsigned gb_runner_error_count(void);
 

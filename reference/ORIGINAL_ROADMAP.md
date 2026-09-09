@@ -385,8 +385,24 @@ Peanut-GB has **no sound emulation**. `ENABLE_SOUND` is `0` in the fork, and the
 Integrate **MiniGB APU** (companion to Peanut-GB), set `ENABLE_SOUND 1`, wire the two callbacks, and feed the
 DAC on a timer. Output is 32768 Hz stereo.
 
+**Amended in build (2026-09-08): the DAC is fed by DMA, not by a timer.** I2S0 runs in built-in-DAC mode
+on IO26 and clocks the samples out itself, so the DMA chain is the queue and there is neither a 32768 Hz
+timer ISR nor a first-party ring buffer. One frame of samples — 548 per channel — is written per emulated
+frame, immediately after `gb_run_frame()`, on the emulation core.
+
+That write is also the pacing rule. It blocks only while the queue is full, which happens only when the
+emulator is running ahead of real time, and it is bounded by one frame. The consequence is that the game
+locks to 32768 / 548 ≈ 59.8 fps — 0.12 % fast against the DMG's 59.7275 Hz, accepted — while a pipeline
+that is already *behind* is never slowed further: audio applies no other throttle. Built-in-DAC mode
+reports neither a fill level nor a starvation event, so the underflow counter is derived from the write
+clock (samples written minus rate × elapsed, clamped) rather than observed.
+
 **Mono:** sum in software, `(l + r) >> 1`. Do not discard a channel — some games pan effects hard left or
 right and you would lose sounds entirely.
+
+*(2026-09-08: built as `(l + r) / 2`. A right shift of a negative sum is implementation-defined in C, and
+it also floors a sum of -1 to -1 rather than 0, so two hard-panned channels at opposite full scale would
+not cancel to mid-scale. The division is the same operation everywhere else.)*
 
 **Volume — high / med / low / off:**
 
@@ -847,8 +863,8 @@ Then mmap the ROM from a raw partition; repartition as needed. Re-measure after 
 Then flip to 26/16 and re-measure; decide 24/16 vs 26/16 on evidence.
 
 ### Phase 6 — Audio
-MiniGB APU, `ENABLE_SOUND 1`, timer-fed DAC, mono sum, dither, 4-state volume (off = DAC held at 128 —
-no hardware mute exists, rev C).
+MiniGB APU, `ENABLE_SOUND 1`, DMA-fed DAC (I2S built-in mode — amended 2026-09-08, §4), mono sum, dither,
+4-state volume (off = DAC held at 128 — no hardware mute exists, rev C).
 Re-measure.
 **Exit: audio at 60 fps; idle hiss with the amp always live measured and judged acceptable.**
 
@@ -906,6 +922,7 @@ menu cart, wildcard, starter carts. There is no phone writing station and no QR 
 | 13 | Cup tab retention | Print tabs at 0.20 / 0.30 / 0.40 mm overhang; pick the one that clicks without force | Discs fall out or cannot be swapped | open — new 2026-09-02 |
 | 14 | Bezel window | Writer and menu render fully inside the visible aperture on an assembled unit | UI hidden behind plastic; shrink the layouts | open — new 2026-09-02 |
 | 15 | Wizard end-to-end | Fresh unit, assembled: menu → wildcard → starter carts → finish; two tags in the field → shielding fault | Build-day first step fails in front of the kids | open — new 2026-09-02 |
+| 16 | Audio on the board | Read `apu=` and `await=`/`aunder=` from the `[PERF]` line on a music-heavy title; meter IO26 with the game paused; listen for idle hiss and judge output latency against on-screen events | `apu_us` over budget is a performance decision, not an audio bug; a mid-scale voltage far from 1.65 V means the DAC path is wrong; audible latency lowers the queue depth | open — new 2026-09-08 |
 
 The vendor datasheet has now been wrong twice — the header pinout and IO4. Meter anything sourced from it
 before building on it.
@@ -946,3 +963,5 @@ Collected because each was considered and rejected for a reason that isn't obvio
 - **Don't add manual Save/Load.** §7.
 - **Don't set lock bits or `CFGLCK` on any tag.** Password protection only — it is reversible. §6.6.
 - **Don't use `pushImage` per line.** §2.5.
+- **Don't zero-fill the I2S DMA buffers**, and don't leave `tx_desc_auto_clear` on. Zero is 0 V on this
+  DAC, not silence; mid-scale is 128. A pause writes silence frames rather than clearing them. §4.

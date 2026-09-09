@@ -9,7 +9,7 @@
  *
  * GOLDEN_FRAME_HASH is FNV-1a 64 over the raw 160x144 index buffer after
  * running dmg-acid2 for GOLDEN_FRAME_COUNT frames. It pins Peanut-GB's OWN
- * output under the firmware's emulator flags (ENABLE_LCD=1, ENABLE_SOUND=0,
+ * output under the firmware's emulator flags (ENABLE_LCD=1, ENABLE_SOUND=1,
  * PEANUT_GB_HIGH_LCD_ACCURACY=0, PEANUT_GB_USE_DOUBLE_WIDTH_PALETTE=0) — it
  * is NOT the official dmg-acid2 reference image, and it is only meaningful
  * while [env:native]'s flags mirror [env:cyd]'s.

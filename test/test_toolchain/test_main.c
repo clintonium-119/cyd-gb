@@ -1,6 +1,27 @@
 #include <unity.h>
 
+#include <stdint.h>
+
+/* With ENABLE_SOUND on, peanut_gb.h calls these and expects the including
+ * translation unit to provide them. This suite only inspects the header's
+ * compile-time behaviour and never runs the emulator, so the definitions are
+ * stubs; the real APU wiring lives in the headless runner. */
+uint8_t audio_read(uint16_t addr);
+void audio_write(uint16_t addr, uint8_t val);
+
 #include "peanut_gb.h"
+
+uint8_t audio_read(uint16_t addr)
+{
+    (void)addr;
+    return 0xFF;
+}
+
+void audio_write(uint16_t addr, uint8_t val)
+{
+    (void)addr;
+    (void)val;
+}
 
 void setUp(void)
 {

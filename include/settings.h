@@ -16,9 +16,10 @@ struct settings_t {
 };
 
 // volume is an index, not a level: design §4's vol_lut is {high, med, low} and
-// 3 means off via the amplifier's hardware mute. Louder therefore counts down
-// towards SETTINGS_VOL_HIGH. The audio workstream reads the setting with this
-// same meaning, so changing the encoding means changing both.
+// 3 means off: the mixer writes mid-scale and the DAC sits at 128, because no
+// hardware mute exists. Louder therefore counts down towards
+// SETTINGS_VOL_HIGH. The mixer reads the setting with this same meaning, so
+// changing the encoding means changing both.
 #define SETTINGS_VOL_HIGH 0
 #define SETTINGS_VOL_OFF  3
 

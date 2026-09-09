@@ -9,9 +9,9 @@ ROM browser: on the finished units there is no way to pick a game from the devic
 
 In progress, and still ahead of the hardware. The cartridge reader, the button driver, the landscape
 renderer, the menu and saves, and the on-device cartridge writer have landed; the host tooling that images
-the SD cards and flashes the boards is built. Audio and the diagnostics screen are next, and a set of
-items are parked until there is a board on the bench. See [`ROADMAP.md`](ROADMAP.md) for what is built,
-what is next, and what is waiting on the bench.
+the SD cards and flashes the boards is built. Audio has landed — the emulated APU reaches the onboard
+amplifier — and the diagnostics screen is next; a set of items are parked until there is a board on the
+bench. See [`ROADMAP.md`](ROADMAP.md) for what is built, what is next, and what is waiting on the bench.
 
 ## Hardware
 
@@ -25,7 +25,7 @@ the pins the firmware actually declares are in [`include/hw_config.h`](include/h
 | SD card | onboard slot on IO5 / IO18 / IO19 / IO23 |
 | Buttons | 8-way PCB via an MCP23017 expander at I²C 0x20, polled once per frame |
 | Cartridges | PN532 NFC reader at I²C 0x24 — *planned* |
-| Audio | onboard amp on the DAC (IO26) — bench-verified; no amp-enable pin exists, playback lands with the audio workstream |
+| Audio | onboard amp on the DAC (IO26) through I2S built-in-DAC DMA; MiniGB APU, summed to mono; four volume states, off parks the DAC at mid-scale (there is no amp-enable pin) |
 | I²C bus | SDA IO22, SCL IO27 — the whole bus, power included, on the 4-pin CN1 plug (bench-verified) |
 | Power | 3.7 V LiPo with integrated protection, charged through the board's own charger |
 

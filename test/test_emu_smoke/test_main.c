@@ -53,9 +53,26 @@ static void test_dmg_acid2_boots_and_runs_60_frames_clean(void)
     TEST_ASSERT_GREATER_OR_EQUAL_UINT(2, distinct);
 }
 
+/* With ENABLE_SOUND on, Peanut-GB routes 0xFF10..0xFF3F through the runner's
+ * APU context and the runner captures one frame of its output per emulated
+ * frame. Whether dmg-acid2 makes any sound is not asserted — it is unknown,
+ * and not what this test is for; what matters is that the stream exists, has
+ * the geometry the mixer expects, and that enabling sound broke nothing. */
+static void test_sound_enabled_run_captures_an_apu_frame(void)
+{
+    load_rom();
+    TEST_ASSERT_EQUAL_INT(GB_RUNNER_OK, gb_runner_init(rom, rom_len));
+    TEST_ASSERT_EQUAL_INT(GB_RUNNER_OK, gb_runner_run_frames(60));
+
+    TEST_ASSERT_EQUAL_UINT(0, gb_runner_error_count());
+    TEST_ASSERT_NOT_NULL(gb_runner_audio());
+    TEST_ASSERT_EQUAL_UINT(548, gb_runner_audio_samples());
+}
+
 int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_dmg_acid2_boots_and_runs_60_frames_clean);
+    RUN_TEST(test_sound_enabled_run_captures_an_apu_frame);
     return UNITY_END();
 }

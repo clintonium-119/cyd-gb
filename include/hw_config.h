@@ -72,8 +72,26 @@
 // ─── Audio ──────────────────────────────────────────────────────────────────
 // No amp-enable pin exists. The vendor datasheet calls IO4 the amp enable, but
 // the bench proved it is not (§1.6, wiring PDF rev C); its real function is
-// unknown, so leave IO4 unused (§13). With no hardware mute, WS-08's volume
-// "off" holds the DAC at 128 (mid-scale) instead.
+// unknown, so leave IO4 unused (§13). With no hardware mute, volume "off"
+// holds the DAC at 128 (mid-scale) instead.
+#define SPEAKER_DAC_PIN 26  // DAC channel 2 = the I2S built-in DAC's left
+                            // channel (§1.6, confirmed rev C). The I2S API
+                            // selects the channel, not the pin, so this is
+                            // documentation plus an init-time check.
+// Must equal AUDIO_SAMPLE_RATE in platformio.ini — the same two-places rule
+// as SD_PIN_CS / -DSD_CS. The bridge static-asserts the pair.
+#define SPEAKER_SAMPLE_RATE 32768
+// One Game Boy frame at that rate (§4). Static-asserted in the bridge against
+// the APU's own AUDIO_SAMPLES, which derives it from the vertical-sync rate.
+#define SPEAKER_SAMPLES_PER_FRAME 548
+// DMA queue depth, in frames. Latency is depth x 16.7 ms, about 67 ms here;
+// whether that is audible against on-screen events is §11 bench work, and
+// lowering it is a one-line change.
+#define SPEAKER_DMA_FRAMES 4
+// The bound on the pacing wait: one frame plus margin. A write that cannot
+// place its frame inside this window gives up rather than stalling the
+// emulator (§4).
+#define SPEAKER_WRITE_TIMEOUT_MS 20
 
 // ─── Power ──────────────────────────────────────────────────────────────────
 #define BAT_ADC_PIN    34   // Battery sense (§1.2). Divider ratio undocumented — §11 item 6.
