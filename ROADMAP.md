@@ -5,7 +5,7 @@ Section references below (`§n.n`) point into it. This file is the *work breakdo
 sequence of apo workstreams, in what order, with what exit criteria, and what each one defers to the bench.
 
 **Status as of 2026-09-01:** hardware is on the bench — `reference/DMG-CYD-wiring.pdf` rev C is
-bench-verified (I²C on CN1 with SDA IO22 / SCL IO27, onboard amp confirmed with no hardware mute, SW1
+bench-verified (I²C on CN1, onboard amp confirmed with no hardware mute, SW1
 bridge, straight-ribbon button map). Each workstream still reaches *code-complete* as planned; the formal
 deferred-verification pass stays collected in WS-11, minus the items rev C already answered (§11 items
 2, 3, 4). **2026-09-02:** cart writing moved on-device per
@@ -18,6 +18,8 @@ and that write is the only pacing audio applies. §4 of the design doc carries t
 D-pad belongs to the page; the mode is a halt entered before the tag read and left by the power switch; the
 tag inspector scans on demand rather than continuously; the firmware version and UTC build time are
 compiled in by a pre-build script; there is no FPS overlay. §8.2 of the design doc carries the amendment.
+**2026-09-14:** the board's CN1 silkscreen reads GND / IO22 / IO21 / 3.3 V, not the IO27 the rev C PDF
+annotated, so SCL is IO21 and the backlight IO27 in firmware; WS-11's first bare-board steps confirm it.
 
 ---
 
@@ -301,7 +303,8 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
 **Deferred verification**
 - All eight buttons register (feeds WS-09's button test screen) on the rev C straight-ribbon map
   (Up=GPA7 … B=GPA0).
-- First I²C transaction on a cold boot succeeds on CN1 (SDA IO22 / SCL IO27) with no recovery step.
+- First I²C transaction on a cold boot succeeds on CN1 (SDA IO22 / SCL IO21, as silkscreened) with no
+  recovery step.
 
 **Notes/risks**
 - `Wire` and the display share no pins, but the PN532 read at boot and the button poll share the bus — the

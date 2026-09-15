@@ -117,7 +117,7 @@ they were data. **Source:** `reference/ORIGINAL_ROADMAP.md:293-300` (read 2026-0
 
 `reference/ORIGINAL_ROADMAP.md` §11 now lists nine questions, each with a bench test, a stated consequence
 and a status column. Wiring PDF rev C (bench-verified, 2026-09-01) answered three: the 4th-EXP-pad question
-is moot (I²C moved to CN1 — SDA IO22 / SCL IO27), the onboard amp is usable (no mod needed — but IO4 is not
+is moot (I²C moved to CN1 — SDA IO22 / SCL IO21 per the board silkscreen, 2026-09-14), the onboard amp is usable (no mod needed — but IO4 is not
 an amp enable, so no hardware mute exists), and BAT does power the system. Still open: the brownout sweep
 (item 1), actual pixel pitch, IO34 divider ratio, max reliable `SPI_FREQUENCY`, real emulation frame time,
 and the new SW1-bridge check (item 9). **Source:** `reference/ORIGINAL_ROADMAP.md:679-696` (read 2026-09-01).

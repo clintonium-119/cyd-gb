@@ -21,12 +21,12 @@ the pins the firmware actually declares are in [`include/hw_config.h`](include/h
 | | |
 |---|---|
 | Board | ESP32-2432S024 (ESP32-D0WD-V3, 4 MB flash, no PSRAM) |
-| Panel | ST7789 240×320 SPI, backlight on IO21 |
+| Panel | ST7789 240×320 SPI, backlight on IO27 |
 | SD card | onboard slot on IO5 / IO18 / IO19 / IO23 |
 | Buttons | 8-way PCB via an MCP23017 expander at I²C 0x20, polled once per frame |
 | Cartridges | PN532 NFC reader at I²C 0x24 — *planned* |
 | Audio | onboard amp on the DAC (IO26) through I2S built-in-DAC DMA; MiniGB APU, summed to mono; four volume states, off parks the DAC at mid-scale (there is no amp-enable pin) |
-| I²C bus | SDA IO22, SCL IO27 — the whole bus, power included, on the 4-pin CN1 plug (bench-verified) |
+| I²C bus | SDA IO22, SCL IO21 — the whole bus, power included, on the 4-pin CN1 plug, pins as silkscreened on the board |
 | Power | 3.7 V LiPo with integrated protection, charged through the board's own charger |
 
 ## Building

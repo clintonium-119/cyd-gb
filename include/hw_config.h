@@ -6,7 +6,12 @@
 // Render geometry lives in render_config.h, not here.
 
 // ─── Display (onboard) ──────────────────────────────────────────────────────
-#define TFT_PIN_BL     21   // Backlight PWM (§1.2, confirmed). Panel pins are set in platformio.ini.
+// Backlight PWM (§1.2). Was 21, which is CN1 pad 3 on this board's silkscreen
+// and now carries I2C SCL; 27 is the 2.4" board's backlight per the same
+// reading of the board against the vendor pin table (silkscreen, 2026-09-14).
+// One bench check confirms it: the panel lights and dims on the first flash
+// with this value, or it does not. Must equal -DTFT_BL in platformio.ini.
+#define TFT_PIN_BL     27   // Panel pins are set in platformio.ini.
 
 // Landscape: the panel is 320 px horizontal x 240 px vertical once rotated
 // (§2.1). TFT_WIDTH / TFT_HEIGHT in platformio.ini still describe the
@@ -25,11 +30,14 @@
 #define SD_PIN_SCK     18   // §1.2, confirmed
 
 // ─── I²C (buttons, NFC) ─────────────────────────────────────────────────────
-// The whole bus lives on the CN1 plug: GND / IO22 / IO27 / 3.3V (§1.2, §1.3,
-// verified — wiring PDF rev C). Neither pin is shared with the UART, so no
-// bus recovery is needed.
-#define I2C_SDA        22   // CN1 (verified, rev C)
-#define I2C_SCL        27   // CN1 (verified, rev C)
+// The whole bus lives on the CN1 plug: GND / IO22 / IO21 / 3.3V, as printed on
+// the board itself (silkscreen read 2026-09-14). The wiring PDF rev C and the
+// vendor pin table say IO27 for pad 3 — that is the 2.8" board's CN1, and the
+// pin table is the document that has been wrong before, so the silkscreen wins
+// until a meter says otherwise (§1.2, §1.3). Neither pin is shared with the
+// UART, so no bus recovery is needed.
+#define I2C_SDA        22   // CN1 pad 2 (silkscreen; verified rev C)
+#define I2C_SCL        21   // CN1 pad 3 (silkscreen, 2026-09-14; bench check pending)
 #define BTN_I2C_ADDR 0x20   // MCP23017, A0-A2 to GND (§1.4)
 
 // Button expander bit map. The button PCB's bottom eight header pins run in

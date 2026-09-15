@@ -68,7 +68,7 @@ that resolves it. **Do not treat flagged values as settled.**
 | Signal | Pin | Source | Status |
 |---|---|---|---|
 | I²C SDA | IO22 | CN1 | **verified (rev C)** |
-| I²C SCL | IO27 | CN1 | **verified (rev C)** — see §1.3 |
+| I²C SCL | IO21 | CN1 | **silkscreen (2026-09-14)**, bench confirmation pending — see §1.3 |
 | 3.3 V / GND | — | CN1 | **verified (rev C)** |
 | Unused | IO4 | onboard | **not an amp enable** — see §1.6; leave it alone |
 | Audio DAC | IO26 | onboard | to amp (always live; no enable pin exists) |
@@ -76,14 +76,16 @@ that resolves it. **Do not treat flagged values as settled.**
 | SD CS | IO5 | onboard | |
 | SD SPI | IO18 / IO19 / IO23 | onboard | now exclusive to SD |
 | LCD | IO15 / IO2 / IO14 / IO13 | CS / DC / SCK / MOSI | |
-| Backlight | IO21 | PWM | |
+| Backlight | IO27 | PWM | inferred from the CN1 silkscreen (2026-09-14); confirmed by the panel lighting on first flash |
 | TFT_RST | −1 | panel reset ties to EN | **must be −1** |
 | Spare | IO35 | P3 header, input-only | verified (rev C) |
 
-Metered on the bench (wiring PDF rev C): **CN1 is a 4-pin 1.25 mm connector carrying GND / IO22 / IO27 /
-3.3 V** — the whole I²C bus, power included, on one plug. **P3 carries GND / IO35 / IO22 / IO21** and is
-spare (IO21 is the backlight — leave it alone; IO35 is input-only). The vendor pin table got the header
-pinout wrong; the silkscreen readings that previously stood here are superseded. No peripheral wiring is
+**CN1 is a 4-pin 1.25 mm connector carrying GND / IO22 / IO21 / 3.3 V** — the whole I²C bus, power
+included, on one plug. That is what the board's own silkscreen prints (read 2026-09-14); the wiring PDF
+rev C and the vendor pin table say IO27 for the third pad, which is the 2.8" board's CN1, so the PDF's
+label is superseded. **P3 carries GND / IO35 / IO22 / IO21** and is spare (IO21 is also CN1 pad 3, so P3
+doubles the SCL net — leave it alone; IO35 is input-only). With IO21 on CN1, the backlight is IO27, the
+other way round from the 2.8" board. The vendor pin table got the header pinout wrong twice over. No peripheral wiring is
 soldered to the CYD anywhere in this build — the SW1 bridge (§1.5) is the one solder joint.
 
 **`LED_R_PIN` in the fork's `hw_config.h` is set to 4.** The vendor datasheet calls IO4 the audio amplifier
@@ -92,9 +94,10 @@ in Phase 1) and leave IO4 unused.
 
 ### 1.3 The I²C pin decision
 
-**Resolved on the bench (wiring PDF rev C): I²C lives entirely on CN1 — SDA on IO22, SCL on IO27, with
-3.3 V and GND on the same 4-pin 1.25 mm connector.** Both the MCP23017 and the PN532 hang off that one plug.
-`Wire.begin(22, 27)` at 400 kHz, and no bus recovery is needed.
+**I²C lives entirely on CN1 — SDA on IO22, SCL on IO21, with 3.3 V and GND on the same 4-pin 1.25 mm
+connector.** Both the MCP23017 and the PN532 hang off that one plug. `Wire.begin(22, 21)` at 400 kHz, and
+no bus recovery is needed. Wiring PDF rev C labelled the SCL pad IO27; the board's silkscreen says IO21
+(2026-09-14), and the silkscreen wins until a meter contradicts it — §11 item 2 carries the check.
 
 The earlier proposal put SDA on IO27 (SPI header) and SCL on IO1 (TX0), which dragged in bootloader-noise
 reasoning, a nine-pulse bus-recovery routine, and a never-use-IO3 warning. All of that is gone: neither UART
@@ -435,7 +438,7 @@ hardware filter.
 |---|---|
 | Start + Select | Menu |
 | Select + Up / Down | Volume (clamped, no wrap) |
-| Select + Left / Right | Brightness (IO21 PWM) |
+| Select + Left / Right | Brightness (IO27 PWM) |
 
 **Mask Up/Down/Left/Right out of the button word before it reaches Peanut-GB while Select is held**, or the
 character walks around during adjustment.
@@ -943,7 +946,7 @@ menu cart, wildcard, starter carts. There is no phone writing station and no QR 
 | # | Question | Test | Impact if it goes badly | Bench status (rev C, 2026-09-01) |
 |---|---|---|---|---|
 | 1 | Does the board run from a 3.7 V cell? | Bench supply, sweep 4.2 → 3.3 V, watch the display | Needs a boost module; changes the whole power section | Runs and plays audio on the cell; the brownout sweep is still open |
-| 2 | What is the 4th EXP-header pad? | Toggle IO22/16/17, meter the pad | If IO22: move SCL there, delete the IO1 boot handling | **Moot** — I²C moved to CN1 (SDA IO22 / SCL IO27); P3 metered as GND / IO35 / IO22 / IO21 |
+| 2 | What is the 4th EXP-header pad? | Toggle IO22/16/17, meter the pad | If IO22: move SCL there, delete the IO1 boot handling | **Reopened 2026-09-14** — I²C is on CN1, but the board's silkscreen prints CN1 as GND / IO22 / IO21 / 3.3 V where rev C said IO27; firmware now uses SCL IO21 and backlight IO27. Confirm: the panel lights and dims on first flash, and a toggle test on CN1 pad 3 reads IO21 |
 | 3 | Is the onboard amp usable? | `tone()` on IO26, stock speaker, at full volume | Resistor mod, then MAX98357A | **Yes** — real GB music from SD, on battery; no mod needed |
 | 4 | Does BAT actually power the system? | Cell connected, USB unplugged — does it boot? | Charge-only would need a boost + USB VBUS feed | **Yes** — the amp test ran on battery |
 | 5 | Actual pixel pitch | Fill screen white, caliper the lit area | Recompute all bezel and `GAME_X`/`GAME_Y` numbers | open |
@@ -959,7 +962,7 @@ menu cart, wildcard, starter carts. There is no phone writing station and no QR 
 | 15 | Wizard end-to-end | Fresh unit, assembled: menu → wildcard → starter carts → finish; two tags in the field → shielding fault | Build-day first step fails in front of the kids | open — new 2026-09-02 |
 | 16 | Audio on the board | Read `apu=` and `await=`/`aunder=` from the `[PERF]` line on a music-heavy title; meter IO26 with the game paused; listen for idle hiss and judge output latency against on-screen events | `apu_us` over budget is a performance decision, not an audio bug; a mid-scale voltage far from 1.65 V means the DAC path is wrong; audible latency lowers the queue depth | open — new 2026-09-08 |
 
-The vendor datasheet has now been wrong twice — the header pinout and IO4. Meter anything sourced from it
+The vendor datasheet has now been wrong three times — the header pinout, IO4, and the CN1 SCL pin. Meter anything sourced from it
 before building on it.
 
 ---

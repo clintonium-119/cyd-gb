@@ -49,7 +49,7 @@ Two supply-chain notes worth carrying into planning:
 | HSPI | MOSI 13, MISO 12, SCLK 14, CS 15, DC 2, RST −1, BL 21 | ILI9341 TFT at 40 MHz | `platformio.ini:22-36` |
 | VSPI | SCK 18, MISO 19, MOSI 23, CS 5 | SD card at 20 MHz | `src/sd_manager.cpp:7, 11-12`; `include/hw_config.h:16-19` |
 | Bit-banged SPI | CS 33, IRQ 36, MOSI 32, MISO 39, CLK 25 | XPT2046 touch | `include/hw_config.h:10-14`; `platformio.ini:58-62` |
-| I²C (`Wire`) | SDA 22, SCL 27 (CN1), 400 kHz | MCP23017 at `0x20`; PN532 at `0x24` joins in WS-06 | `src/i2c_bus.cpp`; `include/hw_config.h:27-33` (updated 2026-09-01, wiring PDF rev C) |
+| I²C (`Wire`) | SDA 22, SCL 21 (CN1, per the board silkscreen 2026-09-14), 400 kHz | MCP23017 at `0x20`; PN532 at `0x24` joins in WS-06 | `src/i2c_bus.cpp`; `include/hw_config.h:27-33` (updated 2026-09-01, wiring PDF rev C) |
 
 The bit-banged touch driver is deliberate: `README.md` § How It Works states it "avoids bus conflicts with
 display and SD card." **Source:** `README.md` (read 2026-08-27).
@@ -59,7 +59,7 @@ display and SD card." **Source:** `README.md` (read 2026-08-27).
 protocol. **Source:** `src/button_input.cpp:15-28` (read 2026-08-27).
 
 `reference/ORIGINAL_ROADMAP.md` §1.4 specifies an **MCP23017** at the same address `0x20`, with `GPPU = 0xFF` for pull-ups and
-buttons on GPA7–GPA0 (a straight ribbon — wiring PDF rev C), at 400 kHz on CN1 (SDA IO22 / SCL IO27).
+buttons on GPA7–GPA0 (a straight ribbon — wiring PDF rev C), at 400 kHz on CN1 (SDA IO22 / SCL IO21 — the silkscreen; the rev C PDF's IO27 was the 2.8" pinout).
 *Resolved 2026-09-01:* WS-05 rewrote `src/button_input.cpp` for the MCP23017 behind the shared
 `src/i2c_bus.cpp`, and the rev C pin/bit map is what the firmware now implements. The PCF8574 description
 above is the fork's history, kept for the record.
