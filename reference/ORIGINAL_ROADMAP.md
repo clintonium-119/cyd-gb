@@ -70,9 +70,10 @@ that resolves it. **Do not treat flagged values as settled.**
 | I²C SDA | IO22 | CN1 | **verified (rev C)** |
 | I²C SCL | IO21 | CN1 | **silkscreen (2026-09-14)**, bench confirmation pending — see §1.3 |
 | 3.3 V / GND | — | CN1 | **verified (rev C)** |
-| Unused | IO4 | onboard | **not an amp enable** — see §1.6; leave it alone |
+| RGB LED (red) | IO4 | onboard | **factory schematic (V1.0)**: R17 100 Ω → LED2 → IO4. Not an amp enable — see §1.6. Unused by this firmware |
 | Audio DAC | IO26 | onboard | to amp (always live; no enable pin exists) |
-| Battery sense | IO34 | onboard ADC | divider ratio undocumented |
+| Ambient light (LDR) | IO34 | onboard ADC | **factory schematic (V1.0)**: 3.3 V → R15 1 MΩ → IO34 → R19 1 MΩ ∥ R21 GT36516 → GND. **Not battery sense** — the vendor pin table was wrong; metered 2026-09-16 |
+| Battery sense | — | **does not exist** | `BAT+` reaches only the IP5306 (U8) and the JST (P5). No divider, no ADC tap, no GPIO on that net (factory schematic V1.0) |
 | SD CS | IO5 | onboard | |
 | SD SPI | IO18 / IO19 / IO23 | onboard | now exclusive to SD |
 | LCD | IO15 / IO2 / IO14 / IO13 | CS / DC / SCK / MOSI | |
@@ -175,6 +176,13 @@ not the limiting factor; the amplifier is — and it passed.
 
 The rejected escalation path (resistor mod, then a MAX98357A on IO22/IO16/IO17) is preserved in
 `reference/DMG-CYD-audio-mod.pdf` for the record only; IO22 now carries I²C SDA in any case.
+
+> **Do not follow that PDF's Step 1 or Step 2.** It states "IO16 and IO17 are green and blue, IO22 is
+> red", and instructs blink-testing GPIO 22 and lifting its LED series resistor. The factory schematic
+> (V1.0, "LED-RGB" block) shows the RGB LED on **IO17, IO4 and IO16** — R16 100 Ω → LED1 → IO17,
+> R17 100 Ω → LED2 → IO4, R20 1 kΩ → LED3 → IO16. **IO22 is not an LED pin**; it is I²C SDA on CN1, the
+> bus the buttons and the reader depend on. Probing or reworking around IO22 on that PDF's instructions
+> risks the I²C bus for no benefit. Recorded 2026-09-16.
 
 ### 1.7 Mechanical
 
@@ -763,7 +771,8 @@ work" into "GPA3 never goes low."
 - Every button, lighting up as pressed
 - SD card detected, ROM count
 - PN532 responding, live UID readout
-- Battery voltage from IO34
+- ~~Battery voltage from IO34~~ — **there is no battery sense on this board** (§1.2, factory schematic
+  V1.0, 2026-09-16). IO34 is the ambient-light sensor. The page must not show a battery figure
 - Audio test tone
 - Colour / scaling test pattern
 - **`GAME_X` / `GAME_Y` nudge**, saved to NVS
@@ -950,7 +959,7 @@ menu cart, wildcard, starter carts. There is no phone writing station and no QR 
 | 3 | Is the onboard amp usable? | `tone()` on IO26, stock speaker, at full volume | Resistor mod, then MAX98357A | **Yes** — real GB music from SD, on battery; no mod needed |
 | 4 | Does BAT actually power the system? | Cell connected, USB unplugged — does it boot? | Charge-only would need a boost + USB VBUS feed | **Yes** — the amp test ran on battery |
 | 5 | Actual pixel pitch | Fill screen white, caliper the lit area | Recompute all bezel and `GAME_X`/`GAME_Y` numbers | open |
-| 6 | IO34 divider ratio | Compare ADC reading to a meter across the cell range | Low-battery cutoff thresholds are wrong | open |
+| 6 | IO34 divider ratio | Compare ADC reading to a meter across the cell range | Low-battery cutoff thresholds are wrong | **closed 2026-09-16 — the question was malformed.** There is no divider and no battery sense: IO34 is the LDR, and `BAT+` reaches no GPIO. Diagnostic page read raw 0 against a metered 3.85 V cell; all six ADC1 and three free ADC2 channels scanned, none tracking the cell; confirmed against the factory schematic V1.0. The low-battery flush has no input — see the open design decision |
 | 7 | Max reliable `SPI_FREQUENCY` | Sweep 40 / 55 / 80 MHz, look for artifacts | Directly caps frame rate | open |
 | 8 | Real emulation frame time | Phase 2 FPS counter | May need Retro-Go's gnuboy core instead of Peanut-GB | open |
 | 9 | Does SW1 bridge cleanly? | Hold SW1 while connecting the battery — does it boot? | A sealed unit cannot be started; rework the power path (§1.5) | open — new in rev C |
@@ -962,8 +971,10 @@ menu cart, wildcard, starter carts. There is no phone writing station and no QR 
 | 15 | Wizard end-to-end | Fresh unit, assembled: menu → wildcard → starter carts → finish; two tags in the field → shielding fault | Build-day first step fails in front of the kids | open — new 2026-09-02 |
 | 16 | Audio on the board | Read `apu=` and `await=`/`aunder=` from the `[PERF]` line on a music-heavy title; meter IO26 with the game paused; listen for idle hiss and judge output latency against on-screen events | `apu_us` over budget is a performance decision, not an audio bug; a mid-scale voltage far from 1.65 V means the DAC path is wrong; audible latency lowers the queue depth | open — new 2026-09-08 |
 
-The vendor datasheet has now been wrong three times — the header pinout, IO4, and the CN1 SCL pin. Meter anything sourced from it
-before building on it.
+The vendor datasheet has now been wrong **four** times — the header pinout, IO4, the CN1 SCL pin, and
+battery sense on IO34. Meter anything sourced from it before building on it. The factory schematic
+(`reference/factory/ESP32-2432S024-1-V1.0.png`, V1.0) has been right on every point the bench has checked
+against it and should be preferred over the pin table in all cases.
 
 ---
 
@@ -972,7 +983,8 @@ before building on it.
 | File | Contents |
 |---|---|
 | `reference/DMG-CYD-wiring.pdf` | Rev C wiring diagram over the actual board photo, BOM, pin map, power notes — **bench-verified** |
-| `reference/DMG-CYD-audio-mod.pdf` | MAX98357A fallback — historical; the escalation path was rejected on the bench (rev C, §1.6) |
+| `reference/DMG-CYD-audio-mod.pdf` | MAX98357A fallback — historical; the escalation path was rejected on the bench (rev C, §1.6). **Contains a wrong LED pin map** (claims IO22 is the red LED; it is IO4) — see the warning in §1.6 before acting on it |
+| `reference/factory/` | Vendor factory documents for the ESP32-2432S024, V1.0 — schematic sheets and the EN specification. **Authoritative**: correct on every point the bench has checked, where the vendor pin table has been wrong four times |
 | `reference/NFC_AMENDMENTS.md` | 2026-09-02 brief that moved cart writing on-device (MENU cart, wizard, password protection) — folded into §6, §8, §10, §11, §13 |
 
 Both are A3 landscape. Rev C of the wiring PDF records bench-verified assignments and now supersedes the
