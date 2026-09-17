@@ -63,7 +63,9 @@ static const char* const VOL_NAMES[] = {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 // Nothing acts until every button is up: the combo that opened the menu is
-// still held when it first draws, and it must not also pick a row.
+// still held when it first draws, and it must not also pick a row. The same
+// on the way out — the A or B that closed the menu is still held when the
+// game's per-frame poll resumes, and it must not also act in the game.
 static void wait_release()
 {
     button_update();
@@ -316,9 +318,11 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
 
         if ((word & GB_BTN_A) && !(prev & GB_BTN_A)) {
             if (cursor == ROW_RESUME) {
+                wait_release();
                 return MENU_RESUME;
             }
             if (cursor == ROW_RESET) {
+                wait_release();
                 return MENU_RESET;
             }
             if (cursor == ROW_INFO) {
@@ -329,6 +333,7 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
             // A on a value row does nothing: Left and Right are its keys.
         }
         if ((word & GB_BTN_B) && !(prev & GB_BTN_B)) {
+            wait_release();
             return MENU_RESUME;
         }
 
