@@ -8,7 +8,7 @@ steps ask for, plus the derived terms:
     emu_core = emu - scale - qstall      (emu contains both; see emulator_bridge.cpp)
     frame    = emu + apu                 (core 1's per-frame cost; push overlaps on core 0)
 
-    python tools/perf_capture.py capture /dev/ttyUSB0 out.log 90
+    python tools/perf_capture.py capture /dev/ttyUSB0 out.log 90 [--no-reset]
     python tools/perf_capture.py stats out.log [--skip 10] [--from SEC --to SEC]
 
 Standard library plus pyserial. Run from anywhere.
@@ -26,23 +26,46 @@ TS_RE = re.compile(r"^\[\s*([\d.]+)\] ")
 BUDGET_US = 16_667
 
 
-def capture(port, out, dur):
+def capture(port, out, dur, reset=True):
     import serial
 
     ser = serial.Serial(port, 115200, timeout=0.2)
-    # DTR low keeps IO0 high (normal boot); pulse RTS to drive EN low.
-    ser.dtr = False
-    ser.rts = True
-    time.sleep(0.12)
-    ser.reset_input_buffer()
-    ser.rts = False
+    if reset:
+        # DTR low keeps IO0 high (normal boot); pulse RTS to drive EN low.
+        ser.dtr = False
+        ser.rts = True
+        time.sleep(0.12)
+        ser.reset_input_buffer()
+        ser.rts = False
     t0 = time.time()
     with open(out, "w", buffering=1) as f:
         f.write("# capture start %s port=%s baud=115200 duration=%gs\n"
                 % (time.strftime("%Y-%m-%dT%H:%M:%S%z"), port, dur))
         buf = b""
         while time.time() - t0 < dur:
-            buf += ser.read(4096)
+            try:
+                buf += ser.read(4096)
+            except serial.SerialException as e:
+                # The bench board's USB link drops while the board keeps
+                # running. Reopen WITHOUT touching DTR/RTS: the kernel raises
+                # both together on open, which leaves EN high. Setting
+                # dtr=False before rts=False (pyserial's order) deasserts DTR
+                # while RTS is still asserted, and that pulses EN - a reset per
+                # reopen, which looked like a boot loop on the bench.
+                f.write("[%8.3f] # link dropped: %s\n" % (time.time() - t0, e))
+                try:
+                    ser.close()
+                except serial.SerialException:
+                    pass
+                time.sleep(0.5)
+                while time.time() - t0 < dur:
+                    try:
+                        ser = serial.Serial(port, 115200, timeout=0.2)
+                        f.write("[%8.3f] # link reopened (no reset)\n" % (time.time() - t0))
+                        break
+                    except serial.SerialException:
+                        time.sleep(0.5)
+                continue
             while b"\n" in buf:
                 line, buf = buf.split(b"\n", 1)
                 f.write("[%8.3f] %s\n" % (time.time() - t0,
@@ -107,6 +130,8 @@ def main():
     c.add_argument("port")
     c.add_argument("out")
     c.add_argument("duration", type=float)
+    c.add_argument("--no-reset", action="store_true",
+                   help="attach to a running board instead of resetting it first")
     s = sub.add_parser("stats")
     s.add_argument("log")
     s.add_argument("--skip", type=int, default=10, help="drop the first N lines (default 10)")
@@ -114,7 +139,7 @@ def main():
     s.add_argument("--to", dest="t_to", type=float, default=1e9)
     a = ap.parse_args()
     if a.cmd == "capture":
-        capture(a.port, a.out, a.duration)
+        capture(a.port, a.out, a.duration, reset=not a.no_reset)
     else:
         stats(parse(a.log, a.skip, a.t_from, a.t_to))
 
