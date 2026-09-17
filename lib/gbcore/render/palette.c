@@ -1,5 +1,4 @@
 #include "palette.h"
-#include "scaler.h"
 
 #include <stddef.h>
 
@@ -152,24 +151,5 @@ void palette_build_lut(uint8_t idx, uint16_t lut[PALETTE_LUT_SIZE])
             p = 2u; /* no real pixel byte reaches here; fold onto BG */
         }
         lut[i] = pals[idx][p][i & 3u];
-    }
-}
-
-void palette_build_pair_lut(const uint16_t lut[PALETTE_LUT_SIZE],
-                            uint16_t out[PALETTE_PAIR_LUT_SIZE])
-{
-    unsigned a;
-    unsigned b;
-
-    if (lut == NULL || out == NULL) {
-        return;
-    }
-    for (a = 0; a < PALETTE_LUT_SIZE; a++) {
-        for (b = 0; b < PALETTE_LUT_SIZE; b++) {
-            uint16_t* e = out + (a * PALETTE_LUT_SIZE + b) * 3u;
-            e[0] = lut[a];
-            e[1] = scaler_avg565(lut[a], lut[b]);
-            e[2] = lut[b];
-        }
     }
 }

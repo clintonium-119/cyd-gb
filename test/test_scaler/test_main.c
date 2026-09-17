@@ -1,6 +1,5 @@
 #include <unity.h>
 
-#include "render/palette.h"
 #include "render/scaler.h"
 
 /*
@@ -597,113 +596,6 @@ static void test_24_16_kernel_survives_alternating_extremes(void)
     TEST_ASSERT_EQUAL_HEX16(0x7BEFu, row_of(1, 240)[2]);
 }
 
-/* ── 24/16 pair-LUT variant against the kernel ───────────────────────── */
-/*
- * The pair-table path takes raw bytes and a table; its contract is the same
- * pixels the kernel makes from those bytes LUT'd through the 64-entry
- * palette, and the kernel is pinned to the spec above. The palette here is
- * random so every channel bit is exercised, not the 12 shades a real one has.
- */
-
-static uint16_t pal[PALETTE_LUT_SIZE];
-static uint16_t pair_lut[PALETTE_PAIR_LUT_SIZE];
-static uint8_t raw[2][SCALER_SRC_W];
-static uint16_t want[3u * 240u];
-
-static const uint8_t legal_px[12] = {
-    0x00, 0x01, 0x02, 0x03, 0x10, 0x11, 0x12, 0x13, 0x20, 0x21, 0x22, 0x23,
-};
-
-static void set_random_palette(void)
-{
-    unsigned i;
-    for (i = 0; i < PALETTE_LUT_SIZE; i++) {
-        pal[i] = rng16();
-    }
-    palette_build_pair_lut(pal, pair_lut);
-}
-
-/* LUT the raw lines, run the kernel into `want`, run the table path into
- * dst, and demand the same 720 pixels. */
-static void assert_lut_path_matches_kernel(void)
-{
-    unsigned l;
-    unsigned i;
-
-    for (l = 0; l < 2u; l++) {
-        for (i = 0; i < SCALER_SRC_W; i++) {
-            src[l][i] = pal[raw[l][i]];
-        }
-    }
-    TEST_ASSERT_EQUAL_INT(SCALER_OK,
-        scaler_scale_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
-                           lines, NULL, want, scratch.row));
-    reset_dst();
-    TEST_ASSERT_EQUAL_INT(SCALER_OK,
-        scaler_scale_block_24_16_lut(raw[0], raw[1], pair_lut, dst.block));
-    TEST_ASSERT_EQUAL_HEX16_ARRAY(want, dst.block, 3u * 240u);
-    assert_canaries_intact(3u * 240u);
-}
-
-static void test_24_16_lut_matches_the_kernel_on_every_legal_pair(void)
-{
-    unsigned k;
-    unsigned p;
-
-    /* 144 ordered pairs of the 12 legal bytes; 80 pairs fit a line, so two
-     * passes cover them all, the second line carrying the pair reversed and
-     * offset so vertical neighbours differ too. */
-    rng_state = 0x0144000Cu;
-    set_random_palette();
-    for (k = 0; k < 2u; k++) {
-        for (p = 0; p < SCALER_SRC_W / 2u; p++) {
-            unsigned n = (k * 80u + p) % 144u;
-            unsigned m = (n + 37u) % 144u;
-            raw[0][2u * p] = legal_px[n / 12u];
-            raw[0][2u * p + 1u] = legal_px[n % 12u];
-            raw[1][2u * p] = legal_px[m % 12u];
-            raw[1][2u * p + 1u] = legal_px[m / 12u];
-        }
-        assert_lut_path_matches_kernel();
-    }
-}
-
-static void test_24_16_lut_matches_the_kernel_on_random_lines(void)
-{
-    unsigned n;
-    unsigned l;
-    unsigned i;
-
-    /* All 64 byte values, not just the 12 a real frame carries: the table
-     * covers the whole index space and so must the proof. */
-    rng_state = 0x4040BEEFu;
-    for (n = 0; n < 64u; n++) {
-        if ((n % 16u) == 0u) {
-            set_random_palette();
-        }
-        for (l = 0; l < 2u; l++) {
-            for (i = 0; i < SCALER_SRC_W; i++) {
-                raw[l][i] = (uint8_t)(rng16() & 63u);
-            }
-        }
-        assert_lut_path_matches_kernel();
-    }
-}
-
-static void test_24_16_lut_rejects_null_arguments(void)
-{
-    reset_dst();
-    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
-        scaler_scale_block_24_16_lut(NULL, raw[1], pair_lut, dst.block));
-    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
-        scaler_scale_block_24_16_lut(raw[0], NULL, pair_lut, dst.block));
-    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
-        scaler_scale_block_24_16_lut(raw[0], raw[1], NULL, dst.block));
-    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
-        scaler_scale_block_24_16_lut(raw[0], raw[1], pair_lut, NULL));
-    assert_canaries_intact(0u);
-}
-
 /* ── argument checking ───────────────────────────────────────────────── */
 
 static void test_null_and_unknown_arguments_are_rejected(void)
@@ -758,9 +650,6 @@ int main(void)
     RUN_TEST(test_24_16_kernel_matches_the_spec_on_random_lines);
     RUN_TEST(test_24_16_kernel_keeps_the_right_edge_pure);
     RUN_TEST(test_24_16_kernel_survives_alternating_extremes);
-    RUN_TEST(test_24_16_lut_matches_the_kernel_on_every_legal_pair);
-    RUN_TEST(test_24_16_lut_matches_the_kernel_on_random_lines);
-    RUN_TEST(test_24_16_lut_rejects_null_arguments);
     RUN_TEST(test_null_and_unknown_arguments_are_rejected);
     return UNITY_END();
 }

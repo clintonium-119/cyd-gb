@@ -37,18 +37,6 @@
 #error "BLOCK_UNITS must divide the frame: GB_SCREEN_H % (UNIT_LINES * BLOCK_UNITS) must be 0"
 #endif
 
-// ─── Scaler variant (bench switch) ──────────────────────────────────────────
-// 1 routes core 0 through the pair-table scaler — raw bytes in, a 24 KB table
-// on the heap — instead of the LUT pass plus the fixed kernel. 24/16 only. Off by
-// default; the measurement build passes -DSCALER_VARIANT_LUT=1. Whichever
-// path loses the bench is deleted, this switch with it.
-#ifndef SCALER_VARIANT_LUT
-#define SCALER_VARIANT_LUT 0
-#endif
-#if SCALER_VARIANT_LUT && SCALE_K != 24
-#error "SCALER_VARIANT_LUT is a 24/16 path"
-#endif
-
 // ─── Game area ──────────────────────────────────────────────────────────────
 // Derived from SCALE_K, so 24 and 26 both land on §2.1's table: 240 x 216 at
 // GAME_X/Y 40,12 and 260 x 234 at 30,3. GAME_X / GAME_Y are compile-time
