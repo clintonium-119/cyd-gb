@@ -38,7 +38,7 @@ Work down the list. Write the result in the blank; a blank you cannot fill is th
 11. **Nudge** — the D-pad moves the whole picture one pixel at a time. Line the white frame up inside the
     bezel, then press **A** to save. "Saved" appears for a moment. **B** puts it back to the factory
     position if you want to start over. Final values: `____`.
-12. **System** — Frameskip should read `0`; leave it there unless you were told otherwise. Write down
+12. **System** — Frameskip should read `1`; leave it there unless you were told otherwise. Write down
     Version and Built exactly as shown — that is how this unit gets matched to a build later: `____`.
 
 **Finish:** switch the unit off. Put a game cartridge in and switch it on normally. The game should sit

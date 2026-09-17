@@ -15,11 +15,14 @@ static_assert(BL_MIN > 0, "a backlight floor of 0 looks like a dead unit");
 
 void settings_defaults(settings_t* s) {
     s->palette = 0;
-    // 0, not the fork's 2: the mapped ROM removed the cache-miss hitches and
-    // the DMA push overlaps the transfer, so a skipped frame is no longer the
-    // normal case. The setting stays for bench sweeps and the diagnostic
-    // screen.
-    s->frameskip = 0;
+    // 1, for now (bench, 2026-09-17): at 80 MHz SPI the emulator core and the
+    // scaler together cost ~23 ms a frame in play, so without a skipped frame
+    // the game runs at 42 fps and 70 % speed with an audio underrun every
+    // frame. Skipping every other frame holds 60 Hz emulation and clean
+    // audio in all but the heaviest scenes, at the cost of one-frame flashes
+    // that land on a skipped frame. Goes back to 0 when the performance
+    // work (scaler kernel, emulator out of flash) makes 60 fps fit.
+    s->frameskip = 1;
     // 6th of the 8 backlight levels, not the top: a fresh unit that boots
     // at maximum is the one the bench found too bright. This is
     // BL_MIN + 5*BL_STEP -- derived, so it follows the ladder if those
