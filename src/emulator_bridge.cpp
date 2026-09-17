@@ -88,17 +88,23 @@ const char* emu_get_palette_name(uint8_t idx)
 }
 
 // ─── Frame path ─────────────────────────────────────────────────────────────
-// Peanut-GB hands us one 160-px index line at a time, in order. Each line is
-// LUT'd into a ring of source lines; as soon as a geometry block's lines plus
-// the first line of the NEXT block are in hand, the block is scaled and pushed.
-// The ring holds one slot more than a block needs, which is what lets that
-// lookahead line double as the next block's first line with no copying: by the
-// time a new line reuses a slot, the block that owned it has already been
-// pushed.
+// Peanut-GB hands us one 160-px index line at a time, in order. Core 1 does
+// nothing with it but copy the 160 raw bytes into the slot the current
+// geometry block owns. A slot is src_lines_per_block lines plus room for one
+// lookahead line — the first line of the NEXT block — which is copied only
+// when the geometry table says a blend row reads it (26/16 does; 24/16 never
+// does). Where it is needed and missing, the scaler's frame-end rule would
+// fire at every block boundary and band the picture. The frame's final block
+// has no lookahead, and its last_in_frame flag is what tells the consumer to
+// pass NULL.
 //
-// Buffers are sized for the larger geometry and every count comes from the
-// geometry table, so flipping SCALE_K changes the output with no edit here.
-static uint16_t line_ring[SCALER_SRC_LINES_MAX + 1][SCALER_SRC_W];
+// Colour never enters a slot: the raw byte is what the queue carries, and the
+// LUT, the scaler and the scaled DMA buffer all belong to the consumer on
+// core 0 (see the pipeline note below). Buffers are sized for the larger
+// geometry and every count comes from the geometry table, so flipping SCALE_K
+// changes the output with no edit here.
+static uint8_t slot_src[FRAMEQUEUE_SLOTS][SCALER_SRC_LINES_MAX + 1][SCALER_SRC_W];
+static uint16_t lut_lines[SCALER_SRC_LINES_MAX + 1][SCALER_SRC_W];
 static uint16_t scratch_row[SCALER_DST_W_MAX];
 static const scaler_geom_info_t* geom = nullptr;
 static int16_t vp_x = GAME_X;
@@ -107,13 +113,15 @@ static int16_t vp_y = GAME_Y;
 // ─── Pipeline ───────────────────────────────────────────────────────────────
 // Threading model, stated once so nothing else has to guess:
 //
-//   core 1, loopTask   emulation and scaling. Peanut-GB calls lcd_line, which
-//                      LUTs lines into line_ring and hands finished blocks to
-//                      push_block. push_block owns slot_buf while the queue
-//                      says the slot is the producer's.
-//   core 0, gbpush     emu_push_task. Pops committed slots, drives the DMA
-//                      display path, releases each slot only after its
-//                      transfer has completed.
+//   core 1, loopTask   emulation and audio. Peanut-GB calls lcd_line, which
+//                      copies each raw line into the open slot, acquiring a
+//                      slot at a block's first line and committing the block
+//                      once its lookahead line is in hand: 144 copies of 160
+//                      bytes per frame, and nothing else for the display.
+//   core 0, gbpush     emu_push_task. Pops committed slots, LUTs the raw
+//                      lines into RGB565, scales the block into the DMA
+//                      buffer, drives the DMA display path, and releases each
+//                      slot only after its transfer has completed.
 //
 // The APU callback, the mixer and the speaker's DMA write all run on core 1
 // inside emu_run_frame(), beside the emulation that feeds them: the APU's
@@ -123,35 +131,36 @@ static int16_t vp_y = GAME_Y;
 // The two never touch the same slot at the same time; framequeue is what makes
 // that a checked property rather than a convention, and it is host-tested. The
 // only shared mutable state outside the queue is the timing counters, single
-// writer each, and vp_x/vp_y, which change only from the menu with the
-// pipeline paused.
+// writer each; vp_x/vp_y, which change only from the menu with the pipeline
+// paused; and the palette LUT, which the menu rebuilds from core 1 while the
+// pipeline is paused and the consumer is parked on an empty queue.
 //
-// One block per slot, sized for the larger geometry, static so it lands in
-// internal DRAM: the SPI DMA engine cannot read from flash, and this board has
-// no PSRAM to get wrong. Two slots is 13.5 KB against the ~96 KB the mapped
-// ROM gave back.
+// The slot array is 2.9 KB of raw lines at the larger geometry; the scaled
+// block lives in dma_buf, 6.8 KB, static so it lands in internal DRAM: the SPI
+// DMA engine cannot read from flash, and this board has no PSRAM to get wrong.
 //
 // The mapped ROM is read-only for the whole session and must stay that way now
 // that two cores execute from flash: a flash write stalls the other core's
 // instruction fetch, so anything that writes the ROM partition has to happen
 // before the push task exists.
-static uint16_t slot_buf[FRAMEQUEUE_SLOTS][SCALER_DST_ROWS_MAX * SCALER_DST_W_MAX];
+static uint16_t dma_buf[SCALER_DST_ROWS_MAX * SCALER_DST_W_MAX];
 static framequeue_t fq;
 static TaskHandle_t push_task = nullptr;
 static uint16_t frame_seq = 0;
 static bool frame_dropped = false;
+// The slot lcd_line is filling, or -1 between blocks. Producer-owned state.
+static int open_slot = -1;
 
 // ─── Frame timing ───────────────────────────────────────────────────────────
 // Microseconds of the last COMPLETED frame, from esp_timer_get_time(): emu is
-// the Peanut-GB frame itself, scale is the accumulated scaler time and push the
-// accumulated display time. The *_acc pair accumulates the frame in progress.
-// Reported once a second, never per frame — serial writes cost frame time.
+// the Peanut-GB frame itself, scale the accumulated LUT + scaler time and push
+// the accumulated display time. Reported once a second, never per frame —
+// serial writes cost frame time.
 static uint32_t emu_us = 0;
-static uint32_t scale_us = 0;
-static uint32_t scale_acc = 0;
 // Written by the push task on core 0 and read by the [PERF] line on core 1.
 // A 32-bit aligned volatile write is atomic on this part, so the worst a race
 // can do is report the previous frame's figure in a once-a-second diagnostic.
+static volatile uint32_t scale_us = 0;
 static volatile uint32_t push_us = 0;
 // Microseconds core 1 spent waiting for a free slot, and how often it found
 // none. Both are the overlap's report card: stall time means the display is
@@ -201,112 +210,143 @@ static uint8_t blocks_per_frame()
 }
 
 /*
- * Scale the block starting at source line `first` into a queue slot and hand
- * it to the push task. `lookahead` is the next block's first line, or nullptr
- * at frame end. Deliberately not IRAM_ATTR: it calls straight into
- * flash-resident gbcore.
+ * Producer half: take the slot for the block about to start. The only thing
+ * core 1 waits for is a free slot, and waiting there is the overlap working:
+ * core 1 is ahead of core 0 and the two-slot backpressure is what keeps them
+ * in step. Backpressure is the whole rate control; there is no catch-up path
+ * that drops a block to get ahead, because that is how tearing gets in. The
+ * one abandonment below is the menu taking the bus, which is a different
+ * thing: the frame is not being raced, it is being cancelled.
  *
- * This is the producer half of the split. It no longer touches the display —
- * the only thing it waits for is a free slot, and waiting there is the overlap
- * working: core 1 is ahead of core 0 and the two-slot backpressure is what
- * keeps them in step. Backpressure is the whole rate control; there is no
- * catch-up path that drops a block to get ahead, because that is how tearing
- * gets in. The one abandonment below is the menu taking the bus, which is a
- * different thing: the frame is not being raced, it is being cancelled.
+ * Deliberately not IRAM_ATTR: it calls straight into flash-resident gbcore.
  */
-static void push_block(uint_fast8_t first, const uint16_t* lookahead)
+static void acquire_block()
 {
-    const uint16_t* src_lines[SCALER_SRC_LINES_MAX];
-    unsigned slots = (unsigned)geom->src_lines_per_block + 1u;
-    framequeue_meta_t meta;
-    unsigned i;
     int slot = 0;
     int r;
     int64_t t0;
-    int64_t t1;
-
-    if (frame_dropped) {
-        return;
-    }
-    meta.block_idx = (uint8_t)(first / geom->src_lines_per_block);
-    meta.frame_seq = frame_seq;
-    meta.last_in_frame = (meta.block_idx == (uint8_t)(blocks_per_frame() - 1u));
 
     t0 = esp_timer_get_time();
     while ((r = framequeue_acquire(&fq, &slot)) == FRAMEQUEUE_FULL) {
         taskYIELD();
     }
-    t1 = esp_timer_get_time();
-    q_stall_acc += (uint32_t)(t1 - t0);
+    q_stall_acc += (uint32_t)(esp_timer_get_time() - t0);
     if (r != FRAMEQUEUE_OK) {
         /* Paused: the menu has the bus. Abandon the rest of this frame rather
          * than committing a hole in the middle of it; resume starts clean. */
         frame_dropped = true;
         return;
     }
+    open_slot = slot;
+}
 
-    for (i = 0; i < geom->src_lines_per_block; i++) {
-        src_lines[i] = line_ring[(first + i) % slots];
-    }
-    if (scaler_scale_block(SCALE_GEOM, SCALER_MODE_BLEND, src_lines, lookahead,
-                           slot_buf[slot], scratch_row) != SCALER_OK) {
-        frame_dropped = true;
-        return;
-    }
-    scale_acc += (uint32_t)(esp_timer_get_time() - t1);
-    if (framequeue_commit(&fq, slot, &meta) != FRAMEQUEUE_OK) {
-        /* Unreachable while the frame walk above is the only producer, so if
-         * it ever fires the sequencing assumption has been broken and the rest
-         * of the frame is not worth pushing. */
+/*
+ * Producer half: hand the open slot, holding the block that starts at source
+ * line `first`, to the push task. Its lines and lookahead are already in
+ * place, so this is metadata, a commit and a wake-up.
+ */
+static void push_block(uint_fast8_t first)
+{
+    framequeue_meta_t meta;
+
+    meta.block_idx = (uint8_t)(first / geom->src_lines_per_block);
+    meta.frame_seq = frame_seq;
+    meta.last_in_frame = (meta.block_idx == (uint8_t)(blocks_per_frame() - 1u));
+    if (framequeue_commit(&fq, open_slot, &meta) != FRAMEQUEUE_OK) {
+        /* Unreachable while the frame walk in lcd_line is the only producer,
+         * so if it ever fires the sequencing assumption has been broken and
+         * the rest of the frame is not worth pushing. */
         Serial.println("[EMU] frame queue rejected a block");
         frame_dropped = true;
-        return;
     }
-    if (push_task) {
+    open_slot = -1;
+    if (!frame_dropped && push_task) {
         xTaskNotifyGive(push_task);
     }
 }
 
 /*
- * Consumer half, pinned to core 0. Frame bracketing lives here now, driven
- * entirely by the metadata the producer committed: block 0 opens the address
- * window, last_in_frame closes it.
+ * Consumer half, pinned to core 0. Every display transform lives here: the
+ * raw lines are LUT'd, the block is scaled into dma_buf and pushed, in that
+ * order and one block at a time. Frame bracketing is driven entirely by the
+ * metadata the producer committed: block 0 opens the address window,
+ * last_in_frame closes it.
  *
- * A slot is released only after its transfer has completed, so the producer
- * can never refill a buffer the DMA engine is still reading. The wait when the
- * queue is empty is a task notification rather than a spin: this is the only
- * task core 0 hosts — input is polled per frame from the emulation loop on
- * core 1 — and a busy loop here would starve that core's idle task into a
- * watchdog reset. The timeout is the belt to that braces — a lost wakeup costs
- * one late block, not a stalled pipeline.
+ * A slot is released only after the block's transfer has completed. Its raw
+ * bytes are finished with sooner than that, but framequeue_drained() is the
+ * menu's cue to take the bus, and it must not fire while a transfer is still
+ * in flight.
+ *
+ * The wait when the queue is empty is a task notification rather than a
+ * spin: this is the only task core 0 hosts — input is polled per frame from
+ * the emulation loop on core 1 — and a busy loop here would starve that
+ * core's idle task into a watchdog reset. The timeout is the belt to that
+ * braces — a lost wakeup costs one late block, not a stalled pipeline.
  */
 static void emu_push_task(void* arg)
 {
+    const uint16_t* src_lines[SCALER_SRC_LINES_MAX];
+    const uint16_t* lookahead;
     framequeue_meta_t meta;
+    uint32_t scale_acc = 0;
     uint32_t push_acc = 0;
+    unsigned lines;
+    unsigned i;
+    unsigned x;
     int slot = 0;
-    int64_t t;
+    int64_t t0;
+    int64_t t1;
 
     (void)arg;
+    for (i = 0; i < SCALER_SRC_LINES_MAX; i++) {
+        src_lines[i] = lut_lines[i];
+    }
     for (;;) {
         if (framequeue_pop(&fq, &slot, &meta) != FRAMEQUEUE_OK) {
             ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2));
             continue;
         }
-        t = esp_timer_get_time();
+        t0 = esp_timer_get_time();
         if (meta.block_idx == 0) {
+            scale_acc = 0;
             push_acc = 0;
+        }
+        /* The lookahead rides in the slot after the block's own lines, when
+         * the geometry reads one at all; the frame's final block has none.
+         * No mask on the raw byte: the 12-colour path bounds it at 0x23 and
+         * the LUT covers all 64 values, which is what removes 23,040 ANDs per
+         * frame (§2.4). */
+        lines = (unsigned)geom->src_lines_per_block;
+        lookahead = nullptr;
+        if (!meta.last_in_frame) {
+            lookahead = lut_lines[lines];
+            lines++;
+        }
+        for (i = 0; i < lines; i++) {
+            for (x = 0; x < SCALER_SRC_W; x++) {
+                lut_lines[i][x] = lut[slot_src[slot][i][x]];
+            }
+        }
+        /* The only failure is a NULL buffer or a bad enum, and every argument
+         * here is a static or a compile-time constant. */
+        (void)scaler_scale_block(SCALE_GEOM, SCALER_MODE_BLEND, src_lines,
+                                 lookahead, dma_buf, scratch_row);
+        t1 = esp_timer_get_time();
+        scale_acc += (uint32_t)(t1 - t0);
+
+        if (meta.block_idx == 0) {
             display_frame_begin(vp_x, vp_y);
         }
-        display_push_rows_dma(slot_buf[slot],
+        display_push_rows_dma(dma_buf,
                               (size_t)geom->dst_rows_per_block * geom->dst_w);
         display_dma_wait();
         framequeue_release(&fq, slot);
         if (meta.last_in_frame) {
             display_frame_end();
         }
-        push_acc += (uint32_t)(esp_timer_get_time() - t);
+        push_acc += (uint32_t)(esp_timer_get_time() - t1);
         if (meta.last_in_frame) {
+            scale_us = scale_acc;
             push_us = push_acc;
         }
     }
@@ -353,9 +393,8 @@ static void gb_err(struct gb_s* g, const enum gb_error_e e, const uint16_t a) {
 }
 static void IRAM_ATTR lcd_line(struct gb_s* g, const uint8_t px[160], const uint_fast8_t ln)
 {
-    unsigned slots;
-    uint16_t* dst;
-    int x;
+    unsigned lpb;
+    unsigned in_block;
 
     (void)g;
     /* Frameskip is Peanut-GB's own (gb->direct.frame_skip): on a skipped
@@ -364,33 +403,40 @@ static void IRAM_ATTR lcd_line(struct gb_s* g, const uint8_t px[160], const uint
      * sequence therefore counts rendered frames and simply jumps over skipped
      * ones, which is exactly what the queue's ordering rule allows. */
     if (ln == 0) {
-        scale_acc = 0;
         q_stall_acc = 0;
         frame_dropped = false;
         frame_seq++;
     }
-
-    slots = (unsigned)geom->src_lines_per_block + 1u;
-    dst = line_ring[ln % slots];
-    /* No mask: the 12-colour path bounds px[x] at 0x23 and the LUT covers all
-     * 64 possible bytes, which is what removes 23,040 ANDs per frame (§2.4). */
-    for (x = 0; x < GB_SCREEN_W; x++) {
-        dst[x] = lut[px[x]];
+    if (frame_dropped) {
+        return;
     }
 
-    /* This line is the previous block's lookahead as well as this block's
-     * first line. 144 divides by both geometries' block heights, so a block
-     * boundary is never also the last line. */
-    if (ln >= geom->src_lines_per_block &&
-        (ln % geom->src_lines_per_block) == 0) {
-        push_block((uint_fast8_t)(ln - geom->src_lines_per_block), dst);
+    lpb = geom->src_lines_per_block;
+    in_block = ln % lpb;
+    if (in_block == 0) {
+        /* This line is the previous block's lookahead as well as this block's
+         * first line. 144 divides by both geometries' block heights, so a
+         * block boundary is never also the last line. The previous block is
+         * committed before the next slot is acquired, so core 0 has work in
+         * hand while core 1 waits for the other slot to come free. */
+        if (ln != 0) {
+            memcpy(slot_src[open_slot][lpb], px, SCALER_SRC_W);
+            push_block((uint_fast8_t)(ln - lpb));
+            if (frame_dropped) {
+                return;
+            }
+        }
+        acquire_block();
+        if (frame_dropped) {
+            return;
+        }
     }
+    memcpy(slot_src[open_slot][in_block], px, SCALER_SRC_W);
+
     if (ln == GB_SCREEN_H - 1) {
         /* Final block: no next line, so its trailing blend rows stay pure. Its
          * last_in_frame flag is what closes the window, over on core 0. */
-        push_block((uint_fast8_t)(GB_SCREEN_H - geom->src_lines_per_block),
-                   nullptr);
-        scale_us = scale_acc;
+        push_block((uint_fast8_t)(GB_SCREEN_H - lpb));
         q_stall_us = q_stall_acc;
     }
 }
