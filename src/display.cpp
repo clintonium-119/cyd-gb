@@ -15,7 +15,12 @@ void display_init()
     pinMode(TFT_PIN_BL, OUTPUT);
     digitalWrite(TFT_PIN_BL, HIGH);
     tft.init();
-    tft.invertDisplay(true);
+    // This panel is not inverted and wants BGR, not RGB. Both were
+    // wrong together and masked each other: inversion alone reads cyan,
+    // the R/B swap alone reads blue on black, and the pair read yellow
+    // on white. The colour order half is -DTFT_RGB_ORDER in
+    // platformio.ini; this is the inversion half (BUG-0004).
+    tft.invertDisplay(false);
     // Palette values are native RGB565 and the scaler blends them before
     // anything swaps bytes, so the driver does the swap at push time — this is
     // the ordering design §2.3 requires to avoid colour fringing.
