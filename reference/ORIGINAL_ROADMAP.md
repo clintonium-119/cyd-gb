@@ -268,8 +268,12 @@ static inline uint16_t avg565(uint16_t a, uint16_t b) {
 *before* swapping, or keep the palette native and let `setSwapBytes(true)` handle it at push time. Blending
 byte-swapped values averages across misaligned fields and produces colour fringing.
 
-Cost: ~29k blends/frame, roughly 0.5 ms at 240 MHz. This is the single best quality-per-millisecond change
-available and matters more than the choice between 24/16 and 26/16.
+Cost, estimated at design time: ~29k blends/frame, roughly 0.5 ms at 240 MHz. Measured 2026-09-17 on the
+bench board: the whole 24/16 blend scale — palette lookup, horizontal pass, vertical blend, 34,560 output
+pixels — is **2.2 ms a frame** as a fixed, unrolled kernel on core 0 (the generic pattern-driven scaler it
+replaced cost 7.8 ms on the same core, 10 ms when it ran on core 1 beside the emulator). The estimate
+counted the blends and not the loads and stores around them. It remains the single best
+quality-per-millisecond change available and matters more than the choice between 24/16 and 26/16.
 
 ### 2.4 Colour
 
@@ -332,16 +336,24 @@ Then `pushPixelsDMA` with two alternating row buffers so the transfer overlaps e
 
 Frame budget at 59.7 fps is **16.75 ms**.
 
-| | ms |
-|---|---|
-| Peanut-GB CPU + PPU | ~8–11 *(estimated, not measured)* |
-| MiniGB APU | ~1 |
-| Scale + blend | ~1.7 |
-| **Core 1 total** | **~11–14** |
-| SPI push @ 80 MHz (core 0, overlapped) | 10.4 |
+Measured 2026-09-17 on the bench board (Black Castle, 80 MHz SPI, frameskip 0, `tools/perf_capture.py`
+attached for 180 s; medians, play window / attract):
 
-The emulation figure is reasoned from instruction counts, **not measured**, and could be off by 50% either
-way. Measure before optimising.
+| | ms (play / attract) | core |
+|---|---|---|
+| Peanut-GB CPU + PPU (`emu − qstall`) | 9.8 (peak 13.1) / 5.1 | 1 |
+| MiniGB APU + mix | 1.2 / 1.2 | 1 |
+| Wait for a free queue slot (`qstall`) | 3.7 / 7.1 | 1 |
+| **Core 1 total** (`emu + apu`) | **14.8 (worst 15.6) / 13.4** | 1 |
+| Palette LUT + scale + blend, fixed kernel | 2.2 / 2.2 | 0 |
+| SPI push @ 80 MHz, 18 DMA transfers of 4 units | 8.9 / 11.8 | 0 |
+| **Core 0 cycle** | **≈ 14.0** | 0 |
+
+Core 0 is the pacing core: its cycle is the 10.4 ms of pixels on the bus plus transfer set-up, and core 1
+waits for a slot whenever the emulator finishes early. The `qstall` row is that wait, not work; the
+emulator's real cost is the first row. Result: 60 fps with the audio underrun counter flat over two minutes
+of play. The design-time estimate for emulation (~8–11 ms) was right; the estimate for the scaler (~1.7 ms)
+undercounted by 4–6× until the kernel landed.
 
 ### 3.2 The ROM cache is the biggest risk
 
@@ -376,6 +388,13 @@ non-issue). Requires repartitioning; current table is app0 2 MB / SPIFFS 1.98 MB
 
 Peanut-GB on core 1, display push on core 0 behind a queue. Serial at 80 MHz is ~12 + 10.4 ≈ 22 ms → frameskip
 1, ~30 fps. Overlapped it's max(12, 10.4) ≈ 12 ms → full 60 fps.
+
+As built (2026-09-17): core 1 runs the emulator and the APU and copies each raw 8-bit line into a queue
+slot; core 0 does every display transform — palette lookup, the 3/2 blend kernel, the byte swap and the
+DMA transfer — scaling one block into one DMA buffer while the other block is still on the bus. A queue
+block is four scaler units (8 source lines → 12 rows), 18 transfers a frame; the raw slot goes back to
+core 1 as soon as it has been read, a transfer early. Measured: core 0's cycle ≈ 14.0 ms, core 1's 14.8 ms
+in play, 60 fps.
 
 `SPI_FREQUENCY` is 80000000 as of 2026-09-17 (§11 item 7): the panel took it with no artefacts, and the display stopped being the bottleneck — `push` 16.1 ms, zero queue overflows. It was not free of consequence for core 1, though: the emulator's own cost rose ~1.5 ms (6.2 → 7.7 ms in attract mode) once both cores ran concurrently instead of core 1 idling in the stall.
 
@@ -906,7 +925,10 @@ window per frame. Add an FPS counter and a frame-time breakdown.
 ### Phase 5 — Performance
 Core split (emulation core 1, push core 0), `pushPixelsDMA` with double row buffers, `SPI_FREQUENCY` 80 MHz.
 Then mmap the ROM from a raw partition; repartition as needed. Re-measure after each.
-**Exit: 60 fps with no frameskip, no stalls on a large ROM.**
+**Exit: 60 fps with no frameskip, no stalls on a large ROM.** — Met 2026-09-17 for the frame rate half:
+Black Castle (64 KB) at 60 fps, frameskip 0, audio underruns flat over two minutes of play, core 1 at
+14.8 ms median / 15.6 ms worst. The "large ROM" half (an MBC5 title through the flash cache) is the bench
+workstream's open item.
 Then flip to 26/16 and re-measure; decide 24/16 vs 26/16 on evidence.
 
 ### Phase 6 — Audio

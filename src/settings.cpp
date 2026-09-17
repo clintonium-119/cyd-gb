@@ -15,14 +15,12 @@ static_assert(BL_MIN > 0, "a backlight floor of 0 looks like a dead unit");
 
 void settings_defaults(settings_t* s) {
     s->palette = 0;
-    // 1, for now (bench, 2026-09-17): at 80 MHz SPI the emulator core and the
-    // scaler together cost ~23 ms a frame in play, so without a skipped frame
-    // the game runs at 42 fps and 70 % speed with an audio underrun every
-    // frame. Skipping every other frame holds 60 Hz emulation and clean
-    // audio in all but the heaviest scenes, at the cost of one-frame flashes
-    // that land on a skipped frame. Goes back to 0 when the performance
-    // work (scaler kernel, emulator out of flash) makes 60 fps fit.
-    s->frameskip = 1;
+    // 0 (bench, 2026-09-17): with the scaler on core 0 and the fixed 3/2
+    // kernel, Black Castle at 80 MHz SPI plays at 60 fps with the audio
+    // underrun counter flat — core 1 at 14.8 ms median, 15.6 ms worst, in a
+    // 16.7 ms budget — so every frame is drawn and one-frame hit flashes show
+    // again. The setting stays per unit for a heavier title that needs it.
+    s->frameskip = 0;
     // 6th of the 8 backlight levels, not the top: a fresh unit that boots
     // at maximum is the one the bench found too bright. This is
     // BL_MIN + 5*BL_STEP -- derived, so it follows the ladder if those
