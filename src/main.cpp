@@ -583,6 +583,10 @@ void setup() {
     display_init();
     display_set_backlight(settings.brightness);
     emu_set_palette(settings.palette);
+#ifdef DEV_FRAMESKIP
+    // Bench only: force the frameskip setting for a measurement build.
+    settings.frameskip = DEV_FRAMESKIP;
+#endif
     emu_set_frame_skip(settings.frameskip);
     emu_set_viewport(settings.game_x, settings.game_y);
     emu_set_volume(settings.volume);

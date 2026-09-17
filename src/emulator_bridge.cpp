@@ -358,12 +358,11 @@ static void IRAM_ATTR lcd_line(struct gb_s* g, const uint8_t px[160], const uint
     int x;
 
     (void)g;
-    /* Frameskip first: a skipped frame must never reach the queue. The frame
+    /* Frameskip is Peanut-GB's own (gb->direct.frame_skip): on a skipped
+     * frame it skips the PPU line draw as well, so this callback is never
+     * entered and neither the scaler nor the queue sees the frame. The frame
      * sequence therefore counts rendered frames and simply jumps over skipped
      * ones, which is exactly what the queue's ordering rule allows. */
-    if (fskip > 0 && (fcnt % (fskip + 1)) != 0) {
-        return;
-    }
     if (ln == 0) {
         scale_acc = 0;
         q_stall_acc = 0;
@@ -469,6 +468,7 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     mix_init(&mix, 0x2545F491u);
 
     gb_init_lcd(gb, lcd_line);
+    gb->direct.frame_skip = (fskip > 0);
     /* Build the LUT here too: main() may never call emu_set_palette. */
     emu_set_palette(curpal);
     geom = scaler_geom_info(SCALE_GEOM);
@@ -623,7 +623,13 @@ void emu_get_audio_times(uint32_t* out_apu_us, uint32_t* out_wait_us)
     }
 }
 
-void emu_set_frame_skip(uint8_t s){fskip=s;}
+void emu_set_frame_skip(uint8_t s)
+{
+    fskip = s;
+    if (gb) {
+        gb->direct.frame_skip = (fskip > 0);
+    }
+}
 uint8_t emu_get_frame_skip(){return fskip;}
 uint32_t emu_get_fps(){return cfps;}
 void emu_reset()
