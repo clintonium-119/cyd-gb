@@ -377,7 +377,7 @@ non-issue). Requires repartitioning; current table is app0 2 MB / SPIFFS 1.98 MB
 Peanut-GB on core 1, display push on core 0 behind a queue. Serial at 80 MHz is ~12 + 10.4 ≈ 22 ms → frameskip
 1, ~30 fps. Overlapped it's max(12, 10.4) ≈ 12 ms → full 60 fps.
 
-Also try raising `SPI_FREQUENCY` to 80000000. Short traces usually take it, and it's free.
+`SPI_FREQUENCY` is 80000000 as of 2026-09-17 (§11 item 7): the panel took it with no artefacts, and the display stopped being the bottleneck — `push` 16.1 ms, zero queue overflows. It was not free of consequence for core 1, though: the emulator's own cost rose ~1.5 ms (6.2 → 7.7 ms in attract mode) once both cores ran concurrently instead of core 1 idling in the stall.
 
 ### 3.4 Reference
 
@@ -960,7 +960,7 @@ menu cart, wildcard, starter carts. There is no phone writing station and no QR 
 | 4 | Does BAT actually power the system? | Cell connected, USB unplugged — does it boot? | Charge-only would need a boost + USB VBUS feed | **Yes** — the amp test ran on battery |
 | 5 | Actual pixel pitch | Fill screen white, caliper the lit area | Recompute all bezel and `GAME_X`/`GAME_Y` numbers | open |
 | 6 | IO34 divider ratio | Compare ADC reading to a meter across the cell range | Low-battery cutoff thresholds are wrong | **closed 2026-09-16 — the question was malformed.** There is no divider and no battery sense: IO34 is the LDR, and `BAT+` reaches no GPIO. Diagnostic page read raw 0 against a metered 3.85 V cell; all six ADC1 and three free ADC2 channels scanned, none tracking the cell; confirmed against the factory schematic V1.0. The low-battery flush has no input — see the open design decision |
-| 7 | Max reliable `SPI_FREQUENCY` | Sweep 40 / 55 / 80 MHz, look for artifacts | Directly caps frame rate | open |
+| 7 | Max reliable `SPI_FREQUENCY` | Sweep 40 / 55 / 80 MHz, look for artifacts | Directly caps frame rate | **80 MHz shipped, 2026-09-17.** `push` median 26.5 ms at 40 MHz (display-bound, 36 fps, core 1 stalled 9.9 ms/frame, queue overflowing) vs 16.1 ms at 80 MHz (zero overflows, stall < 80 µs). No artefacts through ~5 min of Black Castle play at 80. 55 MHz is not a distinct point: the IDF SPI driver programs 40 MHz for it. Colour-bar and checkerboard photos at 80 still to take |
 | 8 | Real emulation frame time | Phase 2 FPS counter | May need Retro-Go's gnuboy core instead of Peanut-GB | open |
 | 9 | Does SW1 bridge cleanly? | Hold SW1 while connecting the battery — does it boot? | A sealed unit cannot be started; rework the power path (§1.5) | open — new in rev C |
 | 10 | Anti-metal read range | Read reliability at final geometry, through the shell, backlight at full | Move the PN532, change disc, or thin the shell behind the slot | open — new 2026-09-02 |
