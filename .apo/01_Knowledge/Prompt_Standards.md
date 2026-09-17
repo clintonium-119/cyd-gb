@@ -8,7 +8,7 @@ title: "Prompt Standards"
 status: in_progress
 owner: ""
 created: '2026-08-27'
-updated: '2026-09-03'
+updated: '2026-09-17'
 reviewed_on: ""
 related_notes: ["[[01_Knowledge/Coding_Standards]]", "[[01_Knowledge/System_Overview]]"]
 tags: [apovault, knowledge, standards]
@@ -135,6 +135,7 @@ rail concerns the palette table:
   inside `02_Work/**`.
 - Domain item IDs referenced as kanban items (`TASK-NNNN`, `BUG-NNNN`) are allowed.
 - Enforced by `/apo:lint`'s "Check for vault-artifact citations".
+- **Do:** after writing an acceptance criterion, re-read the step's own preconditions and DO-NOT list against the observable it names, and confirm that observable is reachable from that starting state — for firmware, trace the actual code path rather than the design doc's description of it; an observable printed after an early-exit the step itself induces is not reachable, it is a contradiction. **Do not:** infer a probe point or reachable state from a plan's prose just because the named artifact exists somewhere in the system. Where an observable is genuinely unreachable in this step, move it to the first step that can reach it and record the reason in both places.
 
 ## Verification status
 
@@ -143,3 +144,4 @@ speculative.
 - **Do:** write each acceptance criterion as the check that would fail if the property were false, naming the exact artifact it reads — the assertion and the field it checks, the grep and its expected count, the command and its output — not a comment, a constant's name, or a struct field that doesn't exist. **Do not:** tick a criterion whose only evidence is a comment claiming the property or a constant whose name implies the bound; if no observable exists yet for the property, say so explicitly so making it checkable becomes part of the work, not a discovery at review time.
 - **Do not:** phrase an acceptance criterion as a bare token grep over a whole file. If the token also occurs in ordinary English prose (e.g. `millis` inside `millisecond`, `return` inside `returns`) or inside a comment the same plan separately mandates, a whole-file grep is unsatisfiable — the executing agent must violate the plan, silently reword prose to dodge the grep, or stop and ask. Scope the grep to the construct that actually carries the property (`grep -cE '^#include.*(Arduino|esp_)'` for a dependency, `grep -c 'millis()'` for a call, not the bare word) and, when the plan requires prose that itself must contain the forbidden token, state that exception in the criterion.
 - **Do:** derive every number an acceptance criterion asserts — expected values, case counts, pixel or byte budgets — by walking the sequence, counting the list, or doing the arithmetic, and show that working in the criterion (`6 x 26 + 40 = 196 <= 216`, not "fits the window"); where a number genuinely cannot be settled until execute, mark it `(verify)` with the fallback named. **Do not:** write an expected value you have not traced, a count you have not counted, or a budget you have not multiplied out — a criterion with a wrong number reads as settled, so the agent that finds it wrong has to disprove it before it can proceed, instead of just meeting a missing one.
+- **Do not treat a scaffold verb's success or a lint pass as proof of correctness:** re-running a scaffold command against an existing file is not guaranteed to be idempotent (it can append a duplicate block instead of updating in place), and a structural linter that parses only the first well-formed block will report clean even when a stale or duplicate block sits behind it. Verify generated/updated files by reading the whole file, not by trusting the tool's exit status or lint output alone.
