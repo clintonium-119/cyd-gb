@@ -52,6 +52,27 @@ bool settings_load(settings_t* s) {
     if (s->volume > SETTINGS_VOL_OFF) {
         s->volume = SETTINGS_VOL_OFF;
     }
+
+    // The nudge is stored in panel pixels, but GAME_W / GAME_H are compile
+    // time: flip SCALE_K and every nudge saved under the old geometry is
+    // suddenly out of range. A 24/16 unit stores gy=12, which at 26/16 puts
+    // the last 6 of 234 rows off the bottom of the panel -- and silently, as
+    // the panel simply drops the rows the address window runs past. The
+    // diagnostics page already clamps to exactly these bounds on entry and on
+    // every step (diag.c:99-104, 121-141), so before this it would display a
+    // corrected origin while the game drew from the stored one. Clamped here
+    // so both read the same value and no stored nudge can push the window off
+    // the panel, whatever geometry wrote it.
+    if (s->game_x < 0) {
+        s->game_x = 0;
+    } else if (s->game_x > (int16_t)(SCREEN_W - GAME_W)) {
+        s->game_x = (int16_t)(SCREEN_W - GAME_W);
+    }
+    if (s->game_y < 0) {
+        s->game_y = 0;
+    } else if (s->game_y > (int16_t)(SCREEN_H - GAME_H)) {
+        s->game_y = (int16_t)(SCREEN_H - GAME_H);
+    }
     return has;
 }
 
