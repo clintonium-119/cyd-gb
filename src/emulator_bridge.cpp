@@ -318,7 +318,7 @@ static void emu_push_task(void* arg)
          * frame (§2.4). */
         lines = (unsigned)geom->src_lines_per_block;
         lookahead = nullptr;
-        if (!meta.last_in_frame) {
+        if (geom->uses_lookahead && !meta.last_in_frame) {
             lookahead = lut_lines[lines];
             lines++;
         }
@@ -420,7 +420,9 @@ static void IRAM_ATTR lcd_line(struct gb_s* g, const uint8_t px[160], const uint
          * committed before the next slot is acquired, so core 0 has work in
          * hand while core 1 waits for the other slot to come free. */
         if (ln != 0) {
-            memcpy(slot_src[open_slot][lpb], px, SCALER_SRC_W);
+            if (geom->uses_lookahead) {
+                memcpy(slot_src[open_slot][lpb], px, SCALER_SRC_W);
+            }
             push_block((uint_fast8_t)(ln - lpb));
             if (frame_dropped) {
                 return;

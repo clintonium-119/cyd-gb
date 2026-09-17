@@ -22,6 +22,17 @@
 // or past the last source line of the frame (lookahead_line NULL), clamps to
 // that last source, so the frame's right and bottom edges stay pure.
 //
+// Lookahead: only a geometry whose block's final blend row reaches into the
+// next block needs the next block's first line. 26/16 does (unit 7 blends
+// with unit 8); 24/16 does not (its one blend partner is in-block), and
+// uses_lookahead in the geometry table says which, so a caller can skip
+// carrying a line nobody reads.
+//
+// Fast path: 24/16 in BLEND mode — the shipped geometry — runs through a
+// fixed, unrolled 3/2 kernel that produces the same pixels as the pattern
+// walk; every other geometry/mode pair takes the pattern-driven code. Both
+// are the same function to the caller.
+//
 // Byte order: scaler_avg565() assumes NATIVE RGB565 bit layout. Blend BEFORE
 // any byte swap — averaging byte-swapped values mixes misaligned channel
 // fields and produces colour fringing.
@@ -60,6 +71,7 @@ typedef struct scaler_geom_info_s {
     uint8_t src_lines_per_block; /* source lines one block call consumes */
     uint8_t dst_rows_per_block;  /* output rows one block call emits     */
     uint16_t dst_w;              /* output row width, pixels             */
+    uint8_t uses_lookahead;      /* a blend row reads the next block     */
 } scaler_geom_info_t;
 
 /*
@@ -74,7 +86,8 @@ const scaler_geom_info_t* scaler_geom_info(enum scaler_geom_e geom);
  *   src_lines      array of src_lines_per_block pointers to SCALER_SRC_W-px
  *                  source lines, top first
  *   lookahead_line first source line of the NEXT block, or NULL at frame end
- *                  (the trailing blend rows then stay pure)
+ *                  (the trailing blend rows then stay pure); ignored by a
+ *                  geometry with uses_lookahead 0
  *   dst            dst_rows_per_block * dst_w pixels, row-major
  *   scratch_row    dst_w scratch pixels, required; holds the horizontally
  *                  scaled lookahead line when a cross-block blend row needs

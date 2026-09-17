@@ -224,12 +224,14 @@ static void test_geom_info_reports_both_geometries(void)
     TEST_ASSERT_EQUAL_UINT(2, g->src_lines_per_block);
     TEST_ASSERT_EQUAL_UINT(3, g->dst_rows_per_block);
     TEST_ASSERT_EQUAL_UINT(240, g->dst_w);
+    TEST_ASSERT_EQUAL_UINT(0, g->uses_lookahead);
 
     g = scaler_geom_info(SCALER_GEOM_26_16);
     TEST_ASSERT_NOT_NULL(g);
     TEST_ASSERT_EQUAL_UINT(8, g->src_lines_per_block);
     TEST_ASSERT_EQUAL_UINT(13, g->dst_rows_per_block);
     TEST_ASSERT_EQUAL_UINT(260, g->dst_w);
+    TEST_ASSERT_EQUAL_UINT(1, g->uses_lookahead);
 
     /* Both tables sized so one set of caller buffers covers either. */
     TEST_ASSERT_TRUE(g->dst_w <= SCALER_DST_W_MAX);
@@ -507,6 +509,93 @@ static void test_26_16_lookahead_row_uses_the_next_block(void)
     assert_canaries_intact(13u * 260u);
 }
 
+/* ── 24/16 fixed kernel against the pattern spec ─────────────────────── */
+/*
+ * 24/16 BLEND is served by an unrolled kernel rather than the pattern walk,
+ * and its contract is that nobody can tell: the spec sweep above is the
+ * pattern walk restated, so these cases run the kernel over inputs the
+ * literal tests never reach — random lines, every mask bit toggling, and
+ * both lookahead states, which the geometry must ignore.
+ */
+
+static uint32_t rng_state;
+
+static uint16_t rng16(void)
+{
+    rng_state = rng_state * 1103515245u + 12345u;
+    return (uint16_t)(rng_state >> 13);
+}
+
+static void set_random_lines(void)
+{
+    unsigned l;
+    unsigned i;
+    for (l = 0; l < 2u; l++) {
+        for (i = 0; i < SCALER_SRC_W; i++) {
+            src[l][i] = rng16();
+        }
+    }
+    for (i = 0; i < SCALER_SRC_W; i++) {
+        lookahead[i] = rng16();
+    }
+}
+
+static void test_24_16_kernel_matches_the_spec_on_random_lines(void)
+{
+    unsigned n;
+
+    rng_state = 0x2416BEEFu;
+    for (n = 0; n < 64u; n++) {
+        set_random_lines();
+        assert_block_matches_spec(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
+                                  spec_24_16, (n & 1u) ? lookahead : NULL);
+    }
+}
+
+static void test_24_16_kernel_keeps_the_right_edge_pure(void)
+{
+    unsigned n;
+
+    /* The last output pixel of each row is the last source pixel of its
+     * line — pixel 159 has no partner to blend with. */
+    rng_state = 0x0159015Au;
+    for (n = 0; n < 16u; n++) {
+        set_random_lines();
+        reset_dst();
+        TEST_ASSERT_EQUAL_INT(SCALER_OK,
+            scaler_scale_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
+                               lines, lookahead, dst.block, scratch.row));
+        TEST_ASSERT_EQUAL_HEX16(src[0][159], row_of(0, 240)[239]);
+        TEST_ASSERT_EQUAL_HEX16(scaler_avg565(src[0][159], src[1][159]),
+                                row_of(1, 240)[239]);
+        TEST_ASSERT_EQUAL_HEX16(src[1][159], row_of(2, 240)[239]);
+        assert_canaries_intact(3u * 240u);
+    }
+}
+
+static void test_24_16_kernel_survives_alternating_extremes(void)
+{
+    unsigned i;
+
+    /* Every channel bit flips between neighbours on both axes, so a blend
+     * that borrowed across a channel boundary would show here. */
+    for (i = 0; i < SCALER_SRC_W; i++) {
+        src[0][i] = (i & 1u) ? 0xFFFFu : 0x0000u;
+        src[1][i] = (i & 1u) ? 0x0000u : 0xFFFFu;
+        lookahead[i] = 0xA5A5u;
+    }
+    assert_block_matches_spec(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
+                              spec_24_16, lookahead);
+    /* The horizontal blend of black and white is mid-grey in every channel
+     * (15, 31, 15), and the vertical blend of two such rows is that grey
+     * where the rows agree and mid-grey again where they cross. */
+    TEST_ASSERT_EQUAL_HEX16(0x7BEFu, row_of(0, 240)[1]);
+    TEST_ASSERT_EQUAL_HEX16(0x7BEFu, row_of(2, 240)[1]);
+    TEST_ASSERT_EQUAL_HEX16(0x7BEFu, row_of(1, 240)[0]);
+    TEST_ASSERT_EQUAL_HEX16(0x7BEFu, row_of(1, 240)[1]);
+    TEST_ASSERT_EQUAL_HEX16(0x7BEFu, row_of(1, 240)[2]);
+}
+
 /* ── argument checking ───────────────────────────────────────────────── */
 
 static void test_null_and_unknown_arguments_are_rejected(void)
@@ -558,6 +647,9 @@ int main(void)
     RUN_TEST(test_26_16_matches_the_spec_in_both_modes);
     RUN_TEST(test_null_lookahead_clamps_the_trailing_blend_rows);
     RUN_TEST(test_26_16_lookahead_row_uses_the_next_block);
+    RUN_TEST(test_24_16_kernel_matches_the_spec_on_random_lines);
+    RUN_TEST(test_24_16_kernel_keeps_the_right_edge_pure);
+    RUN_TEST(test_24_16_kernel_survives_alternating_extremes);
     RUN_TEST(test_null_and_unknown_arguments_are_rejected);
     return UNITY_END();
 }
