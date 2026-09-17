@@ -149,3 +149,15 @@
 // ─── Game Boy ───────────────────────────────────────────────────────────────
 #define GB_SCREEN_W   160
 #define GB_SCREEN_H   144
+
+// ─── Frame queue block ──────────────────────────────────────────────────────
+// Scaler units per queue block (design §3.3). One unit is the scaler's own
+// block — 2 source lines to 3 rows at 24/16 — so a frame is 72 units, and a
+// block of BLOCK_UNITS of them is one DMA transfer: 72 / BLOCK_UNITS
+// transfers a frame, each ~1.4 KB x BLOCK_UNITS. Fewer transfers cut the
+// per-transfer overhead in push; the price is two DMA buffers of BLOCK_UNITS
+// units each in static DRAM. Must divide the frame; the value is measured on
+// the bench, not chosen.
+#ifndef BLOCK_UNITS
+#define BLOCK_UNITS   4
+#endif

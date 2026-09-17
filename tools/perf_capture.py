@@ -5,8 +5,11 @@ the capture starts at t=0 of a fresh boot) and writes every serial line with a
 host timestamp; `stats` turns a capture into the min / median / max table the
 steps ask for, plus the derived terms:
 
-    emu_core = emu - scale - qstall      (emu contains both; see emulator_bridge.cpp)
+    emu_core = emu - qstall              (lines carrying split=c0: scale runs on core 0)
+             = emu - scale - qstall      (older lines: scale ran inside emu on core 1)
     frame    = emu + apu                 (core 1's per-frame cost; push overlaps on core 0)
+
+`stats` reports which accounting the log carries; a log must not mix them.
 
     python tools/perf_capture.py capture /dev/ttyUSB0 out.log 90 [--no-reset]
     python tools/perf_capture.py stats out.log [--skip 10] [--from SEC --to SEC]
@@ -21,7 +24,8 @@ import sys
 import time
 
 FIELDS = ("emu", "scale", "push", "qstall", "qovf", "apu", "await", "aunder", "aover", "fps")
-PERF_RE = re.compile(r"\[PERF\] " + " ".join(r"%s=(\d+)(?:us)?" % f for f in FIELDS))
+PERF_RE = re.compile(r"\[PERF\] " + " ".join(r"%s=(\d+)(?:us)?" % f for f in FIELDS)
+                     + r"(?: split=(\w+))?")
 TS_RE = re.compile(r"^\[\s*([\d.]+)\] ")
 BUDGET_US = 16_667
 
@@ -87,9 +91,13 @@ def parse(path, skip, t_from, t_to):
             t = float(ts.group(1)) if ts else None
             if t is not None and (t < t_from or t > t_to):
                 continue
-            r = dict(zip(FIELDS, map(int, m.groups())))
+            r = dict(zip(FIELDS, map(int, m.groups()[:len(FIELDS)])))
             r["t"] = t
-            r["emu_core"] = r["emu"] - r["scale"] - r["qstall"]
+            r["split"] = m.group(len(FIELDS) + 1) or ""
+            if r["split"] == "c0":
+                r["emu_core"] = r["emu"] - r["qstall"]
+            else:
+                r["emu_core"] = r["emu"] - r["scale"] - r["qstall"]
             r["frame"] = r["emu"] + r["apu"]
             rows.append(r)
     return rows[skip:]
@@ -99,6 +107,11 @@ def stats(rows):
     if not rows:
         sys.exit("no [PERF] lines in range")
     cols = ("emu", "emu_core", "scale", "qstall", "push", "apu", "frame", "fps")
+    splits = {r["split"] for r in rows}
+    if len(splits) > 1:
+        sys.exit("log mixes accountings (%s); split it with --from/--to" % sorted(splits))
+    print("accounting: %s" % ("core-0 scaler, emu_core = emu - qstall" if "c0" in splits
+                              else "core-1 scaler, emu_core = emu - scale - qstall"))
     print("n=%d lines, t=%.1f..%.1f s" % (len(rows), rows[0]["t"] or 0, rows[-1]["t"] or 0))
     print("%-9s %9s %9s %9s" % ("field", "min", "median", "max"))
     for c in cols:

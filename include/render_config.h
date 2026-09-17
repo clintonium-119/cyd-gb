@@ -18,10 +18,23 @@
 // render/scaler.h itself; this header stays free of gbcore.
 #if SCALE_K == 24
 #define SCALE_GEOM SCALER_GEOM_24_16   // 3/2:  240 x 216, 90% of the rows
+#define UNIT_LINES 2                   // source lines one scaler unit consumes
+#define UNIT_ROWS  3                   // output rows it emits
 #elif SCALE_K == 26
 #define SCALE_GEOM SCALER_GEOM_26_16   // 13/8: 260 x 234, 97.5% of the rows
+#define UNIT_LINES 8
+#define UNIT_ROWS  13
 #else
 #error "SCALE_K must be 24 or 26 — design §2.1 tabulates only those two, and 9k <= 240 caps k at 26."
+#endif
+
+// One queue block is BLOCK_UNITS scaler units (hw_config.h). UNIT_LINES /
+// UNIT_ROWS repeat the geometry table's numbers because static buffer sizes
+// need them at compile time; emu_init() checks the table agrees.
+#define BLOCK_LINES (UNIT_LINES * BLOCK_UNITS)   // raw source lines per block
+#define BLOCK_ROWS  (UNIT_ROWS * BLOCK_UNITS)    // output rows per block
+#if (GB_SCREEN_H % BLOCK_LINES) != 0
+#error "BLOCK_UNITS must divide the frame: GB_SCREEN_H % (UNIT_LINES * BLOCK_UNITS) must be 0"
 #endif
 
 // ─── Scaler variant (bench switch) ──────────────────────────────────────────

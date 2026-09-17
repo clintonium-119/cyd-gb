@@ -107,23 +107,22 @@ const char* emu_get_palette_name(uint8_t idx)
 
 // ─── Frame path ─────────────────────────────────────────────────────────────
 // Peanut-GB hands us one 160-px index line at a time, in order. Core 1 does
-// nothing with it but copy the 160 raw bytes into the slot the current
-// geometry block owns. A slot is src_lines_per_block lines plus room for one
-// lookahead line — the first line of the NEXT block — which is copied only
-// when the geometry table says a blend row reads it (26/16 does; 24/16 never
-// does). Where it is needed and missing, the scaler's frame-end rule would
-// fire at every block boundary and band the picture. The frame's final block
-// has no lookahead, and its last_in_frame flag is what tells the consumer to
-// pass NULL.
+// nothing with it but copy the 160 raw bytes into the slot the current queue
+// block owns. A block is BLOCK_LINES raw lines — BLOCK_UNITS scaler units —
+// plus room for one lookahead line, the first line of the NEXT block, which
+// is copied only when the geometry table says a blend row reads it (26/16
+// does; 24/16 never does). Where it is needed and missing, the scaler's
+// frame-end rule would fire at every block boundary and band the picture. The
+// frame's final block has no lookahead, and its last_in_frame flag is what
+// tells the consumer to pass NULL.
 //
 // Colour never enters a slot: the raw byte is what the queue carries, and the
-// LUT, the scaler and the scaled DMA buffer all belong to the consumer on
-// core 0 (see the pipeline note below). Buffers are sized for the larger
-// geometry and every count comes from the geometry table, so flipping SCALE_K
-// changes the output with no edit here.
-static uint8_t slot_src[FRAMEQUEUE_SLOTS][SCALER_SRC_LINES_MAX + 1][SCALER_SRC_W];
+// LUT, the scaler and the scaled DMA buffers all belong to the consumer on
+// core 0 (see the pipeline note below). Every size here derives from SCALE_K
+// and BLOCK_UNITS, so flipping either changes the output with no edit here.
+static uint8_t slot_src[FRAMEQUEUE_SLOTS][BLOCK_LINES + 1][SCALER_SRC_W];
 #if !SCALER_VARIANT_LUT
-static uint16_t lut_lines[SCALER_SRC_LINES_MAX + 1][SCALER_SRC_W];
+static uint16_t lut_lines[BLOCK_LINES + 1][SCALER_SRC_W];
 static uint16_t scratch_row[SCALER_DST_W_MAX];
 #endif
 static const scaler_geom_info_t* geom = nullptr;
@@ -139,9 +138,10 @@ static int16_t vp_y = GAME_Y;
 //                      once its lookahead line is in hand: 144 copies of 160
 //                      bytes per frame, and nothing else for the display.
 //   core 0, gbpush     emu_push_task. Pops committed slots, LUTs the raw
-//                      lines into RGB565, scales the block into the DMA
-//                      buffer, drives the DMA display path, and releases each
-//                      slot only after its transfer has completed.
+//                      lines into RGB565, scales the block into one of two
+//                      DMA buffers while the other is still crossing the
+//                      bus, hands the slot back as soon as its raw lines are
+//                      consumed, then queues the transfer.
 //
 // The APU callback, the mixer and the speaker's DMA write all run on core 1
 // inside emu_run_frame(), beside the emulation that feeds them: the APU's
@@ -156,15 +156,20 @@ static int16_t vp_y = GAME_Y;
 // which the menu rebuilds from core 1 while the pipeline is paused and the
 // consumer is parked on an empty queue.
 //
-// The slot array is 2.9 KB of raw lines at the larger geometry; the scaled
-// block lives in dma_buf, 6.8 KB, static so it lands in internal DRAM: the SPI
-// DMA engine cannot read from flash, and this board has no PSRAM to get wrong.
+// Two DMA buffers, one block each: while the bus reads buffer A, core 0
+// scales the next block into buffer B, and the push of B waits for A to
+// finish before queueing — that wait is the pipelining, and it is why the
+// buffer being scaled is never the one in flight. Static so they land in
+// internal DRAM: the SPI DMA engine cannot read from flash, and this board
+// has no PSRAM to get wrong. At BLOCK_UNITS 4 and 24/16: 2 x 5.6 KB of
+// buffers plus 2.9 KB of raw slot lines. The static DRAM segment has about
+// 15 KB spare after this; anything larger goes on the heap.
 //
 // The mapped ROM is read-only for the whole session and must stay that way now
 // that two cores execute from flash: a flash write stalls the other core's
 // instruction fetch, so anything that writes the ROM partition has to happen
 // before the push task exists.
-static uint16_t dma_buf[SCALER_DST_ROWS_MAX * SCALER_DST_W_MAX];
+static uint16_t dma_buf[2][BLOCK_ROWS * GAME_W];
 static framequeue_t fq;
 static TaskHandle_t push_task = nullptr;
 static uint16_t frame_seq = 0;
@@ -224,10 +229,10 @@ void emu_set_viewport(int16_t x, int16_t y)
     vp_y = y;
 }
 
-/* Blocks one full frame is made of, from the geometry table. */
+/* Queue blocks one full frame is made of. */
 static uint8_t blocks_per_frame()
 {
-    return (uint8_t)(GB_SCREEN_H / geom->src_lines_per_block);
+    return (uint8_t)(GB_SCREEN_H / BLOCK_LINES);
 }
 
 /*
@@ -270,7 +275,7 @@ static void push_block(uint_fast8_t first)
 {
     framequeue_meta_t meta;
 
-    meta.block_idx = (uint8_t)(first / geom->src_lines_per_block);
+    meta.block_idx = (uint8_t)(first / BLOCK_LINES);
     meta.frame_seq = frame_seq;
     meta.last_in_frame = (meta.block_idx == (uint8_t)(blocks_per_frame() - 1u));
     if (framequeue_commit(&fq, open_slot, &meta) != FRAMEQUEUE_OK) {
@@ -288,15 +293,23 @@ static void push_block(uint_fast8_t first)
 
 /*
  * Consumer half, pinned to core 0. Every display transform lives here: the
- * raw lines are LUT'd, the block is scaled into dma_buf and pushed, in that
- * order and one block at a time. Frame bracketing is driven entirely by the
- * metadata the producer committed: block 0 opens the address window,
+ * raw lines are LUT'd, the block is scaled unit by unit into the DMA buffer
+ * the bus is NOT reading, and queued. Frame bracketing is driven entirely by
+ * the metadata the producer committed: block 0 opens the address window,
  * last_in_frame closes it.
  *
- * A slot is released only after the block's transfer has completed. Its raw
- * bytes are finished with sooner than that, but framequeue_drained() is the
- * menu's cue to take the bus, and it must not fire while a transfer is still
- * in flight.
+ * The buffers alternate. dma_buf[buf] was queued two blocks ago, and the
+ * push of the block in between waited for that transfer to finish before
+ * queueing its own, so by the time this block is scaled into dma_buf[buf]
+ * the bus has left it. Scaling block N therefore overlaps the transfer of
+ * block N-1, which is the core split the design asked for.
+ *
+ * A slot is released as soon as its raw lines have been consumed, before its
+ * pixels cross the bus, so core 1 gets it back a transfer early. The frame's
+ * last block is the exception: framequeue_drained() is the menu's cue to
+ * take the bus, and it must not fire while a transfer is in flight or the
+ * frame's window is still open, so that slot is released after
+ * display_frame_end().
  *
  * The wait when the queue is empty is a task notification rather than a
  * spin: this is the only task core 0 hosts — input is polled per frame from
@@ -307,22 +320,24 @@ static void push_block(uint_fast8_t first)
 static void emu_push_task(void* arg)
 {
 #if !SCALER_VARIANT_LUT
-    const uint16_t* src_lines[SCALER_SRC_LINES_MAX];
+    const uint16_t* src_lines[BLOCK_LINES + 1];
     const uint16_t* lookahead;
     unsigned lines;
-    unsigned i;
     unsigned x;
 #endif
     framequeue_meta_t meta;
     uint32_t scale_acc = 0;
     uint32_t push_acc = 0;
+    unsigned buf = 0;
+    unsigned u;
+    unsigned i;
     int slot = 0;
     int64_t t0;
     int64_t t1;
 
     (void)arg;
 #if !SCALER_VARIANT_LUT
-    for (i = 0; i < SCALER_SRC_LINES_MAX; i++) {
+    for (i = 0; i < BLOCK_LINES + 1; i++) {
         src_lines[i] = lut_lines[i];
     }
 #endif
@@ -339,18 +354,21 @@ static void emu_push_task(void* arg)
 #if SCALER_VARIANT_LUT
         /* Bench variant: palette lookup and horizontal blend are one table
          * read per source pair, straight from the raw bytes. */
-        (void)scaler_scale_block_24_16_lut(slot_src[slot][0], slot_src[slot][1],
-                                           pair_lut, dma_buf);
+        for (u = 0; u < BLOCK_UNITS; u++) {
+            (void)scaler_scale_block_24_16_lut(
+                slot_src[slot][u * UNIT_LINES], slot_src[slot][u * UNIT_LINES + 1],
+                pair_lut, dma_buf[buf] + (size_t)u * UNIT_ROWS * GAME_W);
+        }
 #else
         /* The lookahead rides in the slot after the block's own lines, when
          * the geometry reads one at all; the frame's final block has none.
          * No mask on the raw byte: the 12-colour path bounds it at 0x23 and
          * the LUT covers all 64 values, which is what removes 23,040 ANDs per
          * frame (§2.4). */
-        lines = (unsigned)geom->src_lines_per_block;
+        lines = BLOCK_LINES;
         lookahead = nullptr;
         if (geom->uses_lookahead && !meta.last_in_frame) {
-            lookahead = lut_lines[lines];
+            lookahead = lut_lines[BLOCK_LINES];
             lines++;
         }
         for (i = 0; i < lines; i++) {
@@ -358,29 +376,41 @@ static void emu_push_task(void* arg)
                 lut_lines[i][x] = lut[slot_src[slot][i][x]];
             }
         }
-        /* The only failure is a NULL buffer or a bad enum, and every argument
-         * here is a static or a compile-time constant. */
-        (void)scaler_scale_block(SCALE_GEOM, SCALER_MODE_BLEND, src_lines,
-                                 lookahead, dma_buf, scratch_row);
+        /* One scaler call per unit. A unit's lookahead is the next unit's
+         * first line; the block's last unit takes the slot's. The only
+         * failure is a NULL buffer or a bad enum, and every argument here is
+         * a static or a compile-time constant. */
+        for (u = 0; u < BLOCK_UNITS; u++) {
+            const uint16_t* la = (u + 1u < BLOCK_UNITS)
+                ? lut_lines[(u + 1u) * UNIT_LINES] : lookahead;
+            (void)scaler_scale_block(SCALE_GEOM, SCALER_MODE_BLEND,
+                                     src_lines + u * UNIT_LINES, la,
+                                     dma_buf[buf] + (size_t)u * UNIT_ROWS * GAME_W,
+                                     scratch_row);
+        }
 #endif
         t1 = esp_timer_get_time();
         scale_acc += (uint32_t)(t1 - t0);
 
+        if (!meta.last_in_frame) {
+            framequeue_release(&fq, slot);
+        }
         if (meta.block_idx == 0) {
             display_frame_begin(vp_x, vp_y);
         }
-        display_push_rows_dma(dma_buf,
-                              (size_t)geom->dst_rows_per_block * geom->dst_w);
-        display_dma_wait();
-        framequeue_release(&fq, slot);
+        /* Waits for the previous block's transfer, then queues this one. */
+        display_push_rows_dma(dma_buf[buf], (size_t)BLOCK_ROWS * GAME_W);
         if (meta.last_in_frame) {
+            display_dma_wait();
             display_frame_end();
+            framequeue_release(&fq, slot);
         }
         push_acc += (uint32_t)(esp_timer_get_time() - t1);
         if (meta.last_in_frame) {
             scale_us = scale_acc;
             push_us = push_acc;
         }
+        buf ^= 1u;
     }
 }
 
@@ -454,7 +484,7 @@ static void IRAM_ATTR lcd_line(struct gb_s* g, const uint8_t px[160], const uint
         return;
     }
 
-    lpb = geom->src_lines_per_block;
+    lpb = BLOCK_LINES;
     in_block = ln % lpb;
     if (in_block != 0 && open_slot < 0) {
         /* A line inside a block with no slot open: the frame began after
@@ -590,7 +620,12 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     /* Build the LUT here too: main() may never call emu_set_palette. */
     emu_set_palette(curpal);
     geom = scaler_geom_info(SCALE_GEOM);
-    if (!geom) {
+    if (!geom || geom->src_lines_per_block != UNIT_LINES ||
+        geom->dst_rows_per_block != UNIT_ROWS || geom->dst_w != GAME_W) {
+        /* render_config.h repeats the table's numbers for the static buffer
+         * sizes; if they ever disagree, refuse rather than scale into the
+         * wrong-sized buffer. */
+        Serial.println("[EMU] render_config.h disagrees with the scaler geometry");
         return false;
     }
     frame_seq = 0;
@@ -634,12 +669,15 @@ void emu_run_frame() {
         fpst = n;
         /* Last completed frame, once a second. qstall is core 1's wait for a
          * free slot and qovf the running count of times it found none: with
-         * the split, those two are what say which core is the bottleneck. */
+         * the split, those two are what say which core is the bottleneck.
+         * scale and push are measured on core 0 (see emu_push_task). */
         uint32_t aunder = 0, aover = 0, await_us = 0;
         speaker_get_stats(&aunder, &aover, &await_us);
+        /* split=c0 marks the accounting: scale and push are core 0's, emu
+         * contains only qstall. tools/perf_capture.py keys on it. */
         Serial.printf("[PERF] emu=%uus scale=%uus push=%uus qstall=%uus "
                       "qovf=%u apu=%uus await=%uus aunder=%u aover=%u "
-                      "fps=%u\n",
+                      "fps=%u split=c0\n",
                       emu_us, scale_us, push_us, q_stall_us,
                       framequeue_overflows(&fq), apu_us, await_us, aunder,
                       aover, cfps);
