@@ -427,6 +427,7 @@ static void IRAM_ATTR lcd_line(struct gb_s* g, const uint8_t px[160], const uint
 {
     unsigned lpb;
     unsigned in_block;
+    unsigned i;
 
     (void)g;
     /* Frameskip is Peanut-GB's own (gb->direct.frame_skip): on a skipped
@@ -438,6 +439,16 @@ static void IRAM_ATTR lcd_line(struct gb_s* g, const uint8_t px[160], const uint
         q_stall_acc = 0;
         frame_dropped = false;
         frame_seq++;
+        if (open_slot >= 0) {
+            /* The previous frame stopped mid-block — the LCD was switched
+             * off outside vblank — and its slot is still ours. The queue has
+             * no abort, so the slot cannot be handed back and every later
+             * commit will be refused. Say so once, loudly; it is the one
+             * state this producer cannot recover from without a queue verb
+             * for it. */
+            Serial.println("[EMU] block left open across a frame boundary");
+            open_slot = -1;
+        }
     }
     if (frame_dropped) {
         return;
@@ -445,6 +456,25 @@ static void IRAM_ATTR lcd_line(struct gb_s* g, const uint8_t px[160], const uint
 
     lpb = geom->src_lines_per_block;
     in_block = ln % lpb;
+    if (in_block != 0 && open_slot < 0) {
+        /* A line inside a block with no slot open: the frame began after
+         * its first line (the first frame after an LCD enable can). Inside
+         * block 0 the block can still be sequenced, so take the slot now
+         * and stand this line in for the ones missed — wrong for one frame,
+         * invisible. Deeper into the frame nothing can be committed in
+         * order, so the frame is dropped whole. */
+        if (ln >= lpb) {
+            frame_dropped = true;
+            return;
+        }
+        acquire_block();
+        if (frame_dropped) {
+            return;
+        }
+        for (i = 0; i < in_block; i++) {
+            memcpy(slot_src[open_slot][i], px, SCALER_SRC_W);
+        }
+    }
     if (in_block == 0) {
         /* This line is the previous block's lookahead as well as this block's
          * first line. 144 divides by both geometries' block heights, so a
