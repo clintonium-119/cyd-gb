@@ -63,7 +63,7 @@ static void assert_guards_intact(void)
 /* What the mixer would emit with the dither term removed. */
 static uint8_t undithered(int16_t left, int16_t right, uint8_t vol_index)
 {
-    static const uint16_t lut[3] = { 256, 176, 128 };
+    static const uint16_t lut[3] = { 256, 176, 96 };
     int32_t mono = ((int32_t)left + (int32_t)right) / 2;
     int32_t scaled = (mono * (int32_t)lut[vol_index]) / 256;
 
@@ -212,7 +212,7 @@ static void test_volume_steps_keep_the_design_ratios(void)
     TEST_ASSERT_TRUE(high > med);
     TEST_ASSERT_TRUE(med > low);
     assert_ratio_within_2_percent(med, high, 176);
-    assert_ratio_within_2_percent(low, high, 128);
+    assert_ratio_within_2_percent(low, high, 96);
     assert_guards_intact();
 }
 

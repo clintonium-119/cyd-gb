@@ -4,10 +4,16 @@
 
 /*
  * Design §4's table, as 8.8 fixed point. Med at 176/256 (0.69) is what spaces
- * the three steps evenly by ear; low at 128/256 still leaves 7 bits of
- * signal, so no step collapses into the dither.
+ * the three steps evenly by ear. Low was 128/256 and the bench wanted it
+ * quieter; at 96/256 (0.375) roughly 6.6 bits of signal remain, so the step
+ * still clears the dither floor rather than collapsing into it -- 64/256
+ * would leave exactly 6 and make the dither proportionally twice as loud.
+ *
+ * Note this does not address the distortion heard at the low step: that is
+ * not clipping (at 0.375 the scaled value is bounded well inside the clamp)
+ * and lowering the table only makes it quieter, not absent.
  */
-static const uint16_t vol_lut[3] = { 256, 176, 128 };
+static const uint16_t vol_lut[3] = { 256, 176, 96 };
 
 /* Any non-zero constant works; this is the usual xorshift32 seed. */
 #define MIX_SEED_FALLBACK 0x2545F491u

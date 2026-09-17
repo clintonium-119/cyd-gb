@@ -1,8 +1,17 @@
 #include "settings.h"
 #include "render_config.h"
+#include "hw_config.h"
 #include <Preferences.h>
 
 static Preferences prefs;
+
+// The ladder is BL_MIN + n*BL_STEP for n in 0..7, and the combo clamps at
+// 255. These two constants only give 8 evenly spaced levels if the top rung
+// lands exactly on the clamp; move one without the other and the count
+// silently drifts or the last step goes stubby. Nothing else links them.
+static_assert(BL_MIN + 7 * BL_STEP == 255,
+              "backlight ladder must reach 255 in exactly 8 steps");
+static_assert(BL_MIN > 0, "a backlight floor of 0 looks like a dead unit");
 
 void settings_defaults(settings_t* s) {
     s->palette = 0;
@@ -11,8 +20,14 @@ void settings_defaults(settings_t* s) {
     // normal case. The setting stays for bench sweeps and the diagnostic
     // screen.
     s->frameskip = 0;
-    s->brightness = 255;
-    s->volume = 0;
+    // 6th of the 8 backlight levels, not the top: a fresh unit that boots
+    // at maximum is the one the bench found too bright. This is
+    // BL_MIN + 5*BL_STEP -- derived, so it follows the ladder if those
+    // constants move.
+    s->brightness = BL_MIN + 5 * BL_STEP;
+    // MED, not HIGH. Louder counts *down* toward SETTINGS_VOL_HIGH (0),
+    // so medium is 1.
+    s->volume = SETTINGS_VOL_HIGH + 1;
     s->game_x = GAME_X;
     s->game_y = GAME_Y;
 }

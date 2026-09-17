@@ -85,12 +85,20 @@
 
 // ─── Backlight adjustment ───────────────────────────────────────────────────
 // The Select+Left/Right combo steps the backlight by BL_STEP and clamps to
-// [BL_MIN, 255], giving 8 levels. The floor is not 0 on purpose: a unit
-// mounted in a shell at brightness 0 looks dead, and the operators cannot
-// recover it by sight. Whether BL_MIN is visible in daylight is §11 bench
-// work; raising it is a one-line change here.
-#define BL_STEP        32
-#define BL_MIN         32
+// [BL_MIN, 255]. The two constants are chosen together: the ladder is
+// BL_MIN + n*BL_STEP, so 10 + 7*35 = 255 lands the top rung exactly on the
+// clamp and gives 8 evenly spaced levels with no stubby final step. Change
+// one and the other has to move, or the level count drifts.
+//
+//   10  45  80  115  150  185  220  255
+//
+// The floor is not 0 on purpose: a unit mounted in a shell at brightness 0
+// looks dead, and the operators cannot recover it by sight. The bench asked
+// for a dimmer bottom than the original 32 (the header used to anticipate
+// raising it; hardware wanted the opposite), and 10 is ~4% duty — dim enough
+// for a dark room, still visibly lit.
+#define BL_STEP        35
+#define BL_MIN         10
 
 // ─── Audio ──────────────────────────────────────────────────────────────────
 // No amp-enable pin exists. The vendor datasheet calls IO4 the amp enable, but

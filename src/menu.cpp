@@ -74,9 +74,10 @@ static void wait_release()
     delay(100);
 }
 
-// Which of the eight backlight steps the stored level is. Rounded up so the
-// top of the range, which the clamp leaves at 255 rather than a whole step,
-// still reads as the eighth.
+// Which of the eight backlight steps the stored level is. Rounded up: the
+// ladder lands on 255 exactly, but rounding up also keeps a level that was
+// stored under an older ladder reading as the nearest step up rather than
+// falling a whole step.
 static uint8_t bright_level(uint8_t level)
 {
     if (level <= BL_MIN) {
