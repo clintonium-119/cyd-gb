@@ -101,6 +101,20 @@ int scaler_scale_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
                        uint16_t* dst, uint16_t* scratch_row);
 
 /*
+ * Pair-table variant of the 24/16 BLEND block, for the bench comparison with
+ * the fixed kernel. Takes the two RAW 8-bit source lines and a pair table
+ * (palette_build_pair_lut) in place of LUT'd lines, so the palette lookup and
+ * the horizontal blend are one table read per source pair; rows 0 and 2 are
+ * copied from the table and row 1 is their per-pixel average. Bit-exact with
+ * scaler_scale_block(24_16, BLEND) over the same lines LUT'd. Native RGB565
+ * in the table and out, like everything else here.
+ *
+ * Returns SCALER_OK, or SCALER_ERR_ARGS for a NULL pointer.
+ */
+int scaler_scale_block_24_16_lut(const uint8_t* l0, const uint8_t* l1,
+                                 const uint16_t* pair_lut, uint16_t* dst);
+
+/*
  * Average of two native-bit-layout RGB565 pixels, per channel, without
  * unpacking. Callers must pass NATIVE (not byte-swapped) values.
  */

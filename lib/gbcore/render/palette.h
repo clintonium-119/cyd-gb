@@ -44,6 +44,20 @@ const char* palette_name(uint8_t idx);
  */
 void palette_build_lut(uint8_t idx, uint16_t lut[PALETTE_LUT_SIZE]);
 
+/*
+ * Pair table for the pair-LUT scaler variant: one entry per ordered pair of
+ * raw pixel bytes (a, b), holding the three output pixels of the 3/2
+ * horizontal pass with the blend precomputed — lut[a], avg565(lut[a],
+ * lut[b]), lut[b] — so the scaler does one table read per source pair and no
+ * per-pixel palette lookup. 64 x 64 x 3 x 2 bytes = 24 KB, native RGB565.
+ * Built from a 64-entry LUT palette_build_lut filled; writes nothing if
+ * either pointer is NULL.
+ */
+#define PALETTE_PAIR_LUT_SIZE (PALETTE_LUT_SIZE * PALETTE_LUT_SIZE * 3)
+
+void palette_build_pair_lut(const uint16_t lut[PALETTE_LUT_SIZE],
+                            uint16_t out[PALETTE_PAIR_LUT_SIZE]);
+
 #ifdef __cplusplus
 }
 #endif

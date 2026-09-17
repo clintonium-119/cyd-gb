@@ -67,6 +67,13 @@ static uint8_t jpad = 0;
 // wire order once at push time (§2.3).
 static uint16_t lut[PALETTE_LUT_SIZE];
 static uint8_t curpal = 0;
+#if SCALER_VARIANT_LUT
+// The pair table the bench variant scales from: 24 KB, rebuilt with the LUT,
+// only from init and the menu, both with the consumer parked. Heap, not
+// static: the static DRAM segment has about 15 KB to spare after the frame
+// buffers, and the table does not fit there. Allocated once in emu_init().
+static uint16_t* pair_lut = nullptr;
+#endif
 
 void emu_set_palette(uint8_t idx)
 {
@@ -75,6 +82,17 @@ void emu_set_palette(uint8_t idx)
     }
     curpal = idx;
     palette_build_lut(curpal, lut);
+#if SCALER_VARIANT_LUT
+    /* Timed and reported because a palette change from the menu must not
+     * visibly hitch; 4096 entries, expected well under a millisecond. Before
+     * emu_init() there is no table yet and nothing to fill. */
+    if (pair_lut) {
+        int64_t t0 = esp_timer_get_time();
+        palette_build_pair_lut(lut, pair_lut);
+        Serial.printf("[EMU] pair table %uus\n",
+                      (unsigned)(esp_timer_get_time() - t0));
+    }
+#endif
 }
 
 uint8_t emu_get_palette()
@@ -104,8 +122,10 @@ const char* emu_get_palette_name(uint8_t idx)
 // geometry and every count comes from the geometry table, so flipping SCALE_K
 // changes the output with no edit here.
 static uint8_t slot_src[FRAMEQUEUE_SLOTS][SCALER_SRC_LINES_MAX + 1][SCALER_SRC_W];
+#if !SCALER_VARIANT_LUT
 static uint16_t lut_lines[SCALER_SRC_LINES_MAX + 1][SCALER_SRC_W];
 static uint16_t scratch_row[SCALER_DST_W_MAX];
+#endif
 static const scaler_geom_info_t* geom = nullptr;
 static int16_t vp_x = GAME_X;
 static int16_t vp_y = GAME_Y;
@@ -132,8 +152,9 @@ static int16_t vp_y = GAME_Y;
 // that a checked property rather than a convention, and it is host-tested. The
 // only shared mutable state outside the queue is the timing counters, single
 // writer each; vp_x/vp_y, which change only from the menu with the pipeline
-// paused; and the palette LUT, which the menu rebuilds from core 1 while the
-// pipeline is paused and the consumer is parked on an empty queue.
+// paused; and the palette LUT (and the pair table, on the bench variant),
+// which the menu rebuilds from core 1 while the pipeline is paused and the
+// consumer is parked on an empty queue.
 //
 // The slot array is 2.9 KB of raw lines at the larger geometry; the scaled
 // block lives in dma_buf, 6.8 KB, static so it lands in internal DRAM: the SPI
@@ -285,22 +306,26 @@ static void push_block(uint_fast8_t first)
  */
 static void emu_push_task(void* arg)
 {
+#if !SCALER_VARIANT_LUT
     const uint16_t* src_lines[SCALER_SRC_LINES_MAX];
     const uint16_t* lookahead;
-    framequeue_meta_t meta;
-    uint32_t scale_acc = 0;
-    uint32_t push_acc = 0;
     unsigned lines;
     unsigned i;
     unsigned x;
+#endif
+    framequeue_meta_t meta;
+    uint32_t scale_acc = 0;
+    uint32_t push_acc = 0;
     int slot = 0;
     int64_t t0;
     int64_t t1;
 
     (void)arg;
+#if !SCALER_VARIANT_LUT
     for (i = 0; i < SCALER_SRC_LINES_MAX; i++) {
         src_lines[i] = lut_lines[i];
     }
+#endif
     for (;;) {
         if (framequeue_pop(&fq, &slot, &meta) != FRAMEQUEUE_OK) {
             ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2));
@@ -311,6 +336,12 @@ static void emu_push_task(void* arg)
             scale_acc = 0;
             push_acc = 0;
         }
+#if SCALER_VARIANT_LUT
+        /* Bench variant: palette lookup and horizontal blend are one table
+         * read per source pair, straight from the raw bytes. */
+        (void)scaler_scale_block_24_16_lut(slot_src[slot][0], slot_src[slot][1],
+                                           pair_lut, dma_buf);
+#else
         /* The lookahead rides in the slot after the block's own lines, when
          * the geometry reads one at all; the frame's final block has none.
          * No mask on the raw byte: the 12-colour path bounds it at 0x23 and
@@ -331,6 +362,7 @@ static void emu_push_task(void* arg)
          * here is a static or a compile-time constant. */
         (void)scaler_scale_block(SCALE_GEOM, SCALER_MODE_BLEND, src_lines,
                                  lookahead, dma_buf, scratch_row);
+#endif
         t1 = esp_timer_get_time();
         scale_acc += (uint32_t)(t1 - t0);
 
@@ -517,6 +549,14 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
 
     gb_init_lcd(gb, lcd_line);
     gb->direct.frame_skip = (fskip > 0);
+#if SCALER_VARIANT_LUT
+    if (!pair_lut) {
+        pair_lut = (uint16_t*)malloc(PALETTE_PAIR_LUT_SIZE * sizeof(uint16_t));
+    }
+    if (!pair_lut) {
+        return false;
+    }
+#endif
     /* Build the LUT here too: main() may never call emu_set_palette. */
     emu_set_palette(curpal);
     geom = scaler_geom_info(SCALE_GEOM);

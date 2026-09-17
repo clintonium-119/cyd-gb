@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "render/palette.h"
+#include "render/scaler.h"
 
 /*
  * Palette suite.
@@ -214,6 +215,47 @@ static void test_out_of_range_and_null_leave_the_lut_alone(void)
     palette_build_lut(0, NULL); /* must not crash */
 }
 
+/* ── pair table ──────────────────────────────────────────────────────── */
+
+static uint16_t pair_lut[PALETTE_PAIR_LUT_SIZE];
+
+static void test_pair_lut_holds_each_pairs_scaled_triple(void)
+{
+    unsigned p;
+    unsigned a;
+    unsigned b;
+
+    /* Every ordered pair of raw bytes, for a chromatic and an achromatic
+     * palette: the entry is the left pixel, the blend, the right pixel. */
+    for (p = 0; p < PALETTE_COUNT; p += 7u) {
+        palette_build_lut((uint8_t)p, lut);
+        palette_build_pair_lut(lut, pair_lut);
+        for (a = 0; a < PALETTE_LUT_SIZE; a++) {
+            for (b = 0; b < PALETTE_LUT_SIZE; b++) {
+                const uint16_t* e = pair_lut + (a * PALETTE_LUT_SIZE + b) * 3u;
+                TEST_ASSERT_EQUAL_HEX16(lut[a], e[0]);
+                TEST_ASSERT_EQUAL_HEX16(scaler_avg565(lut[a], lut[b]), e[1]);
+                TEST_ASSERT_EQUAL_HEX16(lut[b], e[2]);
+            }
+        }
+    }
+}
+
+static void test_pair_lut_null_arguments_write_nothing(void)
+{
+    unsigned i;
+
+    for (i = 0; i < PALETTE_PAIR_LUT_SIZE; i++) {
+        pair_lut[i] = UNSET;
+    }
+    palette_build_lut(0, lut);
+    palette_build_pair_lut(NULL, pair_lut);
+    for (i = 0; i < PALETTE_PAIR_LUT_SIZE; i++) {
+        TEST_ASSERT_EQUAL_HEX16(UNSET, pair_lut[i]);
+    }
+    palette_build_pair_lut(lut, NULL); /* must not crash */
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -225,5 +267,7 @@ int main(void)
     RUN_TEST(test_palette_names_match_the_forks_list);
     RUN_TEST(test_palette_name_reports_unknown_out_of_range);
     RUN_TEST(test_out_of_range_and_null_leave_the_lut_alone);
+    RUN_TEST(test_pair_lut_holds_each_pairs_scaled_triple);
+    RUN_TEST(test_pair_lut_null_arguments_write_nothing);
     return UNITY_END();
 }

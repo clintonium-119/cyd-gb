@@ -1,4 +1,5 @@
 #include "scaler.h"
+#include "palette.h"
 
 #define GEOM_COUNT 2
 
@@ -47,12 +48,13 @@ static const scaler_pattern_t* const pattern_table[GEOM_COUNT] = {
  * Per-channel average without unpacking: bits the two pixels share pass
  * through (a & b), and each differing bit contributes half. The 0xF7DE mask
  * drops each channel's low bit before the shift so no channel borrows from
- * its neighbour. static inline because the exported symbol below is not
- * inlined by the target toolchain (-mlongcalls turns each use into an l32r +
- * callx8 with a register-window spill), and the kernel calls it five times
- * per source pair.
+ * its neighbour. Forced inline because the target toolchain, at its
+ * effective -Os, otherwise leaves it a call — -mlongcalls turns each use
+ * into an l32r + callx8 with a register-window spill — and the kernels call
+ * it three to five times per source pair.
  */
-static inline uint16_t avg565(uint16_t a, uint16_t b)
+static inline __attribute__((always_inline)) uint16_t avg565(uint16_t a,
+                                                             uint16_t b)
 {
     return (uint16_t)((((a ^ b) & 0xF7DEu) >> 1) + (a & b));
 }
@@ -239,5 +241,37 @@ int scaler_scale_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
         }
     }
 
+    return SCALER_OK;
+}
+
+int scaler_scale_block_24_16_lut(const uint8_t* l0, const uint8_t* l1,
+                                 const uint16_t* pair_lut, uint16_t* dst)
+{
+    uint16_t* r0 = dst;
+    uint16_t* r1 = dst + 240;
+    uint16_t* r2 = dst + 480;
+    unsigned x;
+    unsigned o = 0;
+
+    if (l0 == NULL || l1 == NULL || pair_lut == NULL || dst == NULL) {
+        return SCALER_ERR_ARGS;
+    }
+    for (x = 0; x < SCALER_SRC_W; x += 2) {
+        const uint16_t* t0 =
+            pair_lut + ((unsigned)l0[x] * PALETTE_LUT_SIZE + l0[x + 1]) * 3u;
+        const uint16_t* t1 =
+            pair_lut + ((unsigned)l1[x] * PALETTE_LUT_SIZE + l1[x + 1]) * 3u;
+
+        r0[o] = t0[0];
+        r0[o + 1] = t0[1];
+        r0[o + 2] = t0[2];
+        r1[o] = avg565(t0[0], t1[0]);
+        r1[o + 1] = avg565(t0[1], t1[1]);
+        r1[o + 2] = avg565(t0[2], t1[2]);
+        r2[o] = t1[0];
+        r2[o + 1] = t1[1];
+        r2[o + 2] = t1[2];
+        o += 3;
+    }
     return SCALER_OK;
 }
