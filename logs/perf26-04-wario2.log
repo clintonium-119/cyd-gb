@@ -1,0 +1,69 @@
+# capture start 2026-09-18T11:37:19-0400 port=/dev/ttyUSB0 baud=115200 duration=40s
+[   0.201] ets Jul 29 2019 12:21:46
+[   0.201] 
+[   0.201] rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+[   0.201] configsip: 0, SPIWP:0xee
+[   0.201] clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+[   0.201] mode:DIO, clock div:1
+[   0.201] load:0x3fff0030,len:1344
+[   0.201] load:0x40078000,len:13964
+[   0.201] load:0x40080400,len:3600
+[   0.201] entry 0x400805f0
+[   0.201] E (194) esp_core_dff}���͡� No core dump partition found!
+[   0.401] E (194) esp_core_dump_flash: No core dump partition found!
+[   0.601] 
+[   0.601] === CYD-GB ===
+[   0.601] [SPK] I2S DAC on IO26 32768 Hz depth 4
+[   0.601] [BAT] 284 mV
+[   1.202] [TFT] 320x240 OK
+[   1.202] [INIT] Settings (NVS): pal=3 fs=0 bl=185 vol=2 gx=40 gy=6
+[   1.202] [SD] Type:2 Size:120MB
+[   1.202] [INIT] Heap: 254184
+[   1.202] [ROM] partition 3392KB @0x0B0000
+[   1.202] [ROM] unchanged, skipping write (1024KB)
+[   1.202] [ROM] mapped 'Wario Land II.gb' 1024KB
+[   1.202] [EMU] 'WARIOLAND2' 1024KB heap:203980
+[   1.202] [SD] Load: /saves/Wario Land II.sav (32768)
+[   1.202] [SAVE] Loaded 32768 bytes
+[   1.202] [EMU] emulation on core 1
+[   2.204] [PERF] emu=14714us scale=3833us push=11042us qstall=3127us qovf=53640 apu=382us await=1409us aunder=0 aover=0 fps=60 split=c0
+[   3.205] [PERF] emu=13361us scale=3834us push=11333us qstall=8389us qovf=104220 apu=424us await=2676us aunder=0 aover=0 fps=60 split=c0
+[   4.206] [PERF] emu=13979us scale=3834us push=9945us qstall=4906us qovf=163779 apu=715us await=1703us aunder=0 aover=0 fps=60 split=c0
+[   5.207] [PERF] emu=13052us scale=3831us push=11322us qstall=9086us qovf=237752 apu=418us await=2988us aunder=0 aover=0 fps=60 split=c0
+[   6.209] [PERF] emu=13136us scale=3829us push=11337us qstall=8899us qovf=333621 apu=411us await=2897us aunder=0 aover=0 fps=60 split=c0
+[   7.210] [PERF] emu=13058us scale=3814us push=11338us qstall=8683us qovf=425747 apu=418us await=2978us aunder=0 aover=0 fps=60 split=c0
+[   8.211] [PERF] emu=13064us scale=3851us push=11295us qstall=8688us qovf=517269 apu=412us await=2975us aunder=0 aover=0 fps=60 split=c0
+[   9.213] [PERF] emu=13058us scale=3825us push=11336us qstall=8680us qovf=608770 apu=411us await=2984us aunder=0 aover=0 fps=60 split=c0
+[  10.214] [PERF] emu=13050us scale=3843us push=11304us qstall=8683us qovf=700280 apu=419us await=2986us aunder=0 aover=0 fps=60 split=c0
+[  11.215] [PERF] emu=13841us scale=3818us push=9638us qstall=1971us qovf=784630 apu=984us await=1590us aunder=0 aover=0 fps=60 split=c0
+[  12.217] [PERF] emu=13791us scale=3815us push=9836us qstall=1953us qovf=805227 apu=414us await=2203us aunder=0 aover=0 fps=60 split=c0
+[  12.617] [SD] Save: /saves/Wario Land II.sav (32768)
+[  12.617] [SAVE] idle: 32768 bytes (ok)
+[  13.218] [PERF] emu=13804us scale=3830us push=9700us qstall=1968us qovf=818691 apu=420us await=2187us aunder=0 aover=0 fps=33 split=c0
+[  14.219] [PERF] emu=13815us scale=3807us push=9577us qstall=1983us qovf=839232 apu=413us await=2192us aunder=0 aover=0 fps=60 split=c0
+[  15.220] [PERF] emu=13811us scale=3836us push=9881us qstall=1960us qovf=859907 apu=420us await=2202us aunder=0 aover=0 fps=60 split=c0
+[  16.221] [PERF] emu=13823us scale=3821us push=9759us qstall=1987us qovf=880581 apu=412us await=2183us aunder=0 aover=0 fps=60 split=c0
+[  17.223] [PERF] emu=13857us scale=3828us push=11173us qstall=8426us qovf=959168 apu=420us await=2151us aunder=0 aover=0 fps=60 split=c0
+[  18.224] [PERF] emu=13851us scale=3834us push=10045us qstall=6753us qovf=1031860 apu=413us await=2142us aunder=0 aover=0 fps=60 split=c0
+[  19.225] [PERF] emu=13852us scale=3825us push=10044us qstall=6658us qovf=1101501 apu=414us await=2139us aunder=0 aover=0 fps=60 split=c0
+[  20.227] [PERF] emu=13878us scale=3833us push=10057us qstall=6791us qovf=1169713 apu=421us await=2097us aunder=0 aover=0 fps=60 split=c0
+[  21.228] [PERF] emu=13859us scale=3832us push=10033us qstall=6585us qovf=1237962 apu=414us await=2139us aunder=0 aover=0 fps=60 split=c0
+[  22.229] [PERF] emu=13876us scale=3837us push=9768us qstall=6538us qovf=1303289 apu=421us await=2104us aunder=0 aover=0 fps=60 split=c0
+[  23.231] [PERF] emu=13882us scale=3836us push=9748us qstall=6653us qovf=1369932 apu=415us await=2096us aunder=0 aover=0 fps=60 split=c0
+[  24.232] [PERF] emu=13857us scale=3826us push=10006us qstall=6508us qovf=1436284 apu=422us await=2114us aunder=0 aover=0 fps=60 split=c0
+[  25.434] [PERF] emu=13854us scale=3821us push=9919us qstall=6457us qovf=1504028 apu=414us await=2127us aunder=0 aover=0 fps=60 split=c0
+[  26.435] [PERF] emu=13884us scale=3839us push=10022us qstall=6781us qovf=1571083 apu=413us await=2125us aunder=0 aover=0 fps=60 split=c0
+[  27.436] [PERF] emu=13849us scale=3826us push=10046us qstall=6624us qovf=1638357 apu=421us await=2151us aunder=0 aover=0 fps=60 split=c0
+[  28.438] [PERF] emu=13846us scale=3845us push=9999us qstall=6607us qovf=1706287 apu=415us await=2142us aunder=0 aover=0 fps=60 split=c0
+[  29.439] [PERF] emu=13856us scale=3820us push=10043us qstall=6560us qovf=1772899 apu=424us await=2123us aunder=0 aover=0 fps=60 split=c0
+[  30.440] [PERF] emu=13886us scale=3843us push=10028us qstall=6858us qovf=1843171 apu=418us await=2090us aunder=0 aover=0 fps=60 split=c0
+[  31.442] [PERF] emu=13842us scale=3817us push=10382us qstall=7398us qovf=1920177 apu=412us await=2148us aunder=0 aover=0 fps=60 split=c0
+[  32.443] [PERF] emu=13867us scale=3828us push=10030us qstall=6735us qovf=1992262 apu=422us await=2104us aunder=0 aover=0 fps=60 split=c0
+[  33.445] [PERF] emu=13848us scale=3815us push=10176us qstall=7155us qovf=2063500 apu=412us await=2130us aunder=0 aover=0 fps=60 split=c0
+[  34.446] [PERF] emu=13856us scale=3831us push=10197us qstall=7153us qovf=2138442 apu=420us await=2122us aunder=0 aover=0 fps=60 split=c0
+[  35.447] [PERF] emu=13855us scale=3833us push=10423us qstall=7131us qovf=2213407 apu=413us await=2143us aunder=0 aover=0 fps=60 split=c0
+[  36.449] [PERF] emu=13870us scale=3827us push=10289us qstall=7092us qovf=2288711 apu=420us await=2124us aunder=0 aover=0 fps=60 split=c0
+[  37.450] [PERF] emu=13903us scale=3837us push=10261us qstall=7308us qovf=2361151 apu=411us await=2077us aunder=0 aover=0 fps=60 split=c0
+[  38.451] [PERF] emu=13850us scale=3820us push=10433us qstall=7122us qovf=2436503 apu=412us await=2151us aunder=0 aover=0 fps=60 split=c0
+[  39.453] [PERF] emu=13846us scale=3833us push=10317us qstall=7157us qovf=2511955 apu=419us await=2139us aunder=0 aover=0 fps=60 split=c0
+# capture end, elapsed 40.1s

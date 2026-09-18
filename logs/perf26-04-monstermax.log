@@ -1,0 +1,66 @@
+# capture start 2026-09-18T11:39:26-0400 port=/dev/ttyUSB0 baud=115200 duration=40s
+[   0.200] ets Jul 29 2019 12:21:46
+[   0.200] 
+[   0.201] rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+[   0.201] configsip: 0, SPIWP:0xee
+[   0.201] clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+[   0.201] mode:DIO, clock div:1
+[   0.201] load:0x3fff0030,len:1344
+[   0.201] load:0x40078000,len:13964
+[   0.201] load:0x40080400,len:3600
+[   0.201] entry 0x400805f0
+[   0.401] E (194) esp_core_dff}���͡� No core dump partition found!
+[   0.401] E (194) esp_core_dump_flash: No core dump partition found!
+[   0.601] 
+[   0.601] === CYD-GB ===
+[   0.601] [SPK] I2S DAC on IO26 32768 Hz depth 4
+[   0.601] [BAT] 284 mV
+[   1.202] [TFT] 320x240 OK
+[   1.202] [INIT] Settings (NVS): pal=3 fs=0 bl=185 vol=2 gx=40 gy=6
+[   1.202] [SD] Type:2 Size:120MB
+[   1.202] [INIT] Heap: 254184
+[   1.202] [ROM] partition 3392KB @0x0B0000
+[   1.202] [ROM] unchanged, skipping write (256KB)
+[   1.202] [ROM] mapped 'Monster Max.gb' 256KB
+[   1.202] [EMU] 'MONSTER MAX' 256KB heap:203984
+[   1.202] [SAVE] Load skipped: cart RAM size is 0
+[   1.202] [EMU] emulation on core 1
+[   2.203] [PERF] emu=12759us scale=3832us push=11310us qstall=8391us qovf=55084 apu=1607us await=2073us aunder=0 aover=0 fps=62 split=c0
+[   3.204] [PERF] emu=12765us scale=3832us push=11312us qstall=8471us qovf=144892 apu=692us await=2978us aunder=0 aover=0 fps=60 split=c0
+[   4.206] [PERF] emu=12764us scale=3840us push=11305us qstall=8483us qovf=234421 apu=1223us await=2452us aunder=0 aover=0 fps=60 split=c0
+[   5.207] [PERF] emu=14088us scale=3823us push=9764us qstall=668us qovf=311670 apu=1020us await=1330us aunder=0 aover=0 fps=60 split=c0
+[   6.208] [PERF] emu=12647us scale=3859us push=11292us qstall=7789us qovf=341492 apu=1051us await=2755us aunder=0 aover=0 fps=60 split=c0
+[   7.210] [PERF] emu=12646us scale=3829us push=11324us qstall=8796us qovf=432054 apu=1051us await=2745us aunder=0 aover=0 fps=60 split=c0
+[   8.211] [PERF] emu=12781us scale=3852us push=11301us qstall=8693us qovf=521868 apu=1052us await=2596us aunder=0 aover=0 fps=60 split=c0
+[   9.212] [PERF] emu=12785us scale=3828us push=11340us qstall=8498us qovf=611344 apu=1052us await=2599us aunder=0 aover=0 fps=60 split=c0
+[  10.213] [PERF] emu=16249us scale=3821us push=3038us qstall=20us qovf=653250 apu=71us await=78us aunder=0 aover=0 fps=60 split=c0
+[  11.214] [PERF] emu=14069us scale=3828us push=10790us qstall=1450us qovf=661520 apu=630us await=1733us aunder=0 aover=0 fps=60 split=c0
+[  12.216] [PERF] emu=14045us scale=3833us push=10780us qstall=1443us qovf=673009 apu=1083us await=1304us aunder=0 aover=0 fps=60 split=c0
+[  13.217] [PERF] emu=14042us scale=3816us push=10810us qstall=1416us qovf=684364 apu=1439us await=969us aunder=0 aover=0 fps=60 split=c0
+[  14.218] [PERF] emu=14033us scale=3831us push=10787us qstall=1445us qovf=695548 apu=1476us await=914us aunder=0 aover=0 fps=60 split=c0
+[  15.220] [PERF] emu=14058us scale=3820us push=9739us qstall=680us qovf=706694 apu=1295us await=1091us aunder=0 aover=0 fps=60 split=c0
+[  16.221] [PERF] emu=14263us scale=3832us push=10532us qstall=701us qovf=716369 apu=1052us await=1103us aunder=0 aover=0 fps=60 split=c0
+[  17.222] [PERF] emu=16257us scale=3818us push=3133us qstall=19us qovf=725253 apu=607us await=38us aunder=0 aover=0 fps=59 split=c0
+[  18.223] [PERF] emu=13984us scale=3821us push=10790us qstall=1457us qovf=734893 apu=645us await=1775us aunder=0 aover=0 fps=62 split=c0
+[  19.225] [PERF] emu=14178us scale=3830us push=6619us qstall=1328us qovf=742813 apu=1473us await=412us aunder=0 aover=0 fps=60 split=c0
+[  20.226] [PERF] emu=14011us scale=3825us push=10792us qstall=1450us qovf=752073 apu=1447us await=964us aunder=0 aover=0 fps=60 split=c0
+[  21.227] [PERF] emu=13990us scale=3830us push=10798us qstall=1515us qovf=761569 apu=839us await=1583us aunder=0 aover=0 fps=60 split=c0
+[  22.228] [PERF] emu=14192us scale=3823us push=7792us qstall=1309us qovf=769611 apu=523us await=1699us aunder=0 aover=0 fps=60 split=c0
+[  23.430] [PERF] emu=14021us scale=3823us push=10799us qstall=1455us qovf=777539 apu=500us await=1875us aunder=0 aover=0 fps=60 split=c0
+[  24.431] [PERF] emu=14002us scale=3819us push=10788us qstall=1302us qovf=786181 apu=1512us await=918us aunder=0 aover=0 fps=60 split=c0
+[  25.433] [PERF] emu=14334us scale=3822us push=10361us qstall=804us qovf=794294 apu=570us await=1507us aunder=0 aover=0 fps=60 split=c0
+[  26.434] [PERF] emu=14200us scale=3830us push=10548us qstall=827us qovf=805176 apu=1051us await=1158us aunder=0 aover=0 fps=60 split=c0
+[  27.435] [PERF] emu=14332us scale=3824us push=10319us qstall=832us qovf=812749 apu=1472us await=601us aunder=0 aover=0 fps=60 split=c0
+[  28.437] [PERF] emu=14217us scale=3824us push=10539us qstall=827us qovf=823685 apu=1285us await=917us aunder=0 aover=0 fps=60 split=c0
+[  29.438] [PERF] emu=14332us scale=3821us push=10270us qstall=824us qovf=831258 apu=669us await=1410us aunder=0 aover=0 fps=60 split=c0
+[  30.440] [PERF] emu=14204us scale=3824us push=10541us qstall=815us qovf=842154 apu=950us await=1259us aunder=0 aover=0 fps=60 split=c0
+[  31.441] [PERF] emu=14312us scale=3820us push=10312us qstall=778us qovf=849696 apu=1087us await=1029us aunder=0 aover=0 fps=60 split=c0
+[  32.442] [PERF] emu=14191us scale=3828us push=10575us qstall=812us qovf=860606 apu=394us await=1845us aunder=0 aover=0 fps=60 split=c0
+[  33.444] [PERF] emu=14019us scale=3815us push=9022us qstall=1472us qovf=874566 apu=1741us await=35us aunder=0 aover=0 fps=60 split=c0
+[  34.445] [PERF] emu=14004us scale=3818us push=9921us qstall=1489us qovf=884438 apu=1297us await=968us aunder=0 aover=0 fps=60 split=c0
+[  35.446] [PERF] emu=14200us scale=3815us push=7780us qstall=1346us qovf=892793 apu=1052us await=1153us aunder=0 aover=0 fps=60 split=c0
+[  36.448] [PERF] emu=14011us scale=3830us push=10769us qstall=1489us qovf=901333 apu=654us await=1757us aunder=0 aover=0 fps=60 split=c0
+[  37.449] [PERF] emu=14242us scale=3820us push=7301us qstall=1356us qovf=908795 apu=290us await=1878us aunder=0 aover=0 fps=60 split=c0
+[  38.450] [PERF] emu=14300us scale=3823us push=4939us qstall=855us qovf=916140 apu=1758us await=45us aunder=0 aover=0 fps=60 split=c0
+[  39.452] [PERF] emu=15539us scale=3809us push=4262us qstall=30us qovf=929590 apu=1517us await=48us aunder=0 aover=0 fps=60 split=c0
+# capture end, elapsed 40.1s

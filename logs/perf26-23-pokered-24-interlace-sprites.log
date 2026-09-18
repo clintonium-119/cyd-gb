@@ -1,0 +1,122 @@
+# capture start 2026-09-18T16:58:05-0400 port=/dev/ttyUSB0 baud=115200 duration=90s
+[   0.200] ets Jul 29 2019 12:21:46
+[   0.201] 
+[   0.201] rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+[   0.201] configsip: 0, SPIWP:0xee
+[   0.201] clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+[   0.201] mode:DIO, clock div:1
+[   0.201] load:0x3fff0030,len:1344
+[   0.201] load:0x40078000,len:13964
+[   0.201] load:0x40080400,len:3600
+[   0.201] entry 0x400805f0
+[   0.201] E (194) esp_core_dff}���͡� No core dump partition found!
+[   0.401] E (194) esp_core_dump_flash: No core dump partition found!
+[   0.407] # link dropped: device reports readiness to read but returned no data (device disconnected or multiple access on port?)
+[   1.431] # link reopened (no reset)
+[   3.634] [ROM] writing 1024KB...
+[   4.035] [ROM] wrote 64KB
+[   4.235] [ROM] wrote 128KB
+[   4.435] [ROM] wrote 192KB
+[   4.635] [ROM] wrote 256KB
+[   5.036] [ROM] wrote 320KB
+[   5.236] [ROM] wrote 384KB
+[   5.436] [ROM] wrote 448KB
+[   5.636] [ROM] wrote 512KB
+[   5.837] [ROM] wrote 576KB
+[   6.237] [ROM] wrote 640KB
+[   6.437] [ROM] wrote 704KB
+[   6.638] [ROM] wrote 768KB
+[   6.838] [ROM] wrote 832KB
+[   7.238] [ROM] wrote 896KB
+[   7.438] [ROM] wrote 960KB
+[   7.639] [ROM] wrote 1024KB
+[   7.639] [ROM] done 1048576 bytes
+[   7.639] [ROM] mapped 'Pokemon - Red Version.gb' 1024KB
+[   7.639] [EMU] DEV_INTERLACE: background interlaced, sprites every line
+[   7.639] [EMU] 'POKEMON RED' 1024KB heap:159980
+[   7.839] [SD] Load: /saves/Pokemon - Red Version.sav (32768)
+[   7.839] [SAVE] Loaded 32768 bytes
+[   7.839] [EMU] emulation on core 1
+[   8.640] [PERF] emu=15080us scale=2557us push=2520us qstall=58us qovf=210 apu=77us await=1324us aunder=0 aover=0 fps=60 split=c0 draw=2604us steps=692677
+[   9.641] [PERF] emu=10209us scale=2551us push=8799us qstall=4663us qovf=46120 apu=75us await=6185us aunder=0 aover=0 fps=60 split=c0 draw=8539us steps=70421
+[  10.642] [PERF] emu=10191us scale=2559us push=8785us qstall=4645us qovf=94048 apu=75us await=6204us aunder=0 aover=0 fps=60 split=c0 draw=8541us steps=42900
+[  11.644] [PERF] emu=10212us scale=2559us push=8798us qstall=4661us qovf=141984 apu=83us await=6176us aunder=0 aover=0 fps=60 split=c0 draw=8514us steps=42900
+[  12.845] [PERF] emu=10120us scale=2563us push=8789us qstall=6397us qovf=198139 apu=75us await=6264us aunder=0 aover=0 fps=60 split=c0 draw=8353us steps=80060
+[  13.846] [PERF] emu=10393us scale=2557us push=8808us qstall=6254us qovf=264217 apu=363us await=5707us aunder=0 aover=0 fps=60 split=c0 draw=8373us steps=49994
+[  14.848] [PERF] emu=10265us scale=2559us push=8790us qstall=6284us qovf=329666 apu=185us await=6012us aunder=0 aover=0 fps=60 split=c0 draw=8347us steps=52139
+[  15.849] [PERF] emu=10377us scale=2555us push=8813us qstall=6185us qovf=394696 apu=185us await=5907us aunder=0 aover=0 fps=60 split=c0 draw=8343us steps=50008
+[  16.850] [PERF] emu=10364us scale=2550us push=8799us qstall=6102us qovf=458773 apu=186us await=5922us aunder=0 aover=0 fps=60 split=c0 draw=8377us steps=49856
+[  17.852] [PERF] emu=10578us scale=2548us push=7701us qstall=4670us qovf=519813 apu=662us await=5218us aunder=0 aover=0 fps=60 split=c0 draw=6963us steps=62361
+[  18.853] [PERF] emu=10439us scale=2555us push=8364us qstall=5523us qovf=575966 apu=1203us await=4810us aunder=0 aover=0 fps=60 split=c0 draw=7801us steps=92510
+[  19.855] [PERF] emu=10375us scale=2553us push=8822us qstall=6038us qovf=636216 apu=1113us await=4951us aunder=0 aover=0 fps=60 split=c0 draw=8313us steps=72570
+[  20.856] [PERF] emu=11854us scale=2539us push=3002us qstall=58us qovf=668776 apu=1188us await=3414us aunder=0 aover=0 fps=60 split=c0 draw=3180us steps=257414
+[  21.857] [PERF] emu=10371us scale=2560us push=8802us qstall=5082us qovf=712118 apu=1135us await=4938us aunder=0 aover=0 fps=60 split=c0 draw=8374us steps=131755
+[  22.859] [PERF] emu=10697us scale=2552us push=6404us qstall=3090us qovf=739240 apu=1142us await=4612us aunder=0 aover=0 fps=60 split=c0 draw=5457us steps=248357
+[  23.860] [PERF] emu=10539us scale=2559us push=7446us qstall=4402us qovf=752648 apu=1116us await=4790us aunder=0 aover=0 fps=60 split=c0 draw=6690us steps=398560
+[  24.862] [PERF] emu=14575us scale=2549us push=2530us qstall=60us qovf=799048 apu=1096us await=768us aunder=0 aover=0 fps=60 split=c0 draw=4518us steps=68458
+[  25.863] [PERF] emu=10476us scale=2552us push=8809us qstall=4783us qovf=805452 apu=706us await=5269us aunder=0 aover=0 fps=60 split=c0 draw=8541us steps=355033
+[  26.864] [PERF] emu=10525us scale=2549us push=8737us qstall=4736us qovf=823693 apu=957us await=4965us aunder=0 aover=0 fps=60 split=c0 draw=8522us steps=301861
+[  27.866] [PERF] emu=10537us scale=2543us push=8407us qstall=4403us qovf=870981 apu=1121us await=4795us aunder=0 aover=0 fps=60 split=c0 draw=8148us steps=62675
+[  28.867] [PERF] emu=10496us scale=2561us push=8579us qstall=4565us qovf=913124 apu=946us await=4988us aunder=0 aover=0 fps=60 split=c0 draw=8369us steps=96545
+[  29.868] [PERF] emu=10497us scale=2558us push=8562us qstall=4541us qovf=957841 apu=818us await=5134us aunder=0 aover=0 fps=60 split=c0 draw=8307us steps=78498
+[  30.870] [PERF] emu=10512us scale=2547us push=8728us qstall=4730us qovf=997725 apu=824us await=5109us aunder=0 aover=0 fps=60 split=c0 draw=8497us steps=113750
+[  31.871] [PERF] emu=10459us scale=2552us push=8813us qstall=4941us qovf=1022652 apu=1120us await=4858us aunder=0 aover=0 fps=60 split=c0 draw=8518us steps=254212
+[  32.872] [PERF] emu=10493us scale=2550us push=8615us qstall=4608us qovf=1064739 apu=955us await=5002us aunder=0 aover=0 fps=60 split=c0 draw=8387us steps=97086
+[  33.874] [PERF] emu=13724us scale=2544us push=2533us qstall=61us qovf=1083490 apu=1116us await=1584us aunder=0 aover=0 fps=60 split=c0 draw=4499us steps=308663
+[  34.875] [PERF] emu=10487us scale=2562us push=8595us qstall=4622us qovf=1118902 apu=965us await=5003us aunder=0 aover=0 fps=60 split=c0 draw=8381us steps=160921
+[  35.877] [PERF] emu=10492us scale=2556us push=8811us qstall=4792us qovf=1153632 apu=998us await=4958us aunder=0 aover=0 fps=60 split=c0 draw=8536us steps=150723
+[  36.878] [PERF] emu=13915us scale=2550us push=2526us qstall=59us qovf=1192703 apu=975us await=1552us aunder=0 aover=0 fps=60 split=c0 draw=4611us steps=119437
+[  37.879] [PERF] emu=13878us scale=2542us push=2532us qstall=61us qovf=1234209 apu=970us await=1595us aunder=0 aover=0 fps=60 split=c0 draw=4571us steps=101556
+[  38.881] [PERF] emu=15090us scale=2537us push=2538us qstall=59us qovf=1255120 apu=980us await=366us aunder=0 aover=0 fps=60 split=c0 draw=4411us steps=271870
+[  39.882] [PERF] emu=11610us scale=2547us push=5874us qstall=1876us qovf=1301997 apu=1164us await=3678us aunder=0 aover=0 fps=60 split=c0 draw=5783us steps=75390
+[  40.884] [PERF] emu=14571us scale=2552us push=2529us qstall=59us qovf=1314279 apu=1098us await=781us aunder=0 aover=0 fps=60 split=c0 draw=4558us steps=312010
+[  41.885] [PERF] emu=10503us scale=2558us push=8640us qstall=4669us qovf=1353213 apu=1113us await=4832us aunder=0 aover=0 fps=60 split=c0 draw=8421us steps=120208
+[  42.886] [PERF] emu=13681us scale=2553us push=2530us qstall=59us qovf=1382510 apu=1025us await=1741us aunder=0 aover=0 fps=60 split=c0 draw=4561us steps=199400
+[  43.888] [PERF] emu=10498us scale=2563us push=8811us qstall=4797us qovf=1416268 apu=1123us await=4814us aunder=0 aover=0 fps=60 split=c0 draw=8557us steps=170887
+[  44.889] [PERF] emu=13863us scale=2548us push=2532us qstall=67us qovf=1462030 apu=872us await=1711us aunder=0 aover=0 fps=60 split=c0 draw=4601us steps=71127
+[  45.890] [PERF] emu=10502us scale=2550us push=8725us qstall=4731us qovf=1505457 apu=819us await=5103us aunder=0 aover=0 fps=60 split=c0 draw=8513us steps=86765
+[  46.892] [PERF] emu=10535us scale=2546us push=8535us qstall=4517us qovf=1550921 apu=1159us await=4748us aunder=0 aover=0 fps=60 split=c0 draw=8277us steps=72273
+[  47.893] [PERF] emu=14579us scale=2544us push=2534us qstall=66us qovf=1561597 apu=1100us await=761us aunder=0 aover=0 fps=60 split=c0 draw=4525us steps=323884
+[  48.895] [PERF] emu=10497us scale=2555us push=8751us qstall=4808us qovf=1582165 apu=819us await=5129us aunder=0 aover=0 fps=60 split=c0 draw=8517us steps=253537
+[  49.896] [PERF] emu=10518us scale=2550us push=8554us qstall=4530us qovf=1626149 apu=995us await=4930us aunder=0 aover=0 fps=60 split=c0 draw=8289us steps=82931
+[  50.897] [PERF] emu=14679us scale=2551us push=2527us qstall=59us qovf=1658479 apu=1103us await=665us aunder=0 aover=0 fps=60 split=c0 draw=4520us steps=171915
+[  51.899] [PERF] emu=10477us scale=2554us push=8806us qstall=4770us qovf=1680883 apu=1120us await=4853us aunder=0 aover=0 fps=60 split=c0 draw=8516us steps=259145
+[  52.900] [PERF] emu=10490us scale=2556us push=8612us qstall=4618us qovf=1717733 apu=969us await=4976us aunder=0 aover=0 fps=60 split=c0 draw=8411us steps=136233
+[  53.901] [PERF] emu=10491us scale=2567us push=8737us qstall=4767us qovf=1761491 apu=1005us await=4958us aunder=0 aover=0 fps=60 split=c0 draw=8500us steps=84921
+[  54.903] [PERF] emu=10504us scale=2564us push=8614us qstall=4631us qovf=1805088 apu=889us await=5056us aunder=0 aover=0 fps=60 split=c0 draw=8404us steps=85661
+[  55.904] [PERF] emu=13571us scale=2551us push=2530us qstall=60us qovf=1837738 apu=973us await=1880us aunder=0 aover=0 fps=60 split=c0 draw=4653us steps=172683
+[  56.906] [PERF] emu=10530us scale=2556us push=8803us qstall=4778us qovf=1850546 apu=818us await=5096us aunder=0 aover=0 fps=60 split=c0 draw=8517us steps=343088
+[  57.907] [PERF] emu=10667us scale=2559us push=8220us qstall=4070us qovf=1893933 apu=996us await=4760us aunder=0 aover=0 fps=60 split=c0 draw=8027us steps=80777
+[  58.908] [PERF] emu=10608us scale=2554us push=8401us qstall=4275us qovf=1935435 apu=76us await=5775us aunder=0 aover=0 fps=60 split=c0 draw=8195us steps=89052
+[  59.910] [PERF] emu=10459us scale=2552us push=8063us qstall=5345us qovf=1982410 apu=76us await=5913us aunder=0 aover=0 fps=60 split=c0 draw=7412us steps=113767
+[  60.911] [PERF] emu=10940us scale=2541us push=5135us qstall=1750us qovf=2041899 apu=910us await=4615us aunder=0 aover=0 fps=60 split=c0 draw=3939us steps=87613
+[  61.912] [PERF] emu=10543us scale=2547us push=7391us qstall=4559us qovf=2098578 apu=905us await=4996us aunder=0 aover=0 fps=60 split=c0 draw=6632us steps=102130
+[  62.913] [PERF] emu=10731us scale=2548us push=6947us qstall=4055us qovf=2153681 apu=907us await=4802us aunder=0 aover=0 fps=60 split=c0 draw=6159us steps=114382
+[  63.915] [PERF] emu=10545us scale=2553us push=7693us qstall=4953us qovf=2209936 apu=908us await=4990us aunder=0 aover=0 fps=60 split=c0 draw=7015us steps=106599
+[  64.916] [PERF] emu=10442us scale=2548us push=8254us qstall=5605us qovf=2263626 apu=1003us await=4962us aunder=0 aover=0 fps=60 split=c0 draw=7703us steps=123790
+[  65.918] [PERF] emu=10425us scale=2560us push=8416us qstall=5838us qovf=2316007 apu=892us await=5101us aunder=0 aover=0 fps=60 split=c0 draw=7870us steps=122983
+[  66.919] [PERF] emu=10579us scale=2551us push=7378us qstall=4554us qovf=2368135 apu=879us await=4977us aunder=0 aover=0 fps=60 split=c0 draw=6660us steps=127394
+[  67.920] [PERF] emu=10446us scale=2560us push=8223us qstall=5543us qovf=2420393 apu=991us await=4992us aunder=0 aover=0 fps=60 split=c0 draw=7602us steps=125923
+[  68.922] [PERF] emu=10663us scale=2548us push=7698us qstall=4914us qovf=2472904 apu=1016us await=4762us aunder=0 aover=0 fps=60 split=c0 draw=6999us steps=126589
+[  69.923] [PERF] emu=10414us scale=2550us push=8316us qstall=5688us qovf=2521926 apu=999us await=5004us aunder=0 aover=0 fps=60 split=c0 draw=7760us steps=151749
+[  70.924] [PERF] emu=10428us scale=2547us push=8327us qstall=5654us qovf=2570904 apu=1004us await=4992us aunder=0 aover=0 fps=60 split=c0 draw=7745us steps=142385
+[  71.926] [PERF] emu=10441us scale=2550us push=8327us qstall=5687us qovf=2620678 apu=1011us await=4958us aunder=0 aover=0 fps=60 split=c0 draw=7729us steps=140987
+[  72.927] [PERF] emu=10613us scale=2555us push=7537us qstall=4691us qovf=2672894 apu=1007us await=4822us aunder=0 aover=0 fps=60 split=c0 draw=6800us steps=126359
+[  73.928] [PERF] emu=10689us scale=2550us push=8023us qstall=3863us qovf=2716236 apu=614us await=5142us aunder=0 aover=0 fps=60 split=c0 draw=7924us steps=130147
+[  74.929] [PERF] emu=10401us scale=2557us push=8813us qstall=4570us qovf=2759021 apu=894us await=5157us aunder=0 aover=0 fps=60 split=c0 draw=8525us steps=80134
+[  75.931] [PERF] emu=14401us scale=2541us push=2535us qstall=58us qovf=2780585 apu=779us await=1260us aunder=0 aover=0 fps=60 split=c0 draw=4783us steps=258303
+[  76.932] [PERF] emu=10420us scale=2555us push=8433us qstall=5757us qovf=2820934 apu=933us await=5058us aunder=0 aover=0 fps=60 split=c0 draw=7874us steps=195928
+[  77.933] [PERF] emu=10438us scale=2555us push=8343us qstall=5701us qovf=2871316 apu=765us await=5219us aunder=0 aover=0 fps=60 split=c0 draw=7771us steps=128369
+[  78.934] [PERF] emu=10650us scale=2548us push=7324us qstall=4374us qovf=2921472 apu=906us await=4856us aunder=0 aover=0 fps=60 split=c0 draw=6549us steps=129336
+[  79.936] [PERF] emu=10686us scale=2556us push=8004us qstall=3814us qovf=2969476 apu=776us await=4979us aunder=0 aover=0 fps=60 split=c0 draw=7847us steps=124340
+[  80.937] [PERF] emu=14365us scale=2546us push=2536us qstall=60us qovf=2995812 apu=907us await=1167us aunder=0 aover=0 fps=60 split=c0 draw=4914us steps=204095
+[  81.938] [PERF] emu=10858us scale=2550us push=7642us qstall=3462us qovf=3015073 apu=921us await=4656us aunder=0 aover=0 fps=60 split=c0 draw=7538us steps=262221
+[  82.940] [PERF] emu=10845us scale=2550us push=7645us qstall=3452us qovf=3048488 apu=942us await=4645us aunder=0 aover=0 fps=60 split=c0 draw=7525us steps=145643
+[  83.941] [PERF] emu=10710us scale=2558us push=7997us qstall=3813us qovf=3083411 apu=770us await=4946us aunder=0 aover=0 fps=60 split=c0 draw=7885us steps=132756
+[  84.942] [PERF] emu=10795us scale=2552us push=7202us qstall=4242us qovf=3113386 apu=789us await=4858us aunder=0 aover=0 fps=60 split=c0 draw=6443us steps=219654
+[  85.944] [PERF] emu=12800us scale=2552us push=2528us qstall=60us qovf=3161468 apu=916us await=2731us aunder=0 aover=0 fps=60 split=c0 draw=3038us steps=150050
+[  86.945] [PERF] emu=10682us scale=2553us push=7322us qstall=4446us qovf=3211146 apu=921us await=4830us aunder=0 aover=0 fps=60 split=c0 draw=6617us steps=139597
+[  87.946] [PERF] emu=10610us scale=2552us push=7432us qstall=4554us qovf=3259961 apu=906us await=4895us aunder=0 aover=0 fps=60 split=c0 draw=6715us steps=145121
+[  88.947] [PERF] emu=10432us scale=2556us push=8181us qstall=5447us qovf=3306676 apu=896us await=5077us aunder=0 aover=0 fps=60 split=c0 draw=7611us steps=152586
+[  89.949] [PERF] emu=10434us scale=2552us push=8182us qstall=5446us qovf=3356493 apu=1146us await=4864us aunder=0 aover=0 fps=60 split=c0 draw=7599us steps=135114
+# capture end, elapsed 90.1s

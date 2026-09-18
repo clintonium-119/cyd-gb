@@ -1,0 +1,66 @@
+# capture start 2026-09-18T11:28:53-0400 port=/dev/ttyUSB0 baud=115200 duration=45s
+[   0.200] ets Jul 29 2019 12:21:46
+[   0.201] 
+[   0.201] rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+[   0.201] configsip: 0, SPIWP:0xee
+[   0.201] clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+[   0.201] mode:DIO, clock div:1
+[   0.201] load:0x3fff0030,len:1344
+[   0.201] load:0x40078000,len:13964
+[   0.201] load:0x40080400,len:3600
+[   0.201] entry 0x400805f0
+[   0.201] E (194) esp_core_dff}���͡� No core dump partition found!
+[   0.401] E (194) esp_core_dump_flash: No core dump partition found!
+[   0.407] # link dropped: device reports readiness to read but returned no data (device disconnected or multiple access on port?)
+[   1.432] # link reopened (no reset)
+[   2.233] [PERF] emu=18763us scale=3824us push=2929us qstall=18us qovf=549 apu=70us await=45us aunder=26 aover=0 fps=55 split=c0
+[   3.235] [PERF] emu=14096us scale=3828us push=11224us qstall=5411us qovf=51277 apu=69us await=2259us aunder=87 aover=0 fps=61 split=c0
+[   4.236] [PERF] emu=14091us scale=3826us push=11221us qstall=5397us qovf=105285 apu=69us await=2283us aunder=147 aover=0 fps=60 split=c0
+[   5.237] [PERF] emu=14098us scale=3841us push=11202us qstall=5394us qovf=159285 apu=70us await=2266us aunder=207 aover=0 fps=60 split=c0
+[   6.238] [PERF] emu=13733us scale=3842us push=11302us qstall=8520us qovf=228799 apu=71us await=2636us aunder=267 aover=0 fps=60 split=c0
+[   7.240] [PERF] emu=14018us scale=3842us push=11320us qstall=8363us qovf=317081 apu=391us await=2026us aunder=327 aover=0 fps=60 split=c0
+[   8.241] [PERF] emu=13823us scale=3823us push=11322us qstall=8421us qovf=404989 apu=184us await=2420us aunder=387 aover=0 fps=60 split=c0
+[   9.242] [PERF] emu=13815us scale=3828us push=11305us qstall=8299us qovf=492871 apu=184us await=2426us aunder=447 aover=0 fps=60 split=c0
+[  10.243] [PERF] emu=13824us scale=3841us push=11317us qstall=8231us qovf=579879 apu=192us await=2398us aunder=507 aover=0 fps=60 split=c0
+[  11.245] [PERF] emu=13995us scale=3822us push=10356us qstall=7338us qovf=663710 apu=671us await=1751us aunder=567 aover=0 fps=60 split=c0
+[  12.246] [PERF] emu=14030us scale=3835us push=10398us qstall=8085us qovf=741976 apu=1217us await=1166us aunder=627 aover=0 fps=60 split=c0
+[  13.247] [PERF] emu=14158us scale=3824us push=11339us qstall=6496us qovf=771107 apu=1202us await=1071us aunder=687 aover=0 fps=60 split=c0
+[  14.248] [PERF] emu=14206us scale=3837us push=10513us qstall=6401us qovf=832919 apu=1220us await=985us aunder=747 aover=0 fps=60 split=c0
+[  15.249] [PERF] emu=14076us scale=3829us push=11264us qstall=8219us qovf=873812 apu=1078us await=409us aunder=807 aover=0 fps=60 split=c0
+[  16.250] [PERF] emu=14008us scale=3844us push=11209us qstall=8126us qovf=957817 apu=695us await=1735us aunder=867 aover=0 fps=60 split=c0
+[  17.252] [PERF] emu=14033us scale=3841us push=10840us qstall=8205us qovf=1041242 apu=1101us await=1271us aunder=927 aover=0 fps=60 split=c0
+[  17.575] # link dropped: device reports readiness to read but returned no data (device disconnected or multiple access on port?)
+[  20.100] # link reopened (no reset)
+[  20.300] [SD] Type:2 Size:120MB
+[  20.300] [INIT] Heap: 254184
+[  20.300] [ROM] partition 3392KB @0x0B0000
+[  20.300] [ROM] unchanged, skipping write (1024KB)
+[  20.300] [ROM] mapped 'Pokemon - Red Version.gb' 1024KB
+[  20.300] [EMU] 'POKEMON RED' 1024KB heap:203976
+[  20.300] [SD] Load miss: /saves/Pokemon - Red Version.sav
+[  20.300] [SAVE] No load for /roms/gb/Pokemon - Red Version.gb
+[  20.300] [EMU] emulation on core 1
+[  21.302] [PERF] emu=18760us scale=3795us push=2926us qstall=15us qovf=548 apu=71us await=45us aunder=23 aover=0 fps=55 split=c0
+[  22.303] [PERF] emu=14089us scale=3830us push=11208us qstall=5381us qovf=51303 apu=70us await=2276us aunder=84 aover=0 fps=61 split=c0
+[  23.304] [PERF] emu=14097us scale=3823us push=11223us qstall=5400us qovf=105318 apu=69us await=2260us aunder=144 aover=0 fps=60 split=c0
+[  24.306] [PERF] emu=14096us scale=3826us push=11200us qstall=5413us qovf=159328 apu=70us await=2273us aunder=204 aover=0 fps=60 split=c0
+[  25.307] [PERF] emu=13709us scale=3828us push=11326us qstall=8512us qovf=228835 apu=71us await=2654us aunder=264 aover=0 fps=60 split=c0
+[  26.308] [PERF] emu=14027us scale=3836us push=11308us qstall=8373us qovf=317089 apu=382us await=2025us aunder=324 aover=0 fps=60 split=c0
+[  27.309] [PERF] emu=13827us scale=3831us push=11340us qstall=8415us qovf=405010 apu=184us await=2418us aunder=384 aover=0 fps=60 split=c0
+[  28.310] [PERF] emu=13827us scale=3824us push=11328us qstall=8294us qovf=492965 apu=184us await=2407us aunder=444 aover=0 fps=60 split=c0
+[  29.060] # link dropped: device reports readiness to read but returned no data (device disconnected or multiple access on port?)
+[  32.085] # link reopened (no reset)
+[  32.131] # link dropped: device reports readiness to read but returned no data (device disconnected or multiple access on port?)
+[  37.157] # link reopened (no reset)
+[  37.358] [PERF] emu=14010us scale=3830us push=11320us qstall=8195us qovf=1115654 apu=1084us await=1331us aunder=984 aover=0 fps=60 split=c0
+[  38.359] [PERF] emu=15990us scale=3812us push=3046us qstall=18us qovf=1190905 apu=1095us await=41us aunder=1044 aover=0 fps=60 split=c0
+[  38.793] # link dropped: device reports readiness to read but returned no data (device disconnected or multiple access on port?)
+[  39.317] # link reopened (no reset)
+[  40.319] [PERF] emu=14662us scale=3832us push=11212us qstall=4637us qovf=1240401 apu=1130us await=632us aunder=1157 aover=0 fps=62 split=c0
+[  41.520] [PERF] emu=17879us scale=3815us push=2945us qstall=31us qovf=1249060 apu=881us await=42us aunder=1211 aover=0 fps=54 split=c0
+[  42.522] [PERF] emu=17898us scale=3817us push=2919us qstall=38us qovf=1249060 apu=1094us await=42us aunder=1263 aover=0 fps=52 split=c0
+[  43.323] [SD] Save: /saves/Pokemon - Red Version.sav (32768)
+[  43.323] [SAVE] idle: 32768 bytes (ok)
+[  43.523] [PERF] emu=20549us scale=3827us push=2921us qstall=18us qovf=1272892 apu=1118us await=42us aunder=1300 aover=0 fps=38 split=c0
+[  44.524] [PERF] emu=14499us scale=3820us push=11241us qstall=5487us qovf=1292391 apu=828us await=45us aunder=1356 aover=0 fps=56 split=c0
+# capture end, elapsed 45.1s

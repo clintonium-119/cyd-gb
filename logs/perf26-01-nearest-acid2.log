@@ -1,0 +1,23 @@
+# capture start 2026-09-18T09:52:01-0400 port=/dev/ttyUSB0 baud=115200 duration=12s
+[   0.200] ets Jul 29 2019 12:21:46
+[   0.200] 
+[   0.201] rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+[   0.201] configsip: 0, SPIWP:0xee
+[   0.201] clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+[   0.201] mode:DIO, clock div:1
+[   0.201] load:0x3fff0030,len:1344
+[   0.201] load:0x40078000,len:13964
+[   0.201] load:0x40080400,len:3600
+[   0.201] entry 0x400805f0
+[   0.201] E (194) esp_core_dff}���͡� No core dump partition found!
+[   0.401] E (194) esp_core_dump_flash: No core dump partition found!
+[   0.601] 
+[   0.601] === CYD-GB ===
+[   0.601] [SPK] I2S DAC on IO26 32768 Hz depth 4
+[   0.601] [BAT] 292 mV
+[   1.202] [TFT] 320x240 OK
+[   1.202] [INIT] Settings (NVS): pal=3 fs=0 bl=115 vol=2 gx=40 gy=6
+[   1.202] [SD] Type:2 Size:120MB
+[   1.202] [INIT] Heap: 254184
+[   3.205] [BOOT] halt: Not found: dmg-acid2.gb
+# capture end, elapsed 12.0s

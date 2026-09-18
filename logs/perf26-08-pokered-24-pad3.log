@@ -1,0 +1,60 @@
+# capture start 2026-09-18T14:07:21-0400 port=/dev/ttyUSB0 baud=115200 duration=45s
+[   0.200] ets Jul 29 2019 12:21:46
+[   0.201] 
+[   0.201] rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+[   0.201] configsip: 0, SPIWP:0xee
+[   0.201] clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+[   0.201] mode:DIO, clock div:1
+[   0.201] load:0x3fff0030,len:1344
+[   0.201] load:0x40078000,len:13964
+[   0.201] load:0x40080400,len:3600
+[   0.201] entry 0x400805f0
+[   0.201] E (194) esp_core_dff}���͡� No core dump partition found!
+[   0.401] E (194) esp_core_dump_flash: No core dump partition found!
+[   0.421] # link dropped: device reports readiness to read but returned no data (device disconnected or multiple access on port?)
+[   1.445] # link reopened (no reset)
+[   2.246] [PERF] emu=18623us scale=2530us push=2514us qstall=16us qovf=0 apu=68us await=152us aunder=24 aover=0 fps=54 split=c0 apad=14
+[   3.247] [PERF] emu=10945us scale=2548us push=8559us qstall=2195us qovf=17395 apu=69us await=5470us aunder=84 aover=0 fps=60 split=c0 apad=0
+[   4.249] [PERF] emu=10937us scale=2554us push=8549us qstall=2186us qovf=37312 apu=81us await=5465us aunder=144 aover=0 fps=60 split=c0 apad=0
+[   5.250] [PERF] emu=10941us scale=2551us push=8551us qstall=2202us qovf=57240 apu=68us await=5474us aunder=204 aover=0 fps=60 split=c0 apad=0
+[   6.251] [PERF] emu=10547us scale=2552us push=8779us qstall=5369us qovf=94469 apu=67us await=5858us aunder=264 aover=0 fps=60 split=c0 apad=0
+[   7.253] [PERF] emu=10958us scale=2558us push=8412us qstall=4821us qovf=149000 apu=415us await=5100us aunder=324 aover=0 fps=60 split=c0 apad=0
+[   8.254] [PERF] emu=10740us scale=2554us push=8803us qstall=5289us qovf=202789 apu=182us await=5547us aunder=384 aover=0 fps=60 split=c0 apad=0
+[   9.255] [PERF] emu=10834us scale=2555us push=8776us qstall=5147us qovf=256264 apu=182us await=5457us aunder=444 aover=0 fps=60 split=c0 apad=0
+[  10.257] [PERF] emu=12305us scale=2546us push=6416us qstall=2624us qovf=308370 apu=182us await=3986us aunder=504 aover=0 fps=60 split=c0 apad=0
+[  11.258] [PERF] emu=11302us scale=2558us push=8041us qstall=4347us qovf=353747 apu=1233us await=3897us aunder=564 aover=0 fps=60 split=c0 apad=0
+[  12.259] [PERF] emu=11773us scale=2557us push=7166us qstall=3401us qovf=401502 apu=1300us await=3372us aunder=624 aover=0 fps=60 split=c0 apad=0
+[  13.261] [PERF] emu=11207us scale=2553us push=8046us qstall=4323us qovf=450300 apu=1310us await=3927us aunder=684 aover=0 fps=60 split=c0 apad=0
+[  14.262] [PERF] emu=10904us scale=2542us push=8675us qstall=4990us qovf=499099 apu=1179us await=4328us aunder=744 aover=0 fps=60 split=c0 apad=0
+[  15.263] [PERF] emu=10856us scale=2555us push=8794us qstall=5111us qovf=548534 apu=1204us await=4370us aunder=804 aover=0 fps=60 split=c0 apad=0
+[  16.264] [PERF] emu=10894us scale=2555us push=8731us qstall=5049us qovf=599539 apu=1031us await=4529us aunder=864 aover=0 fps=60 split=c0 apad=0
+[  17.266] [PERF] emu=11010us scale=2549us push=8775us qstall=3197us qovf=616546 apu=1205us await=4209us aunder=924 aover=0 fps=60 split=c0 apad=0
+[  18.267] [PERF] emu=11040us scale=2565us push=8647us qstall=3052us qovf=645502 apu=1226us await=4132us aunder=984 aover=0 fps=60 split=c0 apad=0
+[  19.268] [PERF] emu=10878us scale=2555us push=8714us qstall=5036us qovf=668527 apu=1118us await=4442us aunder=1044 aover=0 fps=60 split=c0 apad=0
+[  20.269] [PERF] emu=10891us scale=2561us push=8676us qstall=5014us qovf=718725 apu=698us await=4841us aunder=1104 aover=0 fps=60 split=c0 apad=0
+[  21.271] [PERF] emu=15606us scale=2541us push=2534us qstall=16us qovf=737698 apu=1064us await=138us aunder=1164 aover=0 fps=60 split=c0 apad=0
+[  22.272] [PERF] emu=11275us scale=2552us push=8475us qstall=2230us qovf=757401 apu=1122us await=4016us aunder=1225 aover=0 fps=61 split=c0 apad=0
+[  23.273] [PERF] emu=18707us scale=2619us push=2521us qstall=11us qovf=760681 apu=1086us await=151us aunder=1277 aover=0 fps=52 split=c0 apad=56
+[  24.274] [PERF] emu=13427us scale=2544us push=6317us qstall=1057us qovf=767630 apu=593us await=2431us aunder=1331 aover=0 fps=54 split=c0 apad=0
+[  25.276] [PERF] emu=11228us scale=2549us push=8597us qstall=2278us qovf=773423 apu=858us await=4341us aunder=1385 aover=0 fps=54 split=c0 apad=12
+[  26.277] [PERF] emu=11266us scale=2560us push=8595us qstall=2304us qovf=793310 apu=995us await=4170us aunder=1444 aover=0 fps=59 split=c0 apad=0
+[  27.479] [PERF] emu=19011us scale=2595us push=2550us qstall=17us qovf=793310 apu=1098us await=151us aunder=1493 aover=0 fps=49 split=c0 apad=56
+[  28.480] [PERF] emu=18278us scale=2533us push=2513us qstall=17us qovf=794287 apu=953us await=158us aunder=1544 aover=0 fps=51 split=c0 apad=56
+[  29.482] [PERF] emu=18288us scale=2559us push=2528us qstall=15us qovf=794287 apu=1093us await=151us aunder=1595 aover=0 fps=51 split=c0 apad=56
+[  30.483] [PERF] emu=18417us scale=2527us push=2533us qstall=16us qovf=794287 apu=1097us await=153us aunder=1646 aover=0 fps=51 split=c0 apad=56
+[  31.484] [PERF] emu=18229us scale=2548us push=2514us qstall=16us qovf=794287 apu=962us await=151us aunder=1697 aover=0 fps=51 split=c0 apad=56
+[  32.486] [PERF] emu=18322us scale=2557us push=2537us qstall=14us qovf=794287 apu=1095us await=151us aunder=1747 aover=0 fps=50 split=c0 apad=56
+[  33.487] [PERF] emu=18959us scale=2529us push=2515us qstall=17us qovf=797464 apu=975us await=150us aunder=1800 aover=0 fps=53 split=c0 apad=56
+[  34.488] [PERF] emu=18927us scale=2529us push=2557us qstall=14us qovf=807859 apu=968us await=139us aunder=1857 aover=0 fps=57 split=c0 apad=0
+[  35.490] [SD] Save: /saves/Pokemon - Red Version.sav (32768)
+[  35.490] [SAVE] idle: 32768 bytes (ok)
+[  35.690] [PERF] emu=18676us scale=2531us push=2524us qstall=19us qovf=814853 apu=1108us await=140us aunder=1902 aover=0 fps=46 split=c0 apad=0
+[  36.691] [PERF] emu=18945us scale=2529us push=2514us qstall=19us qovf=818631 apu=1085us await=151us aunder=1955 aover=0 fps=53 split=c0 apad=54
+[  37.693] [PERF] emu=11246us scale=2552us push=8569us qstall=2280us qovf=826725 apu=1027us await=4185us aunder=2012 aover=0 fps=57 split=c0 apad=0
+[  38.694] [PERF] emu=11004us scale=2555us push=8714us qstall=4173us qovf=836501 apu=993us await=4455us aunder=2067 aover=0 fps=55 split=c0 apad=0
+[  39.896] [PERF] emu=18314us scale=2556us push=2531us qstall=18us qovf=851369 apu=965us await=140us aunder=2126 aover=0 fps=59 split=c0 apad=0
+[  40.897] [PERF] emu=18292us scale=2563us push=2521us qstall=14us qovf=860022 apu=1089us await=141us aunder=2184 aover=0 fps=58 split=c0 apad=7
+[  41.899] [PERF] emu=18658us scale=2534us push=2576us qstall=16us qovf=865369 apu=957us await=148us aunder=2238 aover=0 fps=54 split=c0 apad=56
+[  42.901] [SD] Save: /saves/Pokemon - Red Version.sav (32768)
+[  42.901] [SAVE] menu: 32768 bytes (ok)
+# capture end, elapsed 45.1s

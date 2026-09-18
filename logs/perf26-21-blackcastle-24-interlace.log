@@ -1,0 +1,39 @@
+# capture start 2026-09-18T16:46:59-0400 port=/dev/ttyUSB0 baud=115200 duration=30s
+[   0.200] ets Jul 29 2019 12:21:46
+[   0.201] 
+[   0.201] rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+[   0.201] configsip: 0, SPIWP:0xee
+[   0.201] clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+[   0.201] mode:DIO, clock div:1
+[   0.201] load:0x3fff0030,len:1344
+[   0.201] load:0x40078000,len:13964
+[   0.201] load:0x40080400,len:3600
+[   0.201] entry 0x400805f0
+[   0.201] E (194) esp_core_dff}���͡� No core dump partition found!
+[   0.401] E (194) esp_core_dump_flash: No core dump partition found!
+[   0.407] # link dropped: device reports readiness to read but returned no data (device disconnected or multiple access on port?)
+[   1.431] # link reopened (no reset)
+[   2.232] [PERF] emu=9601us scale=2560us push=8798us qstall=6893us qovf=53405 apu=824us await=6038us aunder=0 aover=0 fps=62 split=c0 draw=8257us steps=147038
+[   3.233] [PERF] emu=9556us scale=2563us push=8814us qstall=6574us qovf=89825 apu=79us await=6850us aunder=0 aover=0 fps=60 split=c0 draw=8214us steps=238273
+[   4.235] [PERF] emu=10530us scale=2552us push=7861us qstall=5124us qovf=146272 apu=585us await=5335us aunder=0 aover=0 fps=60 split=c0 draw=6783us steps=106589
+[   5.236] [PERF] emu=10466us scale=2556us push=6958us qstall=4258us qovf=191727 apu=708us await=5248us aunder=0 aover=0 fps=60 split=c0 draw=5977us steps=164033
+[   6.237] [PERF] emu=10526us scale=2558us push=6959us qstall=4116us qovf=232182 apu=579us await=5327us aunder=0 aover=0 fps=60 split=c0 draw=5905us steps=186069
+[   7.239] [PERF] emu=10550us scale=2554us push=7717us qstall=5002us qovf=277693 apu=954us await=4914us aunder=0 aover=0 fps=60 split=c0 draw=6651us steps=163779
+[   8.240] [PERF] emu=10529us scale=2544us push=7173us qstall=4417us qovf=326436 apu=698us await=5195us aunder=0 aover=0 fps=60 split=c0 draw=6107us steps=150678
+[   9.241] [PERF] emu=10616us scale=2560us push=6581us qstall=3576us qovf=364789 apu=1035us await=4759us aunder=0 aover=0 fps=60 split=c0 draw=5388us steps=196165
+[  10.243] [PERF] emu=10470us scale=2564us push=7889us qstall=5153us qovf=409794 apu=704us await=5260us aunder=0 aover=0 fps=60 split=c0 draw=6814us steps=167377
+[  11.244] [PERF] emu=10633us scale=2557us push=7015us qstall=4278us qovf=457268 apu=1028us await=4763us aunder=0 aover=0 fps=60 split=c0 draw=6005us steps=156368
+[  12.245] [PERF] emu=10493us scale=2545us push=6937us qstall=4117us qovf=502956 apu=836us await=5087us aunder=0 aover=0 fps=60 split=c0 draw=5772us steps=164118
+[  13.247] [PERF] emu=10484us scale=2544us push=7275us qstall=4383us qovf=544297 apu=697us await=5236us aunder=0 aover=0 fps=60 split=c0 draw=6214us steps=182699
+[  14.248] [PERF] emu=10458us scale=2556us push=7006us qstall=4238us qovf=585656 apu=836us await=5119us aunder=0 aover=0 fps=60 split=c0 draw=6011us steps=181824
+[  15.249] [PERF] emu=10535us scale=2557us push=7705us qstall=5013us qovf=634373 apu=698us await=5193us aunder=0 aover=0 fps=60 split=c0 draw=6624us steps=149684
+[  16.251] [PERF] emu=10533us scale=2551us push=7818us qstall=5076us qovf=685048 apu=835us await=5058us aunder=0 aover=0 fps=60 split=c0 draw=6729us steps=141926
+[  17.252] [PERF] emu=10506us scale=2560us push=7314us qstall=4642us qovf=732754 apu=703us await=5220us aunder=0 aover=0 fps=60 split=c0 draw=6433us steps=155681
+[  18.253] [PERF] emu=10473us scale=2560us push=7897us qstall=5166us qovf=781464 apu=836us await=5124us aunder=0 aover=0 fps=60 split=c0 draw=6809us steps=150896
+[  19.255] [PERF] emu=10487us scale=2555us push=7827us qstall=5163us qovf=834271 apu=834us await=5106us aunder=0 aover=0 fps=60 split=c0 draw=6853us steps=130623
+[  20.256] [PERF] emu=10558us scale=2547us push=6709us qstall=3811us qovf=881411 apu=828us await=5035us aunder=0 aover=0 fps=60 split=c0 draw=5548us steps=157756
+[  21.257] [PERF] emu=10627us scale=2554us push=6239us qstall=3110us qovf=917096 apu=597us await=5179us aunder=0 aover=0 fps=60 split=c0 draw=4917us steps=211394
+[  22.259] [PERF] emu=10684us scale=2547us push=5228us qstall=1952us qovf=941174 apu=830us await=4903us aunder=0 aover=0 fps=60 split=c0 draw=3790us steps=271558
+[  23.260] [PERF] emu=10575us scale=2549us push=5790us qstall=2452us qovf=969721 apu=869us await=4977us aunder=0 aover=0 fps=60 split=c0 draw=4241us steps=248297
+[  24.261] [PERF] emu=10487us scale=2556us push=6739us qstall=3718us qovf=1007863 apu=595us await=5335us aunder=0 aover=0 fps=60 split=c0 draw=5580us steps=197975
+# capture end, elapsed 30.1s
