@@ -118,15 +118,7 @@
 // DMA queue depth, in frames. Latency is depth x 16.7 ms, about 67 ms here;
 // whether that is audible against on-screen events is §11 bench work, and
 // lowering it is a one-line change.
-//
-// Overridable so the bench can raise it: a deeper queue absorbs a longer dip
-// below full speed before the chain starves and starts re-clocking its last
-// buffer, which is the test that says whether starvation is what BUG-0011
-// hears. Depth is bounded by latency, not memory — 16 frames is a quarter of
-// a second between an on-screen event and its sound.
-#ifndef SPEAKER_DMA_FRAMES
 #define SPEAKER_DMA_FRAMES 4
-#endif
 // The bound on the pacing wait: one frame plus margin. A write that cannot
 // place its frame inside this window gives up rather than stalling the
 // emulator (§4).
