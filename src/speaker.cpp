@@ -25,7 +25,10 @@ static uint8_t stretched[SPEAKER_SAMPLES_PER_FRAME + SPEAKER_PAD_MAX];
 // the emulator keeps up, which is every title the bench has measured except
 // the three Pokemon ones, and on that path stretch_mono() is an exact copy.
 static uint16_t pad = 0;
-static uint16_t pad_hold = 0;
+// Smoothed cost of one emulated frame, and the entry timestamp of the last
+// write, which is what measures it.
+static uint32_t period_avg_us = 0;
+static int64_t last_write_us = 0;
 
 // Queue depth is estimated, not observed: built-in-DAC mode reports neither a
 // fill level nor a starvation event.
@@ -124,24 +127,52 @@ void speaker_write_frame(const uint8_t* mono, size_t n_samples) {
     // The queue having run dry before this frame arrived is the emulator
     // falling behind, not a pause: a pause goes through speaker_silence(),
     // which stops the clock.
-    bool starved = level_running(&lvl) && level_queued(&lvl, now_us) == 0;
-    if (starved) {
+    if (level_running(&lvl) && level_queued(&lvl, now_us) == 0) {
         underflow_count++;
     }
 
-    // One sample a frame up while starving, one every SPEAKER_PAD_HOLD_FRAMES
-    // back down once it stops. The pad settles just above the shortfall and
-    // stays there: overshooting is not free, because a queue that fills
-    // blocks the write below and paces the emulator slower still.
-    if (starved) {
-        if (pad < SPEAKER_PAD_MAX) {
-            pad++;
+    // The pad is computed, not searched for. This function is called once per
+    // emulated frame, so the interval between calls — less whatever the
+    // previous one spent blocked — is what one frame actually costs the
+    // emulator, and the DAC drains exactly that interval's worth of samples
+    // meanwhile. The shortfall is then arithmetic.
+    //
+    // Feed-forward on purpose. Both feedback designs tried before this one
+    // wound up and pinned the pad at its cap, because every queue-state
+    // signal lags by the time it takes a 67 ms queue to register an error,
+    // and a loop correcting a sample a frame runs far past the target inside
+    // that window. Measuring the period is immune to that: dt minus the wait
+    // reports the emulator's true cost whether or not the queue is blocking
+    // us (BUG-0011).
+    if (last_write_us != 0) {
+        int64_t dt = now_us - last_write_us;
+
+        if (dt > 0 && dt < SPEAKER_PAD_GAP_US) {
+            uint32_t emu_period = (uint32_t)dt;
+
+            /* The previous write's block sits inside this interval and is
+             * not the emulator's cost. */
+            emu_period = (emu_period > last_wait_us)
+                ? emu_period - last_wait_us : 0;
+
+            period_avg_us = (period_avg_us == 0)
+                ? emu_period
+                : (uint32_t)((int32_t)period_avg_us
+                             + (((int32_t)emu_period - (int32_t)period_avg_us)
+                                >> SPEAKER_PAD_AVG_SHIFT));
+
+            uint32_t want = (uint32_t)(((uint64_t)period_avg_us
+                                        * SPEAKER_SAMPLE_RATE) / 1000000u);
+            uint32_t bias = (last_wait_us >= SPEAKER_PAD_FULL_WAIT_US)
+                ? 0u : SPEAKER_PAD_BIAS;
+            uint32_t want_pad = (want > n_samples)
+                ? (want - (uint32_t)n_samples) + bias : 0u;
+
+            pad = (uint16_t)((want_pad > SPEAKER_PAD_MAX)
+                             ? SPEAKER_PAD_MAX : want_pad);
         }
-        pad_hold = 0;
-    } else if (pad > 0 && ++pad_hold >= SPEAKER_PAD_HOLD_FRAMES) {
-        pad--;
-        pad_hold = 0;
     }
+    last_write_us = now_us;
 
     size_t out_n = n_samples + pad;
     if (stretch_mono(mono, n_samples, stretched, out_n) != STRETCH_OK) {
