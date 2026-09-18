@@ -315,7 +315,7 @@ static void push_block(uint_fast8_t first)
  * core's idle task into a watchdog reset. The timeout is the belt to that
  * braces — a lost wakeup costs one late block, not a stalled pipeline.
  */
-static void emu_push_task(void* arg)
+static void IRAM_ATTR emu_push_task(void* arg)
 {
     const uint16_t* src_lines[BLOCK_LINES + 1];
     const uint16_t* lookahead;
