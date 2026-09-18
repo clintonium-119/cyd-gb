@@ -65,6 +65,36 @@ static_assert(AUDIO_SAMPLES == SPEAKER_SAMPLES_PER_FRAME,
 // failed allocation points rom_lo at the flash mapping instead, so the read
 // path below needs no second branch.
 #define ROM_LO_SIZE 0x4000u
+static uint32_t rom_reads = 0;
+static uint32_t rom_hi_reads = 0;
+
+/* Switchable ROM in DRAM too. The bench measured 559,000 ROM reads a second
+ * with 250,000 still reaching flash, spread over six distinct 16 KB banks —
+ * about 5,100 misses a frame, which at a flash miss's cost is more than the
+ * shortfall that remains.
+ *
+ * 4 KB pages, not 16 KB banks: six banks is 96 KB and would not fit the
+ * SHIPPING build. -DDEV_ROM_PATH removes about 58 KB of static NFC buffers,
+ * so a bench build has that much more heap than a real one — 189 KB free
+ * after init against roughly 131 KB. Sixteen 4 KB pages is 64 KB and fits
+ * both identically, which is what makes the bench number mean anything.
+ *
+ * A page is claimed once it has been read ROM_PAGE_HOT times, not on first
+ * touch: there are more pages in the working set than slots, and first-touch
+ * would fill them with whatever the boot path happened to walk. Nothing is
+ * ever evicted — with a working set this small there is nothing to evict for,
+ * and a cache that thrashes would be worse than the flash it replaced. Once
+ * the slots are gone the rest reads from flash exactly as before. */
+#define ROM_PAGE_BITS 12
+#define ROM_PAGE_SIZE (1u << ROM_PAGE_BITS)
+#define ROM_PAGE_MASK (ROM_PAGE_SIZE - 1u)
+#define ROM_PAGES_MAX 256
+#define ROM_PAGE_SLOTS 16
+#define ROM_PAGE_HOT 200
+static uint8_t* rom_page[ROM_PAGE_SLOTS];
+static int8_t rom_page_slot[ROM_PAGES_MAX];
+static uint8_t rom_page_hits[ROM_PAGES_MAX];
+static uint8_t rom_pages_used = 0;
 static const uint8_t* rom = nullptr;
 static const uint8_t* rom_lo = nullptr;
 static uint8_t* rom_lo_buf = nullptr;
@@ -413,12 +443,51 @@ static void emu_push_task(void* arg)
 static uint8_t IRAM_ATTR gb_rom_read(struct gb_s* g, const uint_fast32_t a)
 {
     (void)g;
+    /* Bench instrumentation for BUG-0011. Caching the home bank bought 3,165
+     * us a frame, so flash misses are the cost — but roughly 520 us is still
+     * missing and the rest of the working set is in the switchable banks.
+     * These say how much traffic misses the cache and how many distinct banks
+     * it spreads over, which is what decides whether one more 16 KB buffer
+     * would do or whether the shape has to be a page cache. */
+    rom_reads++;
     /* The home bank first: it is the hottest quarter of any ROM and it is the
      * one region whose contents never change, so this compare replaces a
      * flash read with a DRAM read on a large share of fetches. */
     if (a < ROM_LO_SIZE) {
         return rom_lo[a];
     }
+    if (a >= romlen) {
+        return 0xFF;
+    }
+    {
+        unsigned pg = (unsigned)(a >> ROM_PAGE_BITS);
+
+        if (pg < ROM_PAGES_MAX) {
+            int8_t slot = rom_page_slot[pg];
+
+            if (slot >= 0) {
+                return rom_page[slot][a & ROM_PAGE_MASK];
+            }
+            if (rom_page_hits[pg] < 255u) {
+                rom_page_hits[pg]++;
+            }
+            if (rom_page_hits[pg] >= ROM_PAGE_HOT
+                && rom_pages_used < ROM_PAGE_SLOTS) {
+                uint8_t* buf = (uint8_t*)malloc(ROM_PAGE_SIZE);
+
+                if (buf) {
+                    memcpy(buf, rom + (size_t)pg * ROM_PAGE_SIZE,
+                           ROM_PAGE_SIZE);
+                    rom_page[rom_pages_used] = buf;
+                    rom_page_slot[pg] = (int8_t)rom_pages_used;
+                    rom_pages_used++;
+                    return buf[a & ROM_PAGE_MASK];
+                }
+            }
+        }
+    }
+    /* Still flash: this is the number the next capture has to shrink. */
+    rom_hi_reads++;
     /* One compare more than a bare rom[a]: an out-of-range bank read from a
      * corrupt ROM would otherwise fault through the flash cache, and this
      * branch predicts perfectly. */
@@ -577,6 +646,11 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
      * emulator owns the board until power-off — and on failure rom_lo simply
      * aliases the flash mapping, so the unit plays at the old speed rather
      * than not at all. */
+    /* Bank 0 is the home bank and already has rom_lo, so its slot entry stays
+     * unused; every other bank starts uncached for this cartridge. */
+    memset(rom_page_slot, -1, sizeof(rom_page_slot));
+    memset(rom_page_hits, 0, sizeof(rom_page_hits));
+
     if (!rom_lo_buf) {
         rom_lo_buf = (uint8_t*)malloc(ROM_LO_SIZE);
     }
@@ -659,6 +733,9 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     rom_title(title, sizeof(title));
     Serial.printf("[EMU] '%s' %uKB heap:%u romlo:%s\n", title, romlen / 1024,
                   ESP.getFreeHeap(), (rom_lo == rom) ? "flash" : "dram");
+    Serial.printf("[EMU] rom pages:%u of %u (%u KB)\n",
+                  (unsigned)rom_pages_used, (unsigned)ROM_PAGE_SLOTS,
+                  (unsigned)(ROM_PAGE_SLOTS * ROM_PAGE_SIZE / 1024u));
     return true;
 }
 
@@ -702,10 +779,14 @@ void emu_run_frame() {
          * contains only qstall. tools/perf_capture.py keys on it. */
         Serial.printf("[PERF] emu=%uus scale=%uus push=%uus qstall=%uus "
                       "qovf=%u apu=%uus await=%uus aunder=%u aover=%u "
-                      "fps=%u split=c0\n",
+                      "fps=%u split=c0 rd=%u miss=%u pg=%u\n",
                       emu_us, scale_us, push_us, q_stall_us,
                       framequeue_overflows(&fq), apu_us, await_us, aunder,
-                      aover, cfps);
+                      aover, cfps, rom_reads, rom_hi_reads,
+                      (unsigned)rom_pages_used);
+        /* Per second, so the counts read as rates beside fps. */
+        rom_reads = 0;
+        rom_hi_reads = 0;
     }
 }
 

@@ -276,23 +276,18 @@ static void poll_input(uint32_t now_ms) {
 }
 
 // ─── Automatic saves ───────────────────────────────────────────────────────
-// The minimum the toast stays up, measured from the draw rather than from the
-// write, so a fast card does not flash it too briefly to read. The game is
-// paused for this long: a save is the one moment the player is told about, and
-// a confirmation nobody can read is not a confirmation.
-#define SAVE_TOAST_MS 400
-
-// A strip across the bottom of the game window, never outside it. The next
-// emulated frame repaints the whole window, so there is nothing to clear.
-static void draw_toast(const char* text, uint16_t colour) {
-    int16_t top = settings.game_y + GAME_H - 32;
-
-    tft.fillRect(settings.game_x, top, GAME_W, 32, TFT_BLACK);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(colour, TFT_BLACK);
-    tft.drawString(text, settings.game_x + GAME_W / 2,
-                   settings.game_y + GAME_H - 16, 4);
-}
+// Silent by design. There was a toast across the bottom of the game window
+// here, held 400 ms so it could be read; the builder's verdict is that it is
+// jarring and ugly, and on a cartridge console the save is meant to be
+// invisible — the player never asked for it and cannot decline it. Removing
+// the hold also gives back 400 ms of paused emulation per save, which the
+// audio queue was riding out as silence.
+//
+// A failed save now reports only over serial. The write is retried a full
+// idle period later and the RAM stays dirty until it lands, so nothing is
+// lost to a single failure; a card that fails every time loses saves without
+// telling the player, and if that is worth surfacing the RGB LED is the
+// unobtrusive place for it.
 
 // Write cartridge RAM to the card, with the toast that confirms it. Self
 // contained: it decides whether there is anything to do, takes the display
@@ -312,25 +307,19 @@ static void flush_save(const char* why) {
         return;
     }
 
+    // The pipeline still pauses: the card write blocks this core for long
+    // enough that the DMA queue would run dry, and speaker_silence() holding
+    // the pin at mid-scale is quieter than a starved chain repeating its last
+    // buffer. Nothing is drawn, so the frozen frame is all the player sees.
     emu_pause_pipeline();
-
-    uint32_t t0 = millis();
-    draw_toast("SAVED", 0x07E0);
 
     bool ok = sd_save_state(cur_path, ram, sz);
     if (ok) {
         emu_clear_cart_ram_dirty();
     } else {
-        draw_toast("SAVE FAILED", TFT_RED);
         emu_autosave_defer(millis());
     }
     Serial.printf("[SAVE] %s: %u bytes (%s)\n", why, sz, ok ? "ok" : "fail");
-
-    // Signed difference so the hold survives the millis() rollover instead of
-    // parking the game for 49 days.
-    while ((int32_t)(millis() - t0) < SAVE_TOAST_MS) {
-        delay(10);
-    }
 
     emu_resume_pipeline();
 }
