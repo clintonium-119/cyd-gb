@@ -32,9 +32,7 @@
 /*
  * Vendored from https://github.com/deltabeard/Peanut-GB — upstream commit
  * c13c99cd967d72dbd9e600795cd66169ca3945c7 (2025-11-08).
- * Local modifications: PEANUT_GB_HOT on __gb_draw_line and __gb_step_cpu,
- * which places them in IRAM on ESP32 and expands to nothing elsewhere. See
- * the macro's definition for why. Re-apply after any upstream update.
+ * Local modifications: none.
  * Update with scripts/update_peanut_gb.sh <sha>.
  */
 
@@ -1467,23 +1465,7 @@ static int compare_sprites(const struct sprite_data *const sd1, const struct spr
 }
 #endif
 
-/* Local modification (BUG-0011): the two hot functions are placed in IRAM on
- * ESP32. The bench regressed emu_core against ROM reads per frame and found a
- * fixed 6,575 us of PPU work plus 246 CPU cycles per read of interpreter
- * work — and the slope fell to 204 when core 0's workload halved, which is
- * cross-core contention for the flash controller and nothing else. Running
- * these from internal RAM takes core 1 off that controller entirely, so core
- * 0's instruction fetches can no longer queue in front of it. Empty on the
- * host build, which has no such attribute. */
-#ifndef PEANUT_GB_HOT
-# ifdef IRAM_ATTR
-#  define PEANUT_GB_HOT IRAM_ATTR
-# else
-#  define PEANUT_GB_HOT
-# endif
-#endif
-
-PEANUT_GB_HOT void __gb_draw_line(struct gb_s *gb)
+void __gb_draw_line(struct gb_s *gb)
 {
 	uint8_t pixels[160] = {0};
 
@@ -1812,7 +1794,7 @@ PEANUT_GB_HOT void __gb_draw_line(struct gb_s *gb)
 /**
  * Internal function used to step the CPU.
  */
-PEANUT_GB_HOT void __gb_step_cpu(struct gb_s *gb)
+void __gb_step_cpu(struct gb_s *gb)
 {
 	uint8_t opcode;
 	uint_fast16_t inst_cycles;
@@ -3932,7 +3914,7 @@ void gb_run_frame(struct gb_s *gb);
  *
  * \param	An initialised emulator context. Must not be NULL.
  */
-PEANUT_GB_HOT void __gb_step_cpu(struct gb_s *gb);
+void __gb_step_cpu(struct gb_s *gb);
 
 /** Function prototypes: Optional Functions **/
 /**
