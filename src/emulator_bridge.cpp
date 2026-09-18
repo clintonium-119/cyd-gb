@@ -422,40 +422,8 @@ static uint8_t audio_read(uint16_t addr)
     return minigb_apu_audio_read(&apu, addr);
 }
 
-/* Bench instrumentation for BUG-0011. NR12 / NR22 / NR42 are the envelope
- * registers, and minigb_apu mutates the channel's live volume on any write to
- * one while that channel is playing — its "zombie mode" emulation, which on
- * real hardware fires only under far narrower conditions. A driver that
- * re-applies envelopes routinely therefore gets its volume inverted over and
- * over. nrx2 counts those writes a second and zmb counts how many landed with
- * the channel powered and enabled, which is exactly the hack's trigger. */
-static uint32_t nrx2_writes = 0;
-static uint32_t nrx2_live = 0;
-
 static void audio_write(uint16_t addr, uint8_t val)
 {
-    if (addr == 0xFF12 || addr == 0xFF17 || addr == 0xFF21) {
-        unsigned ch = (unsigned)(addr - AUDIO_ADDR_COMPENSATION) / 5u;
-        bool live = apu.chans[ch].powered && apu.chans[ch].enabled;
-
-        nrx2_writes++;
-        if (live) {
-            nrx2_live++;
-        }
-#ifdef DEV_NO_ZOMBIE_VOL
-        /* Bench A/B: keep the register write, drop only the volume mutation,
-         * so the hypothesis can be tested without editing the vendored file.
-         * The volume is the sole thing that case path touches beyond
-         * volume_init, powered and env.step. */
-        if (live) {
-            uint8_t before = apu.chans[ch].volume;
-
-            minigb_apu_audio_write(&apu, addr, val);
-            apu.chans[ch].volume = before;
-            return;
-        }
-#endif
-    }
     minigb_apu_audio_write(&apu, addr, val);
 }
 
@@ -687,14 +655,10 @@ void emu_run_frame() {
          * contains only qstall. tools/perf_capture.py keys on it. */
         Serial.printf("[PERF] emu=%uus scale=%uus push=%uus qstall=%uus "
                       "qovf=%u apu=%uus await=%uus aunder=%u aover=%u "
-                      "fps=%u split=c0 nrx2=%u zmb=%u\n",
+                      "fps=%u split=c0\n",
                       emu_us, scale_us, push_us, q_stall_us,
                       framequeue_overflows(&fq), apu_us, await_us, aunder,
-                      aover, cfps, nrx2_writes, nrx2_live);
-        /* Per second, not cumulative: the question is whether the rate rises
-         * while the builder holds a button to fast-forward dialogue. */
-        nrx2_writes = 0;
-        nrx2_live = 0;
+                      aover, cfps);
     }
 }
 
