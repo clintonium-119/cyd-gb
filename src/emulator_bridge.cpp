@@ -47,9 +47,27 @@ static_assert(AUDIO_SAMPLES == SPEAKER_SAMPLES_PER_FRAME,
 // The ROM is a pointer into memory-mapped flash, owned by the rom_store
 // module and valid for the whole session. What used to be here — a sixteen
 // entry 4 KB page cache with its own hash table and LRU, plus a 32 KB copy of
-// bank 0 — is gone: the hardware flash cache does that job, in silicon, for
-// free (§3.2).
+// bank 0 — was removed on the grounds that the hardware flash cache does that
+// job in silicon for free (§3.2).
+//
+// The bench has put that in doubt for large titles, so one piece of it is
+// back: a DRAM copy of the home bank. Pokemon Red runs gb_run_frame in
+// 18.1 ms where Wario Land II — the same 1 MB MBC3 cart — runs it in 6.7, and
+// an RP2040 at a comparable clock plays both cleanly. The ESP32's flash cache
+// is small and shared with core 0's instruction fetch, and a title whose
+// per-frame working set spans a script interpreter, a music driver and map
+// data across several banks will miss it constantly. The home bank is the
+// half of that which never changes: every call, return and trampoline goes
+// through it, so serving it from RAM is the cheapest thing that can move the
+// number (BUG-0011).
+//
+// 16 KB of heap, not of the static segment, which has about 15 KB spare. A
+// failed allocation points rom_lo at the flash mapping instead, so the read
+// path below needs no second branch.
+#define ROM_LO_SIZE 0x4000u
 static const uint8_t* rom = nullptr;
+static const uint8_t* rom_lo = nullptr;
+static uint8_t* rom_lo_buf = nullptr;
 static uint32_t romlen = 0;
 
 // ─── State ──────────────────────────────────────────────────────────────────
@@ -395,6 +413,12 @@ static void emu_push_task(void* arg)
 static uint8_t IRAM_ATTR gb_rom_read(struct gb_s* g, const uint_fast32_t a)
 {
     (void)g;
+    /* The home bank first: it is the hottest quarter of any ROM and it is the
+     * one region whose contents never change, so this compare replaces a
+     * flash read with a DRAM read on a large share of fetches. */
+    if (a < ROM_LO_SIZE) {
+        return rom_lo[a];
+    }
     /* One compare more than a bare rom[a]: an out-of-range bank read from a
      * corrupt ROM would otherwise fault through the flash cache, and this
      * branch predicts perfectly. */
@@ -549,6 +573,29 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     rom = rom_data;
     romlen = rom_size;
 
+    /* Home bank into DRAM. Allocated once per session and never freed — the
+     * emulator owns the board until power-off — and on failure rom_lo simply
+     * aliases the flash mapping, so the unit plays at the old speed rather
+     * than not at all. */
+    if (!rom_lo_buf) {
+        rom_lo_buf = (uint8_t*)malloc(ROM_LO_SIZE);
+    }
+    if (rom_lo_buf) {
+        /* Refilled on every init, not just the first: the buffer outlives one
+         * cartridge, and a second ROM loaded in the same session must not be
+         * served the previous one's home bank. */
+        size_t n = (romlen < ROM_LO_SIZE) ? romlen : ROM_LO_SIZE;
+
+        memcpy(rom_lo_buf, rom, n);
+        if (n < ROM_LO_SIZE) {
+            memset(rom_lo_buf + n, 0xFF, ROM_LO_SIZE - n);
+        }
+        rom_lo = rom_lo_buf;
+    } else {
+        rom_lo = rom;
+        Serial.println("[EMU] home-bank cache unavailable, reading flash");
+    }
+
     if (!cram) {
         cram = (uint8_t*)malloc(MAXRAM);
     }
@@ -610,8 +657,8 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     fpst = millis();
 
     rom_title(title, sizeof(title));
-    Serial.printf("[EMU] '%s' %uKB heap:%u\n", title, romlen / 1024,
-                  ESP.getFreeHeap());
+    Serial.printf("[EMU] '%s' %uKB heap:%u romlo:%s\n", title, romlen / 1024,
+                  ESP.getFreeHeap(), (rom_lo == rom) ? "flash" : "dram");
     return true;
 }
 
