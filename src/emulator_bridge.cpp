@@ -8,6 +8,9 @@
 #include "save/autosave.h"
 #include "speaker.h"
 #include "audio/mix.h"
+#ifdef DEV_TONE_AUDIO
+#include "audio/tone.h"
+#endif
 /* The vendored APU header is plain C with no linkage guard of its own, and it
  * is kept byte-identical to upstream, so the guard goes here. */
 extern "C" {
@@ -183,6 +186,14 @@ static struct minigb_apu_ctx apu;
 static audio_sample_t apu_buf[AUDIO_SAMPLES_TOTAL];
 static uint8_t mono_buf[AUDIO_SAMPLES];
 static mix_state_t mix;
+#ifdef DEV_TONE_AUDIO
+/* Bench A/B for BUG-0011: a known-perfect square replaces the APU's output
+ * while everything else — the emulator, the frame pacing, the mixer, the DMA
+ * write — stays exactly as it is. A tone that comes through clean puts the
+ * fault in what the APU generates; a tone that crackles puts it in how the
+ * samples are delivered. */
+static tone_state_t tone_st;
+#endif
 // Off until main() applies the stored setting, so a unit is never loud before
 // its own volume is read.
 static uint8_t vol_idx = MIX_VOL_OFF;
@@ -604,6 +615,10 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
 
     minigb_apu_audio_init(&apu);
     mix_init(&mix, 0x2545F491u);
+#ifdef DEV_TONE_AUDIO
+    tone_init(&tone_st, TONE_HZ, SPEAKER_SAMPLE_RATE);
+    Serial.println("[EMU] DEV_TONE_AUDIO: APU output replaced by a test tone");
+#endif
 
     gb_init_lcd(gb, lcd_line);
     gb->direct.frame_skip = (fskip > 0);
@@ -647,6 +662,11 @@ void emu_run_frame() {
      * is ahead of real time. */
     t = esp_timer_get_time();
     minigb_apu_audio_callback(&apu, apu_buf);
+#ifdef DEV_TONE_AUDIO
+    /* Overwritten, not skipped: the callback's cost stays inside the frame so
+     * the pacing under test is the real one. */
+    tone_fill(&tone_st, TONE_AMPLITUDE, apu_buf, AUDIO_SAMPLES);
+#endif
     mix_mono(&mix, apu_buf, AUDIO_SAMPLES, vol_idx, mono_buf);
     apu_us = (uint32_t)(esp_timer_get_time() - t);
     speaker_write_frame(mono_buf, AUDIO_SAMPLES);
