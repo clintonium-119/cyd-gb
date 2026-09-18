@@ -598,6 +598,18 @@ static void test_24_16_kernel_survives_alternating_extremes(void)
 
 /* ── argument checking ───────────────────────────────────────────────── */
 
+static void test_26_16_kernel_matches_the_spec_on_random_lines(void)
+{
+    unsigned n;
+
+    rng_state = 0x2616BEEFu;
+    for (n = 0; n < 64u; n++) {
+        set_random_lines();
+        assert_block_matches_spec(SCALER_GEOM_26_16, SCALER_MODE_BLEND,
+                                  spec_26_16, (n & 1u) ? lookahead : NULL);
+    }
+}
+
 static void test_null_and_unknown_arguments_are_rejected(void)
 {
     const uint16_t* holed[SCALER_SRC_LINES_MAX];
@@ -650,6 +662,7 @@ int main(void)
     RUN_TEST(test_24_16_kernel_matches_the_spec_on_random_lines);
     RUN_TEST(test_24_16_kernel_keeps_the_right_edge_pure);
     RUN_TEST(test_24_16_kernel_survives_alternating_extremes);
+    RUN_TEST(test_26_16_kernel_matches_the_spec_on_random_lines);
     RUN_TEST(test_null_and_unknown_arguments_are_rejected);
     return UNITY_END();
 }

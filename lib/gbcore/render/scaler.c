@@ -146,6 +146,102 @@ static void scale_block_24_16_blend(const uint16_t* l0, const uint16_t* l1,
     }
 }
 
+/*
+ * Fixed 13/8 blend kernel for 26/16 — the same deletion the 3/2 kernel made,
+ * against an irregular rhythm four times the size. Nine live source pixels
+ * across eight lines will not sit in the LX6's window, so this keeps the
+ * generic path's two-pass shape (scale the 8 pure rows horizontally, then
+ * average pairs of already-scaled rows) and unrolls only the horizontal
+ * walk, which is where the per-pixel pattern load, is_blend branch and
+ * bounds check lived. 20 groups of 8 source pixels become 13 output pixels
+ * each: 260 per row, 13 rows, 18 calls a frame.
+ *
+ * ponytail: plain 16-bit stores, as in the 3/2 kernel; pack to 32-bit only
+ * if the bench says this lands short.
+ */
+static void scale_row_26_16(const uint16_t* src, uint16_t* dst)
+{
+    unsigned base;
+    unsigned o = 0;
+
+    for (base = 0; base < SCALER_SRC_W; base += 8) {
+        /* The last group's partner is pixel 160, which does not exist; it
+         * clamps to 159, so the final output pixel is avg(s159, s159) and
+         * the right edge stays pure. One compare per group, not per pixel. */
+        uint16_t s0 = src[base];
+        uint16_t s1 = src[base + 1];
+        uint16_t s2 = src[base + 2];
+        uint16_t s3 = src[base + 3];
+        uint16_t s4 = src[base + 4];
+        uint16_t s5 = src[base + 5];
+        uint16_t s6 = src[base + 6];
+        uint16_t s7 = src[base + 7];
+        uint16_t s8 = src[base + 8 < SCALER_SRC_W ? base + 8
+                                                  : SCALER_SRC_W - 1];
+
+        dst[o] = s0;
+        dst[o + 1] = s1;
+        dst[o + 2] = avg565(s1, s2);
+        dst[o + 3] = s2;
+        dst[o + 4] = s3;
+        dst[o + 5] = avg565(s3, s4);
+        dst[o + 6] = s4;
+        dst[o + 7] = avg565(s4, s5);
+        dst[o + 8] = s5;
+        dst[o + 9] = s6;
+        dst[o + 10] = avg565(s6, s7);
+        dst[o + 11] = s7;
+        dst[o + 12] = avg565(s7, s8);
+        o += 13;
+    }
+}
+
+/* One vertical blend row: the average of two rows scale_row_26_16 already
+ * produced, never of the four sources, because avg565 is not associative. */
+static void blend_row_26_16(uint16_t* dst, const uint16_t* a,
+                            const uint16_t* b)
+{
+    unsigned x;
+
+    for (x = 0; x < 260; x++) {
+        dst[x] = avg565(a[x], b[x]);
+    }
+}
+
+/*
+ * pattern_26_16 lands source line i on output row {0, 1, 3, 4, 6, 8, 9, 11}
+ * and leaves rows 2, 5, 7, 10 and 12 as vertical blends. Row 12's partner is
+ * source line 8 — the next block's first line, which arrives as
+ * lookahead_line and is NULL on the frame's last block; there the generic
+ * path averages the row with itself, so blending row 11 with row 11 is the
+ * same pixels without a second code path.
+ */
+static void scale_block_26_16_blend(const uint16_t* const* src_lines,
+                                    const uint16_t* lookahead_line,
+                                    uint16_t* dst, uint16_t* scratch_row)
+{
+    scale_row_26_16(src_lines[0], dst);
+    scale_row_26_16(src_lines[1], dst + 260);
+    scale_row_26_16(src_lines[2], dst + 3 * 260);
+    scale_row_26_16(src_lines[3], dst + 4 * 260);
+    scale_row_26_16(src_lines[4], dst + 6 * 260);
+    scale_row_26_16(src_lines[5], dst + 8 * 260);
+    scale_row_26_16(src_lines[6], dst + 9 * 260);
+    scale_row_26_16(src_lines[7], dst + 11 * 260);
+
+    blend_row_26_16(dst + 2 * 260, dst + 260, dst + 3 * 260);
+    blend_row_26_16(dst + 5 * 260, dst + 4 * 260, dst + 6 * 260);
+    blend_row_26_16(dst + 7 * 260, dst + 6 * 260, dst + 8 * 260);
+    blend_row_26_16(dst + 10 * 260, dst + 9 * 260, dst + 11 * 260);
+
+    if (lookahead_line != NULL) {
+        scale_row_26_16(lookahead_line, scratch_row);
+        blend_row_26_16(dst + 12 * 260, dst + 11 * 260, scratch_row);
+    } else {
+        blend_row_26_16(dst + 12 * 260, dst + 11 * 260, dst + 11 * 260);
+    }
+}
+
 int scaler_scale_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
                        const uint16_t* const* src_lines,
                        const uint16_t* lookahead_line,
@@ -179,6 +275,10 @@ int scaler_scale_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
 
     if (geom == SCALER_GEOM_24_16 && mode == SCALER_MODE_BLEND) {
         scale_block_24_16_blend(src_lines[0], src_lines[1], dst);
+        return SCALER_OK;
+    }
+    if (geom == SCALER_GEOM_26_16 && mode == SCALER_MODE_BLEND) {
+        scale_block_26_16_blend(src_lines, lookahead_line, dst, scratch_row);
         return SCALER_OK;
     }
 
