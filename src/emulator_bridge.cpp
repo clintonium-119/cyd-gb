@@ -633,16 +633,12 @@ void emu_run_frame() {
         speaker_get_stats(&aunder, &aover, &await_us);
         /* split=c0 marks the accounting: scale and push are core 0's, emu
          * contains only qstall. tools/perf_capture.py keys on it. */
-        /* apad trails split= on purpose: tools/perf_capture.py's pattern
-         * requires the fields before it in order and ignores what follows,
-         * so appending here reads in the new logs without invalidating the
-         * captures already taken. */
         Serial.printf("[PERF] emu=%uus scale=%uus push=%uus qstall=%uus "
                       "qovf=%u apu=%uus await=%uus aunder=%u aover=%u "
-                      "fps=%u split=c0 apad=%u\n",
+                      "fps=%u split=c0\n",
                       emu_us, scale_us, push_us, q_stall_us,
                       framequeue_overflows(&fq), apu_us, await_us, aunder,
-                      aover, cfps, (unsigned)speaker_get_pad());
+                      aover, cfps);
     }
 }
 

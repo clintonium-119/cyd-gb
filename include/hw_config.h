@@ -119,33 +119,6 @@
 // whether that is audible against on-screen events is §11 bench work, and
 // lowering it is a one-line change.
 #define SPEAKER_DMA_FRAMES 4
-// Most samples a starving frame may be stretched by. Sample supply is bound
-// to the emulated frame rate, so a title core 1 cannot run at full speed
-// starves the queue every frame; stretching buys the shortfall back as pitch.
-// 56 of 548 is 10.2 %, against the 5.9 % worst case the bench has measured
-// (Pokemon Red at 24/16), so the cap is headroom and not a target. The cap is
-// what bounds the drift: a runaway loop can flatten the music by at most a
-// tone and a half, never further (BUG-0011).
-#define SPEAKER_PAD_MAX 56
-// How hard the pad's frame-period average is smoothed: the average moves by
-// 1/32 of the error each frame, about half a second. Long enough that a
-// single heavy frame does not bend the pitch, short enough to follow a scene
-// change.
-#define SPEAKER_PAD_AVG_SHIFT 5
-// A gap longer than this is a discontinuity — a menu, a save flush, the ROM
-// write at boot — not a slow frame, and must not be averaged in.
-#define SPEAKER_PAD_GAP_US 100000
-// Samples added on top of the computed shortfall while the queue is still
-// filling. The feed-forward term holds the queue wherever it already is, so
-// a queue that starved down to empty would stay empty and repeat on any
-// jitter; this is what refills it. It stops as soon as a write blocks, which
-// is the one queue-state signal that is directly observed rather than
-// estimated, so it cannot wind up.
-#define SPEAKER_PAD_BIAS 6
-// Blocking at or above this many microseconds means the write found the DMA
-// queue full. A starving title blocks 35 to 50 us and a title that keeps up
-// blocks thousands, so this sits in a two-order-of-magnitude gap.
-#define SPEAKER_PAD_FULL_WAIT_US 250
 // The bound on the pacing wait: one frame plus margin. A write that cannot
 // place its frame inside this window gives up rather than stalling the
 // emulator (§4).

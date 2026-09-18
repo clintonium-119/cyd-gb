@@ -39,22 +39,7 @@ bool speaker_init();
 // One frame of unsigned 8-bit mono, mid-scale at 128. n_samples must not
 // exceed SPEAKER_SAMPLES_PER_FRAME. Blocks for at most
 // SPEAKER_WRITE_TIMEOUT_MS waiting for room in the DMA queue.
-//
-// The frame may be handed to the DAC stretched. Sample supply is one frame
-// per emulated frame, so a title the emulator cannot run at full speed
-// supplies fewer samples a second than the DAC drains and the chain re-clocks
-// its last buffer, which is heard as a continuous buzz. This counts the
-// starvation and stretches the next frames to cover it, trading pitch — which
-// the player has already lost to the slow frame rate — for continuity. The
-// pad is zero, and the stretch an exact copy, on every title that keeps up
-// (BUG-0011).
 void speaker_write_frame(const uint8_t* mono, size_t n_samples);
-
-// Samples currently being added to each frame, 0 to SPEAKER_PAD_MAX. Zero
-// means the emulator is keeping up and nothing is being resampled; a steady
-// non-zero value is how far behind real time the game is running, in samples
-// per frame. Reported in the bench's [PERF] line.
-uint16_t speaker_get_pad();
 
 // Fills every DMA buffer with mid-scale and stops the level clock, so a
 // deliberate pause — the menu, a save flush — leaves the pin quiet instead of
