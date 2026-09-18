@@ -35,20 +35,21 @@ uint8_t emu_get_colour_hash();
 // cartridge-RAM write callback only sets a flag — it is IRAM resident and
 // runs per access, so it may not read a clock — and the tick is what turns
 // that flag into the dirty state. So the dirty stamp is the frame's
-// timestamp, not the write's, which is at worst one frame stale and is what
-// emu_autosave_idle_due() measures from.
+// timestamp, not the write's, which is at worst one frame stale.
+//
+// There is deliberately no idle rule. A card write pauses emulation and
+// audio for about 400 ms, and Pokemon uses cartridge RAM as scratch from
+// the title screen on, so an idle save fired every ten seconds of play and
+// every one was heard as a dropout (BUG-0011). Saves happen when the menu
+// opens and once on a low battery.
 //
 // The battery thresholds are passed in rather than read here, which keeps
 // this header free of hw_config.h: the constants live there and are applied
 // from main.cpp, alongside the ADC reading they are compared against.
 void emu_autosave_tick(uint32_t now_ms);
 
-// Whether cartridge RAM is dirty and has gone unwritten long enough to be
-// worth saving.
-bool emu_autosave_idle_due(uint32_t now_ms);
-
-// After a save that failed: the RAM stays dirty, but the idle clock restarts
-// so the retry waits a full idle period instead of firing every frame.
+// After a save that failed: restamps the RAM so the next trigger's retry is
+// not confused with a fresh write.
 void emu_autosave_defer(uint32_t now_ms);
 
 // True exactly once per crossing below low_mv; re-arms only above

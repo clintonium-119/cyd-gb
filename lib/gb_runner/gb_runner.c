@@ -110,6 +110,12 @@ int gb_runner_init(const uint8_t* rom, size_t len)
         != GB_INIT_NO_ERROR) {
         return GB_RUNNER_ERR_INIT;
     }
+    /* Same rule as the firmware: the direct path only when the buffer holds
+     * every bank the header declares, otherwise the bounds-checked callback
+     * carries the reads. */
+    if ((size_t)(gb.num_rom_banks_mask + 1u) * ROM_BANK_SIZE <= len) {
+        gb.rom_direct = rom;
+    }
     gb_init_lcd(&gb, lcd_line);
     booted = 1;
     return GB_RUNNER_OK;

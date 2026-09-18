@@ -370,9 +370,6 @@ void run_emu() {
         // state here, stamped with this frame's time: the callback is IRAM
         // resident and may not read a clock.
         emu_autosave_tick(now);
-        if (emu_autosave_idle_due(now)) {
-            flush_save("idle");
-        }
 
         // One ADC read a second, and one save per crossing below the
         // threshold — the latch in gbcore is what makes the second true.

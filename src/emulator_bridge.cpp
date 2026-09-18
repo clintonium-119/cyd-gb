@@ -31,6 +31,25 @@ static void audio_write(uint16_t addr, uint8_t val);
 #define ENABLE_LCD 1
 #define ENABLE_SOUND 1
 #define PEANUT_GB_HIGH_LCD_ACCURACY 0
+
+/* Bench counters behind the two hooks the vendored header exposes.
+ * emu_steps counts emulated instructions and is the workload proxy the
+ * [PERF] line reports as steps/s: two builds compared at the same steps/s
+ * saw the same work. draw_cycles is the line renderer's own cycle count for
+ * the frame, read from the core's cycle counter around each __gb_draw_line,
+ * which is what separates PPU time from interpreter time without a
+ * regression (BUG-0011). About four instructions per emulated instruction
+ * and four per scanline. */
+#include <xtensa/hal.h>
+static uint32_t emu_steps = 0;
+static uint32_t draw_cycles = 0;
+#define PEANUT_GB_STEP_HOOK() (emu_steps++)
+#define PEANUT_GB_DRAW_LINE(g)                                            \
+    do {                                                                  \
+        uint32_t c0_ = xthal_get_ccount();                                \
+        __gb_draw_line(g);                                                \
+        draw_cycles += xthal_get_ccount() - c0_;                          \
+    } while (0)
 #include "peanut_gb.h"
 
 /* The two-places rule, made a compile error rather than a comment: the APU
@@ -45,15 +64,15 @@ static_assert(AUDIO_SAMPLES == SPEAKER_SAMPLES_PER_FRAME,
 
 // ─── ROM ────────────────────────────────────────────────────────────────────
 // The ROM is a pointer into memory-mapped flash, owned by the rom_store
-// module and valid for the whole session. What used to be here — a sixteen
-// entry 4 KB page cache with its own hash table and LRU, plus a 32 KB copy of
-// bank 0 — was removed on the grounds that the hardware flash cache does that
-// job in silicon for free (§3.2).
-//
-// free (§3.2). Caching it made no difference: the bench eliminated 224,000
-// flash reads a second and fps did not move, so the reads were never the cost
-// (BUG-0011).
-static uint32_t rom_reads = 0;
+// module and valid for the whole session. The interpreter reads it directly
+// through gb->rom_direct (a local modification to the vendored header): one
+// load per byte, no callback, no bounds check. What used to be here — a
+// sixteen-entry 4 KB page cache with its own hash table and LRU, plus a 32 KB
+// copy of bank 0 — was removed on the grounds that the hardware flash cache
+// does that job in silicon for free (§3.2), and the bench agreed: caching
+// eliminated 224,000 flash reads a second and fps did not move (BUG-0011).
+// The callback below still serves gb_init()'s header parse, and it is the
+// fallback when a ROM file is shorter than its header claims.
 
 
 static const uint8_t* rom = nullptr;
@@ -99,15 +118,28 @@ const char* emu_get_palette_name(uint8_t idx)
 }
 
 // ─── Frame path ─────────────────────────────────────────────────────────────
-// Peanut-GB hands us one 160-px index line at a time, in order. Core 1 does
-// nothing with it but copy the 160 raw bytes into the slot the current queue
-// block owns. A block is BLOCK_LINES raw lines — BLOCK_UNITS scaler units —
-// plus room for one lookahead line, the first line of the NEXT block, which
-// is copied only when the geometry table says a blend row reads it (26/16
-// does; 24/16 never does). Where it is needed and missing, the scaler's
-// frame-end rule would fire at every block boundary and band the picture. The
-// frame's final block has no lookahead, and its last_in_frame flag is what
-// tells the consumer to pass NULL.
+// Peanut-GB hands us one 160-px index line at a time. Core 1 copies it into a
+// persistent raw frame buffer (fb), and when the first line of the NEXT block
+// arrives the finished block is copied out of fb into a queue slot and
+// committed. The frame's final block is committed from emu_run_frame() once
+// gb_run_frame() returns, because under interlace the last drawn line is 142
+// on half the frames and no line number says "done".
+//
+// A block is BLOCK_LINES raw lines — BLOCK_UNITS scaler units — plus room for
+// one lookahead line, the first line of the next block, copied only when the
+// geometry table says a blend row reads it (26/16 does; 24/16 never does).
+// Where it is needed and missing, the scaler's frame-end rule would fire at
+// every block boundary and band the picture. The final block has no
+// lookahead, and its last_in_frame flag is what tells the consumer to pass
+// NULL.
+//
+// The persistent buffer is what makes interlace possible: a line Peanut-GB
+// skips this frame keeps last frame's pixels, so every block still commits
+// BLOCK_LINES valid lines. It also closes two gaps the per-line scheme could
+// not: a frame that begins past block 0 (LCD enabled mid-frame) commits the
+// blocks it missed from last frame's lines, and a frame cut short (LCD
+// disabled mid-frame) commits the rest the same way — so the consumer always
+// sees whole frames and the queue never sticks on a half one.
 //
 // Colour never enters a slot: the raw byte is what the queue carries, and the
 // LUT, the scaler and the scaled DMA buffers all belong to the consumer on
@@ -124,10 +156,10 @@ static int16_t vp_y = GAME_Y;
 // Threading model, stated once so nothing else has to guess:
 //
 //   core 1, loopTask   emulation and audio. Peanut-GB calls lcd_line, which
-//                      copies each raw line into the open slot, acquiring a
-//                      slot at a block's first line and committing the block
-//                      once its lookahead line is in hand: 144 copies of 160
-//                      bytes per frame, and nothing else for the display.
+//                      copies each raw line into the persistent frame buffer
+//                      and, once a block is complete, copies that block into
+//                      a queue slot and commits it: about 46 KB of copying
+//                      per frame, and nothing else for the display.
 //   core 0, gbpush     emu_push_task. Pops committed slots, LUTs the raw
 //                      lines into RGB565, scales the block into one of two
 //                      DMA buffers while the other is still crossing the
@@ -164,8 +196,15 @@ static framequeue_t fq;
 static TaskHandle_t push_task = nullptr;
 static uint16_t frame_seq = 0;
 static bool frame_dropped = false;
-// The slot lcd_line is filling, or -1 between blocks. Producer-owned state.
-static int open_slot = -1;
+// The raw frame, GB_SCREEN_H x SCALER_SRC_W index bytes. Heap, not static:
+// 23 KB, and the static DRAM segment is nearly full (OBS-0012).
+static uint8_t* fb = nullptr;
+// Block the incoming lines belong to, -1 before a frame's first line. The
+// block is committed when a line from a later block arrives, or at frame end.
+static int cur_block = -1;
+// A line has arrived since emu_run_frame() began: frame_seq has been bumped
+// and cur_block is meaningful.
+static bool frame_open = false;
 
 // ─── Frame timing ───────────────────────────────────────────────────────────
 // Microseconds of the last COMPLETED frame, from esp_timer_get_time(): emu is
@@ -183,6 +222,9 @@ static volatile uint32_t push_us = 0;
 // the bottleneck, zero stall with a full max_depth means emulation is.
 static uint32_t q_stall_us = 0;
 static uint32_t q_stall_acc = 0;
+// Microseconds of the last frame spent inside __gb_draw_line, from the cycle
+// counter (see PEANUT_GB_DRAW_LINE). Contained in emu_us.
+static uint32_t draw_us = 0;
 
 // ─── Audio ──────────────────────────────────────────────────────────────────
 // One APU context, one frame of its interleaved stereo output, one frame of
@@ -234,18 +276,21 @@ static uint8_t blocks_per_frame()
 }
 
 /*
- * Producer half: take the slot for the block about to start. The only thing
- * core 1 waits for is a free slot, and waiting there is the overlap working:
- * core 1 is ahead of core 0 and the two-slot backpressure is what keeps them
- * in step. Backpressure is the whole rate control; there is no catch-up path
- * that drops a block to get ahead, because that is how tearing gets in. The
- * one abandonment below is the menu taking the bus, which is a different
- * thing: the frame is not being raced, it is being cancelled.
+ * Producer half: copy block `blk` out of the frame buffer into a queue slot
+ * and commit it. Waiting for a free slot is the only thing core 1 waits for,
+ * and waiting there is the overlap working: core 1 is ahead of core 0 and the
+ * two-slot backpressure is what keeps them in step. Backpressure is the whole
+ * rate control; there is no catch-up path that drops a block to get ahead,
+ * because that is how tearing gets in. A PAUSED acquire is the menu taking
+ * the bus, which is a different thing: the frame is not being raced, it is
+ * being cancelled, so the rest of it is abandoned and resume starts clean.
  *
  * Deliberately not IRAM_ATTR: it calls straight into flash-resident gbcore.
  */
-static void acquire_block()
+static void commit_block(uint_fast8_t blk)
 {
+    framequeue_meta_t meta;
+    const uint8_t* first;
     int slot = 0;
     int r;
     int64_t t0;
@@ -256,37 +301,64 @@ static void acquire_block()
     }
     q_stall_acc += (uint32_t)(esp_timer_get_time() - t0);
     if (r != FRAMEQUEUE_OK) {
-        /* Paused: the menu has the bus. Abandon the rest of this frame rather
-         * than committing a hole in the middle of it; resume starts clean. */
         frame_dropped = true;
         return;
     }
-    open_slot = slot;
+
+    meta.block_idx = (uint8_t)blk;
+    meta.frame_seq = frame_seq;
+    meta.last_in_frame = (blk == (uint_fast8_t)(blocks_per_frame() - 1u));
+
+    first = fb + (size_t)blk * BLOCK_LINES * SCALER_SRC_W;
+    memcpy(slot_src[slot][0], first, (size_t)BLOCK_LINES * SCALER_SRC_W);
+    if (geom->uses_lookahead && !meta.last_in_frame) {
+        memcpy(slot_src[slot][BLOCK_LINES],
+               first + (size_t)BLOCK_LINES * SCALER_SRC_W, SCALER_SRC_W);
+    }
+
+    if (framequeue_commit(&fq, slot, &meta) != FRAMEQUEUE_OK) {
+        /* Unreachable while commit_blocks is the only producer and walks the
+         * blocks in order, so if it ever fires the sequencing assumption has
+         * been broken and the rest of the frame is not worth pushing. */
+        Serial.println("[EMU] frame queue rejected a block");
+        frame_dropped = true;
+        return;
+    }
+    if (push_task) {
+        xTaskNotifyGive(push_task);
+    }
+}
+
+/* Blocks [from, to] in order, stopping at the first pause. */
+static void commit_blocks(int from, int to)
+{
+    int b;
+
+    for (b = from; b <= to && !frame_dropped; b++) {
+        commit_block((uint_fast8_t)b);
+    }
 }
 
 /*
- * Producer half: hand the open slot, holding the block that starts at source
- * line `first`, to the push task. Its lines and lookahead are already in
- * place, so this is metadata, a commit and a wake-up.
+ * Frame end, from emu_run_frame() once gb_run_frame() has returned. Whatever
+ * block was still collecting lines goes out now, and so does anything after
+ * it: a frame the LCD cut short still reaches the consumer whole, made of
+ * last frame's lines. A frame that drew nothing (frameskip, LCD off) commits
+ * nothing and the sequence number simply jumps, which is what the queue's
+ * ordering rule allows.
  */
-static void push_block(uint_fast8_t first)
+static void frame_end()
 {
-    framequeue_meta_t meta;
-
-    meta.block_idx = (uint8_t)(first / BLOCK_LINES);
-    meta.frame_seq = frame_seq;
-    meta.last_in_frame = (meta.block_idx == (uint8_t)(blocks_per_frame() - 1u));
-    if (framequeue_commit(&fq, open_slot, &meta) != FRAMEQUEUE_OK) {
-        /* Unreachable while the frame walk in lcd_line is the only producer,
-         * so if it ever fires the sequencing assumption has been broken and
-         * the rest of the frame is not worth pushing. */
-        Serial.println("[EMU] frame queue rejected a block");
-        frame_dropped = true;
+    if (frame_open) {
+        if (!frame_dropped) {
+            commit_blocks(cur_block, (int)blocks_per_frame() - 1);
+        }
+        frame_open = false;
+        cur_block = -1;
     }
-    open_slot = -1;
-    if (!frame_dropped && push_task) {
-        xTaskNotifyGive(push_task);
-    }
+    q_stall_us = q_stall_acc;
+    q_stall_acc = 0;
+    frame_dropped = false;
 }
 
 /*
@@ -402,18 +474,10 @@ static void emu_push_task(void* arg)
 static uint8_t IRAM_ATTR gb_rom_read(struct gb_s* g, const uint_fast32_t a)
 {
     (void)g;
-    /* Bench instrumentation for BUG-0011. Caching the home bank bought 3,165
-     * us a frame, so flash misses are the cost — but roughly 520 us is still
-     * missing and the rest of the working set is in the switchable banks.
-     * These say how much traffic misses the cache and how many distinct banks
-     * it spreads over, which is what decides whether one more 16 KB buffer
-     * would do or whether the shape has to be a page cache. */
-    /* Kept: reads per frame is the only proxy this project has for the
-     * emulated instruction count, and the BUG-0011 regression needs it. */
-    rom_reads++;
-    /* One compare more than a bare rom[a]: an out-of-range bank read from a
-     * corrupt ROM would otherwise fault through the flash cache, and this
-     * branch predicts perfectly. */
+    /* Header parse at init, and every read for a ROM whose file is shorter
+     * than its header's bank count (emu_init leaves rom_direct NULL then):
+     * an out-of-range bank read would otherwise fault through the flash
+     * cache. */
     return (a < romlen) ? rom[a] : 0xFF;
 }
 static uint8_t IRAM_ATTR gb_cram_r(struct gb_s* g, const uint_fast32_t a) {
@@ -448,83 +512,34 @@ static void gb_err(struct gb_s* g, const enum gb_error_e e, const uint16_t a) {
 }
 static void IRAM_ATTR lcd_line(struct gb_s* g, const uint8_t px[160], const uint_fast8_t ln)
 {
-    unsigned lpb;
-    unsigned in_block;
-    unsigned i;
+    int blk;
 
     (void)g;
     /* Frameskip is Peanut-GB's own (gb->direct.frame_skip): on a skipped
      * frame it skips the PPU line draw as well, so this callback is never
-     * entered and neither the scaler nor the queue sees the frame. The frame
-     * sequence therefore counts rendered frames and simply jumps over skipped
-     * ones, which is exactly what the queue's ordering rule allows. */
-    if (ln == 0) {
-        q_stall_acc = 0;
-        frame_dropped = false;
+     * entered and neither the scaler nor the queue sees the frame. Interlace
+     * (gb->direct.interlace) skips alternate lines instead; those keep last
+     * frame's bytes in fb. */
+    blk = (int)(ln / BLOCK_LINES);
+    if (!frame_open) {
+        /* First drawn line of this frame. The sequence counts drawn frames
+         * and jumps over skipped ones. Blocks before this one — an LCD
+         * enabled mid-frame — go out with last frame's lines so the frame
+         * is whole. */
+        frame_open = true;
         frame_seq++;
-        if (open_slot >= 0) {
-            /* The previous frame stopped mid-block — the LCD was switched
-             * off outside vblank — and its slot is still ours. The queue has
-             * no abort, so the slot cannot be handed back and every later
-             * commit will be refused. Say so once, loudly; it is the one
-             * state this producer cannot recover from without a queue verb
-             * for it. */
-            Serial.println("[EMU] block left open across a frame boundary");
-            open_slot = -1;
-        }
+        commit_blocks(0, blk - 1);
+        cur_block = blk;
     }
     if (frame_dropped) {
         return;
     }
-
-    lpb = BLOCK_LINES;
-    in_block = ln % lpb;
-    if (in_block != 0 && open_slot < 0) {
-        /* A line inside a block with no slot open: the frame began after
-         * its first line (the first frame after an LCD enable can). Inside
-         * block 0 the block can still be sequenced, so take the slot now
-         * and stand this line in for the ones missed — wrong for one frame,
-         * invisible. Deeper into the frame nothing can be committed in
-         * order, so the frame is dropped whole. */
-        if (ln >= lpb) {
-            frame_dropped = true;
-            return;
-        }
-        acquire_block();
-        if (frame_dropped) {
-            return;
-        }
-        for (i = 0; i < in_block; i++) {
-            memcpy(slot_src[open_slot][i], px, SCALER_SRC_W);
-        }
-    }
-    if (in_block == 0) {
-        /* This line is the previous block's lookahead as well as this block's
-         * first line. 144 divides by both geometries' block heights, so a
-         * block boundary is never also the last line. The previous block is
-         * committed before the next slot is acquired, so core 0 has work in
-         * hand while core 1 waits for the other slot to come free. */
-        if (ln != 0) {
-            if (geom->uses_lookahead) {
-                memcpy(slot_src[open_slot][lpb], px, SCALER_SRC_W);
-            }
-            push_block((uint_fast8_t)(ln - lpb));
-            if (frame_dropped) {
-                return;
-            }
-        }
-        acquire_block();
-        if (frame_dropped) {
-            return;
-        }
-    }
-    memcpy(slot_src[open_slot][in_block], px, SCALER_SRC_W);
-
-    if (ln == GB_SCREEN_H - 1) {
-        /* Final block: no next line, so its trailing blend rows stay pure. Its
-         * last_in_frame flag is what closes the window, over on core 0. */
-        push_block((uint_fast8_t)(GB_SCREEN_H - lpb));
-        q_stall_us = q_stall_acc;
+    memcpy(fb + (size_t)ln * SCALER_SRC_W, px, SCALER_SRC_W);
+    if (blk != cur_block) {
+        /* This line is the next block's first, and under 26/16 the previous
+         * block's lookahead, so it is in fb before the commit reads it. */
+        commit_blocks(cur_block, blk - 1);
+        cur_block = blk;
     }
 }
 
@@ -581,12 +596,35 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     }
     memset(gb, 0, sizeof(struct gb_s));
 
+    if (!fb) {
+        fb = (uint8_t*)malloc((size_t)GB_SCREEN_H * SCALER_SRC_W);
+    }
+    if (!fb) {
+        return false;
+    }
+    /* Index 0 is shade 0 of the BG palette: the blank the panel shows until
+     * the first frame lands, and what an interlaced first frame's skipped
+     * lines are made of. */
+    memset(fb, 0, (size_t)GB_SCREEN_H * SCALER_SRC_W);
+
     enum gb_init_error_e r = gb_init(gb, gb_rom_read, gb_cram_r, gb_cram_w,
                                      gb_err, nullptr);
     if (r != GB_INIT_NO_ERROR) {
         Serial.printf("[EMU] init fail %d\n", (int)r);
         return false;
     }
+    /* The interpreter reads the ROM through this pointer, not the callback:
+     * one load per byte instead of an indirect call and a bounds check on
+     * every instruction fetch. Only when the file holds every bank the
+     * header declares, so a bank index the MBC lets through cannot run off
+     * the end of the map; a short file keeps the checked callback. */
+    if ((uint32_t)(gb->num_rom_banks_mask + 1u) * ROM_BANK_SIZE <= romlen) {
+        gb->rom_direct = rom;
+    } else {
+        Serial.println("[EMU] ROM shorter than its header claims; reads "
+                       "go through the callback");
+    }
+
     /* The cartridge's real save size, from the header gb_init just parsed.
      * An unrecognised RAM-size code is -1, which becomes 0 — autosave off —
      * rather than a guess at how much RAM to write to the card. */
@@ -606,6 +644,14 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
 
     gb_init_lcd(gb, lcd_line);
     gb->direct.frame_skip = (fskip > 0);
+#ifdef DEV_INTERLACE
+    /* Bench A/B for BUG-0011: draw alternate lines each frame, which halves
+     * the PPU's share of core 1 — the largest and most scene-dependent term
+     * in the frame — at the cost of one-frame-old pixels on the other half.
+     * A build flag only, passed per invocation like DEV_ROM_PATH. */
+    gb->direct.interlace = 1;
+    Serial.println("[EMU] DEV_INTERLACE: alternate lines each frame");
+#endif
     /* Build the LUT here too: main() may never call emu_set_palette. */
     emu_set_palette(curpal);
     geom = scaler_geom_info(SCALE_GEOM);
@@ -619,6 +665,8 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     }
     frame_seq = 0;
     frame_dropped = false;
+    frame_open = false;
+    cur_block = -1;
     if (framequeue_init(&fq, blocks_per_frame()) != FRAMEQUEUE_OK) {
         return false;
     }
@@ -637,8 +685,11 @@ void emu_run_frame() {
     gb->direct.joypad_bits.right=!(jpad&0x01); gb->direct.joypad_bits.left=!(jpad&0x02);
     gb->direct.joypad_bits.up=!(jpad&0x04); gb->direct.joypad_bits.down=!(jpad&0x08);
     int64_t t = esp_timer_get_time();
+    draw_cycles = 0;
     gb_run_frame(gb);
+    frame_end();
     emu_us = (uint32_t)(esp_timer_get_time() - t);
+    draw_us = draw_cycles / (F_CPU / 1000000UL);
 
     /* Every frame, skipped display frame or not: the sound has to stay
      * continuous, and the write is also what paces emulation — it blocks
@@ -668,15 +719,17 @@ void emu_run_frame() {
         uint32_t aunder = 0, aover = 0, await_us = 0;
         speaker_get_stats(&aunder, &aover, &await_us);
         /* split=c0 marks the accounting: scale and push are core 0's, emu
-         * contains only qstall. tools/perf_capture.py keys on it. */
+         * contains only qstall. tools/perf_capture.py keys on it. draw is
+         * the PPU's share of emu; steps is emulated instructions per
+         * second, the workload proxy for comparing builds. */
         Serial.printf("[PERF] emu=%uus scale=%uus push=%uus qstall=%uus "
                       "qovf=%u apu=%uus await=%uus aunder=%u aover=%u "
-                      "fps=%u split=c0 rd=%u\n",
+                      "fps=%u split=c0 draw=%uus steps=%u\n",
                       emu_us, scale_us, push_us, q_stall_us,
                       framequeue_overflows(&fq), apu_us, await_us, aunder,
-                      aover, cfps, rom_reads);
-        /* Per second, so the counts read as rates beside fps. */
-        rom_reads = 0;
+                      aover, cfps, draw_us, emu_steps);
+        /* Per second, so the count reads as a rate beside fps. */
+        emu_steps = 0;
     }
 }
 
@@ -738,11 +791,6 @@ void emu_clear_cart_ram_dirty()
 void emu_autosave_tick(uint32_t now_ms)
 {
     autosave_tick(&autosave, now_ms);
-}
-
-bool emu_autosave_idle_due(uint32_t now_ms)
-{
-    return autosave_idle_due(&autosave, now_ms);
 }
 
 void emu_autosave_defer(uint32_t now_ms)

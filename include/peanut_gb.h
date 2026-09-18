@@ -32,7 +32,14 @@
 /*
  * Vendored from https://github.com/deltabeard/Peanut-GB — upstream commit
  * c13c99cd967d72dbd9e600795cd66169ca3945c7 (2025-11-08).
- * Local modifications: none.
+ * Local modifications (BUG-0011), each marked "Local modification" below.
+ * Re-apply after any upstream update:
+ *   - struct gb_s.rom_direct and a fast path in __gb_read: ROM bytes are
+ *     read straight from a host pointer instead of through the
+ *     gb_rom_read callback.
+ *   - PEANUT_GB_STEP_HOOK() at the top of __gb_step_cpu and
+ *     PEANUT_GB_DRAW_LINE() at the one __gb_draw_line call site: bench
+ *     counters, empty unless the including file defines them.
  * Update with scripts/update_peanut_gb.sh <sha>.
  */
 
@@ -110,6 +117,16 @@
 /* Use intrinsic functions. This may produce smaller and faster code. */
 #ifndef PEANUT_GB_USE_INTRINSICS
 # define PEANUT_GB_USE_INTRINSICS 1
+#endif
+
+/* Local modification: bench hooks. The including file may define these to
+ * count emulated instructions and time the line renderer; by default they
+ * cost nothing. */
+#ifndef PEANUT_GB_STEP_HOOK
+# define PEANUT_GB_STEP_HOOK() do {} while(0)
+#endif
+#ifndef PEANUT_GB_DRAW_LINE
+# define PEANUT_GB_DRAW_LINE(gb) __gb_draw_line(gb)
 #endif
 
 /* Only include function prototypes. At least one file must *not* have this
@@ -592,6 +609,13 @@ struct gb_s
 	 * \return		byte at address in ROM
 	 */
 	uint8_t (*gb_rom_read)(struct gb_s*, const uint_fast32_t addr);
+	/* Local modification: when non-NULL, __gb_read serves 0x0000-0x7FFF
+	 * from this pointer (the whole ROM, bank 0 first) and never calls
+	 * gb_rom_read for them. gb_init() still uses the callback for the
+	 * header, so it stays mandatory. The front end sets this after
+	 * gb_init() and is responsible for the buffer being at least
+	 * (num_rom_banks_mask + 1) * ROM_BANK_SIZE bytes. */
+	const uint8_t *rom_direct;
 
 	/**
 	 * Return byte from cart RAM at given address.
@@ -803,17 +827,30 @@ uint8_t __gb_read(struct gb_s *gb, uint16_t addr)
 	case 0x1:
 	case 0x2:
 	case 0x3:
+		/* Local modification: direct ROM path, see rom_direct. */
+		if(gb->rom_direct)
+			return gb->rom_direct[addr];
 		return gb->gb_rom_read(gb, addr);
 
 	case 0x4:
 	case 0x5:
 	case 0x6:
 	case 0x7:
+	{
+		uint_fast32_t rom_addr;
+
 		if(gb->mbc == 1 && gb->cart_mode_select)
-			return gb->gb_rom_read(gb,
-					       addr + ((gb->selected_rom_bank & 0x1F) - 1) * ROM_BANK_SIZE);
+			rom_addr = addr + ((gb->selected_rom_bank & 0x1F) - 1) * ROM_BANK_SIZE;
 		else
-			return gb->gb_rom_read(gb, addr + (gb->selected_rom_bank - 1) * ROM_BANK_SIZE);
+			rom_addr = addr + (gb->selected_rom_bank - 1) * ROM_BANK_SIZE;
+
+		/* Local modification: direct ROM path. selected_rom_bank is
+		 * already masked to num_rom_banks_mask by __gb_write, so this
+		 * stays inside the buffer the front end promised. */
+		if(gb->rom_direct)
+			return gb->rom_direct[rom_addr];
+		return gb->gb_rom_read(gb, rom_addr);
+	}
 
 	case 0x8:
 	case 0x9:
@@ -1821,6 +1858,8 @@ void __gb_step_cpu(struct gb_s *gb)
 		/* *INDENT-ON* */
 	};
 	static const uint_fast16_t TAC_CYCLES[4] = {1024, 16, 64, 256};
+
+	PEANUT_GB_STEP_HOOK(); /* Local modification. */
 
 	/* Handle interrupts */
 	/* If gb_halt is positive, then an interrupt must have occurred by the
@@ -3525,7 +3564,7 @@ void __gb_step_cpu(struct gb_s *gb)
 			gb->hram_io[IO_STAT] = (gb->hram_io[IO_STAT] & ~STAT_MODE) | IO_STAT_MODE_LCD_DRAW;
 #if ENABLE_LCD
 			if(!gb->lcd_blank)
-				__gb_draw_line(gb);
+				PEANUT_GB_DRAW_LINE(gb); /* Local modification. */
 #endif
 			/* If halted immediately jump to next LCD mode. */
 			if (gb->counter.lcd_count < LCD_MODE3_LCD_DRAW_MIN_DURATION)
@@ -3741,6 +3780,7 @@ enum gb_init_error_e gb_init(struct gb_s *gb,
 	const uint8_t num_ram_banks[] = { 0, 1, 1, 4, 16, 8 };
 
 	gb->gb_rom_read = gb_rom_read;
+	gb->rom_direct = NULL; /* Local modification. */
 	gb->gb_cart_ram_read = gb_cart_ram_read;
 	gb->gb_cart_ram_write = gb_cart_ram_write;
 	gb->gb_error = gb_error;
