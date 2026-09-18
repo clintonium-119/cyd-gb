@@ -102,6 +102,16 @@ const char* emu_get_palette_name(uint8_t idx)
 // LUT, the scaler and the scaled DMA buffers all belong to the consumer on
 // core 0 (see the pipeline note below). Every size here derives from SCALE_K
 // and BLOCK_UNITS, so flipping either changes the output with no edit here.
+// Bench only: nearest deletes pass 2 of scaler_scale_block and every blend
+// branch in pass 1, at the cost of the anti-aliased seam scaler.h:15-19
+// describes. Never the shipped default — it is flipped per invocation, like
+// DEV_ROM_PATH and DEV_FRAMESKIP.
+#ifdef DEV_SCALER_NEAREST
+#define BRIDGE_SCALER_MODE SCALER_MODE_NEAREST
+#else
+#define BRIDGE_SCALER_MODE SCALER_MODE_BLEND
+#endif
+
 static uint8_t slot_src[FRAMEQUEUE_SLOTS][BLOCK_LINES + 1][SCALER_SRC_W];
 static uint16_t lut_lines[BLOCK_LINES + 1][SCALER_SRC_W];
 static uint16_t scratch_row[SCALER_DST_W_MAX];
@@ -349,7 +359,7 @@ static void emu_push_task(void* arg)
         for (u = 0; u < BLOCK_UNITS; u++) {
             const uint16_t* la = (u + 1u < BLOCK_UNITS)
                 ? lut_lines[(u + 1u) * UNIT_LINES] : lookahead;
-            (void)scaler_scale_block(SCALE_GEOM, SCALER_MODE_BLEND,
+            (void)scaler_scale_block(SCALE_GEOM, BRIDGE_SCALER_MODE,
                                      src_lines + u * UNIT_LINES, la,
                                      dma_buf[buf] + (size_t)u * UNIT_ROWS * GAME_W,
                                      scratch_row);
