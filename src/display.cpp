@@ -104,6 +104,25 @@ void display_frame_end()
     tft.endWrite();
 }
 
+// The scaler blends in native RGB565 and the panel wants the high byte first,
+// so a block has to be byte-swapped between the two. pushPixelsDMA does that
+// itself, but it does it AFTER its own dmaWait() — with the bus idle, which
+// makes every swapped pixel dead transfer time. At 26/16 that is 60,840
+// pixels a frame, and the 24/16 bench capture measured it directly: push
+// accumulated 2,531 us across a frame whose blocks only cost 2 us each to
+// queue (logs/perf26-04-pokered-24.log).
+//
+// This is the same swap, hoisted in front of the wait, where it overlaps the
+// previous block's transfer instead of following it.
+static void swap565(uint16_t* px, size_t n)
+{
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        px[i] = (uint16_t)(px[i] << 8 | px[i] >> 8);
+    }
+}
+
 void display_push_rows_dma(uint16_t* px, size_t n)
 {
     static bool complained = false;
@@ -115,12 +134,19 @@ void display_push_rows_dma(uint16_t* px, size_t n)
         }
         return;
     }
-    // The previous transfer must finish before the producer may refill its
-    // buffer, and pushPixelsDMA byte-swaps this one in place before queueing
-    // it, so the wait has to happen first either way. The driver waits
-    // internally too; saying it here is what makes the ordering readable.
+    // Before the wait, not after: this block's buffer is not the one in
+    // flight, so swapping it is safe while the previous transfer runs.
+    swap565(px, n);
+    // Cleared only across the queueing call. setSwapBytes(true) is what the
+    // menu's pushImage path relies on (the .565 covers), and the frame path
+    // is the one place that has already done the swap for itself.
+    tft.setSwapBytes(false);
+    // The previous transfer must still finish before the producer may refill
+    // its buffer. The driver waits internally too; saying it here is what
+    // makes the ordering readable.
     tft.dmaWait();
     tft.pushPixelsDMA(px, (uint32_t)n);
+    tft.setSwapBytes(true);
 }
 
 void display_dma_wait()

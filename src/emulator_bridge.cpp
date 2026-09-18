@@ -63,8 +63,9 @@ static uint8_t jpad = 0;
 // ─── Palette ────────────────────────────────────────────────────────────────
 // The tables and the fill rule live in gbcore (host-tested); this is the thin
 // wrapper. Values stay NATIVE RGB565 — there is no pre-swap macro any more,
-// because the blend runs before the byte swap and setSwapBytes(true) handles
-// wire order once at push time (§2.3).
+// because the blend runs before the byte swap and the display module handles
+// wire order once at push time (§2.3). A pre-swapped LUT is not an option:
+// avg565 needs each channel contiguous, and a byte swap splits green.
 static uint16_t lut[PALETTE_LUT_SIZE];
 static uint8_t curpal = 0;
 

@@ -63,11 +63,14 @@ void display_frame_end();
 //
 //   * The pushed buffer belongs to the driver until display_dma_wait()
 //     returns. Refilling it before then corrupts the transfer in flight.
-//   * setSwapBytes(true) is in force, and the DMA path byte-swaps the buffer
-//     IN PLACE on the CPU before starting the transfer. A pushed buffer is
-//     therefore consumed, not merely read: its contents are no longer the
-//     native-order pixels the scaler wrote. Never push the same buffer twice,
-//     and never read one back expecting the scaler's values.
+//   * The DMA path byte-swaps the buffer IN PLACE on the CPU before starting
+//     the transfer. A pushed buffer is therefore consumed, not merely read:
+//     its contents are no longer the native-order pixels the scaler wrote.
+//     Never push the same buffer twice, and never read one back expecting the
+//     scaler's values. The swap happens before the wait for the previous
+//     transfer, so it costs transfer time rather than idle bus time; the
+//     driver's own setSwapBytes(true) — which the menu's cover path needs —
+//     is cleared across the queueing call and restored after it.
 //
 // The pointer is non-const for exactly that reason.
 void display_push_rows_dma(uint16_t* px, size_t n);
