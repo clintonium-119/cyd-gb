@@ -119,6 +119,19 @@
 // whether that is audible against on-screen events is §11 bench work, and
 // lowering it is a one-line change.
 #define SPEAKER_DMA_FRAMES 4
+// Most samples a starving frame may be stretched by. Sample supply is bound
+// to the emulated frame rate, so a title core 1 cannot run at full speed
+// starves the queue every frame; stretching buys the shortfall back as pitch.
+// 56 of 548 is 10.2 %, against the 5.9 % worst case the bench has measured
+// (Pokemon Red at 24/16), so the cap is headroom and not a target. The cap is
+// what bounds the drift: a runaway loop can flatten the music by at most a
+// tone and a half, never further (BUG-0011).
+#define SPEAKER_PAD_MAX 56
+// Frames of no starvation before the pad gives a sample back. Asymmetric on
+// purpose: attack one sample a frame, decay one sample every four seconds. A
+// pad that tracked the deficit quickly would wobble the pitch, and a wobble
+// is far more audible than a steady offset.
+#define SPEAKER_PAD_HOLD_FRAMES 240
 // The bound on the pacing wait: one frame plus margin. A write that cannot
 // place its frame inside this window gives up rather than stalling the
 // emulator (§4).

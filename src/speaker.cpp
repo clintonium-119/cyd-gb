@@ -7,12 +7,25 @@
 #include <esp_timer.h>
 
 #include "audio/level.h"
+#include "audio/stretch.h"
 
 // The expanded frame handed to the driver: one 16-bit word per channel, the
-// sample in the high byte. Static rather than stack — 2192 B is more than the
-// emulation task wants to carry — and the only buffer this module owns; the
-// DMA chain itself is allocated once by i2s_driver_install().
-static uint16_t frame[2 * SPEAKER_SAMPLES_PER_FRAME];
+// sample in the high byte. Static rather than stack — 2416 B is more than the
+// emulation task wants to carry — and sized for a fully stretched frame, so
+// the pad below never needs a second buffer. The DMA chain itself is
+// allocated once by i2s_driver_install().
+#define SPEAKER_FRAME_WORDS (2 * (SPEAKER_SAMPLES_PER_FRAME + SPEAKER_PAD_MAX))
+static uint16_t frame[SPEAKER_FRAME_WORDS];
+
+// The stretched frame, before expansion. Separate from frame[] so the
+// resampling is a pure function this project can host-test (test_stretch).
+static uint8_t stretched[SPEAKER_SAMPLES_PER_FRAME + SPEAKER_PAD_MAX];
+
+// Samples added to each frame to cover a sustained shortfall. Zero whenever
+// the emulator keeps up, which is every title the bench has measured except
+// the three Pokemon ones, and on that path stretch_mono() is an exact copy.
+static uint16_t pad = 0;
+static uint16_t pad_hold = 0;
 
 // Queue depth is estimated, not observed: built-in-DAC mode reports neither a
 // fill level nor a starvation event.
@@ -32,7 +45,7 @@ static bool ready = false;
 // Fills the whole frame buffer with mid-scale and pushes it, so no caller can
 // hand the DMA chain a zero-filled buffer by accident.
 static void write_silence_frames(unsigned n_frames) {
-    for (size_t i = 0; i < 2 * SPEAKER_SAMPLES_PER_FRAME; i++) {
+    for (size_t i = 0; i < SPEAKER_FRAME_WORDS; i++) {
         frame[i] = SPEAKER_SILENCE_WORD;
     }
     for (unsigned f = 0; f < n_frames; f++) {
@@ -99,7 +112,7 @@ bool speaker_init() {
 }
 
 void speaker_write_frame(const uint8_t* mono, size_t n_samples) {
-    if (!ready || mono == nullptr || n_samples == 0) {
+    if (!ready || mono == nullptr || n_samples < 2) {
         return;
     }
     if (n_samples > SPEAKER_SAMPLES_PER_FRAME) {
@@ -111,20 +124,40 @@ void speaker_write_frame(const uint8_t* mono, size_t n_samples) {
     // The queue having run dry before this frame arrived is the emulator
     // falling behind, not a pause: a pause goes through speaker_silence(),
     // which stops the clock.
-    if (level_running(&lvl) && level_queued(&lvl, now_us) == 0) {
+    bool starved = level_running(&lvl) && level_queued(&lvl, now_us) == 0;
+    if (starved) {
         underflow_count++;
+    }
+
+    // One sample a frame up while starving, one every SPEAKER_PAD_HOLD_FRAMES
+    // back down once it stops. The pad settles just above the shortfall and
+    // stays there: overshooting is not free, because a queue that fills
+    // blocks the write below and paces the emulator slower still.
+    if (starved) {
+        if (pad < SPEAKER_PAD_MAX) {
+            pad++;
+        }
+        pad_hold = 0;
+    } else if (pad > 0 && ++pad_hold >= SPEAKER_PAD_HOLD_FRAMES) {
+        pad--;
+        pad_hold = 0;
+    }
+
+    size_t out_n = n_samples + pad;
+    if (stretch_mono(mono, n_samples, stretched, out_n) != STRETCH_OK) {
+        return;
     }
 
     // The DAC takes the high byte as an unsigned level; both channels carry
     // the same sample because only the left one is enabled and the right
     // word still has to be clocked out.
-    for (size_t i = 0; i < n_samples; i++) {
-        uint16_t word = (uint16_t)mono[i] << 8;
+    for (size_t i = 0; i < out_n; i++) {
+        uint16_t word = (uint16_t)stretched[i] << 8;
         frame[i * 2 + 0] = word;
         frame[i * 2 + 1] = word;
     }
 
-    size_t bytes = n_samples * SPEAKER_BYTES_PER_SAMPLE;
+    size_t bytes = out_n * SPEAKER_BYTES_PER_SAMPLE;
     size_t written = 0;
     i2s_write(I2S_NUM_0, frame, bytes, &written,
               pdMS_TO_TICKS(SPEAKER_WRITE_TIMEOUT_MS));
@@ -147,6 +180,13 @@ void speaker_silence() {
     // current position.
     write_silence_frames(SPEAKER_DMA_FRAMES + 1);
     level_reset(&lvl);
+    // The pad deliberately survives: it describes how fast the game runs, not
+    // what the queue holds, and rebuilding it after every menu close would be
+    // an audible ramp each time.
+}
+
+uint16_t speaker_get_pad() {
+    return pad;
 }
 
 void speaker_get_stats(uint32_t* underflows, uint32_t* overflows,
