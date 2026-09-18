@@ -50,6 +50,18 @@ static uint32_t draw_cycles = 0;
         __gb_draw_line(g);                                                \
         draw_cycles += xthal_get_ccount() - c0_;                          \
     } while (0)
+/* Sprite-preserving interlace (BUG-0011). The line renderer saves each drawn
+ * line's background here before it composites sprites, and restores it on the
+ * frames where that line's background is skipped, so sprites still move at the
+ * full rate while only the background is interlaced. The saved copy has to be
+ * pre-sprite: restoring the composited line would leave last frame's sprite
+ * pixels on the line to be drawn over, i.e. a trail. 23 KB on the heap beside
+ * fb, which the static DRAM segment has no room for (OBS-0012). */
+static uint8_t* bgfb = nullptr;
+static void bg_save(const uint8_t* px, unsigned ln);
+static void bg_restore(uint8_t* px, unsigned ln);
+#define PEANUT_GB_BG_SAVE(g, px)    bg_save((px), (g)->hram_io[IO_LY])
+#define PEANUT_GB_BG_RESTORE(g, px) bg_restore((px), (g)->hram_io[IO_LY])
 #include "peanut_gb.h"
 
 /* The two-places rule, made a compile error rather than a comment: the APU
@@ -510,6 +522,16 @@ static void audio_write(uint16_t addr, uint8_t val)
 static void gb_err(struct gb_s* g, const enum gb_error_e e, const uint16_t a) {
     (void)g; Serial.printf("[EMU] Err %d @0x%04X\n",(int)e,a);
 }
+static void IRAM_ATTR bg_save(const uint8_t* px, unsigned ln)
+{
+    memcpy(bgfb + (size_t)ln * SCALER_SRC_W, px, SCALER_SRC_W);
+}
+
+static void IRAM_ATTR bg_restore(uint8_t* px, unsigned ln)
+{
+    memcpy(px, bgfb + (size_t)ln * SCALER_SRC_W, SCALER_SRC_W);
+}
+
 static void IRAM_ATTR lcd_line(struct gb_s* g, const uint8_t px[160], const uint_fast8_t ln)
 {
     int blk;
@@ -607,6 +629,14 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
      * lines are made of. */
     memset(fb, 0, (size_t)GB_SCREEN_H * SCALER_SRC_W);
 
+    if (!bgfb) {
+        bgfb = (uint8_t*)malloc((size_t)GB_SCREEN_H * SCALER_SRC_W);
+    }
+    if (!bgfb) {
+        return false;
+    }
+    memset(bgfb, 0, (size_t)GB_SCREEN_H * SCALER_SRC_W);
+
     enum gb_init_error_e r = gb_init(gb, gb_rom_read, gb_cram_r, gb_cram_w,
                                      gb_err, nullptr);
     if (r != GB_INIT_NO_ERROR) {
@@ -644,14 +674,14 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
 
     gb_init_lcd(gb, lcd_line);
     gb->direct.frame_skip = (fskip > 0);
-#ifdef DEV_INTERLACE
-    /* Bench A/B for BUG-0011: draw alternate lines each frame, which halves
-     * the PPU's share of core 1 — the largest and most scene-dependent term
-     * in the frame — at the cost of one-frame-old pixels on the other half.
-     * A build flag only, passed per invocation like DEV_ROM_PATH. */
+    /* Interlace the background on alternate lines: it is the largest and most
+     * scene-dependent term in core 1's frame, and a background that scrolls
+     * slowly or not at all hides a one-frame-old line. Sprites are still
+     * composited on every line (see PEANUT_GB_BG_RESTORE in the vendored
+     * header), because a sprite moving several pixels a frame combs visibly
+     * when half its rows lag — measured on the bench 2026-09-18 as the one
+     * artefact of plain interlace, on Black Castle. */
     gb->direct.interlace = 1;
-    Serial.println("[EMU] DEV_INTERLACE: alternate lines each frame");
-#endif
     /* Build the LUT here too: main() may never call emu_set_palette. */
     emu_set_palette(curpal);
     geom = scaler_geom_info(SCALE_GEOM);

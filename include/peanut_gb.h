@@ -40,6 +40,11 @@
  *   - PEANUT_GB_STEP_HOOK() at the top of __gb_step_cpu and
  *     PEANUT_GB_DRAW_LINE() at the one __gb_draw_line call site: bench
  *     counters, empty unless the including file defines them.
+ *   - PEANUT_GB_BG_SAVE() / PEANUT_GB_BG_RESTORE() in __gb_draw_line: an
+ *     interlaced line keeps last frame's background but still draws this
+ *     frame's sprites, instead of being skipped whole. Both empty unless
+ *     the including file defines them, in which case interlace behaves
+ *     exactly as upstream.
  * Update with scripts/update_peanut_gb.sh <sha>.
  */
 
@@ -1505,6 +1510,11 @@ static int compare_sprites(const struct sprite_data *const sd1, const struct spr
 void __gb_draw_line(struct gb_s *gb)
 {
 	uint8_t pixels[160] = {0};
+	/* Local modification (BUG-0011): set when this line's background
+	 * came from PEANUT_GB_BG_RESTORE rather than being rendered. Always
+	 * 0 when the front-end defines no restore hook, which folds every
+	 * test below back to upstream. */
+	uint8_t bg_interlaced = 0;
 
 	/* If LCD not initialised by front-end, don't render anything. */
 	if(gb->display.lcd_draw_line == NULL)
@@ -1528,12 +1538,29 @@ void __gb_draw_line(struct gb_s *gb)
 					&& gb->hram_io[IO_WX] <= 166)
 				gb->display.window_clear++;
 
+#if defined(PEANUT_GB_BG_RESTORE)
+			/* Local modification (BUG-0011): restore the background
+			 * this line had last frame and fall through to draw
+			 * this frame's sprites over it, rather than skipping
+			 * the line whole. Interlacing hides a stale background
+			 * because it scrolls slowly or not at all; a sprite
+			 * moving several pixels a frame combs visibly when half
+			 * its rows lag, which is the artefact this removes.
+			 *
+			 * The restore source is the pre-sprite line saved by
+			 * PEANUT_GB_BG_SAVE, never the composited frame: the
+			 * composite still holds last frame's sprite pixels, and
+			 * drawing over it would leave them behind as a trail. */
+			bg_interlaced = 1;
+			PEANUT_GB_BG_RESTORE(gb, pixels);
+#else
 			return;
+#endif
 		}
 	}
 
 	/* If background is enabled, draw it. */
-	if(gb->hram_io[IO_LCDC] & LCDC_BG_ENABLE)
+	if(!bg_interlaced && (gb->hram_io[IO_LCDC] & LCDC_BG_ENABLE))
 	{
 		uint8_t bg_y, disp_x, bg_x, idx, py, px, t1, t2;
 		uint16_t bg_map, tile;
@@ -1612,7 +1639,8 @@ void __gb_draw_line(struct gb_s *gb)
 	}
 
 	/* draw window */
-	if(gb->hram_io[IO_LCDC] & LCDC_WINDOW_ENABLE
+	if(!bg_interlaced
+			&& gb->hram_io[IO_LCDC] & LCDC_WINDOW_ENABLE
 			&& gb->hram_io[IO_LY] >= gb->display.WY
 			&& gb->hram_io[IO_WX] <= 166)
 	{
@@ -1680,6 +1708,14 @@ void __gb_draw_line(struct gb_s *gb)
 
 		gb->display.window_clear++; // advance window line
 	}
+
+#if defined(PEANUT_GB_BG_SAVE)
+	/* Local modification (BUG-0011): the background and window as they are
+	 * before any sprite is composited, which is what next frame's
+	 * interlaced restore of this line needs. */
+	if(!bg_interlaced)
+		PEANUT_GB_BG_SAVE(gb, pixels);
+#endif
 
 	// draw sprites
 	if(gb->hram_io[IO_LCDC] & LCDC_OBJ_ENABLE)
