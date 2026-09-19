@@ -94,7 +94,15 @@ static uint32_t romlen = 0;
 
 // ─── State ──────────────────────────────────────────────────────────────────
 static autosave_state_t autosave;
+// The cartridge's real save size, from the ROM header, and the bytes gnuboy
+// actually allocated. The first is what reaches the card; the second is only
+// the bound on a restore. See save_size_from_header().
+static uint32_t save_size = 0;
+static uint32_t cram_alloc = 0;
 static bool emu_up = false;
+/* Defined with the rest of the cartridge-RAM surface, below; emu_init() needs
+ * it before that. */
+static uint32_t save_size_from_header();
 static uint8_t fskip = 0, fcnt = 0;
 static uint32_t fpsc = 0, fpst = 0, cfps = 0;
 static uint8_t jpad = 0;
@@ -557,11 +565,12 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
 
     mix_init(&mix, 0x2545F491u);
 
-    /* Cartridge RAM and the save path are wired in their own change; until
-     * then autosave is initialised with a zero save size, which is the same
-     * thing the other bridge does for a cartridge whose RAM size it cannot
-     * read: autosave off rather than a guess at how much to write. */
-    autosave_init(&autosave, 0);
+    save_size = save_size_from_header();
+    cram_alloc = (uint32_t)cart.ramsize * 8192u;
+    if (!save_size) {
+        Serial.println("[EMU] no cartridge RAM declared, autosave off");
+    }
+    autosave_init(&autosave, save_size);
 
     palette_refresh(true);
     geom = scaler_geom_info(SCALE_GEOM);
@@ -678,21 +687,66 @@ void emu_resume_pipeline()
 void emu_set_joypad(uint8_t b) { jpad = b; }
 
 // ─── Cartridge RAM ──────────────────────────────────────────────────────────
-// Bound to gnuboy's SRAM in its own change. Reporting no cartridge RAM is the
-// honest answer until then: the save path writes nothing rather than writing
-// the wrong bytes to a card.
+// gnuboy allocates cartridge RAM as one contiguous calloc and views it as
+// banks, so the flat buffer the header's contract promises is that allocation
+// with no gather.
+//
+// The length handed out is the ROM header's save size, NOT what gnuboy
+// allocated, and the difference matters: gnuboy rounds every cartridge up to
+// whole 8 KB banks and gives a cartridge that declares no RAM a bank anyway,
+// so its allocation is 8192 where the header says 0 or 2048. Writing that to
+// the card would change the .sav length and break every file already on the
+// cards. The header is the core-independent answer and it is the one the
+// other bridge writes, so both cores produce the same file for the same ROM.
+//
+// The allocation is always at least the header size — 8 KB banks rounded up —
+// so handing out the smaller number can never run off the end.
+
+/*
+ * The cartridge's save size from the mapped header, by the same rule the
+ * other core applies: byte 0x149 into the standard table, with MBC2 as the
+ * exception it always is. An unrecognised code is 0 — autosave off — rather
+ * than a guess at how much RAM to write to a card.
+ */
+static uint32_t save_size_from_header()
+{
+    static const uint32_t sizes[] = {
+        0x0u, 0x800u, 0x2000u, 0x8000u, 0x20000u, 0x10000u
+    };
+    uint8_t code;
+
+    if (!rom || romlen <= 0x149) {
+        return 0;
+    }
+    /* MBC2 carries 512 half-bytes of its own and declares no RAM in the
+     * header, so the table would answer 0 for it. */
+    if (cart.mbc == MBC_MBC2) {
+        return 0x200u;
+    }
+    code = rom[0x149];
+    if (code >= (uint8_t)(sizeof(sizes) / sizeof(sizes[0]))) {
+        return 0;
+    }
+    return sizes[code];
+}
+
 uint8_t* emu_get_cart_ram(uint32_t* s)
 {
     if (s) {
-        *s = 0;
+        *s = save_size;
     }
-    return nullptr;
+    return (uint8_t*)cart.rambanks;
 }
 
 void emu_set_cart_ram(const uint8_t* d, uint32_t s)
 {
-    (void)d;
-    (void)s;
+    if (!d || !cart.rambanks) {
+        return;
+    }
+    if (s > cram_alloc) {
+        s = cram_alloc;
+    }
+    memcpy(cart.rambanks, d, s);
 }
 
 bool emu_cart_ram_dirty()
@@ -712,6 +766,23 @@ void emu_clear_cart_ram_dirty()
 
 void emu_autosave_tick(uint32_t now_ms)
 {
+    /* The other core notes each write from its IRAM-resident RAM callback.
+     * gnuboy has no such callback to hand out; it sets a per-bank bit in
+     * cart.sram_dirty instead, and only when the byte actually changed. So
+     * the notice is collected here, once a frame, and the bits are consumed
+     * the way gnuboy's own save path consumes them.
+     *
+     * The flag-then-tick split survives intact: the stamp is still the
+     * frame's, still at worst one frame stale, and autosave still owns the
+     * dirty state — which is what lets emu_clear_cart_ram_dirty() work at
+     * all, since gnuboy's own flag has no public way to be cleared.
+     *
+     * Consuming the bits is what keeps a save from firing on every menu open
+     * forever after the first write. */
+    if (save_size && cart.sram_dirty) {
+        cart.sram_dirty = 0;
+        autosave_note_write(&autosave, 0);
+    }
     autosave_tick(&autosave, now_ms);
 }
 
@@ -758,7 +829,11 @@ void emu_reset()
     if (!emu_up) {
         return;
     }
-    gnuboy_reset(true);
+    /* Soft, and that is load-bearing: gnuboy's hard reset memsets cartridge
+     * RAM to 0xFF, which would throw away the save the boot flow had just
+     * restored. A soft reset still puts the CPU, the LCD, the sound unit and
+     * every IO register back to their power-up values. */
+    gnuboy_reset(false);
     palette_refresh(true);
     fcnt = 0;
 }
