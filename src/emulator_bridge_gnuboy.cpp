@@ -24,6 +24,11 @@ static inline uint8_t reg_bgp()  { return R_BGP; }
 static inline uint8_t reg_obp0() { return R_OBP0; }
 static inline uint8_t reg_obp1() { return R_OBP1; }
 
+/* Interleaved int16s the sound unit wrote during the frame just run. gnuboy
+ * zeroes this at the top of every gnuboy_run(), so it is that frame's count
+ * and not a running total. */
+static inline size_t gnuboy_audio_samples() { return GB.audio.pos; }
+
 #undef A
 #undef B
 #undef C
@@ -202,14 +207,51 @@ static uint32_t q_stall_us = 0;
 static uint32_t q_stall_acc = 0;
 
 // ─── Audio ──────────────────────────────────────────────────────────────────
-// gnuboy's sound unit is bound to its own hardware state and cannot be handed
-// to MiniGB APU, so the conversion from its int16 stream to the unsigned 8-bit
-// mono frame the speaker wants is its own piece of work and is not here yet.
-// Until it lands, this bridge hands the speaker nothing, which means the
-// pipeline is paced by the frame queue's backpressure alone rather than by the
-// DAC write. Volume is stored and reported so the settings menu behaves, and
-// applies from the moment the conversion exists.
+// gnuboy's sound unit is bound to its own hardware state and cannot be swapped
+// for MiniGB APU, so this core generates its own samples. Everything after
+// that is the other bridge's path unchanged: gnuboy is asked for interleaved
+// stereo int16, which is exactly what mix_mono() takes, so the volume table,
+// the dither and the mid-scale bias are the same tested code on both cores
+// rather than a second conversion written here. The alternative — gnuboy's
+// mono format and a hand-rolled shift and bias — would have had to re-derive
+// the volume encoding and the silence rule that mix_mono already pins.
+//
+// The sample count is NOT fixed, and it does not divide evenly into the
+// speaker's frame. gnuboy emits a sample every snd.rate cycles, so the count
+// follows the frame's real emulated length: at 32768 Hz it alternates 548 and
+// 549 and averages 548.62, which is a DMG's true 59.727 Hz. The speaker takes
+// a fixed SPEAKER_SAMPLES_PER_FRAME of 548, which is 59.796 Hz.
+//
+// So gnuboy produces about 0.6 samples a frame more than one write can carry,
+// and the surplus is dropped. Carrying it instead does not work and was tried:
+// the only way to drain a surplus is to hand the speaker more than one frame
+// per emulated frame, which is the pacing rule itself, so a carry grows
+// without bound until it is dropped anyway — in one audible 0.7 ms chunk
+// rather than in single samples. Dropping one sample at the end of the 62 %
+// of frames that run long is a 30 us slip, and it keeps the pacing rule and
+// the A/B intact.
+//
+// The other core has the same 0.11 % discrepancy and spends it differently:
+// MiniGB APU generates exactly 548 samples whatever the frame did, so there it
+// shows up as the emulator being paced 0.11 % fast rather than as a dropped
+// sample. Neither is a pitch error worth hearing; they are just not the same
+// mechanism, which is worth knowing before reading an audio figure across the
+// two.
+//
+// The buffer carries headroom above one frame because gnuboy wraps and loses
+// samples if a frame fills it: this bridge passes no audio callback for it to
+// flush through. The first frame after a reset emits 572, with the LCD off.
+#define GNUBOY_AUDIO_HEADROOM 64
+static int16_t apu_buf[2 * (SPEAKER_SAMPLES_PER_FRAME + GNUBOY_AUDIO_HEADROOM)];
+static uint8_t mono_buf[SPEAKER_SAMPLES_PER_FRAME];
+static mix_state_t mix;
+// Off until main() applies the stored setting, so a unit is never loud before
+// its own volume is read.
 static uint8_t vol_idx = MIX_VOL_OFF;
+// The mix, for the [PERF] line. NOT the same quantity the other bridge reports
+// under this name: there the APU runs after the frame and is timed with the
+// mix, here it runs inside gnuboy_run() and its cost is inside emu_us. The
+// sum of the two is what compares across cores; neither half does.
 static uint32_t apu_us = 0;
 
 void emu_get_frame_times(uint32_t* out_emu_us, uint32_t* out_scale_us,
@@ -489,11 +531,13 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
      * LCD cut short are made of. */
     memset(fb, 0, (size_t)GB_SCREEN_H * SCALER_SRC_W);
 
-    /* The sample rate must be real even though the speaker is not wired yet:
-     * gnuboy derives its sample counter from it and a zero divisor leaves
-     * that counter unable to advance, which hangs the core outright. */
-    if (gnuboy_init(AUDIO_SAMPLE_RATE, GB_AUDIO_MONO_S16, GB_PIXEL_PALETTED,
-                    nullptr, nullptr) != 0) {
+    /* The speaker's rate, not a number of this file's own: gnuboy derives its
+     * sample counter from it, and a zero there leaves the counter unable to
+     * advance and hangs the core outright. No audio callback is passed —
+     * gnuboy fills the buffer and this bridge reads it at frame end, which is
+     * where the other core's mix happens too. */
+    if (gnuboy_init(SPEAKER_SAMPLE_RATE, GB_AUDIO_STEREO_S16,
+                    GB_PIXEL_PALETTED, nullptr, nullptr) != 0) {
         Serial.println("[EMU] gnuboy init failed");
         return false;
     }
@@ -507,8 +551,11 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     /* gnuboy's framebuffer IS fb, which is what makes the per-line hook a
      * bookkeeping call with no copy in it. */
     gnuboy_set_framebuffer(fb);
+    gnuboy_set_soundbuffer(apu_buf, sizeof(apu_buf) / sizeof(apu_buf[0]));
     gnuboy_reset(true);
     emu_up = true;
+
+    mix_init(&mix, 0x2545F491u);
 
     /* Cartridge RAM and the save path are wired in their own change; until
      * then autosave is initialised with a zero save size, which is the same
@@ -545,6 +592,7 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
 void emu_run_frame()
 {
     bool draw;
+    size_t n_samples;
     int64_t t;
 
     /* The two cores' pad bits happen to agree exactly — right, left, up,
@@ -565,6 +613,21 @@ void emu_run_frame()
     /* After the frame, so a register the frame wrote is picked up before the
      * next one is drawn with it. */
     palette_refresh(false);
+
+    /* Every frame, drawn or skipped: the sound has to stay continuous, and
+     * the write is also what paces emulation — it blocks only while the DMA
+     * queue is full, which happens only when the emulator is ahead of real
+     * time. gnuboy reports its samples per channel in audio.pos counting
+     * interleaved int16s, so the frame length is half of it, clamped to what
+     * the speaker takes. */
+    t = esp_timer_get_time();
+    n_samples = gnuboy_audio_samples() / 2u;
+    if (n_samples > SPEAKER_SAMPLES_PER_FRAME) {
+        n_samples = SPEAKER_SAMPLES_PER_FRAME;
+    }
+    mix_mono(&mix, apu_buf, n_samples, vol_idx, mono_buf);
+    apu_us = (uint32_t)(esp_timer_get_time() - t);
+    speaker_write_frame(mono_buf, n_samples);
 
     fcnt++; fpsc++;
     uint32_t n = millis();
