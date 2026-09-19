@@ -37,6 +37,12 @@ pio run -e cyd -t upload  # flash
 pio device monitor        # serial, 115200
 ```
 
+Two emulator cores are vendored and exactly one is linked per image, so the environment picks the
+core. `cyd` builds Peanut-GB (`include/peanut_gb.h`) and is the default. `cyd-gnuboy` builds gnuboy
+(`lib/gnuboy/`), which is GPL-2.0-or-later and therefore makes that image GPL-2.0-or-later — see
+[`LICENSE`](LICENSE). The two exist side by side so the renderers can be compared on one board with
+the core as the only variable; neither has been chosen over the other.
+
 Every `cyd` build stamps a version from `git describe --tags --always --dirty` and a UTC build time into
 the firmware, and names the copy in `builds/` from the same two values. Both show on the diagnostic
 screen's System page, so a unit in hand can be matched to a commit without a computer.
@@ -125,6 +131,10 @@ pytest tools/tests                                      # the host test suite
 - [Peanut-GB](https://github.com/deltabeard/Peanut-GB) — emulator core by Mahyar Koshkouei. Vendored at
   `include/peanut_gb.h`, pinned to an upstream commit recorded in that file's header; refresh it with
   `scripts/update_peanut_gb.sh <sha>`.
+- [gnuboy](https://github.com/ducalex/retro-go) — the second emulator core, taken from retro-go's
+  `retro-core/components/gnuboy`. Vendored at `lib/gnuboy/`, pinned to an upstream commit recorded in
+  `lib/gnuboy/gnuboy.h`; refresh it with `scripts/update_gnuboy.sh <sha>`. Authorship is in
+  `lib/gnuboy/CREDITS`. Only the core is vendored — retro-go's launcher and system layer are not.
 - [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI) — display driver
 - [artanergin44-collab/cyd-gb](https://github.com/artanergin44-collab/cyd-gb) — the upstream fork this
   started from
@@ -132,4 +142,6 @@ pytest tools/tests                                      # the host test suite
 
 ## License
 
-MIT. Peanut-GB is also MIT, copyright 2018-2023 Mahyar Koshkouei.
+The first-party code is MIT, and Peanut-GB is also MIT, copyright 2018-2023 Mahyar Koshkouei, so a
+`cyd` image is MIT. gnuboy is GPL-2.0-or-later, so a `cyd-gnuboy` image is GPL-2.0-or-later. Full
+terms and the exact boundary are in [`LICENSE`](LICENSE).

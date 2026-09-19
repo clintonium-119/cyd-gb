@@ -19,3 +19,32 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+================================================================================
+Vendored cores and the licence of a built image
+================================================================================
+
+The MIT terms above cover the first-party code in this repository: everything
+under src/, include/ (except include/peanut_gb.h), lib/gbcore/, lib/gb_runner/,
+test/ and tools/. lib/minigb_apu/ is third-party under its own permissive
+terms; see lib/minigb_apu/LICENSE.
+
+Two emulator cores are vendored, and exactly one is linked into any given
+firmware image. Which one you build decides the licence of that image.
+
+  include/peanut_gb.h  Peanut-GB, MIT, copyright 2018-2023 Mahyar Koshkouei.
+                       An image built with this core is distributed under MIT.
+                       This is the default core and the `cyd` environment.
+
+  lib/gnuboy/          gnuboy, as carried by retro-go, GPL-2.0-or-later. See
+                       lib/gnuboy/COPYING for the full text and
+                       lib/gnuboy/CREDITS for authorship. An image built with
+                       this core is a combined work with GPL-2.0 code, so that
+                       image is distributed under GPL-2.0-or-later, and anyone
+                       distributing it owes the corresponding source under
+                       those terms. This is the `cyd-gnuboy` environment.
+
+The MIT grant on the first-party code is unaffected either way: it stays MIT at
+the source level, and the GPL obligation attaches only to the combined image
+that links lib/gnuboy/.
