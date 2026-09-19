@@ -27,6 +27,14 @@ static byte BUF[0x100];
 static int WX, WY;
 static bool pal_dirty;
 
+/* Local modification. Per-line hand-off to the front end: the finished
+ * 160-byte line and its number, once per drawn line. Empty unless the
+ * including build defines it, so an unmodified consumer gets upstream
+ * behaviour and pays nothing for the hook. */
+#ifndef GNUBOY_DRAW_LINE
+# define GNUBOY_DRAW_LINE(line, index) do {} while(0)
+#endif
+
 
 /**
  * Drawing routines
@@ -702,6 +710,8 @@ static inline void lcd_renderline()
 		for (int i = 0; i < 160; ++i)
 			dst[i] = pal[BUF[i]];
 	}
+
+	GNUBOY_DRAW_LINE(BUF, SL); /* Local modification. */
 }
 
 void gb_lcd_emulate(int cycles)

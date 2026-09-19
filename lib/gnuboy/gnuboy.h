@@ -4,7 +4,11 @@
  * from retro-core/components/gnuboy.
  * Licensed GPL-2.0-or-later; see COPYING beside this file and the
  * consequence recorded in the repository LICENSE.
- * Local modifications: none.
+ * Local modifications, each marked "Local modification" below.
+ * Re-apply after any upstream update:
+ *   - GNUBOY_DRAW_LINE() at the tail of lcd_renderline: per-line
+ *     hand-off to the front end, empty unless the including file
+ *     defines it.
  * Update with scripts/update_gnuboy.sh <sha>.
  */
 
