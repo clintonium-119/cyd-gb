@@ -173,5 +173,9 @@
 // units each in static DRAM. Must divide the frame; the value is measured on
 // the bench, not chosen.
 #ifndef BLOCK_UNITS
-#define BLOCK_UNITS   4
+// 1 at 26/16, and forced rather than chosen: a scaler unit is 8 source lines
+// at that geometry and 4 does not divide 144, so the build refuses. 2 would
+// halve the per-transfer overhead but wants about 27 KB of DMA buffers, which
+// ws/perf26 priced and rejected.
+#define BLOCK_UNITS   1
 #endif

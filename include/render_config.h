@@ -7,11 +7,15 @@
 
 // ─── Scale ──────────────────────────────────────────────────────────────────
 // Compile-time constant, deliberately NOT a runtime setting: the scaler's
-// block geometry and every buffer size derive from it. 24/16 (3/2) ships as
-// the default per §2.1's "build 24/16 first"; §11 item 8 (emulation-alone
-// frame time) and §2.1's SPI comparison settle whether 26/16 is affordable,
-// and flipping this one line is the whole experiment.
-#define SCALE_K 24
+// block geometry and every buffer size derive from it. 24/16 was built first
+// per §2.1; 26/16 is what ships, on ws/perf26's measurement that its fixed
+// 13/8 kernel holds 60 fps with about 20 % of core 0 spare, and on the core
+// comparison that followed, every capture of which was taken here.
+//
+// 26 is the ceiling: GAME_H is 9k and the panel is 240 tall, so k <= 26.
+// Filling the last 6 rows would need 5/3, which is not of the form k/16 and
+// gives a non-integer width.
+#define SCALE_K 26
 
 // The gbcore geometry that matches SCALE_K, so Arduino-side callers never
 // repeat the number. Expands to an enum name — the consumer includes

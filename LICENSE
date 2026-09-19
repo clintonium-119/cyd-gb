@@ -33,17 +33,24 @@ terms; see lib/minigb_apu/LICENSE.
 Two emulator cores are vendored, and exactly one is linked into any given
 firmware image. Which one you build decides the licence of that image.
 
-  include/peanut_gb.h  Peanut-GB, MIT, copyright 2018-2023 Mahyar Koshkouei.
-                       An image built with this core is distributed under MIT.
-                       This is the default core and the `cyd` environment.
-
   lib/gnuboy/          gnuboy, as carried by retro-go, GPL-2.0-or-later. See
                        lib/gnuboy/COPYING for the full text and
                        lib/gnuboy/CREDITS for authorship. An image built with
                        this core is a combined work with GPL-2.0 code, so that
                        image is distributed under GPL-2.0-or-later, and anyone
                        distributing it owes the corresponding source under
-                       those terms. This is the `cyd-gnuboy` environment.
+                       those terms.
+
+                       THIS IS THE SHIPPED CORE, and the `cyd-gnuboy`
+                       environment is what a bare `pio run` builds. The
+                       firmware handed to a user is therefore
+                       GPL-2.0-or-later, and that user is entitled to the
+                       corresponding source on request.
+
+  include/peanut_gb.h  Peanut-GB, MIT, copyright 2018-2023 Mahyar Koshkouei.
+                       An image built with this core is distributed under MIT.
+                       It remains available and supported as the `cyd`
+                       environment; it is no longer the default.
 
 The MIT grant on the first-party code is unaffected either way: it stays MIT at
 the source level, and the GPL obligation attaches only to the combined image

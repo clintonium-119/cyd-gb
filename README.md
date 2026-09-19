@@ -32,18 +32,24 @@ the pins the firmware actually declares are in [`include/hw_config.h`](include/h
 ## Building
 
 ```sh
-pio run -e cyd                   # build (Peanut-GB core, the default)
-pio run -e cyd -t upload         # flash
-pio run -e cyd-gnuboy            # build (gnuboy core)
-pio run -e cyd-gnuboy -t upload  # flash
+pio run                          # build the shipped image (gnuboy core)
+pio run -t upload                # flash it
+pio run -e cyd                   # build the Peanut-GB image instead
 pio device monitor               # serial, 115200
 ```
 
 Two emulator cores are vendored and exactly one is linked per image, so the environment picks the
-core. `cyd` builds Peanut-GB (`include/peanut_gb.h`) and is the default. `cyd-gnuboy` builds gnuboy
-(`lib/gnuboy/`), which is GPL-2.0-or-later and therefore makes that image GPL-2.0-or-later — see
-[`LICENSE`](LICENSE). The two exist side by side so the renderers can be compared on one board with
-the core as the only variable; neither has been chosen over the other.
+core.
+
+**`cyd-gnuboy` is what ships**, and a bare `pio run` builds it. It was chosen on a measurement
+against Peanut-GB on one board in one sitting — Pokemon Yellow's overworld at 26/16 with interlace
+off on both cores — where it cost 7,718 us of emulation plus audio against 10,165, peaked at 13.0 ms
+a frame against 23.4, held a minimum 59 fps against 57, and sounded clean where Peanut-GB was rough.
+Because it links `lib/gnuboy/`, **the shipped firmware is GPL-2.0-or-later** and anyone given a unit
+is entitled to the corresponding source; see [`LICENSE`](LICENSE).
+
+`cyd` still builds the Peanut-GB image, which is MIT and keeps its interlace — that trick is
+load-bearing for that renderer, which is the whole reason the comparison happened.
 
 Every `cyd` build stamps a version from `git describe --tags --always --dirty` and a UTC build time into
 the firmware, and names the copy in `builds/` from the same two values. Both show on the diagnostic
