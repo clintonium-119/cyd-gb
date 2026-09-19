@@ -153,3 +153,33 @@ void palette_build_lut(uint8_t idx, uint16_t lut[PALETTE_LUT_SIZE])
         lut[i] = pals[idx][p][i & 3u];
     }
 }
+
+/* Shade the register selects for raw tile bits c: two bits each, low pair
+ * first, exactly as the DMG's BGP/OBP0/OBP1 are laid out. */
+static unsigned reg_shade(uint8_t reg, unsigned c)
+{
+    return (unsigned)((reg >> (2u * c)) & 3u);
+}
+
+void palette_build_lut_gnuboy(uint8_t idx, uint8_t bgp, uint8_t obp0,
+                              uint8_t obp1, uint16_t lut[PALETTE_LUT_SIZE])
+{
+    unsigned i;
+    unsigned c;
+
+    if (lut == NULL || idx >= PALETTE_COUNT) {
+        return;
+    }
+    /* Everything first, folded onto the background: the groups below then
+     * overwrite the indices gnuboy actually emits, and no byte is left
+     * pointing at an undefined colour. */
+    for (i = 0; i < PALETTE_LUT_SIZE; i++) {
+        lut[i] = pals[idx][2][reg_shade(bgp, i & 3u)];
+    }
+    for (c = 0; c < 4u; c++) {
+        lut[0u + c]  = pals[idx][2][reg_shade(bgp, c)];   /* background */
+        lut[4u + c]  = pals[idx][2][reg_shade(bgp, c)];   /* window     */
+        lut[32u + c] = pals[idx][0][reg_shade(obp0, c)];  /* OBP0       */
+        lut[36u + c] = pals[idx][1][reg_shade(obp1, c)];  /* OBP1       */
+    }
+}

@@ -44,6 +44,30 @@ const char* palette_name(uint8_t idx);
  */
 void palette_build_lut(uint8_t idx, uint16_t lut[PALETTE_LUT_SIZE]);
 
+/*
+ * The same LUT for the gnuboy core, whose pixel byte means something else.
+ *
+ * gnuboy writes the tile's RAW two bits and identifies the source in the high
+ * bits — background 0-3, window 4-7, OBP0 32-35, OBP1 36-39 — and applies the
+ * DMG palette registers when it builds its own colour table, not when it draws
+ * the pixel. Peanut-GB does the opposite: its byte already holds the shade the
+ * register selected. So a straight reordering of the table would drop BGP,
+ * OBP0 and OBP1 entirely and every fade, flash and inverted screen would stop
+ * happening.
+ *
+ * This composes the two steps into one table: register first, then ramp. Pass
+ * the three DMG palette registers as the hardware holds them, two bits per
+ * shade, low pair first. Window shares the background's ramp and register,
+ * which is what the hardware does.
+ *
+ * Fills all PALETTE_LUT_SIZE entries as palette_build_lut does, so no raw
+ * pixel byte can index an undefined colour; indices gnuboy's DMG path never
+ * emits fold onto the background. Writes nothing if lut is NULL or idx is out
+ * of range.
+ */
+void palette_build_lut_gnuboy(uint8_t idx, uint8_t bgp, uint8_t obp0,
+                              uint8_t obp1, uint16_t lut[PALETTE_LUT_SIZE]);
+
 #ifdef __cplusplus
 }
 #endif

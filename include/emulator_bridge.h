@@ -58,12 +58,18 @@ bool emu_autosave_battery(uint16_t mv, uint16_t low_mv, uint16_t hyst_mv);
 
 // ─── Pipeline ───────────────────────────────────────────────────────────────
 // Emulation and display transfer run on different cores so they overlap.
-// Peanut-GB, the scaler and this module's frame walk stay on the Arduino
-// loopTask (core 1); emu_start_push_task() creates a task on core 0 that pops
-// scaled blocks from an internal two-slot queue and pushes them over DMA.
+// The emulator core, the scaler and this module's frame walk stay on the
+// Arduino loopTask (core 1); emu_start_push_task() creates a task on core 0
+// that pops scaled blocks from an internal two-slot queue and pushes them
+// over DMA.
 // Slot buffers belong to this module, and each is the producer's or the
 // consumer's exclusively, never both — the queue is the arbiter and its rules
 // are host-tested.
+//
+// Which emulator that is, is not this header's business and no caller can
+// tell: two implementations of everything declared here live in the tree and
+// the build system links exactly one (see platformio.ini). Nothing below
+// changes with the core.
 //
 // Call once, after emu_init() succeeds and after anything that writes flash:
 // two cores executing from flash means a flash write stalls both.

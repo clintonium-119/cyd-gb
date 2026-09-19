@@ -60,7 +60,10 @@ def write_build_info(env):
 
 
 # The native environment compiles nothing from src/ and has no board to stamp.
-if env["PIOENV"] == "cyd":
+# Every other environment is a firmware image and wants the version stamped
+# into it, so this tests for the one exception rather than naming each board
+# environment — there is one per emulator core now.
+if env["PIOENV"] != "native":
     gen = write_build_info(env)
     # Generated into the build directory, never into src/ or include/: a build
     # leaves the working tree clean. Objects land beside it for the same
