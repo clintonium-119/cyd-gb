@@ -9,10 +9,13 @@
 #include "audio/level.h"
 
 // The expanded frame handed to the driver: one 16-bit word per channel, the
-// sample in the high byte. Static rather than stack — 2192 B is more than the
-// emulation task wants to carry — and the only buffer this module owns; the
-// DMA chain itself is allocated once by i2s_driver_install().
-static uint16_t frame[2 * SPEAKER_SAMPLES_PER_FRAME];
+// sample in the high byte. Sized for SPEAKER_SAMPLES_MAX rather than the
+// nominal frame so a core whose per-frame count varies can hand over
+// everything it generated instead of having the surplus truncated away.
+// Static rather than stack — the emulation task should not carry this — and
+// the only buffer this module owns; the DMA chain itself is allocated once by
+// i2s_driver_install().
+static uint16_t frame[2 * SPEAKER_SAMPLES_MAX];
 
 // Queue depth is estimated, not observed: built-in-DAC mode reports neither a
 // fill level nor a starvation event.
@@ -32,12 +35,17 @@ static bool ready = false;
 // Fills the whole frame buffer with mid-scale and pushes it, so no caller can
 // hand the DMA chain a zero-filled buffer by accident.
 static void write_silence_frames(unsigned n_frames) {
+    /* Nominal frames, not the buffer's full size: this primes and drains the
+     * DMA chain, and the chain's buffers are SPEAKER_SAMPLES_PER_FRAME long.
+     * The extra headroom above exists for a caller's overshoot, not here. */
+    const size_t bytes = SPEAKER_SAMPLES_PER_FRAME * SPEAKER_BYTES_PER_SAMPLE;
+
     for (size_t i = 0; i < 2 * SPEAKER_SAMPLES_PER_FRAME; i++) {
         frame[i] = SPEAKER_SILENCE_WORD;
     }
     for (unsigned f = 0; f < n_frames; f++) {
         size_t written = 0;
-        i2s_write(I2S_NUM_0, frame, sizeof(frame), &written,
+        i2s_write(I2S_NUM_0, frame, bytes, &written,
                   pdMS_TO_TICKS(SPEAKER_WRITE_TIMEOUT_MS));
     }
 }
@@ -102,8 +110,8 @@ void speaker_write_frame(const uint8_t* mono, size_t n_samples) {
     if (!ready || mono == nullptr || n_samples == 0) {
         return;
     }
-    if (n_samples > SPEAKER_SAMPLES_PER_FRAME) {
-        n_samples = SPEAKER_SAMPLES_PER_FRAME;
+    if (n_samples > SPEAKER_SAMPLES_MAX) {
+        n_samples = SPEAKER_SAMPLES_MAX;
     }
 
     int64_t now_us = esp_timer_get_time();

@@ -115,6 +115,20 @@
 // One Game Boy frame at that rate (§4). Static-asserted in the bridge against
 // the APU's own AUDIO_SAMPLES, which derives it from the vertical-sync rate.
 #define SPEAKER_SAMPLES_PER_FRAME 548
+// The most one write may hand over, which is deliberately more than nominal.
+//
+// MiniGB APU emits exactly SPEAKER_SAMPLES_PER_FRAME whatever the frame did,
+// so for that core the two are the same number and this changes nothing.
+// gnuboy's count is cycle-derived and follows the frame's real emulated
+// length: 548 or 549 at this rate, averaging 548.62. Truncating to nominal
+// discarded the surplus — about 37 samples a second, each one a discontinuity
+// in the middle of the waveform — which is audible and is not what the
+// underflow counter measures.
+//
+// With the surplus delivered instead of dropped, the DAC's own back-pressure
+// paces emulation to 32768 / 548.62 = 59.727 fps, which is a Game Boy's true
+// frame rate. The headroom only has to cover one frame's overshoot.
+#define SPEAKER_SAMPLES_MAX (SPEAKER_SAMPLES_PER_FRAME + 64)
 // DMA queue depth, in frames. Latency is depth x 16.7 ms, about 67 ms here;
 // whether that is audible against on-screen events is §11 bench work, and
 // lowering it is a one-line change.

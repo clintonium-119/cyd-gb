@@ -227,34 +227,30 @@ static uint32_t q_stall_acc = 0;
 // mono format and a hand-rolled shift and bias — would have had to re-derive
 // the volume encoding and the silence rule that mix_mono already pins.
 //
-// The sample count is NOT fixed, and it does not divide evenly into the
-// speaker's frame. gnuboy emits a sample every snd.rate cycles, so the count
-// follows the frame's real emulated length: at 32768 Hz it alternates 548 and
-// 549 and averages 548.62, which is a DMG's true 59.727 Hz. The speaker takes
-// a fixed SPEAKER_SAMPLES_PER_FRAME of 548, which is 59.796 Hz.
-//
-// So gnuboy produces about 0.6 samples a frame more than one write can carry,
-// and the surplus is dropped. Carrying it instead does not work and was tried:
-// the only way to drain a surplus is to hand the speaker more than one frame
-// per emulated frame, which is the pacing rule itself, so a carry grows
-// without bound until it is dropped anyway — in one audible 0.7 ms chunk
-// rather than in single samples. Dropping one sample at the end of the 62 %
-// of frames that run long is a 30 us slip, and it keeps the pacing rule and
-// the A/B intact.
-//
-// The other core has the same 0.11 % discrepancy and spends it differently:
-// MiniGB APU generates exactly 548 samples whatever the frame did, so there it
-// shows up as the emulator being paced 0.11 % fast rather than as a dropped
-// sample. Neither is a pitch error worth hearing; they are just not the same
-// mechanism, which is worth knowing before reading an audio figure across the
-// two.
-//
-// The buffer carries headroom above one frame because gnuboy wraps and loses
-// samples if a frame fills it: this bridge passes no audio callback for it to
-// flush through. The first frame after a reset emits 572, with the LCD off.
 #define GNUBOY_AUDIO_HEADROOM 64
+// The sample count is NOT fixed. gnuboy emits a sample every snd.rate cycles,
+// so the count follows the frame's real emulated length: at 32768 Hz it
+// alternates 548 and 549 and averages 548.62, which is a DMG's true 59.727 Hz.
+//
+// Every one of them is handed over. An earlier version truncated to the
+// speaker's nominal 548 and discarded the rest, on the reasoning that a
+// dropped sample is a 30 us slip and inaudible. The bench disagreed: that is
+// about 37 discontinuities a second, the builder heard crackle, and the
+// underflow counter does not measure it at all — over the capture the stream
+// was in net surplus while 3,317 samples were being thrown away. The speaker
+// now accepts up to SPEAKER_SAMPLES_MAX and the surplus goes to the DAC.
+//
+// Delivering all of it is also what makes the pacing correct rather than
+// approximately correct. The write blocks when the DMA queue is full, so in
+// steady state delivery equals the DAC's 32768 samples a second, which puts
+// the emulator at 32768 / 548.62 = 59.727 fps — a Game Boy's real frame rate.
+// Truncating had it running about 0.5 % fast.
+//
+// The buffer still carries headroom above one frame because gnuboy wraps and
+// loses samples if a frame fills it: this bridge passes no audio callback for
+// it to flush through, and the first frame after a reset emits 572.
 static int16_t apu_buf[2 * (SPEAKER_SAMPLES_PER_FRAME + GNUBOY_AUDIO_HEADROOM)];
-static uint8_t mono_buf[SPEAKER_SAMPLES_PER_FRAME];
+static uint8_t mono_buf[SPEAKER_SAMPLES_MAX];
 static mix_state_t mix;
 // Off until main() applies the stored setting, so a unit is never loud before
 // its own volume is read.
@@ -672,8 +668,11 @@ void emu_run_frame()
      * the speaker takes. */
     t = esp_timer_get_time();
     n_samples = gnuboy_audio_samples() / 2u;
-    if (n_samples > SPEAKER_SAMPLES_PER_FRAME) {
-        n_samples = SPEAKER_SAMPLES_PER_FRAME;
+    if (n_samples > SPEAKER_SAMPLES_MAX) {
+        /* Only a frame that ran long enough to overshoot the speaker's
+         * headroom, which the reset frame's 572 does not. Clamping here
+         * discards audio, so it is the last resort rather than the rule. */
+        n_samples = SPEAKER_SAMPLES_MAX;
     }
     mix_mono(&mix, apu_buf, n_samples, vol_idx, mono_buf);
     apu_us = (uint32_t)(esp_timer_get_time() - t);

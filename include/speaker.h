@@ -36,9 +36,14 @@
 // rather than halting.
 bool speaker_init();
 
-// One frame of unsigned 8-bit mono, mid-scale at 128. n_samples must not
-// exceed SPEAKER_SAMPLES_PER_FRAME. Blocks for at most
-// SPEAKER_WRITE_TIMEOUT_MS waiting for room in the DMA queue.
+// One frame of unsigned 8-bit mono, mid-scale at 128. n_samples may exceed
+// the nominal SPEAKER_SAMPLES_PER_FRAME — a core whose sample count follows
+// the frame's real emulated length does not land on a fixed number — and is
+// clamped at SPEAKER_SAMPLES_MAX. Clamping is a last resort rather than a
+// rate policy: a discarded sample is a discontinuity in the stream, so the
+// caller should hand over everything it generated and let the block below do
+// the pacing. Blocks for at most SPEAKER_WRITE_TIMEOUT_MS waiting for room in
+// the DMA queue.
 void speaker_write_frame(const uint8_t* mono, size_t n_samples);
 
 // Fills every DMA buffer with mid-scale and stops the level clock, so a
