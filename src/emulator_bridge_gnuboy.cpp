@@ -206,6 +206,9 @@ static bool frame_dropped = false;
 static uint8_t* fb = nullptr;
 static int cur_block = -1;
 static bool frame_open = false;
+// The last line the hook was handed. A line number that does not advance is
+// how a frame boundary is recognised — see emu_gnuboy_line().
+static int last_line = -1;
 
 // ─── Frame timing ───────────────────────────────────────────────────────────
 static uint32_t emu_us = 0;
@@ -345,13 +348,16 @@ static void commit_blocks(int from, int to)
 }
 
 /*
- * Frame end, from emu_run_frame() once gnuboy_run() has returned. Whatever
- * block was still collecting lines goes out now, and so does anything after
- * it, made of the previous frame's lines. A frame that drew nothing — the LCD
- * off, or a skipped frame — commits nothing and the sequence number simply
- * jumps, which the queue's ordering rule allows.
+ * Close whatever frame is open. Whatever block was still collecting lines goes
+ * out now, and so does anything after it, made of the previous frame's lines,
+ * so a frame the LCD cut short still reaches the consumer whole. A frame that
+ * drew nothing commits nothing and the sequence number simply jumps, which the
+ * queue's ordering rule allows.
+ *
+ * Called from two places, and it has to be both: the line hook when the line
+ * number wraps, and emu_run_frame() when the run returns.
  */
-static void frame_end()
+static void frame_flush()
 {
     if (frame_open) {
         if (!frame_dropped) {
@@ -359,10 +365,17 @@ static void frame_end()
         }
         frame_open = false;
         cur_block = -1;
+        last_line = -1;
     }
+    frame_dropped = false;
+}
+
+/* Frame end, from emu_run_frame() once gnuboy_run() has returned. */
+static void frame_end()
+{
+    frame_flush();
     q_stall_us = q_stall_acc;
     q_stall_acc = 0;
-    frame_dropped = false;
 }
 
 /*
@@ -468,6 +481,22 @@ void emu_gnuboy_line(const unsigned char* line, int index)
     if (index < 0 || index >= GB_SCREEN_H) {
         return;
     }
+    /*
+     * The frame boundary is the line number wrapping, NOT gnuboy_run()
+     * returning, and the difference is load-bearing rather than pedantic.
+     * gnuboy's run loop tests R_LY between CPU steps, so a step that carries
+     * the LCD past the last line and around to the top is not noticed and the
+     * run keeps going into the next frame: the first run after a reset draws
+     * 287 lines, two frames' worth, before it returns.
+     *
+     * Missing that wrap commits block 0 of the second frame while the queue
+     * is still expecting block 17 of the first, which it rejects as out of
+     * order — and a rejected commit leaves its slot producer-owned, so two of
+     * them strand both slots and the producer waits for a free one forever.
+     */
+    if (frame_open && index <= last_line) {
+        frame_flush();
+    }
     blk = index / BLOCK_LINES;
     if (!frame_open) {
         /* First drawn line of this frame. The sequence counts drawn frames
@@ -479,6 +508,7 @@ void emu_gnuboy_line(const unsigned char* line, int index)
         commit_blocks(0, blk - 1);
         cur_block = blk;
     }
+    last_line = index;
     if (frame_dropped) {
         return;
     }
@@ -549,13 +579,23 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
         Serial.println("[EMU] gnuboy init failed");
         return false;
     }
-    /* DMG only. No CGB path is wired: the colour scanline renderers and the
-     * priority buffer are left as the vendored core has them. */
-    gnuboy_set_hwtype(GB_HW_DMG);
     if (gnuboy_load_rom(rom, romlen) != 0) {
         Serial.println("[EMU] gnuboy rejected the ROM");
         return false;
     }
+    /* DMG only, forced rather than asked for, and AFTER the load.
+     *
+     * gnuboy_set_hwtype() is a stub in this vendored version — its body is
+     * the comment "nothing for now" — so the type is whatever
+     * gnuboy_load_rom() read out of the cartridge header a line above. A
+     * CGB-aware cartridge sets header byte 0x143 to 0x80, which is most of
+     * the library and includes Pokemon Yellow, and that would run the colour
+     * scanline renderers and the CGB pixel encoding. Neither is wired: this
+     * phase is DMG only, and the bridge's LUT assumes the DMG index layout.
+     *
+     * Writing the field is what actually takes effect, because IS_CGB reads
+     * it directly. */
+    GB.hwtype = GB_HW_DMG;
     /* gnuboy's framebuffer IS fb, which is what makes the per-line hook a
      * bookkeeping call with no copy in it. */
     gnuboy_set_framebuffer(fb);
@@ -586,6 +626,7 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     frame_dropped = false;
     frame_open = false;
     cur_block = -1;
+    last_line = -1;
     if (framequeue_init(&fq, blocks_per_frame()) != FRAMEQUEUE_OK) {
         return false;
     }

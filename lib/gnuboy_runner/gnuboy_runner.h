@@ -74,11 +74,21 @@ const uint8_t* gnuboy_runner_cart_ram(size_t* len);
 unsigned gnuboy_runner_error_count(void);
 
 /*
- * Per-line hook bookkeeping for the last emulated frame: how many times the
- * vendored renderer's hook fired, and whether the line numbers it reported
- * were 0..143 with no repeats and no gaps.
+ * Per-line hook bookkeeping for the last gnuboy_runner_run_frames(1) call.
+ *
+ * `line_calls` is every hook fire in that run, and it is NOT capped at 144:
+ * gnuboy's run loop tests the line counter between CPU steps, so a step that
+ * carries the LCD past the last line and around to the top goes unnoticed and
+ * the run continues into the next frame. The first run after a reset draws two
+ * frames' worth. A front end that treats one run as one frame gets the frame
+ * boundary wrong, which is why this is reported rather than hidden.
+ *
+ * `frames` counts LCD frames in that run by the only reliable rule — the line
+ * number failing to advance — and `lines_ordered` is whether, within each of
+ * those frames, the numbers ran 0..143 with no repeats and no gaps.
  */
 unsigned gnuboy_runner_line_calls(void);
+unsigned gnuboy_runner_frames(void);
 int gnuboy_runner_lines_ordered(void);
 
 #ifdef __cplusplus

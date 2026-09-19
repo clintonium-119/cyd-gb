@@ -29,8 +29,10 @@ static int booted;
 /* Per-frame hook bookkeeping. Reset at the top of every emulated frame, so
  * they describe the last one and not the run. */
 static unsigned line_calls;
+static unsigned frames_seen;
 static int lines_ordered;
 static int next_line;
+static int last_line;
 
 /*
  * The vendored renderer's per-line hook. gnuboy has already written the line
@@ -41,10 +43,17 @@ static int next_line;
 void emu_gnuboy_line(const unsigned char* line, int index)
 {
     (void)line;
+    /* A line number that does not advance is a new LCD frame, which can
+     * happen part way through a run. */
+    if (last_line >= 0 && index <= last_line) {
+        frames_seen++;
+        next_line = 0;
+    }
     if (index != next_line) {
         lines_ordered = 0;
     }
     next_line = index + 1;
+    last_line = index;
     line_calls++;
 }
 
@@ -53,8 +62,10 @@ int gnuboy_runner_init(const uint8_t* rom, size_t len)
     booted = 0;
     error_count = 0;
     line_calls = 0;
+    frames_seen = 0;
     lines_ordered = 1;
     next_line = 0;
+    last_line = -1;
     memset(frame, 0, sizeof(frame));
     memset(audio_frame, 0, sizeof(audio_frame));
 
@@ -71,11 +82,15 @@ int gnuboy_runner_init(const uint8_t* rom, size_t len)
         error_count++;
         return GNUBOY_RUNNER_ERR_INIT;
     }
-    gnuboy_set_hwtype(GB_HW_DMG);
     if (gnuboy_load_rom(rom, len) != 0) {
         error_count++;
         return GNUBOY_RUNNER_ERR_INIT;
     }
+    /* DMG only, forced after the load and not before it: gnuboy_set_hwtype()
+     * is a stub, and gnuboy_load_rom() has just taken the type from the
+     * cartridge header. The firmware bridge does the same thing for the same
+     * reason. */
+    GB.hwtype = GB_HW_DMG;
     gnuboy_set_framebuffer(frame);
     gnuboy_set_soundbuffer(audio_frame,
                            sizeof(audio_frame) / sizeof(audio_frame[0]));
@@ -94,9 +109,13 @@ int gnuboy_runner_run_frames(unsigned n)
     }
     for (i = 0; i < n; i++) {
         line_calls = 0;
+        frames_seen = 0;
         lines_ordered = 1;
         next_line = 0;
+        last_line = -1;
         gnuboy_run(true);
+        /* The frame the run ended on counts too. */
+        frames_seen++;
     }
     return GNUBOY_RUNNER_OK;
 }
@@ -147,6 +166,11 @@ unsigned gnuboy_runner_error_count(void)
 unsigned gnuboy_runner_line_calls(void)
 {
     return line_calls;
+}
+
+unsigned gnuboy_runner_frames(void)
+{
+    return frames_seen;
 }
 
 int gnuboy_runner_lines_ordered(void)

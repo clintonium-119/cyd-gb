@@ -143,8 +143,46 @@ static void test_the_hook_fires_once_per_line_in_order(void)
 {
     run_both(SETTLE_FRAMES);
     TEST_ASSERT_EQUAL_UINT(144u, gnuboy_runner_line_calls());
+    TEST_ASSERT_EQUAL_UINT(1u, gnuboy_runner_frames());
     TEST_ASSERT_TRUE_MESSAGE(gnuboy_runner_lines_ordered(),
         "the hook reported line numbers out of order, repeated or with gaps");
+}
+
+/*
+ * A run is not a frame, and the bridge must not assume it is.
+ *
+ * gnuboy's run loop tests the line counter between CPU steps, so a step that
+ * carries the LCD past the last line and around to the top is not noticed and
+ * the run keeps going into the next frame. The first run after a reset draws
+ * 287 lines — two frames' worth — before it returns.
+ *
+ * This is pinned because the suite could not catch it before: every other case
+ * here looks at the settled frame, by which point a run is one frame and the
+ * hazard has gone. A bridge that took the run as the frame boundary committed
+ * the second frame's block 0 while the queue was still expecting the first
+ * frame's last block, the queue rejected it, and the rejected commit stranded
+ * its slot until the producer deadlocked waiting for a free one.
+ */
+static void test_a_single_run_can_span_more_than_one_lcd_frame(void)
+{
+    load_rom();
+    TEST_ASSERT_EQUAL_INT(GNUBOY_RUNNER_OK, gnuboy_runner_init(rom, rom_len));
+    TEST_ASSERT_EQUAL_INT(GNUBOY_RUNNER_OK, gnuboy_runner_run_frames(1u));
+
+    printf("[crosscheck] first run after reset: %u hook calls across %u LCD "
+           "frames\n", gnuboy_runner_line_calls(), gnuboy_runner_frames());
+    TEST_ASSERT_GREATER_THAN_UINT_MESSAGE(144u, gnuboy_runner_line_calls(),
+        "the first run no longer spans more than one frame — if gnuboy's run "
+        "loop changed, the bridge's wrap-detected frame boundary should be "
+        "re-read, not silently kept");
+    TEST_ASSERT_GREATER_THAN_UINT(1u, gnuboy_runner_frames());
+    /* Deliberately no ordering assertion here. The reset frame starts at line
+     * 1, not 0: gnuboy comes out of a hard reset in hblank, and its state
+     * machine increments the line counter before it renders, so line 0 of the
+     * very first frame is never drawn. The bridge covers that case already —
+     * the blocks before the first drawn line go out carrying the frame
+     * buffer's initial blank — and the settled-frame case above is where
+     * clean 0..143 ordering is pinned. */
 }
 
 /* ─── Pixel encoding ─────────────────────────────────────────────────────── */
@@ -308,6 +346,7 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_both_cores_boot_the_fixture_without_error);
     RUN_TEST(test_the_hook_fires_once_per_line_in_order);
+    RUN_TEST(test_a_single_run_can_span_more_than_one_lcd_frame);
     RUN_TEST(test_every_gnuboy_pixel_is_inside_the_lut_domain);
     RUN_TEST(test_the_gnuboy_lut_maps_background_and_window_alike);
     RUN_TEST(test_sprite_indices_resolve_through_their_own_registers);
