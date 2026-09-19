@@ -13,7 +13,8 @@ extern "C" {
 #endif
 
 /* The finished 160-byte line and its number, straight from lcd_renderline().
- * Implemented in src/emulator_bridge_gnuboy.cpp. */
+ * Implemented by whoever is driving gnuboy: src/emulator_bridge_gnuboy.cpp on
+ * the device, lib/gnuboy_runner/ on the host. */
 void emu_gnuboy_line(const unsigned char* line, int index);
 
 #ifdef __cplusplus
