@@ -32,9 +32,11 @@ the pins the firmware actually declares are in [`include/hw_config.h`](include/h
 ## Building
 
 ```sh
-pio run -e cyd            # build
-pio run -e cyd -t upload  # flash
-pio device monitor        # serial, 115200
+pio run -e cyd                   # build (Peanut-GB core, the default)
+pio run -e cyd -t upload         # flash
+pio run -e cyd-gnuboy            # build (gnuboy core)
+pio run -e cyd-gnuboy -t upload  # flash
+pio device monitor               # serial, 115200
 ```
 
 Two emulator cores are vendored and exactly one is linked per image, so the environment picks the
