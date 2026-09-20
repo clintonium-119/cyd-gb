@@ -1,0 +1,157 @@
+[PERF] emu=12599us scale=3898us push=10235us qstall=6770us qovf=294065 apu=57us await=3767us aunder=0 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12765us scale=3891us push=10153us qstall=6492us qovf=360797 apu=67us await=3588us aunder=0 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12764us scale=3910us push=10212us qstall=6467us qovf=426852 apu=57us await=3588us aunder=0 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12745us scale=3902us push=10140us qstall=6325us qovf=491717 apu=57us await=3615us aunder=0 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12695us scale=3897us push=10217us qstall=6278us qovf=555213 apu=57us await=3668us aunder=0 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12821us scale=3903us push=10223us qstall=6118us qovf=617929 apu=58us await=3541us aunder=0 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12980us scale=3896us push=10126us qstall=5721us qovf=676182 apu=84us await=3360us aunder=0 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13173us scale=3901us push=10008us qstall=5964us qovf=741119 apu=80us await=3161us aunder=51 aover=0 fps=62 split=c0 core=gnuboy
+[PERF] emu=12595us scale=3897us push=10123us qstall=3686us qovf=785922 apu=75us await=3783us aunder=56 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12829us scale=3894us push=10072us qstall=6182us qovf=824341 apu=114us await=3482us aunder=59 aover=0 fps=60 split=c0 core=gnuboy
+[TRIM] 601 frames in 10.0 s: [TRIM] cumulative porch 10 + 56/64  panel 59.8037 Hz  emu 59.9790 Hz  beat -0.1753 Hz  null at 9 + 56/64
+[PERF] emu=13444us scale=3905us push=10109us qstall=2561us qovf=883422 apu=58us await=2919us aunder=67 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13388us scale=3899us push=9961us qstall=1448us qovf=920632 apu=78us await=2946us aunder=70 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13148us scale=3900us push=9824us qstall=4684us qovf=962849 apu=85us await=3175us aunder=73 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13225us scale=3908us push=10002us qstall=5723us qovf=1019877 apu=76us await=3117us aunder=75 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13219us scale=3889us push=10131us qstall=5743us qovf=1074079 apu=80us await=3086us aunder=93 aover=0 fps=59 split=c0 core=gnuboy
+[PERF] emu=13475us scale=3904us push=10071us qstall=1873us qovf=1128697 apu=89us await=2830us aunder=153 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13279us scale=3897us push=10181us qstall=5900us qovf=1167467 apu=81us await=3062us aunder=213 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13191us scale=3895us push=10002us qstall=5720us qovf=1224766 apu=81us await=3140us aunder=273 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13170us scale=3912us push=9984us qstall=3995us qovf=1272206 apu=76us await=3171us aunder=333 aover=0 fps=60 split=c0 core=gnuboy
+[TRIM] 1199 frames in 20.0 s: [TRIM] cumulative porch 10 + 56/64  panel 59.8037 Hz  emu 59.8686 Hz  beat -0.0648 Hz  null at 10 + 32/64
+[PERF] emu=13230us scale=3901us push=10015us qstall=5716us qovf=1320712 apu=80us await=3099us aunder=393 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13227us scale=3895us push=10192us qstall=5882us qovf=1370114 apu=79us await=3104us aunder=453 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13177us scale=3895us push=10075us qstall=4895us qovf=1413308 apu=83us await=3162us aunder=513 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13217us scale=3894us push=10192us qstall=5887us qovf=1458920 apu=80us await=3119us aunder=554 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13182us scale=3901us push=10056us qstall=5853us qovf=1510959 apu=76us await=3155us aunder=558 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13198us scale=3904us push=10143us qstall=5896us qovf=1547609 apu=76us await=3132us aunder=562 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13519us scale=3902us push=10151us qstall=2591us qovf=1600483 apu=80us await=2824us aunder=565 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13204us scale=3891us push=10121us qstall=5740us qovf=1644715 apu=82us await=3115us aunder=568 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13422us scale=3906us push=9842us qstall=1043us qovf=1699166 apu=91us await=2901us aunder=571 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13232us scale=3904us push=10194us qstall=5912us qovf=1737164 apu=81us await=3096us aunder=573 aover=0 fps=60 split=c0 core=gnuboy
+[TRIM] 1796 frames in 30.0 s: [TRIM] cumulative porch 10 + 56/64  panel 59.8037 Hz  emu 59.8111 Hz  beat -0.0074 Hz  null at 10 + 53/64
+[PERF] emu=13645us scale=3899us push=10233us qstall=6210us qovf=1794946 apu=91us await=38us aunder=614 aover=0 fps=59 split=c0 core=gnuboy
+[PERF] emu=13176us scale=3901us push=10176us qstall=5885us qovf=1845515 apu=87us await=3160us aunder=674 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13232us scale=3905us push=10006us qstall=5750us qovf=1893495 apu=81us await=3110us aunder=734 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13531us scale=3900us push=10254us qstall=2724us qovf=1941564 apu=77us await=2802us aunder=794 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13218us scale=3896us push=10037us qstall=5734us qovf=1988688 apu=80us await=3105us aunder=854 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13144us scale=3895us push=9979us qstall=4170us qovf=2036859 apu=84us await=3196us aunder=914 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13367us scale=3899us push=10084us qstall=3401us qovf=2074999 apu=80us await=2961us aunder=974 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13176us scale=3896us push=9851us qstall=5396us qovf=2124510 apu=81us await=3148us aunder=1034 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13172us scale=3906us push=9836us qstall=5326us qovf=2175614 apu=84us await=3159us aunder=1048 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13212us scale=3902us push=10102us qstall=5719us qovf=2228125 apu=81us await=3117us aunder=1052 aover=0 fps=60 split=c0 core=gnuboy
+[TRIM] 2394 frames in 40.0 s: [TRIM] cumulative porch 10 + 56/64  panel 59.8037 Hz  emu 59.8070 Hz  beat -0.0033 Hz  null at 10 + 55/64
+[PERF] emu=13645us scale=3902us push=10176us qstall=6081us qovf=2278543 apu=78us await=2623us aunder=1058 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13392us scale=3899us push=9968us qstall=1505us qovf=2319820 apu=81us await=2935us aunder=1061 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13336us scale=3893us push=10032us qstall=3285us qovf=2344076 apu=83us await=2992us aunder=1064 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13191us scale=3900us push=10033us qstall=5465us qovf=2399672 apu=76us await=3145us aunder=1066 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12734us scale=3899us push=9977us qstall=5539us qovf=2453234 apu=66us await=20334us aunder=1068 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12704us scale=3899us push=10184us qstall=6625us qovf=2514978 apu=57us await=3657us aunder=1128 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12732us scale=3897us push=10046us qstall=6033us qovf=2577240 apu=58us await=3634us aunder=1188 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12943us scale=3903us push=10079us qstall=6481us qovf=2638686 apu=80us await=3382us aunder=1248 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12929us scale=3894us push=10007us qstall=6447us qovf=2699982 apu=80us await=3405us aunder=1308 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13050us scale=3900us push=9901us qstall=6195us qovf=2762567 apu=80us await=39us aunder=1367 aover=0 fps=59 split=c0 core=gnuboy
+[TRIM] 2994 frames in 50.0 s: [TRIM] cumulative porch 10 + 56/64  panel 59.8037 Hz  emu 59.8449 Hz  beat -0.0411 Hz  null at 10 + 41/64
+[PERF] emu=13018us scale=3902us push=9974us qstall=5481us qovf=2827845 apu=81us await=3314us aunder=1423 aover=0 fps=63 split=c0 core=gnuboy
+[PERF] emu=13052us scale=3895us push=9900us qstall=5475us qovf=2886026 apu=82us await=3286us aunder=1429 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12995us scale=3896us push=9949us qstall=6235us qovf=2942695 apu=80us await=3304us aunder=1433 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12990us scale=3903us push=9844us qstall=6215us qovf=3000541 apu=80us await=3342us aunder=1437 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12973us scale=3902us push=9904us qstall=5790us qovf=3061192 apu=80us await=3351us aunder=1456 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12966us scale=3917us push=9783us qstall=5504us qovf=3117316 apu=80us await=3351us aunder=1460 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13081us scale=3903us push=9999us qstall=5234us qovf=3172336 apu=81us await=3256us aunder=1463 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13135us scale=3897us push=10029us qstall=6014us qovf=3228984 apu=79us await=3175us aunder=1466 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13034us scale=3897us push=9900us qstall=4983us qovf=3287223 apu=82us await=3303us aunder=1468 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13279us scale=3897us push=9963us qstall=3255us qovf=3345951 apu=87us await=19770us aunder=1470 aover=0 fps=60 split=c0 core=gnuboy
+[TRIM] 3592 frames in 60.0 s: [TRIM] cumulative porch 10 + 56/64  panel 59.8037 Hz  emu 59.8366 Hz  beat -0.0329 Hz  null at 10 + 44/64
+[PERF] emu=13040us scale=3897us push=9877us qstall=4967us qovf=3405563 apu=81us await=3288us aunder=1525 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13196us scale=3897us push=10005us qstall=5943us qovf=3460263 apu=77us await=3128us aunder=1585 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13003us scale=3905us push=10156us qstall=5653us qovf=3514181 apu=89us await=3324us aunder=1645 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13036us scale=3904us push=9895us qstall=4777us qovf=3569763 apu=81us await=3300us aunder=1705 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13010us scale=3900us push=9804us qstall=5431us qovf=3625600 apu=80us await=3314us aunder=1765 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13078us scale=3907us push=9713us qstall=4088us qovf=3681372 apu=81us await=3253us aunder=1825 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13008us scale=3899us push=9838us qstall=5974us qovf=3737967 apu=80us await=3319us aunder=1885 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13000us scale=3905us push=9937us qstall=5871us qovf=3796357 apu=80us await=3335us aunder=1940 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13013us scale=3899us push=9830us qstall=6060us qovf=3855213 apu=80us await=3316us aunder=1945 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12993us scale=3898us push=9813us qstall=4851us qovf=3913810 apu=83us await=3339us aunder=1949 aover=0 fps=60 split=c0 core=gnuboy
+[TRIM] 4190 frames in 70.0 s: [TRIM] cumulative porch 10 + 56/64  panel 59.8037 Hz  emu 59.8308 Hz  beat -0.0271 Hz  null at 10 + 46/64
+[PERF] emu=12998us scale=3901us push=9968us qstall=5466us qovf=3972536 apu=79us await=3341us aunder=1955 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13067us scale=3909us push=9773us qstall=4438us qovf=4027960 apu=81us await=3272us aunder=1958 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13056us scale=3907us push=9835us qstall=5472us qovf=4083019 apu=80us await=3260us aunder=1961 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13006us scale=3903us push=9816us qstall=5883us qovf=4138165 apu=80us await=3317us aunder=1963 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13113us scale=3892us push=10004us qstall=4658us qovf=4193874 apu=84us await=3195us aunder=1977 aover=0 fps=59 split=c0 core=gnuboy
+[PERF] emu=12995us scale=3900us push=9908us qstall=6203us qovf=4250228 apu=80us await=3333us aunder=2037 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13046us scale=3907us push=10055us qstall=6129us qovf=4306661 apu=80us await=3283us aunder=2097 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13076us scale=3899us push=10104us qstall=4968us qovf=4362449 apu=81us await=3252us aunder=2157 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13052us scale=3893us push=9999us qstall=5247us qovf=4418943 apu=81us await=3286us aunder=2217 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13029us scale=3897us push=9946us qstall=6345us qovf=4476700 apu=80us await=3291us aunder=2277 aover=0 fps=60 split=c0 core=gnuboy
+[TRIM] 4787 frames in 80.0 s: [TRIM] cumulative porch 10 + 56/64  panel 59.8037 Hz  emu 59.8139 Hz  beat -0.0102 Hz  null at 10 + 52/64
+[PERF] emu=13273us scale=3886us push=10149us qstall=3541us qovf=4534170 apu=86us await=3057us aunder=2337 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13069us scale=3899us push=9925us qstall=5445us qovf=4590569 apu=81us await=3266us aunder=2397 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13055us scale=3913us push=10230us qstall=6314us qovf=4648386 apu=79us await=3269us aunder=2435 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13026us scale=3906us push=9947us qstall=6337us qovf=4707225 apu=79us await=3303us aunder=2439 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13023us scale=3895us push=10206us qstall=6108us qovf=4764511 apu=80us await=3307us aunder=2443 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13060us scale=3886us push=9877us qstall=4798us qovf=4820743 apu=81us await=3277us aunder=2447 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13059us scale=3890us push=9934us qstall=4784us qovf=4875083 apu=81us await=3253us aunder=2450 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12986us scale=3898us push=9899us qstall=6191us qovf=4929825 apu=80us await=3342us aunder=2453 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13058us scale=3902us push=10094us qstall=6155us qovf=4985974 apu=90us await=3256us aunder=2455 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13048us scale=3904us push=9918us qstall=5155us qovf=5041865 apu=83us await=3285us aunder=2495 aover=0 fps=59 split=c0 core=gnuboy
+[TRIM] 5384 frames in 90.0 s: [TRIM] cumulative porch 10 + 56/64  panel 59.8037 Hz  emu 59.8008 Hz  beat +0.0029 Hz  null at 10 + 57/64
+[PERF] emu=13000us scale=3898us push=9907us qstall=6193us qovf=5100541 apu=79us await=3320us aunder=2555 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12989us scale=3894us push=9904us qstall=6273us qovf=5157468 apu=80us await=3332us aunder=2615 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13065us scale=3898us push=9941us qstall=5449us qovf=5214069 apu=81us await=3263us aunder=2675 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13063us scale=3886us push=9926us qstall=5438us qovf=5270129 apu=80us await=3261us aunder=2735 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13005us scale=3897us push=9930us qstall=6309us qovf=5326940 apu=80us await=3323us aunder=2795 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13032us scale=3894us push=9922us qstall=5425us qovf=5385700 apu=81us await=3305us aunder=2855 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13030us scale=3900us push=9936us qstall=5448us qovf=5443993 apu=81us await=3302us aunder=2914 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13009us scale=3897us push=9942us qstall=6331us qovf=5502891 apu=79us await=3322us aunder=2930 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13068us scale=3892us push=9874us qstall=4858us qovf=5560742 apu=84us await=3256us aunder=2934 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13081us scale=3890us push=9850us qstall=4785us qovf=5617310 apu=81us await=3258us aunder=2938 aover=0 fps=60 split=c0 core=gnuboy
+[TRIM] 5982 frames in 100.0 s: [TRIM] cumulative porch 10 + 56/64  panel 59.8037 Hz  emu 59.8002 Hz  beat +0.0035 Hz  null at 10 + 57/64
+[PERF] emu=12997us scale=3902us push=9914us qstall=6227us qovf=5673701 apu=90us await=3314us aunder=2943 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12986us scale=3906us push=9916us qstall=6218us qovf=5728162 apu=79us await=3343us aunder=2946 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13052us scale=3900us push=9920us qstall=5229us qovf=5783411 apu=80us await=3288us aunder=2948 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13609us scale=3897us push=10246us qstall=6410us qovf=5840952 apu=81us await=40us aunder=2954 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13045us scale=3900us push=9923us qstall=5904us qovf=5895042 apu=79us await=3288us aunder=3013 aover=0 fps=59 split=c0 core=gnuboy
+[PERF] emu=13071us scale=3897us push=9848us qstall=5236us qovf=5952869 apu=81us await=3257us aunder=3073 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13085us scale=3903us push=10108us qstall=6170us qovf=6009474 apu=77us await=3239us aunder=3133 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13041us scale=3896us push=9892us qstall=5169us qovf=6065624 apu=90us await=3285us aunder=3193 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13008us scale=3897us push=9914us qstall=6217us qovf=6122267 apu=80us await=3315us aunder=3253 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13126us scale=3897us push=9891us qstall=4763us qovf=6179388 apu=81us await=3212us aunder=3313 aover=0 fps=60 split=c0 core=gnuboy
+[TRIM] 6579 frames in 110.0 s: [TRIM] cumulative porch 10 + 56/64  panel 59.8037 Hz  emu 59.7907 Hz  beat +0.0131 Hz  null at 10 + 61/64
+[PERF] emu=13116us scale=3903us push=9898us qstall=5059us qovf=6237157 apu=81us await=3206us aunder=3373 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13026us scale=3895us push=9961us qstall=6323us qovf=6293555 apu=79us await=3297us aunder=3430 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13030us scale=3890us push=9964us qstall=6350us qovf=6349418 apu=80us await=3296us aunder=3435 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13295us scale=3899us push=10071us qstall=3549us qovf=6406072 apu=87us await=3035us aunder=3439 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13052us scale=3899us push=9938us qstall=5437us qovf=6464780 apu=81us await=3294us aunder=3443 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13073us scale=3899us push=10168us qstall=6309us qovf=6523241 apu=77us await=3247us aunder=3446 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13029us scale=3896us push=9972us qstall=6379us qovf=6581990 apu=80us await=3302us aunder=3449 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13023us scale=3896us push=9938us qstall=5797us qovf=6639564 apu=79us await=3315us aunder=3451 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13058us scale=3894us push=9959us qstall=5750us qovf=6694986 apu=80us await=3271us aunder=3479 aover=0 fps=59 split=c0 core=gnuboy
+[PERF] emu=13051us scale=3902us push=10103us qstall=5716us qovf=6749306 apu=89us await=3272us aunder=3539 aover=0 fps=60 split=c0 core=gnuboy
+[TRIM] 7176 frames in 120.0 s: [TRIM] cumulative porch 10 + 56/64  panel 59.8037 Hz  emu 59.7828 Hz  beat +0.0209 Hz  null at 10 + 64/64
+[PERF] emu=13005us scale=3907us push=9910us qstall=6215us qovf=6807708 apu=79us await=3325us aunder=3599 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13010us scale=3904us push=10167us qstall=6000us qovf=6864108 apu=79us await=3333us aunder=3659 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13010us scale=3897us push=9922us qstall=6200us qovf=6920849 apu=79us await=3302us aunder=3719 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13075us scale=3897us push=10054us qstall=4982us qovf=6977591 apu=81us await=3261us aunder=3779 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13026us scale=3902us push=9943us qstall=6358us qovf=7035257 apu=80us await=3297us aunder=3839 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13064us scale=3911us push=10167us qstall=6235us qovf=7092191 apu=77us await=3269us aunder=3899 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13047us scale=3891us push=9923us qstall=5901us qovf=7148463 apu=88us await=3272us aunder=3934 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13022us scale=3898us push=10007us qstall=5785us qovf=7204523 apu=80us await=3310us aunder=3939 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13061us scale=3893us push=9943us qstall=5444us qovf=7262588 apu=81us await=3277us aunder=3943 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13045us scale=3901us push=10013us qstall=5450us qovf=7321015 apu=81us await=3285us aunder=3947 aover=0 fps=60 split=c0 core=gnuboy
+[TRIM] 7774 frames in 130.0 s: [TRIM] cumulative porch 10 + 56/64  panel 59.8037 Hz  emu 59.7838 Hz  beat +0.0199 Hz  null at 10 + 63/64
+[PERF] emu=13025us scale=3894us push=9953us qstall=6330us qovf=7381560 apu=80us await=3293us aunder=3952 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13040us scale=3895us push=10046us qstall=6369us qovf=7439780 apu=79us await=3284us aunder=3955 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13054us scale=3901us push=10067us qstall=5176us qovf=7495647 apu=81us await=3285us aunder=3957 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13037us scale=3901us push=9914us qstall=4767us qovf=7550371 apu=81us await=3298us aunder=4005 aover=0 fps=59 split=c0 core=gnuboy
+[PERF] emu=13012us scale=3901us push=9929us qstall=6228us qovf=7605062 apu=80us await=3308us aunder=4065 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13082us scale=3890us push=10084us qstall=5006us qovf=7661888 apu=82us await=3256us aunder=4125 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13053us scale=3905us push=9886us qstall=5202us qovf=7718179 apu=81us await=3273us aunder=4185 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=12952us scale=3899us push=9981us qstall=6189us qovf=7775152 apu=80us await=3369us aunder=4245 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13019us scale=3901us push=9945us qstall=6340us qovf=7832547 apu=91us await=3285us aunder=4305 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13022us scale=3912us push=9954us qstall=5382us qovf=7888830 apu=82us await=3313us aunder=4365 aover=0 fps=60 split=c0 core=gnuboy
+[TRIM] 8371 frames in 140.0 s: [TRIM] cumulative porch 10 + 56/64  panel 59.8037 Hz  emu 59.7774 Hz  beat +0.0263 Hz  null at 11 + 2/64
+[PERF] emu=13024us scale=3893us push=9960us qstall=6347us qovf=7947244 apu=80us await=3305us aunder=4425 aover=0 fps=60 split=c0 core=gnuboy
+[PERF] emu=13030us scale=3902us push=10030us qstall=6334us qovf=8006890 apu=80us await=3280us aunder=4440 aover=0 fps=60 split=c0 core=gnuboy
+[SD] Save: /saves/Pokemon - Yellow Version.sav (32768)
+[SAVE] menu: 32768 bytes (ok)

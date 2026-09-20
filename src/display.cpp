@@ -101,20 +101,73 @@ static void trim_report(const char* why, double emu_hz)
  * serial port so the builder can play rather than press buttons. */
 static void trim_console()
 {
+    // Cumulative since a warm-up, not a fresh window each time. Counting
+    // whole frames over ten seconds quantises to about 0.1 Hz, which is ten
+    // times coarser than the trim needs; the same count over five minutes is
+    // 0.003 Hz. The long-run rate is what a rate trim has to match anyway -
+    // the short-term hunting around it is the audio buffer filling and
+    // draining, and no porch value can follow that.
     static uint32_t frames = 0;
     static int64_t t0 = 0;
+    static int64_t next_report = 0;
     static double emu_hz = 0.0;
     int64_t now = esp_timer_get_time();
 
+    // Five seconds of warm-up discarded: the first frames carry the ROM load
+    // and the splash, which are not the cadence being measured.
     if (t0 == 0) {
+        if (now < 5000000) {
+            return;
+        }
         t0 = now;
-    } else if (now - t0 >= 10000000) {
-        emu_hz = (double)frames * 1000000.0 / (double)(now - t0);
-        trim_report("measured", emu_hz);
-        frames = 0;
-        t0 = now;
+        next_report = now + 10000000;
+        return;
     }
     frames++;
+
+    // Frame-to-frame spread, which is what decides whether a parked seam is
+    // even possible. The seam's position is the phase between the emulator's
+    // frame start and the panel's scan, so a frame that arrives 2 ms late
+    // moves it an eighth of the way across. If the spread is wider than the
+    // beat a trim could null, the trim is chasing the wrong term.
+    {
+        static int64_t last = 0;
+        static int32_t lo = 0;
+        static int32_t hi = 0;
+        static int64_t sum = 0;
+        static uint32_t n = 0;
+
+        if (last != 0) {
+            int32_t dt = (int32_t)(now - last);
+
+            if (n == 0 || dt < lo) {
+                lo = dt;
+            }
+            if (n == 0 || dt > hi) {
+                hi = dt;
+            }
+            sum += dt;
+            n++;
+        }
+        last = now;
+        if (now >= next_report && n > 0) {
+            Serial.printf("[TRIM] frame period mean %ld us, min %ld, max %ld, "
+                          "spread %ld us (%.0f%% of a frame)\n",
+                          (long)(sum / n), (long)lo, (long)hi,
+                          (long)(hi - lo), 100.0 * (double)(hi - lo) / 16700.0);
+            lo = hi = 0;
+            sum = 0;
+            n = 0;
+        }
+    }
+
+    if (now >= next_report) {
+        emu_hz = (double)frames * 1000000.0 / (double)(now - t0);
+        Serial.printf("[TRIM] %u frames in %.1f s: ", (unsigned)frames,
+                      (double)(now - t0) / 1000000.0);
+        trim_report("cumulative", emu_hz);
+        next_report = now + 10000000;
+    }
 
     while (Serial.available() > 0) {
         int c = Serial.read();
