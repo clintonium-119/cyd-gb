@@ -18,16 +18,23 @@
 // at 266: 53 groups of 3 source pixels to 5 output, plus one leftover pixel
 // emitted pure. Square pixels, a 0.25 % aspect error, every row of the panel.
 //
-// All three are compiled into gbcore; this header picks one. 26/16 stays the
-// default until the bench rules on 5/3.
+// All three are compiled into gbcore; this header picks one. 5/3 is what
+// ships, on one board in one sitting against 26/16 on the same fixture with
+// the geometry as the only variable: frame peak 13.8 ms of a 16.67 ms budget
+// against 12.4, fps 60 on both, aover 0 on both, and emu_core within 0.2 %
+// which is what makes the two captures comparable. scale grew 1.5 % for
+// 4.93 % more pixels; push grew 8.2 %, the excess being 24 DMA transfers a
+// frame against 18. The bezel aperture clears all 240 rows.
 //
-//   PLATFORMIO_BUILD_FLAGS=-DRENDER_GEOM=GEOM_5_3 pio run -e cyd-gnuboy
+// Select another geometry per invocation:
+//
+//   PLATFORMIO_BUILD_FLAGS=-DRENDER_GEOM=GEOM_26_16 pio run -e cyd-gnuboy
 #define GEOM_24_16 2416
 #define GEOM_26_16 2616
 #define GEOM_5_3    503
 
 #ifndef RENDER_GEOM
-#define RENDER_GEOM GEOM_26_16
+#define RENDER_GEOM GEOM_5_3
 #endif
 
 // The gbcore geometry that matches RENDER_GEOM, so Arduino-side callers never

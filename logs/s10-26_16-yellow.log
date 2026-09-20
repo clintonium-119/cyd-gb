@@ -1,0 +1,74 @@
+# capture start 2026-09-20T09:29:09-0400 port=/dev/ttyUSB0 baud=115200 duration=60s
+[   0.201] ets Jul 29 2019 12:21:46
+[   0.201] 
+[   0.201] rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+[   0.201] configsip: 0, SPIWP:0xee
+[   0.201] clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+[   0.201] mode:DIO, clock div:1
+[   0.201] load:0x3fff0030,len:1344
+[   0.201] load:0x40078000,len:13964
+[   0.201] load:0x40080400,len:3600
+[   0.201] entry 0x400805f0
+[   0.401] E (197) esp_core_dff}���͡� No core dump partition found!
+[   0.401] E (197) esp_core_dump_flash: No core dump partition found!
+[   0.410] # link dropped: device reports readiness to read but returned no data (device disconnected or multiple access on port?)
+[   1.435] # link reopened (no reset)
+[   2.236] [PERF] emu=11431us scale=3830us push=9446us qstall=4709us qovf=34943 apu=5us await=5009us aunder=0 aover=0 fps=56 split=c0 core=gnuboy
+[   3.237] [PERF] emu=11414us scale=3835us push=9446us qstall=4675us qovf=82913 apu=5us await=5027us aunder=0 aover=0 fps=60 split=c0 core=gnuboy
+[   4.238] [PERF] emu=11400us scale=3844us push=9440us qstall=4686us qovf=130965 apu=5us await=5043us aunder=0 aover=0 fps=60 split=c0 core=gnuboy
+[   5.240] [PERF] emu=11411us scale=3836us push=9447us qstall=4685us qovf=178999 apu=5us await=5032us aunder=0 aover=0 fps=60 split=c0 core=gnuboy
+[   6.241] [PERF] emu=11287us scale=3843us push=9418us qstall=5458us qovf=236347 apu=5us await=5144us aunder=0 aover=0 fps=60 split=c0 core=gnuboy
+[   7.242] [PERF] emu=11531us scale=3835us push=9463us qstall=4866us qovf=289477 apu=5us await=4900us aunder=0 aover=0 fps=60 split=c0 core=gnuboy
+[   8.244] [PERF] emu=11859us scale=3841us push=9339us qstall=4325us qovf=335986 apu=84us await=4480us aunder=0 aover=0 fps=60 split=c0 core=gnuboy
+[   9.245] [PERF] emu=11877us scale=3837us push=9206us qstall=4536us qovf=387813 apu=83us await=4447us aunder=13 aover=0 fps=60 split=c0 core=gnuboy
+[  10.246] [PERF] emu=11336us scale=3834us push=9316us qstall=2133us qovf=433413 apu=77us await=5058us aunder=14 aover=0 fps=60 split=c0 core=gnuboy
+[  11.248] [PERF] emu=11819us scale=3848us push=9361us qstall=5282us qovf=464147 apu=80us await=4528us aunder=14 aover=0 fps=60 split=c0 core=gnuboy
+[  12.249] [PERF] emu=11835us scale=3834us push=9453us qstall=4663us qovf=495848 apu=58us await=4519us aunder=14 aover=0 fps=60 split=c0 core=gnuboy
+[  13.250] [PERF] emu=12162us scale=3844us push=9268us qstall=1447us qovf=540575 apu=82us await=4165us aunder=14 aover=0 fps=60 split=c0 core=gnuboy
+[  14.251] [PERF] emu=12259us scale=3837us push=9015us qstall=349us qovf=566404 apu=76us await=4097us aunder=14 aover=0 fps=60 split=c0 core=gnuboy
+[  15.253] [PERF] emu=11962us scale=3836us push=9447us qstall=4683us qovf=603702 apu=80us await=4391us aunder=14 aover=0 fps=60 split=c0 core=gnuboy
+[  16.254] [PERF] emu=12138us scale=3837us push=9280us qstall=1387us qovf=631045 apu=80us await=4220us aunder=14 aover=0 fps=60 split=c0 core=gnuboy
+[  17.255] [PERF] emu=12230us scale=3852us push=9195us qstall=977us qovf=645965 apu=80us await=4111us aunder=14 aover=0 fps=60 split=c0 core=gnuboy
+[  18.256] [PERF] emu=12221us scale=3849us push=9168us qstall=974us qovf=656241 apu=80us await=4135us aunder=14 aover=0 fps=60 split=c0 core=gnuboy
+[  19.258] [PERF] emu=12161us scale=3841us push=8973us qstall=748us qovf=666467 apu=85us await=4189us aunder=14 aover=0 fps=60 split=c0 core=gnuboy
+[  20.259] [PERF] emu=11966us scale=3837us push=9394us qstall=4662us qovf=681781 apu=82us await=4372us aunder=14 aover=0 fps=60 split=c0 core=gnuboy
+[  21.260] [PERF] emu=11967us scale=3840us push=9267us qstall=4500us qovf=727371 apu=82us await=4369us aunder=14 aover=0 fps=60 split=c0 core=gnuboy
+[  22.261] [PERF] emu=11945us scale=3844us push=9439us qstall=4673us qovf=769386 apu=78us await=4389us aunder=14 aover=0 fps=59 split=c0 core=gnuboy
+[  23.263] [PERF] emu=11954us scale=3838us push=9364us qstall=4609us qovf=801486 apu=79us await=4394us aunder=15 aover=0 fps=60 split=c0 core=gnuboy
+[  24.264] [PERF] emu=11881us scale=3840us push=9283us qstall=4519us qovf=841331 apu=77us await=4481us aunder=16 aover=0 fps=60 split=c0 core=gnuboy
+[  25.265] [PERF] emu=11893us scale=3852us push=9305us qstall=3113us qovf=876060 apu=80us await=4454us aunder=17 aover=0 fps=60 split=c0 core=gnuboy
+[  26.267] [PERF] emu=11910us scale=3856us push=9318us qstall=4616us qovf=910844 apu=81us await=4444us aunder=17 aover=0 fps=60 split=c0 core=gnuboy
+[  27.268] [PERF] emu=11902us scale=3855us push=9078us qstall=4124us qovf=952596 apu=81us await=4455us aunder=17 aover=0 fps=60 split=c0 core=gnuboy
+[  28.269] [PERF] emu=11941us scale=3851us push=9278us qstall=4546us qovf=995251 apu=81us await=4413us aunder=17 aover=0 fps=60 split=c0 core=gnuboy
+[  29.270] [PERF] emu=12268us scale=3836us push=9007us qstall=818us qovf=1040503 apu=80us await=4090us aunder=17 aover=0 fps=60 split=c0 core=gnuboy
+[  30.272] [PERF] emu=12208us scale=3838us push=9133us qstall=1308us qovf=1063232 apu=79us await=4139us aunder=17 aover=0 fps=60 split=c0 core=gnuboy
+[  31.273] [PERF] emu=11900us scale=3836us push=8982us qstall=3679us qovf=1106575 apu=78us await=4442us aunder=17 aover=0 fps=60 split=c0 core=gnuboy
+[  32.274] [PERF] emu=11927us scale=3842us push=9445us qstall=4664us qovf=1137513 apu=70us await=4427us aunder=17 aover=0 fps=60 split=c0 core=gnuboy
+[  33.275] [PERF] emu=12227us scale=3846us push=9216us qstall=963us qovf=1181519 apu=75us await=4133us aunder=17 aover=0 fps=60 split=c0 core=gnuboy
+[  34.277] [PERF] emu=12367us scale=3841us push=8897us qstall=33us qovf=1204460 apu=80us await=3963us aunder=17 aover=0 fps=60 split=c0 core=gnuboy
+[  35.278] [PERF] emu=11946us scale=3842us push=9438us qstall=4701us qovf=1247167 apu=82us await=4410us aunder=17 aover=0 fps=60 split=c0 core=gnuboy
+[  36.279] [PERF] emu=11987us scale=3833us push=9268us qstall=4451us qovf=1290628 apu=82us await=4355us aunder=17 aover=0 fps=60 split=c0 core=gnuboy
+[  37.280] [PERF] emu=12238us scale=3847us push=9176us qstall=979us qovf=1332001 apu=80us await=4111us aunder=17 aover=0 fps=59 split=c0 core=gnuboy
+[  38.281] [PERF] emu=11919us scale=3832us push=9014us qstall=3727us qovf=1375724 apu=83us await=4422us aunder=18 aover=0 fps=60 split=c0 core=gnuboy
+[  39.283] [PERF] emu=11908us scale=3845us push=9138us qstall=4272us qovf=1402610 apu=91us await=4387us aunder=19 aover=0 fps=60 split=c0 core=gnuboy
+[  40.484] [PERF] emu=11927us scale=3845us push=9319us qstall=4623us qovf=1448160 apu=82us await=4434us aunder=20 aover=0 fps=60 split=c0 core=gnuboy
+[  41.485] [PERF] emu=12355us scale=3830us push=8865us qstall=99us qovf=1491693 apu=78us await=3992us aunder=20 aover=0 fps=60 split=c0 core=gnuboy
+[  42.486] [PERF] emu=11910us scale=3844us push=9436us qstall=4675us qovf=1517104 apu=77us await=4447us aunder=20 aover=0 fps=60 split=c0 core=gnuboy
+[  43.488] [PERF] emu=11925us scale=3839us push=9344us qstall=4616us qovf=1559811 apu=80us await=4435us aunder=20 aover=0 fps=60 split=c0 core=gnuboy
+[  44.489] [PERF] emu=11953us scale=3860us push=9321us qstall=4606us qovf=1600424 apu=82us await=4366us aunder=20 aover=0 fps=60 split=c0 core=gnuboy
+[  45.490] [PERF] emu=11926us scale=3840us push=9310us qstall=4571us qovf=1642877 apu=81us await=4433us aunder=20 aover=0 fps=60 split=c0 core=gnuboy
+[  46.492] [PERF] emu=12305us scale=3839us push=9181us qstall=134us qovf=1678871 apu=80us await=4038us aunder=20 aover=0 fps=60 split=c0 core=gnuboy
+[  47.493] [PERF] emu=11993us scale=3827us push=9382us qstall=4662us qovf=1693588 apu=80us await=4344us aunder=20 aover=0 fps=60 split=c0 core=gnuboy
+[  48.494] [PERF] emu=11814us scale=3840us push=9050us qstall=4198us qovf=1737958 apu=82us await=4527us aunder=20 aover=0 fps=60 split=c0 core=gnuboy
+[  49.496] [PERF] emu=11441us scale=3853us push=9160us qstall=4335us qovf=1780776 apu=59us await=4934us aunder=20 aover=0 fps=60 split=c0 core=gnuboy
+[  50.497] [PERF] emu=11406us scale=3831us push=9416us qstall=5379us qovf=1831330 apu=57us await=4966us aunder=22 aover=0 fps=60 split=c0 core=gnuboy
+[  51.498] [PERF] emu=11626us scale=3841us push=9360us qstall=5307us qovf=1881620 apu=80us await=4686us aunder=22 aover=0 fps=60 split=c0 core=gnuboy
+[  52.499] [PERF] emu=11648us scale=3843us push=9283us qstall=4291us qovf=1931434 apu=82us await=4708us aunder=22 aover=0 fps=59 split=c0 core=gnuboy
+[  53.501] [PERF] emu=11616us scale=3843us push=9231us qstall=4387us qovf=1980828 apu=83us await=4723us aunder=23 aover=0 fps=60 split=c0 core=gnuboy
+[  54.502] [PERF] emu=11795us scale=3834us push=9133us qstall=4226us qovf=2036155 apu=84us await=4560us aunder=35 aover=0 fps=61 split=c0 core=gnuboy
+[  55.504] [PERF] emu=11714us scale=3832us push=9187us qstall=5076us qovf=2082904 apu=81us await=4608us aunder=35 aover=0 fps=60 split=c0 core=gnuboy
+[  56.505] [PERF] emu=11699us scale=3840us push=9083us qstall=4260us qovf=2129726 apu=81us await=4639us aunder=35 aover=0 fps=60 split=c0 core=gnuboy
+[  57.506] [PERF] emu=11705us scale=3839us push=9050us qstall=4285us qovf=2175643 apu=103us await=4612us aunder=35 aover=0 fps=60 split=c0 core=gnuboy
+[  58.508] [PERF] emu=11755us scale=3847us push=9036us qstall=4735us qovf=2221067 apu=86us await=4594us aunder=35 aover=0 fps=60 split=c0 core=gnuboy
+[  59.509] [PERF] emu=11716us scale=3843us push=9020us qstall=3878us qovf=2273671 apu=84us await=4638us aunder=43 aover=0 fps=66 split=c0 core=gnuboy
+# capture end, elapsed 60.1s
