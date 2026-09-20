@@ -1,0 +1,18 @@
+# PANEL_PROBE, 2026-09-20, ws/bench, gnuboy + Pokemon Yellow bench build.
+# Each register read twice, once under INPUT_PULLUP and once under
+# INPUT_PULLDOWN. "floating" = the two disagreed, so nothing drives MISO.
+[PROBE] panel readback on MISO=12
+[PROBE] 2 MHz cmd 04 -> 40 C0 D9 FF 80 3F  floating
+[PROBE] 2 MHz cmd 09 -> 5A 29 82 00 7F 80  floating
+[PROBE] 2 MHz cmd 0A -> 9C FF 00 FF 00 FF  floating
+[PROBE] 2 MHz cmd 0B -> 68 FF 00 FF 00 FF  floating
+[PROBE] 2 MHz cmd 0C -> 05 FF 00 FF 00 FF  floating
+[PROBE] 2 MHz cmd 45 -> 00 00 7F 80 3F C0  floating
+[PROBE] 6 MHz cmd 04 -> 40 C0 D9 FF 80 0F  floating
+[PROBE] 6 MHz cmd 09 -> 5A 29 82 00 1F 80  floating
+[PROBE] 6 MHz cmd 0A -> 9C FF 00 FF 00 FF  floating
+[PROBE] 6 MHz cmd 0B -> 68 FF 00 FF 00 FF  floating
+[PROBE] 6 MHz cmd 0C -> 05 FF 00 FF 00 FF  floating
+[PROBE] 6 MHz cmd 45 -> 00 9C 1F 80 0F C0  floating
+[PROBE] MISO follows the pull: the panel drives nothing.
+[PROBE] No scan-position reference. Software vsync is out.
