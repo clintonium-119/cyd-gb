@@ -30,6 +30,14 @@ static bool dma_ready = false;
 #define PANEL_PORCH_RATIO 0
 #endif
 
+// Live, because the fixture's null was measured against a timer set to the
+// emulator's ASSUMED 59.7275 fps, and the game is paced by the audio DMA at
+// whatever rate the I2S divider really produces. The two are not the same
+// question, so the trim is driven over the serial port while a game runs and
+// the real cadence is measured rather than assumed.
+static uint8_t trim_fpa = PANEL_PORCH_FPA;
+static uint8_t trim_ratio = PANEL_PORCH_RATIO;
+
 static void write_porch(uint8_t fpa)
 {
     tft.writecommand(0xB2);
@@ -48,16 +56,98 @@ static void porch_advance()
 {
     static uint8_t acc = 0;
     static uint8_t applied = 0xFF;
-    uint8_t want = PANEL_PORCH_FPA;
+    uint8_t want = trim_fpa;
 
-    acc = (uint8_t)(acc + PANEL_PORCH_RATIO);
+    acc = (uint8_t)(acc + trim_ratio);
     if (acc >= 64) {
         acc = (uint8_t)(acc - 64);
-        want = (uint8_t)(PANEL_PORCH_FPA + 1);
+        want = (uint8_t)(trim_fpa + 1);
     }
     if (want != applied) {
         write_porch(want);
         applied = want;
+    }
+}
+
+/* Panel rate this trim gives, from the one fixed point the bench has: the
+ * fixture nulled at 11 + 20/64 against a 59.7275 Hz source, so the panel runs
+ * at that rate there and scales inversely with the total line count. This is
+ * a measurement of THIS panel, not a datasheet number. */
+static double panel_hz(uint8_t fpa, uint8_t ratio)
+{
+    return 59.7275 * (332.0 + 11.0 + 20.0 / 64.0)
+                   / (332.0 + (double)fpa + (double)ratio / 64.0);
+}
+
+static void trim_report(const char* why, double emu_hz)
+{
+    double p = panel_hz(trim_fpa, trim_ratio);
+
+    Serial.printf("[TRIM] %s porch %u + %u/64  panel %.4f Hz  emu %.4f Hz  "
+                  "beat %+.4f Hz", why, (unsigned)trim_fpa,
+                  (unsigned)trim_ratio, p, emu_hz, p - emu_hz);
+    if (emu_hz > 1.0) {
+        double want = (332.0 + 11.0 + 20.0 / 64.0) * 59.7275 / emu_hz - 332.0;
+
+        Serial.printf("  null at %u + %u/64", (unsigned)want,
+                      (unsigned)((want - (double)(unsigned)want) * 64.0 + 0.5));
+    }
+    Serial.println();
+}
+
+/* Once a frame, from display_frame_end(). Measures the cadence the frame path
+ * is actually running at over a long window - the whole point, since the
+ * assumed rate is what the fixture got wrong - and takes trim keys off the
+ * serial port so the builder can play rather than press buttons. */
+static void trim_console()
+{
+    static uint32_t frames = 0;
+    static int64_t t0 = 0;
+    static double emu_hz = 0.0;
+    int64_t now = esp_timer_get_time();
+
+    if (t0 == 0) {
+        t0 = now;
+    } else if (now - t0 >= 10000000) {
+        emu_hz = (double)frames * 1000000.0 / (double)(now - t0);
+        trim_report("measured", emu_hz);
+        frames = 0;
+        t0 = now;
+    }
+    frames++;
+
+    while (Serial.available() > 0) {
+        int c = Serial.read();
+
+        switch (c) {
+            case '+':
+                if (trim_ratio + 4 < 64) {
+                    trim_ratio = (uint8_t)(trim_ratio + 4);
+                } else {
+                    trim_ratio = (uint8_t)(trim_ratio + 4 - 64);
+                    trim_fpa++;
+                }
+                break;
+            case '-':
+                if (trim_ratio >= 4) {
+                    trim_ratio = (uint8_t)(trim_ratio - 4);
+                } else if (trim_fpa > 1) {
+                    trim_ratio = (uint8_t)(trim_ratio + 60);
+                    trim_fpa--;
+                }
+                break;
+            case ']':
+                trim_fpa++;
+                break;
+            case '[':
+                if (trim_fpa > 1) {
+                    trim_fpa--;
+                }
+                break;
+            default:
+                continue;
+        }
+        trim_report("set", emu_hz);
     }
 }
 #endif
@@ -162,6 +252,7 @@ void display_frame_end()
     tft.endWrite();
 #ifdef PANEL_PORCH_FPA
     porch_advance();
+    trim_console();
 #endif
 }
 
