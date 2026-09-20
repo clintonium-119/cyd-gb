@@ -17,7 +17,7 @@
 // the edge detection below needs no filter of its own.
 #define MENU_POLL_MS 16
 
-// 6 x 26 + 40 = 196, inside GAME_H at either scale.
+// 6 x 26 + 40 = 196, inside GAME_H at every geometry — 216, 234, 240.
 #define MENU_ROWS  6
 #define MENU_ROW_H 26
 #define MENU_TOP   40   /* the title band above the first row */
@@ -173,7 +173,8 @@ static const char* auth_name(const menu_cart_info_t* info)
 // Read-only, and B is the only way out. The two values that can outrun the
 // window — the cartridge's raw string and the matched file name — wrap at
 // font 1; the rest are short enough for font 2. Worst case is 178 px of rows
-// against GAME_H's 216, which leaves the footer its own line.
+// against the shortest GAME_H, 216, which leaves the footer its own line; a
+// taller geometry only adds room.
 static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info)
 {
     char line[128];

@@ -401,17 +401,18 @@ void diag_checker_build(diag_checker_t* ck, uint8_t idx)
 /*
  * The checkerboard, pushed through the real scaler in blend mode.
  *
- * Both geometries emit whole blocks only, so the body holds as many complete
+ * Every geometry emits whole blocks only, so the body holds as many complete
  * blocks as fit under the header and stops: 216 - 20 = 196 rows is 65 blocks
- * of 3 at 24/16, and 234 - 20 = 214 is 16 blocks of 13 at 26/16. The leftover
- * row or six stay background, which is what the border and the bars already
- * show anyway.
+ * of 3 at 24/16, 234 - 20 = 214 is 16 blocks of 13 at 26/16, and 240 - 20 =
+ * 220 is 44 blocks of 5 at 5/3. The leftover row or six stay background,
+ * which is what the border and the bars already show anyway.
  */
 static void page_checker(const ui_canvas_t* cv, const diag_layout_t* g,
                          const diag_data_t* data, diag_checker_t* ck)
 {
-    const scaler_geom_info_t* info;
-    enum scaler_geom_e geom;
+    const scaler_geom_info_t* info = NULL;
+    enum scaler_geom_e geom = SCALER_GEOM_24_16;
+    unsigned idx;
     int16_t blocks;
     int16_t b;
     uint8_t i;
@@ -423,32 +424,43 @@ static void page_checker(const ui_canvas_t* cv, const diag_layout_t* g,
     }
 
     /* The window width picks the geometry, because it is the scaler's own
-     * output width. Neither of the two means there is nothing to push. */
-    if (g->w == (int16_t)scaler_geom_info(SCALER_GEOM_24_16)->dst_w) {
-        geom = SCALER_GEOM_24_16;
-    } else if (g->w == (int16_t)scaler_geom_info(SCALER_GEOM_26_16)->dst_w) {
-        geom = SCALER_GEOM_26_16;
-    } else {
+     * output width. scaler_geom_info() returns NULL past the last one, so
+     * this walk needs no edit when a geometry is added; no match means there
+     * is nothing to push. */
+    for (idx = 0; (info = scaler_geom_info((enum scaler_geom_e)idx)) != NULL;
+         idx++) {
+        if (g->w == (int16_t)info->dst_w) {
+            geom = (enum scaler_geom_e)idx;
+            break;
+        }
+    }
+    if (info == NULL) {
         draw_border(cv, g);
         full_row(cv, g, 0, "No scaler geometry for this width.", COL_WARN);
         return;
     }
-    info = scaler_geom_info(geom);
 
     diag_checker_build(ck, data->palette);
-
-    /* Every block starts on an even source line, because both geometries take
-     * an even number of them — so the lookahead is always line 0's parity. */
-    for (i = 0; i < info->src_lines_per_block; i++) {
-        ck->lines[i] = ck->line[i & 1];
-    }
 
     blocks = (int16_t)((g->h - g->body_y) / info->dst_rows_per_block);
     for (b = 0; b < blocks; b++) {
         int16_t y = (int16_t)(g->body_y + b * info->dst_rows_per_block);
+        unsigned first = (unsigned)b * info->src_lines_per_block;
+
+        /* A block starts on source line first, and the chequer alternates
+         * every line, so the parity is the block's own — not line 0's. With
+         * an even lines-per-block every block starts even and this is the
+         * same pointers as before; at 5/3's three it alternates. */
+        for (i = 0; i < info->src_lines_per_block; i++) {
+            ck->lines[i] = ck->line[(first + i) & 1u];
+        }
 
         if (scaler_scale_block(geom, SCALER_MODE_BLEND, ck->lines,
-                               ck->line[0], ck->block, ck->scratch)
+                               /* the next block's first line, which is what
+                                * the game path hands the scaler */
+                               ck->line[(first + info->src_lines_per_block)
+                                        & 1u],
+                               ck->block, ck->scratch)
             != SCALER_OK) {
             return;
         }

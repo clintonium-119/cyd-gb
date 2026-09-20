@@ -30,8 +30,11 @@
 #define GEOM_24_H 216
 #define GEOM_26_W 260
 #define GEOM_26_H 234
+#define GEOM_53_W 266
+#define GEOM_53_H 240
 
-#define FB_MAX (GEOM_26_W * GEOM_26_H)
+/* 5/3 is both the widest and the tallest, so its window bounds the canvas. */
+#define FB_MAX (GEOM_53_W * GEOM_53_H)
 
 /* The catalog shape: the library's 132 titles, every tenth one a starter. */
 #define LIB_COUNT 132
@@ -326,6 +329,25 @@ static void test_the_layout_at_260_by_234(void)
                                       (unsigned)(g.desc_cols * g.band_rows));
 }
 
+/* The writer logs "cannot happen" on a refused layout, so the third geometry
+ * has to compose too. It is the widest and tallest window, so it only gains
+ * room — but the claim is asserted rather than assumed. */
+static void test_the_layout_at_266_by_240(void)
+{
+    picker_layout_t g;
+
+    TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(GEOM_53_W, GEOM_53_H, &g));
+    TEST_ASSERT_EQUAL_UINT8(12, g.rows);        /* (240 - 18) / 18      */
+    TEST_ASSERT_EQUAL_INT16(258, g.list_w);     /* 266 - 8              */
+    TEST_ASSERT_EQUAL_INT16(142, g.band_h);     /* 240 - 52 - 46        */
+    TEST_ASSERT_EQUAL_UINT8(14, g.band_rows);   /* 142 / 10             */
+    TEST_ASSERT_EQUAL_INT16(158, g.desc_w);     /* 266 - 104 - 4        */
+    TEST_ASSERT_EQUAL_UINT8(26, g.desc_cols);   /* 158 / 6              */
+
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT(CATALOG_DESC_MAX - 1,
+                                      (unsigned)(g.desc_cols * g.band_rows));
+}
+
 static void test_the_layout_refuses_a_window_it_cannot_compose(void)
 {
     picker_layout_t g;
@@ -342,11 +364,12 @@ static void test_the_layout_refuses_a_window_it_cannot_compose(void)
 static void test_the_list_stays_inside_the_window_in_every_mode(void)
 {
     struct { int16_t w, h; } geo[] = { { GEOM_24_W, GEOM_24_H },
-                                       { GEOM_26_W, GEOM_26_H } };
+                                       { GEOM_26_W, GEOM_26_H },
+                                       { GEOM_53_W, GEOM_53_H } };
     size_t i;
 
     fill_library(LIB_COUNT);
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < sizeof(geo) / sizeof(geo[0]); i++) {
         picker_layout_t g;
 
         TEST_ASSERT_EQUAL_INT(PICKER_OK,
@@ -389,7 +412,8 @@ static void test_a_marked_row_still_fits_its_box(void)
 static void test_every_detail_combination_stays_inside_the_window(void)
 {
     struct { int16_t w, h; } geo[] = { { GEOM_24_W, GEOM_24_H },
-                                       { GEOM_26_W, GEOM_26_H } };
+                                       { GEOM_26_W, GEOM_26_H },
+                                       { GEOM_53_W, GEOM_53_H } };
     uint8_t states[][2] = {
         { PICKER_MEDIA_READY, PICKER_MEDIA_READY },
         { PICKER_MEDIA_READY, PICKER_MEDIA_MISSING },
@@ -400,7 +424,7 @@ static void test_every_detail_combination_stays_inside_the_window(void)
     size_t gi, si, pi, sc;
 
     fill_library(LIB_COUNT);
-    for (gi = 0; gi < 2; gi++) {
+    for (gi = 0; gi < sizeof(geo) / sizeof(geo[0]); gi++) {
         picker_layout_t g;
         uint16_t span;
 
@@ -623,6 +647,7 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_the_layout_at_240_by_216);
     RUN_TEST(test_the_layout_at_260_by_234);
+    RUN_TEST(test_the_layout_at_266_by_240);
     RUN_TEST(test_the_layout_refuses_a_window_it_cannot_compose);
     RUN_TEST(test_the_list_stays_inside_the_window_in_every_mode);
     RUN_TEST(test_a_marked_row_still_fits_its_box);

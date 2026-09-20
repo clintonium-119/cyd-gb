@@ -27,13 +27,17 @@
 #define GEOM_24_H 216
 #define GEOM_26_W 260
 #define GEOM_26_H 234
+#define GEOM_53_W 266
+#define GEOM_53_H 240
 
-#define FB_MAX (GEOM_26_W * GEOM_26_H)
+/* 5/3 is both the widest and the tallest, so its window bounds the canvas. */
+#define FB_MAX (GEOM_53_W * GEOM_53_H)
 
 /* body_y is DIAG_HEADER_H + 2 = 20, so the checkerboard has 196 rows to fill
- * at 24/16 and 214 at 26/16, and only whole blocks are pushed. */
+ * at 24/16, 214 at 26/16 and 220 at 5/3, and only whole blocks are pushed. */
 #define CHECKER_BLOCKS_24 ((GEOM_24_H - (DIAG_HEADER_H + 2)) / 3)   /* 65 */
 #define CHECKER_BLOCKS_26 ((GEOM_26_H - (DIAG_HEADER_H + 2)) / 13)  /* 16 */
+#define CHECKER_BLOCKS_53 ((GEOM_53_H - (DIAG_HEADER_H + 2)) / 5)   /* 44 */
 
 /* ─── the fake canvas ─────────────────────────────────────────────────────── */
 
@@ -59,6 +63,8 @@ typedef struct {
     unsigned img_w_faults, img_rows_faults;
     uint16_t first_block[SCALER_DST_ROWS_MAX * SCALER_DST_W_MAX];
     bool have_first_block;
+    uint16_t second_block[SCALER_DST_ROWS_MAX * SCALER_DST_W_MAX];
+    bool have_second_block;
 } fake_t;
 
 static fake_t fk;
@@ -184,11 +190,21 @@ static void fk_image(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
     if (row0 < 0 || rows < 0 || row0 + rows > h) {
         f->range_faults++;
     }
-    if (!f->have_first_block && rows > 0
+    if (rows > 0
         && (size_t)rows * (size_t)w
                <= sizeof(f->first_block) / sizeof(f->first_block[0])) {
-        memcpy(f->first_block, px, (size_t)rows * (size_t)w * sizeof(px[0]));
-        f->have_first_block = true;
+        /* The first two blocks, because a geometry with an odd
+         * lines-per-block gives them opposite source-line parity and that is
+         * a per-block property block 0 alone cannot show. */
+        if (!f->have_first_block) {
+            memcpy(f->first_block, px,
+                   (size_t)rows * (size_t)w * sizeof(px[0]));
+            f->have_first_block = true;
+        } else if (!f->have_second_block) {
+            memcpy(f->second_block, px,
+                   (size_t)rows * (size_t)w * sizeof(px[0]));
+            f->have_second_block = true;
+        }
     }
     put_rect(f, x, y, w, h);
 }
@@ -314,7 +330,7 @@ static void assert_clean(void)
 
 /* ─── geometry ────────────────────────────────────────────────────────────── */
 
-static void test_the_layout_accepts_both_windows(void)
+static void test_the_layout_accepts_every_window(void)
 {
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(GEOM_24_W, GEOM_24_H, &geom));
     TEST_ASSERT_EQUAL_INT16(DIAG_HEADER_H + 2, geom.body_y);
@@ -330,6 +346,15 @@ static void test_the_layout_accepts_both_windows(void)
     /* (234 - 20 - 2) / 10 = 21. */
     TEST_ASSERT_EQUAL_UINT8(21, geom.rows);
     TEST_ASSERT_EQUAL_INT16(GEOM_26_W / 8, geom.bar_w);
+
+    TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(GEOM_53_W, GEOM_53_H, &geom));
+    TEST_ASSERT_EQUAL_INT16(DIAG_HEADER_H + 2, geom.body_y);
+    /* (240 - 20 - 2) / 10 = 21 — no fewer than 26/16 gives, and the footer
+     * is inside the window. */
+    TEST_ASSERT_EQUAL_UINT8(21, geom.rows);
+    TEST_ASSERT_EQUAL_INT16(GEOM_53_W / 8, geom.bar_w);
+    TEST_ASSERT_EQUAL_INT16(GEOM_53_H - DIAG_ROW_H - 2, geom.footer_y);
+    TEST_ASSERT_TRUE(geom.footer_y + DIAG_ROW_H <= GEOM_53_H);
 }
 
 static void test_the_layout_refuses_a_window_with_too_few_rows(void)
@@ -368,6 +393,12 @@ static void test_every_page_paints_inside_the_260x234_window(void)
     walk_every_page(GEOM_26_W, GEOM_26_H);
 }
 
+static void test_every_page_paints_inside_the_266x240_window(void)
+{
+    fill_data();
+    walk_every_page(GEOM_53_W, GEOM_53_H);
+}
+
 static void test_every_page_paints_inside_the_window_with_no_data_at_all(void)
 {
     /* A zeroed snapshot is the state a page is in before its binding has
@@ -375,6 +406,7 @@ static void test_every_page_paints_inside_the_window_with_no_data_at_all(void)
      * most likely to be missing. */
     walk_every_page(GEOM_24_W, GEOM_24_H);
     walk_every_page(GEOM_26_W, GEOM_26_H);
+    walk_every_page(GEOM_53_W, GEOM_53_H);
 }
 
 /* ─── the display page's three patterns ───────────────────────────────────── */
@@ -395,6 +427,13 @@ static void test_the_bars_pattern_paints_eight_bars(void)
     TEST_ASSERT_EQUAL_UINT(8, fk.bar_fills);
     /* 8 x 32 = 256, four pixels short of 260 — bars never overrun. */
     TEST_ASSERT_TRUE(8 * geom.bar_w <= geom.w);
+
+    draw_page(GEOM_53_W, GEOM_53_H, DIAG_PAGE_DISPLAY, DIAG_PATTERN_BARS,
+              true, 0);
+    assert_clean();
+    TEST_ASSERT_EQUAL_UINT(8, fk.bar_fills);
+    /* 8 x 33 = 264, two pixels short of 266. */
+    TEST_ASSERT_TRUE(8 * geom.bar_w <= geom.w);
 }
 
 static void test_the_border_pattern_is_four_one_pixel_edges(void)
@@ -410,6 +449,15 @@ static void test_the_border_pattern_is_four_one_pixel_edges(void)
     TEST_ASSERT_EQUAL_UINT(0, fk.thick_edges);
 
     draw_page(GEOM_26_W, GEOM_26_H, DIAG_PAGE_DISPLAY, DIAG_PATTERN_BORDER,
+              true, 0);
+    assert_clean();
+    TEST_ASSERT_EQUAL_UINT(1, fk.edge_top);
+    TEST_ASSERT_EQUAL_UINT(1, fk.edge_bottom);
+    TEST_ASSERT_EQUAL_UINT(1, fk.edge_left);
+    TEST_ASSERT_EQUAL_UINT(1, fk.edge_right);
+    TEST_ASSERT_EQUAL_UINT(0, fk.thick_edges);
+
+    draw_page(GEOM_53_W, GEOM_53_H, DIAG_PAGE_DISPLAY, DIAG_PATTERN_BORDER,
               true, 0);
     assert_clean();
     TEST_ASSERT_EQUAL_UINT(1, fk.edge_top);
@@ -442,6 +490,15 @@ static void test_the_checkerboard_pushes_whole_scaler_blocks(void)
     TEST_ASSERT_EQUAL_UINT(CHECKER_BLOCKS_26, fk.images);
     TEST_ASSERT_EQUAL_INT16(info->dst_rows_per_block, fk.last_img_rows);
     TEST_ASSERT_EQUAL_INT16(GEOM_26_W, fk.last_img_w);
+
+    draw_page(GEOM_53_W, GEOM_53_H, DIAG_PAGE_DISPLAY, DIAG_PATTERN_CHECKER,
+              true, 0);
+    assert_clean();
+    info = scaler_geom_info(SCALER_GEOM_5_3);
+    TEST_ASSERT_EQUAL_UINT16(GEOM_53_W, info->dst_w);
+    TEST_ASSERT_EQUAL_UINT(CHECKER_BLOCKS_53, fk.images);
+    TEST_ASSERT_EQUAL_INT16(info->dst_rows_per_block, fk.last_img_rows);
+    TEST_ASSERT_EQUAL_INT16(GEOM_53_W, fk.last_img_w);
 }
 
 static void test_the_checkerboard_without_a_buffer_pushes_no_image(void)
@@ -488,6 +545,64 @@ static void test_the_checkerboards_first_block_is_the_blend_the_game_uses(void)
 
     TEST_ASSERT_EQUAL_HEX16(scaler_avg565(dark, light), row1[0]);
     TEST_ASSERT_EQUAL_HEX16(scaler_avg565(light, dark), row1[2]);
+}
+
+/*
+ * The chequer alternates every source line, so a block's source lines are
+ * phased on the block's own first line — not on line 0. With an even
+ * lines-per-block every block starts even and the distinction is invisible,
+ * which is why it survived two geometries; 5/3's three is the first to show
+ * it. Against the old code block 1 repeated block 0's lines and every block's
+ * lookahead was line 0's parity.
+ */
+static void test_the_checkerboard_phases_source_lines_on_the_block_index(void)
+{
+    diag_checker_t ref;
+    uint16_t dark;
+    uint16_t light;
+    const uint16_t* b0;
+    const uint16_t* b1;
+
+    fill_data();
+    draw_page(GEOM_53_W, GEOM_53_H, DIAG_PAGE_DISPLAY, DIAG_PATTERN_CHECKER,
+              true, 0);
+    assert_clean();
+    TEST_ASSERT_TRUE(fk.have_first_block);
+    TEST_ASSERT_TRUE(fk.have_second_block);
+
+    memset(&ref, 0, sizeof(ref));
+    diag_checker_build(&ref, data.palette);
+    dark = ref.line[0][0];
+    light = ref.line[0][1];
+    TEST_ASSERT_TRUE(dark != light);
+
+    b0 = fk.first_block;
+    b1 = fk.second_block;
+
+    /* Block 0 starts on source line 0 and block 1 on source line 3, so their
+     * top output rows are opposite ends of the chequer. */
+    TEST_ASSERT_EQUAL_HEX16(dark, b0[0]);
+    TEST_ASSERT_EQUAL_HEX16(light, b1[0]);
+
+    /* pattern_5_3 leaves rows 1 and 4 as vertical blends, and row 4's
+     * partner is the NEXT block's first line. At this geometry that is the
+     * opposite parity to row 3's source, so row 4 is row 1 again — where the
+     * old lookahead of line 0 made it a copy of row 3. */
+    TEST_ASSERT_EQUAL_HEX16_ARRAY(b0 + GEOM_53_W, b0 + 4 * GEOM_53_W,
+                                  GEOM_53_W);
+    TEST_ASSERT_FALSE(b0[3 * GEOM_53_W] == b0[4 * GEOM_53_W]);
+}
+
+/* A width no geometry claims has nothing to push, and the page says so
+ * rather than drawing a wrong one. */
+static void test_the_checkerboard_refuses_an_unclaimed_width(void)
+{
+    fill_data();
+    draw_page(250, GEOM_26_H, DIAG_PAGE_DISPLAY, DIAG_PATTERN_CHECKER,
+              true, 0);
+    assert_clean();
+    TEST_ASSERT_EQUAL_UINT(0, fk.images);
+    TEST_ASSERT_TRUE(fk.texts > 0);
 }
 
 /* ─── individual pages ────────────────────────────────────────────────────── */
@@ -620,16 +735,19 @@ static void test_a_null_argument_paints_nothing(void)
 int main(void)
 {
     UNITY_BEGIN();
-    RUN_TEST(test_the_layout_accepts_both_windows);
+    RUN_TEST(test_the_layout_accepts_every_window);
     RUN_TEST(test_the_layout_refuses_a_window_with_too_few_rows);
     RUN_TEST(test_every_page_paints_inside_the_240x216_window);
     RUN_TEST(test_every_page_paints_inside_the_260x234_window);
+    RUN_TEST(test_every_page_paints_inside_the_266x240_window);
     RUN_TEST(test_every_page_paints_inside_the_window_with_no_data_at_all);
     RUN_TEST(test_the_bars_pattern_paints_eight_bars);
     RUN_TEST(test_the_border_pattern_is_four_one_pixel_edges);
     RUN_TEST(test_the_checkerboard_pushes_whole_scaler_blocks);
     RUN_TEST(test_the_checkerboard_without_a_buffer_pushes_no_image);
     RUN_TEST(test_the_checkerboards_first_block_is_the_blend_the_game_uses);
+    RUN_TEST(test_the_checkerboard_phases_source_lines_on_the_block_index);
+    RUN_TEST(test_the_checkerboard_refuses_an_unclaimed_width);
     RUN_TEST(test_the_buttons_page_lights_a_box_per_pressed_button);
     RUN_TEST(test_the_tag_page_dumps_four_hex_rows);
     RUN_TEST(test_the_nudge_page_shows_saved_only_while_the_toast_is_up);
