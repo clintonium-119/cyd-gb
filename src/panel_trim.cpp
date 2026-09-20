@@ -34,6 +34,15 @@
 #define STRIPE_PERIOD 16
 #define STRIPE_STEP    4
 
+// Fine step. One line of porch is 64 of these, so a full coarse step is 16
+// presses rather than 64: one press is about 0.011 Hz, which parks the seam
+// for a minute and a half, and that is the finest distinction an eye can
+// make. Holding a direction repeats, because a null found 30 presses from
+// where you started is a null nobody reaches.
+#define FINE_STEP      4
+#define HOLD_FRAMES   30
+#define REPEAT_FRAMES  4
+
 // Two, alternating, for the same reason the frame path has two: a pushed
 // buffer belongs to the driver until the transfer completes, so the next
 // block cannot be built in the one still going out. Heap rather than static -
@@ -108,6 +117,8 @@ void panel_trim_run()
     uint8_t acc = 0;
     uint8_t applied = 0xFF;     // forces the first write
     uint16_t prev_btn = 0;
+    uint16_t held = 0;
+    unsigned hold_frames = 0;
     unsigned phase = 0;
     int64_t next = esp_timer_get_time() * 1000;
 
@@ -150,6 +161,23 @@ void panel_trim_run()
         btn = button_get_buttons();
         edge = (uint16_t)(btn & ~prev_btn);
         prev_btn = btn;
+        // Auto-repeat on the four trim directions only: A and B stay
+        // one-shot, because repeating a reset would be a trap.
+        if (btn & (GB_BTN_LEFT | GB_BTN_RIGHT | GB_BTN_UP | GB_BTN_DOWN)) {
+            if (btn == held) {
+                hold_frames++;
+                if (hold_frames > HOLD_FRAMES
+                    && (hold_frames - HOLD_FRAMES) % REPEAT_FRAMES == 0) {
+                    edge |= btn;
+                }
+            } else {
+                held = btn;
+                hold_frames = 0;
+            }
+        } else {
+            held = 0;
+            hold_frames = 0;
+        }
         if (edge & GB_BTN_RIGHT) {
             if (fpa < 0x7E) {
                 fpa++;
@@ -162,15 +190,24 @@ void panel_trim_run()
             }
             report(fpa, ratio);
         }
+        // The fine knob carries into the coarse one, so a null that sits
+        // just the other side of a line boundary is still reachable by
+        // holding one direction rather than by knowing to step the porch.
         if (edge & GB_BTN_UP) {
-            if (ratio < 63) {
-                ratio++;
+            if (ratio + FINE_STEP < 64) {
+                ratio = (uint8_t)(ratio + FINE_STEP);
+            } else if (fpa < 0x7E) {
+                ratio = (uint8_t)(ratio + FINE_STEP - 64);
+                fpa++;
             }
             report(fpa, ratio);
         }
         if (edge & GB_BTN_DOWN) {
-            if (ratio > 0) {
-                ratio--;
+            if (ratio >= FINE_STEP) {
+                ratio = (uint8_t)(ratio - FINE_STEP);
+            } else if (fpa > 1) {
+                ratio = (uint8_t)(ratio + 64 - FINE_STEP);
+                fpa--;
             }
             report(fpa, ratio);
         }
