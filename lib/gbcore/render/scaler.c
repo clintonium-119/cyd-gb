@@ -1,6 +1,6 @@
 #include "scaler.h"
 
-#define GEOM_COUNT 2
+#define GEOM_COUNT 3
 
 /*
  * One output unit of a geometry's pattern. The pattern is indexed by the
@@ -33,14 +33,26 @@ static const scaler_pattern_t pattern_26_16[13] = {
     { 7, 0 }, { 7, 1 },
 };
 
+/*
+ * 5/3: three source units to five output units. The ideal sample positions
+ * are 0, 0.6, 1.2, 1.8 and 2.4; a 50/50 avg565 reaches half-steps, so the
+ * pattern lands them on 0, 0.5, 1, 2 and 2.5 — a maximum phase error of
+ * 0.2 px, with three of the five left pure.
+ */
+static const scaler_pattern_t pattern_5_3[5] = {
+    { 0, 0 }, { 0, 1 }, { 1, 0 }, { 2, 0 }, { 2, 1 },
+};
+
 static const scaler_geom_info_t geom_table[GEOM_COUNT] = {
     { 2, 3, 240, 0 },  /* SCALER_GEOM_24_16: the blend partner is in-block */
     { 8, 13, 260, 1 }, /* SCALER_GEOM_26_16: unit 7 blends with unit 8     */
+    { 3, 5, 266, 1 },  /* SCALER_GEOM_5_3:   unit 2 blends with unit 3     */
 };
 
 static const scaler_pattern_t* const pattern_table[GEOM_COUNT] = {
     pattern_24_16,
     pattern_26_16,
+    pattern_5_3,
 };
 
 /*
@@ -74,7 +86,9 @@ const scaler_geom_info_t* scaler_geom_info(enum scaler_geom_e geom)
 /*
  * Scale one source line to one output row. Applies the pattern across the
  * whole line, so a horizontal blend may reach into the next block; only the
- * final block's last blend has no partner and clamps to pixel 159.
+ * final block's last blend has no partner and clamps to pixel 159. A group
+ * that does not divide 160 leaves a tail, emitted pure after the last whole
+ * group.
  */
 static void scale_row(const uint16_t* src, uint16_t* dst,
                       const scaler_pattern_t* pat,
@@ -83,7 +97,7 @@ static void scale_row(const uint16_t* src, uint16_t* dst,
     unsigned base;
     unsigned o = 0;
 
-    for (base = 0; base < SCALER_SRC_W; base += src_units) {
+    for (base = 0; base + src_units <= SCALER_SRC_W; base += src_units) {
         unsigned i;
         for (i = 0; i < dst_units; i++) {
             unsigned s = base + pat[i].src_offset;
@@ -97,6 +111,15 @@ static void scale_row(const uint16_t* src, uint16_t* dst,
                 dst[o++] = src[s];
             }
         }
+    }
+
+    /* A geometry whose group does not divide 160 leaves a tail. Each
+     * leftover source pixel emits itself once: there is no next group to
+     * blend toward, and the alternative is one more iteration of the group
+     * loop, which emits dst_units pixels and overruns dst_w. Zero-length for
+     * both k/16 geometries. */
+    for (; base < SCALER_SRC_W; base++) {
+        dst[o++] = src[base];
     }
 }
 
@@ -242,6 +265,81 @@ static void scale_block_26_16_blend(const uint16_t* const* src_lines,
     }
 }
 
+/*
+ * Fixed 5/3 blend kernel — the third geometry, unrolled. Its group is small
+ * enough to hold outright: four live source pixels become five output
+ * pixels, where 13/8 needed nine and had to stay two-pass. The vertical half
+ * keeps the two-pass shape regardless, because avg565 is not associative and
+ * a blend row must average two rows that were already scaled horizontally,
+ * never the four sources.
+ *
+ * 53 groups of 3 source pixels become 5 output pixels each, then the one
+ * leftover pixel emits itself: 53 x 5 + 1 = 266 per row. There is no
+ * right-edge clamp — the last full group starts at 156 and reads 159, which
+ * exists — because the tail is what stands in for one, and it is pure by
+ * construction. 5 rows, 48 calls a frame.
+ *
+ * ponytail: plain 16-bit stores, as in the other two kernels; pack to 32-bit
+ * only if the bench says this lands short.
+ */
+static void scale_row_5_3(const uint16_t* src, uint16_t* dst)
+{
+    unsigned base;
+    unsigned o = 0;
+
+    for (base = 0; base + 3 <= SCALER_SRC_W; base += 3) {
+        uint16_t s0 = src[base];
+        uint16_t s1 = src[base + 1];
+        uint16_t s2 = src[base + 2];
+        uint16_t s3 = src[base + 3]; /* base <= 156, so 159 at most */
+
+        dst[o] = s0;
+        dst[o + 1] = avg565(s0, s1);
+        dst[o + 2] = s1;
+        dst[o + 3] = s2;
+        dst[o + 4] = avg565(s2, s3);
+        o += 5;
+    }
+    dst[o] = src[SCALER_SRC_W - 1]; /* the tail: 53 x 5 + 1 = 266 */
+}
+
+/* One vertical blend row: the average of two rows scale_row_5_3 already
+ * produced, never of the four sources, because avg565 is not associative. */
+static void blend_row_5_3(uint16_t* dst, const uint16_t* a, const uint16_t* b)
+{
+    unsigned x;
+
+    for (x = 0; x < 266; x++) {
+        dst[x] = avg565(a[x], b[x]);
+    }
+}
+
+/*
+ * pattern_5_3 lands source line i on output rows 0, 2 and 3, leaving rows 1
+ * and 4 as vertical blends. Row 4's partner is source line 3 — the next
+ * block's first line, which arrives as lookahead_line and is NULL on the
+ * frame's last block; there the generic path averages the row with itself,
+ * so blending row 3 with row 3 is the same pixels without a second code
+ * path.
+ */
+static void scale_block_5_3_blend(const uint16_t* const* src_lines,
+                                  const uint16_t* lookahead_line,
+                                  uint16_t* dst, uint16_t* scratch_row)
+{
+    scale_row_5_3(src_lines[0], dst);
+    scale_row_5_3(src_lines[1], dst + 2 * 266);
+    scale_row_5_3(src_lines[2], dst + 3 * 266);
+
+    blend_row_5_3(dst + 266, dst, dst + 2 * 266);
+
+    if (lookahead_line != NULL) {
+        scale_row_5_3(lookahead_line, scratch_row);
+        blend_row_5_3(dst + 4 * 266, dst + 3 * 266, scratch_row);
+    } else {
+        blend_row_5_3(dst + 4 * 266, dst + 3 * 266, dst + 3 * 266);
+    }
+}
+
 int scaler_scale_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
                        const uint16_t* const* src_lines,
                        const uint16_t* lookahead_line,
@@ -279,6 +377,10 @@ int scaler_scale_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
     }
     if (geom == SCALER_GEOM_26_16 && mode == SCALER_MODE_BLEND) {
         scale_block_26_16_blend(src_lines, lookahead_line, dst, scratch_row);
+        return SCALER_OK;
+    }
+    if (geom == SCALER_GEOM_5_3 && mode == SCALER_MODE_BLEND) {
+        scale_block_5_3_blend(src_lines, lookahead_line, dst, scratch_row);
         return SCALER_OK;
     }
 
