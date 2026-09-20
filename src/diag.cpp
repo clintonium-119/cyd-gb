@@ -249,7 +249,7 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
     gather_sd(sd_ok);
 
     if (diag_layout(GAME_W, GAME_H, &geom) != DIAG_OK) {
-        // Cannot happen at either SCALE_K, so it is logged rather than
+        // Cannot happen at any RENDER_GEOM, so it is logged rather than
         // handled: a window this small means render_config.h changed.
         Serial.printf("[DIAG] layout refused %dx%d\n", GAME_W, GAME_H);
         return;

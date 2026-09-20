@@ -59,7 +59,7 @@ typedef struct diag_layout_s {
 
 /*
  * Work out every number the eight pages need from the window size alone, so
- * the two SCALE_K geometries are the same code with different inputs.
+ * the three render geometries are the same code with different inputs.
  *
  * DIAG_ERR_ARGS for a NULL out or a window with fewer than DIAG_MIN_ROWS body
  * rows.

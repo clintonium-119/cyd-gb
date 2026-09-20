@@ -22,7 +22,7 @@
  * not a literal copied from a run.
  */
 
-/* The two windows SCALE_K gives (render_config.h: 160 x k/16 by 144 x k/16). */
+/* The windows render_config.h's geometries give. */
 #define GEOM_24_W 240
 #define GEOM_24_H 216
 #define GEOM_26_W 260

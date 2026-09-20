@@ -13,7 +13,8 @@
  * be proved is the property the exit actually names: every primitive the
  * layout module emits lands inside the game window. A fake canvas paints a
  * buffer of exactly w x h and counts anything whose rectangle leaves it, and
- * the driver below walks every screen the writer has at both SCALE_K windows.
+ * the driver below walks every screen the writer has at each render-geometry
+ * window.
  *
  * The detail page scrolls, so a screen is not one picture but one per scroll
  * offset — and an image clipped at the band's edge is drawn as a row range,
@@ -24,7 +25,7 @@
  * not a literal copied from a run.
  */
 
-/* The two windows SCALE_K gives (render_config.h: 160 x k/16 by 144 x k/16). */
+/* The windows render_config.h's geometries give. */
 #define GEOM_24_W 240
 #define GEOM_24_H 216
 #define GEOM_26_W 260

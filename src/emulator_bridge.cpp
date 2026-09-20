@@ -155,8 +155,9 @@ const char* emu_get_palette_name(uint8_t idx)
 //
 // Colour never enters a slot: the raw byte is what the queue carries, and the
 // LUT, the scaler and the scaled DMA buffers all belong to the consumer on
-// core 0 (see the pipeline note below). Every size here derives from SCALE_K
-// and BLOCK_UNITS, so flipping either changes the output with no edit here.
+// core 0 (see the pipeline note below). Every size here derives from
+// RENDER_GEOM and BLOCK_UNITS, so flipping either changes the output with no
+// edit here.
 static uint8_t slot_src[FRAMEQUEUE_SLOTS][BLOCK_LINES + 1][SCALER_SRC_W];
 static uint16_t lut_lines[BLOCK_LINES + 1][SCALER_SRC_W];
 static uint16_t scratch_row[SCALER_DST_W_MAX];

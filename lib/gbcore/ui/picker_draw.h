@@ -82,7 +82,7 @@ typedef struct picker_layout_s {
 
 /*
  * Work out every number both screens need from the window size alone, so the
- * two SCALE_K geometries are the same code with different inputs.
+ * three render geometries are the same code with different inputs.
  *
  * PICKER_ERR_ARGS for a NULL out, a list shorter than PICKER_MIN_ROWS, a band
  * with no room for a line, a description column under PICKER_DESC_MIN_COLS, or

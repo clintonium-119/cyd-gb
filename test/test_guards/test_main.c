@@ -453,6 +453,30 @@ static void test_the_diagnostics_define_the_mode(void)
         "src/diag.cpp never draws, so guard (h) would pass vacuously");
 }
 
+/* render_config.h selects one of three geometries and every branch must state
+ * its own output size, because 5/3's width is not 160 x k/16 for any k and
+ * the old derived formula would silently give the wrong one. A fourth
+ * geometry added without a GAME_W or a GAME_H fails here rather than at a
+ * corrupt frame. */
+static void test_render_config_states_a_size_for_every_geometry(void)
+{
+    const char* path = PROJECT_DIR "/include/render_config.h";
+    int geoms = file_count(path, "#define SCALE_GEOM ");
+    int widths = file_count(path, "#define GAME_W");
+    int heights = file_count(path, "#define GAME_H");
+
+    TEST_ASSERT_TRUE_MESSAGE(slurp(path), path);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(3, geoms,
+        "render_config.h no longer names exactly three geometries");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(geoms, widths,
+        "every RENDER_GEOM branch must define its own GAME_W");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(geoms, heights,
+        "every RENDER_GEOM branch must define its own GAME_H");
+    TEST_ASSERT_TRUE_MESSAGE(
+        file_contains(path, "#error \"RENDER_GEOM must be"),
+        "an unknown RENDER_GEOM must fail at an #error, not at a link error");
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -469,5 +493,6 @@ int main(void)
     RUN_TEST(test_no_exit_path_symbol_under_src);
     RUN_TEST(test_the_diagnostics_reference_no_forbidden_layer);
     RUN_TEST(test_the_diagnostics_define_the_mode);
+    RUN_TEST(test_render_config_states_a_size_for_every_geometry);
     return UNITY_END();
 }

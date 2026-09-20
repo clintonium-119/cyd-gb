@@ -54,7 +54,7 @@ bool settings_load(settings_t* s) {
     }
 
     // The nudge is stored in panel pixels, but GAME_W / GAME_H are compile
-    // time: flip SCALE_K and every nudge saved under the old geometry is
+    // time: flip RENDER_GEOM and every nudge saved under the old geometry is
     // suddenly out of range. A 24/16 unit stores gy=12, which at 26/16 puts
     // the last 6 of 234 rows off the bottom of the panel -- and silently, as
     // the panel simply drops the rows the address window runs past. The
