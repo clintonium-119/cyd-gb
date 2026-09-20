@@ -9,13 +9,13 @@
 /*
  * Scaled golden-frame regression pins.
  *
- * The index-buffer suite next door pins Peanut-GB's own output. These four
+ * The index-buffer suite next door pins Peanut-GB's own output. These six
  * pins cover everything downstream of it: the palette LUT, the scaler's
- * pattern tables for both geometries, and the blend. Each hash is FNV-1a 64
- * over the whole scaled RGB565 frame after running dmg-acid2 for
+ * pattern tables for all three geometries, and the blend. Each hash is
+ * FNV-1a 64 over the whole scaled RGB565 frame after running dmg-acid2 for
  * GOLDEN_FRAME_COUNT frames and colourizing it through palette 0.
  *
- * The four constants are independent measurements, not derived from each
+ * The six constants are independent measurements, not derived from each
  * other. What legitimately changes them:
  *
  *   - a deliberate change to the scaler's pattern tables or blend
@@ -36,6 +36,8 @@
 #define GOLDEN_24_16_BLEND   0x7879A9E86DB38D3FULL
 #define GOLDEN_26_16_NEAREST 0x8C129E3C797D7FA8ULL
 #define GOLDEN_26_16_BLEND   0x57BB983C883E96FFULL
+#define GOLDEN_5_3_NEAREST   0x83CB60D3C84CEC38ULL
+#define GOLDEN_5_3_BLEND     0x5E331E79E1250913ULL
 
 #define GOLDEN_PALETTE 0 /* "Classic Green" */
 
@@ -45,11 +47,9 @@
 static uint8_t rom[ROM_MAX];
 static uint16_t lines[GB_RUNNER_H][SCALER_SRC_W];
 static const uint16_t* line_ptrs[GB_RUNNER_H];
-/* Widest and tallest either geometry can produce: 26/16 has both the most
- * rows per block and the widest rows, so its full frame is the bound. */
-#define FRAME_MAX_PX (SCALER_DST_ROWS_MAX \
-                      * (GB_RUNNER_H / SCALER_SRC_LINES_MAX) \
-                      * SCALER_DST_W_MAX)
+/* The panel is 240 rows and no geometry is wider than SCALER_DST_W_MAX, so
+ * this bounds every geometry's frame. 5/3 reaches it exactly. */
+#define FRAME_MAX_PX (SCALER_DST_W_MAX * 240)
 
 static uint16_t frame[FRAME_MAX_PX];
 static uint16_t scratch[SCALER_DST_W_MAX];
@@ -189,9 +189,25 @@ static void test_golden_26_16_blend(void)
         GOLDEN_MESSAGE);
 }
 
+static void test_golden_5_3_nearest(void)
+{
+    render_source_lines();
+    TEST_ASSERT_EQUAL_HEX64_MESSAGE(GOLDEN_5_3_NEAREST,
+        scale_frame_and_hash(SCALER_GEOM_5_3, SCALER_MODE_NEAREST, 240u),
+        GOLDEN_MESSAGE);
+}
+
+static void test_golden_5_3_blend(void)
+{
+    render_source_lines();
+    TEST_ASSERT_EQUAL_HEX64_MESSAGE(GOLDEN_5_3_BLEND,
+        scale_frame_and_hash(SCALER_GEOM_5_3, SCALER_MODE_BLEND, 240u),
+        GOLDEN_MESSAGE);
+}
+
 /* The blend must actually change the picture: a mode that silently fell back
- * to nearest-neighbour would otherwise pass three of the four pins above by
- * matching a constant measured from the same broken code. */
+ * to nearest-neighbour would otherwise pass half the pins above by matching
+ * a constant measured from the same broken code. */
 static void test_blend_differs_from_nearest(void)
 {
     uint64_t nearest;
@@ -205,6 +221,10 @@ static void test_blend_differs_from_nearest(void)
     nearest = scale_frame_and_hash(SCALER_GEOM_26_16, SCALER_MODE_NEAREST, 234u);
     blend = scale_frame_and_hash(SCALER_GEOM_26_16, SCALER_MODE_BLEND, 234u);
     TEST_ASSERT_NOT_EQUAL(nearest, blend);
+
+    nearest = scale_frame_and_hash(SCALER_GEOM_5_3, SCALER_MODE_NEAREST, 240u);
+    blend = scale_frame_and_hash(SCALER_GEOM_5_3, SCALER_MODE_BLEND, 240u);
+    TEST_ASSERT_NOT_EQUAL(nearest, blend);
 }
 
 int main(void)
@@ -214,6 +234,8 @@ int main(void)
     RUN_TEST(test_golden_24_16_blend);
     RUN_TEST(test_golden_26_16_nearest);
     RUN_TEST(test_golden_26_16_blend);
+    RUN_TEST(test_golden_5_3_nearest);
+    RUN_TEST(test_golden_5_3_blend);
     RUN_TEST(test_blend_differs_from_nearest);
     return UNITY_END();
 }
