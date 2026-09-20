@@ -11,6 +11,58 @@ TFT_eSPI tft = TFT_eSPI();
 // this is false - see display_push_rows_dma().
 static bool dma_ready = false;
 
+#ifdef PANEL_PORCH_FPA
+// ─── Panel rate trim ────────────────────────────────────────────────────────
+// The tear is the emulator's audio-locked 59.7275 fps beating against the
+// panel's free-running refresh, and PANEL_PROBE established that this panel
+// drives nothing on MISO, so the beat cannot be servoed. It can be nulled:
+// PORCTRL's front porch lengthens the frame by whole lines, one line being
+// about 0.17 Hz, and a fractional divider between two neighbouring values
+// makes the average continuous. Both numbers are per unit, because the null
+// measures that panel's own oscillator error.
+//
+// Trim values come from the PANEL_TRIM fixture. This is the verification
+// build that applies one: a real game, the real frame path, the numbers the
+// bench found.
+//
+//   PLATFORMIO_BUILD_FLAGS='-DPANEL_PORCH_FPA=11 -DPANEL_PORCH_RATIO=16 ...'
+#ifndef PANEL_PORCH_RATIO
+#define PANEL_PORCH_RATIO 0
+#endif
+
+static void write_porch(uint8_t fpa)
+{
+    tft.writecommand(0xB2);
+    tft.writedata(0x0C);
+    tft.writedata(fpa);
+    tft.writedata(0x00);
+    tft.writedata(0x33);
+    tft.writedata(0x33);
+}
+
+// One frame of the divider, from display_frame_end(): the panel spends
+// PANEL_PORCH_RATIO frames in 64 on the longer porch, so the average line
+// count is fractional even though each frame's is not. Six bytes of SPI on
+// the frames where the value changes, with the bus already idle.
+static void porch_advance()
+{
+    static uint8_t acc = 0;
+    static uint8_t applied = 0xFF;
+    uint8_t want = PANEL_PORCH_FPA;
+
+    acc = (uint8_t)(acc + PANEL_PORCH_RATIO);
+    if (acc >= 64) {
+        acc = (uint8_t)(acc - 64);
+        want = (uint8_t)(PANEL_PORCH_FPA + 1);
+    }
+    if (want != applied) {
+        write_porch(want);
+        applied = want;
+    }
+}
+#endif
+
+
 void display_init()
 {
     pinMode(TFT_PIN_BL, OUTPUT);
@@ -34,6 +86,11 @@ void display_init()
     if (!dma_ready) {
         Serial.println("[TFT] DMA init FAILED - frame path unavailable");
     }
+#ifdef PANEL_PORCH_FPA
+    write_porch(PANEL_PORCH_FPA);
+    Serial.printf("[TFT] porch trim %d + %d/64\n", (int)PANEL_PORCH_FPA,
+                  (int)PANEL_PORCH_RATIO);
+#endif
     tft.fillScreen(TFT_BLACK);
     ledcSetup(0, 5000, 8);
     ledcAttachPin(TFT_PIN_BL, 0);
@@ -103,6 +160,9 @@ void display_push_rows(const uint16_t* px, size_t n)
 void display_frame_end()
 {
     tft.endWrite();
+#ifdef PANEL_PORCH_FPA
+    porch_advance();
+#endif
 }
 
 // The scaler blends in native RGB565 and the panel wants the high byte first,

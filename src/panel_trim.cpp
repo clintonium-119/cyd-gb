@@ -131,6 +131,28 @@ void panel_trim_run()
         }
     }
 
+    // Before any trimming, settle whether the knob is connected to anything
+    // at all. A one-line step is a 0.17 Hz change that takes a careful eye to
+    // judge; this is a 9 Hz change, four times, with no button to press and
+    // no judgement to make. If the picture does not visibly change here, the
+    // panel is ignoring PORCTRL on a live display and the whole approach is
+    // dead - which is worth one bench minute to know.
+    Serial.println("[TRIM] knob check: porch 12 <-> 100 (60.0 <-> 47.7 Hz).");
+    for (int i = 0; i < 4; i++) {
+        uint8_t big = (i % 2) ? 100 : PORCH_FPA_DEFAULT;
+        int64_t until = esp_timer_get_time() + 4000000;
+
+        write_porch(big);
+        Serial.printf("[TRIM] porch %u, nominal %.2f Hz\n", (unsigned)big,
+                      nominal_hz(big, 0));
+        while (esp_timer_get_time() < until) {
+            push_pattern(phase);
+            phase += STRIPE_STEP;
+        }
+    }
+    write_porch(PORCH_FPA_DEFAULT);
+    Serial.println("[TRIM] knob check done.");
+
     Serial.println("[TRIM] panel rate trim. Left/Right porch, Down/Up dither,");
     Serial.println("[TRIM] A prints state, B restores the power-on porch.");
     Serial.println("[TRIM] Null the seam: coarse until it crawls, then fine.");
