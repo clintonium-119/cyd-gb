@@ -91,3 +91,14 @@ void display_dma_wait();
 // yet pushed will be drawn over the menu.
 void display_bus_acquire();
 void display_bus_release();
+
+// ─── Panel probe (bench only) ───────────────────────────────────────────────
+// Answers the one question a software vsync depends on: does this panel drive
+// MISO, so the firmware can read its scan position (ST7789 GSCAN, 0x45) and
+// know where the refresh is? Prints its findings and returns; the boot carries
+// on, so the same image can be built with DEV_ROM_PATH and played afterwards.
+//
+//   PLATFORMIO_BUILD_FLAGS='-DPANEL_PROBE -DDEV_ROM_PATH="..."' pio run -e cyd-gnuboy
+#ifdef PANEL_PROBE
+void display_panel_probe();
+#endif

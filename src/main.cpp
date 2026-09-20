@@ -567,6 +567,11 @@ void setup() {
     in.pending_set = settings_pending_load(&in.pending);
 
     display_init();
+#ifdef PANEL_PROBE
+    // Bench only: does this panel answer reads? See display.h. Runs before the
+    // frame path exists, so it has the bus to itself.
+    display_panel_probe();
+#endif
     display_set_backlight(settings.brightness);
     emu_set_palette(settings.palette);
 #ifdef DEV_FRAMESKIP

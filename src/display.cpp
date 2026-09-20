@@ -2,6 +2,7 @@
 #include "hw_config.h"
 #include "render_config.h"
 #include <Arduino.h>
+#include <math.h>
 #include <string.h>
 
 TFT_eSPI tft = TFT_eSPI();
@@ -231,3 +232,145 @@ void display_bus_release()
     // read as a matched pair and so a future handover that does need teardown
     // has one place to live.
 }
+
+#ifdef PANEL_PROBE
+// ─── Panel probe ────────────────────────────────────────────────────────────
+// Tearing is the emulator's 59.727 fps beating against the panel's own
+// free-running refresh. Nothing in software can lock the two together without
+// a phase reference, and this panel offers exactly one candidate: ST7789's
+// GSCAN (0x45), which returns the line the refresh is currently on. That read
+// only arrives if the panel's SDO is wired to TFT_MISO on this board, which
+// the CYD's documentation does not say either way.
+//
+// The discriminator is a pull test, not a plausibility test on the bytes. An
+// undriven MISO follows whatever the ESP32's internal pull does, so the same
+// register read is taken twice, once with each pull. Identical results mean
+// the panel is driving the line; results that follow the pull mean nothing is
+// on the other end and the whole vsync programme is dead on this hardware.
+#ifndef TFT_MISO
+#error "PANEL_PROBE needs TFT_MISO"
+#endif
+
+static void probe_read(uint8_t cmd, uint8_t* out, size_t n, uint32_t hz)
+{
+    SPIClass& spi = tft.getSPIinstance();
+    size_t i;
+
+    // ST7789 reads want a slower clock than writes do; the datasheet's read
+    // cycle is 150 ns, so anything above about 6 MHz is out of spec.
+    spi.beginTransaction(SPISettings(hz, MSBFIRST, SPI_MODE0));
+    digitalWrite(TFT_DC, LOW);
+    digitalWrite(TFT_CS, LOW);
+    spi.transfer(cmd);
+    digitalWrite(TFT_DC, HIGH);
+    // The first byte back is the dummy clock every ST7789 read begins with.
+    for (i = 0; i < n; i++) {
+        out[i] = spi.transfer(0x00);
+    }
+    digitalWrite(TFT_CS, HIGH);
+    spi.endTransaction();
+}
+
+/* Same read under each internal pull. Returns true if the panel drove it. */
+static bool probe_read_driven(uint8_t cmd, uint8_t* out, size_t n, uint32_t hz)
+{
+    uint8_t up[8];
+    uint8_t dn[8];
+    size_t i;
+
+    if (n > sizeof(up)) {
+        n = sizeof(up);
+    }
+    pinMode(TFT_MISO, INPUT_PULLUP);
+    probe_read(cmd, up, n, hz);
+    pinMode(TFT_MISO, INPUT_PULLDOWN);
+    probe_read(cmd, dn, n, hz);
+    pinMode(TFT_MISO, INPUT);
+    for (i = 0; i < n; i++) {
+        out[i] = up[i];
+    }
+    return memcmp(up, dn, n) == 0;
+}
+
+/* GSCAN's 9-bit line counter, from the two bytes after the dummy. */
+static uint16_t probe_scanline(uint32_t hz)
+{
+    uint8_t b[3];
+
+    probe_read(0x45, b, 3, hz);
+    return (uint16_t)(((b[1] & 0x01) << 8) | b[2]);
+}
+
+void display_panel_probe()
+{
+    static const uint8_t cmds[] = { 0x04, 0x09, 0x0A, 0x0B, 0x0C, 0x45 };
+    static const uint32_t rates[] = { 2000000, 6000000 };
+    uint8_t b[6];
+    unsigned r;
+    unsigned i;
+    bool any_driven = false;
+
+    Serial.printf("[PROBE] panel readback on MISO=%d\n", (int)TFT_MISO);
+    for (r = 0; r < sizeof(rates) / sizeof(rates[0]); r++) {
+        for (i = 0; i < sizeof(cmds); i++) {
+            bool driven = probe_read_driven(cmds[i], b, 6, rates[r]);
+            any_driven |= driven;
+            Serial.printf("[PROBE] %u MHz cmd %02X -> %02X %02X %02X %02X %02X %02X  %s\n",
+                          (unsigned)(rates[r] / 1000000u), cmds[i],
+                          b[0], b[1], b[2], b[3], b[4], b[5],
+                          driven ? "DRIVEN" : "floating");
+        }
+    }
+    if (!any_driven) {
+        Serial.println("[PROBE] MISO follows the pull: the panel drives nothing.");
+        Serial.println("[PROBE] No scan-position reference. Software vsync is out.");
+        return;
+    }
+
+    // The panel is answering. Time its refresh against the ESP32's clock by
+    // watching the line counter wrap: the emulator's own rate is a known
+    // 32768/548.62 = 59.7275 fps, so the difference is the beat the tear
+    // rides on, and the ratio says how far a porch trim would have to move it.
+    {
+        const uint32_t hz = 2000000;
+        uint16_t prev = probe_scanline(hz);
+        uint16_t top = prev;
+        uint32_t wraps = 0;
+        int64_t first = 0;
+        int64_t last = 0;
+        int64_t deadline = esp_timer_get_time() + 2000000;
+
+        while (esp_timer_get_time() < deadline) {
+            uint16_t now = probe_scanline(hz);
+            if (now > top) {
+                top = now;
+            }
+            // A wrap is the only large step backwards the counter takes.
+            if (now + 16 < prev) {
+                last = esp_timer_get_time();
+                if (wraps == 0) {
+                    first = last;
+                }
+                wraps++;
+            }
+            prev = now;
+        }
+        if (wraps < 2) {
+            Serial.printf("[PROBE] GSCAN answers but never wrapped (top=%u, "
+                          "wraps=%u): counter is not live.\n",
+                          (unsigned)top, (unsigned)wraps);
+            return;
+        }
+        {
+            double us = (double)(last - first) / (double)(wraps - 1);
+            Serial.printf("[PROBE] panel %.4f Hz (period %.1f us, top line %u, "
+                          "%u wraps)\n", 1000000.0 / us, us, (unsigned)top,
+                          (unsigned)wraps);
+            Serial.printf("[PROBE] emulator 59.7275 Hz -> beat %.4f Hz, "
+                          "seam crosses every %.1f s\n",
+                          1000000.0 / us - 59.7275,
+                          1.0 / fabs(1000000.0 / us - 59.7275));
+        }
+    }
+}
+#endif
