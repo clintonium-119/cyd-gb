@@ -328,12 +328,21 @@ static uint8_t rot_now = TFT_ROTATION_LANDSCAPE;
 #define MADCTL_ML 0x10u
 #define MADCTL_BGR 0x08u
 
+#define MADCTL_MV 0x20u
+
 static void write_madctl_scan_reversed(uint8_t rot)
 {
     uint8_t madctl = MADCTL_BGR | MADCTL_ML;
 
-    if (rot == 2) {
-        madctl |= MADCTL_MX | MADCTL_MY;
+    /* TFT_eSPI's ST7789 table, plus ML. Composing these by hand is the only
+     * way to reach ML at all, since setRotation() writes MADCTL itself and
+     * offers four of the eight combinations — so the rotation's own bits have
+     * to be reproduced exactly or the image moves. */
+    switch (rot) {
+    case 0: break;                                        /* portrait        */
+    case 1: madctl |= MADCTL_MX | MADCTL_MV; break;       /* landscape       */
+    case 2: madctl |= MADCTL_MX | MADCTL_MY; break;       /* portrait, 180   */
+    default: madctl |= MADCTL_MY | MADCTL_MV; break;      /* landscape, 180  */
     }
     tft.writecommand(0x36);
     tft.writedata(madctl);
@@ -348,10 +357,17 @@ static void set_orientation(uint8_t rot)
     tft.setRotation(rot);
 #ifdef PANEL_SCAN_REVERSE
     // After setRotation, which writes MADCTL itself: this re-writes it with
-    // the refresh order reversed. Only for the frame path's orientation — the
-    // UI has no seam to chase, and leaving its scan alone keeps the probe
-    // honest about what changed.
+    // the refresh order reversed. For whichever orientation the frame path
+    // uses — portrait under a transposed push order, landscape under the row
+    // one — because ML is a property of the panel's scan-out and applies to
+    // any write order. The UI's own orientation is left alone: it has no seam
+    // to chase, and not touching it keeps a comparison honest about what
+    // changed.
+#if PUSH_TRANSPOSED
     if (rot == TFT_ROTATION_PORTRAIT) {
+#else
+    if (rot == TFT_ROTATION_LANDSCAPE) {
+#endif
         write_madctl_scan_reversed(rot);
     }
 #endif

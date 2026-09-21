@@ -1286,8 +1286,15 @@ static void demo_advance()
     if ((pressed & SELECT) || demo_vx != was_x || demo_vy != was_y) {
         /* Once, on a change, and never on the frame path's own account: a
          * print every frame would itself cost most of one. */
-        Serial.printf("[DEMO] %s scroll %+d,%+d px/frame\n", demo_pat_name(),
-                      (int)demo_vx, (int)demo_vy);
+        Serial.printf("[DEMO] %s scroll %+d,%+d px/frame"
+#ifdef PACED_WRITE
+                      " pace %u us"
+#endif
+                      "\n", demo_pat_name(), (int)demo_vx, (int)demo_vy
+#ifdef PACED_WRITE
+                      , (unsigned)pace_us
+#endif
+                      );
     }
     demo_sx = (int16_t)(demo_sx + demo_vx);
     demo_sy = (int16_t)(demo_sy + demo_vy);
@@ -1565,10 +1572,21 @@ void emu_run_frame()
 #ifndef QUIET_PERF
         Serial.printf("[PERF] emu=%uus scale=%uus push=%uus qstall=%uus "
                       "qovf=%u apu=%uus await=%uus aunder=%u aover=%u "
-                      "fps=%u split=c0 core=gnuboy\n",
+                      "fps=%u split=c0 core=gnuboy"
+#ifdef PACED_WRITE
+                      " pace=%uus"
+#endif
+                      "\n",
                       emu_us, scale_us, push_us, q_stall_us,
                       framequeue_overflows(&fq), apu_us, await_us, aunder,
-                      aover, cfps);
+                      aover, cfps
+#ifdef PACED_WRITE
+                      /* In the line that prints every second, not only when
+                       * it changes: a sweep is unreadable if the current step
+                       * cannot be recovered after the fact. */
+                      , (unsigned)pace_us
+#endif
+                      );
 #endif
     }
 }
