@@ -205,6 +205,38 @@
 #error "SCATTER_STRIDE below 2 is not a scatter."
 #endif
 
+// ─── Paced write (PUSH_COL only) ────────────────────────────────────────────
+// How long, in microseconds, the frame's writes should be spread over.
+//
+// This is the one lever the tearing arithmetic actually points at, and it took
+// until the bench of 2026-09-21 to see it. A seam exists only when the scan
+// overtakes the write or the write overtakes the scan partway across, and the
+// phase window in which that happens has width |P - W|, for a refresh period
+// P and a write span W. So the crossing fraction is |P - W| / P, and it goes
+// to ZERO when the write takes exactly one refresh period. The write then
+// tracks the scan and never crosses it.
+//
+// What makes it worth building is that it needs no knowledge of the scan's
+// PHASE — only its rate. Phase is what this panel cannot give up: MISO is
+// dead, TE is not routed, and nothing restarts the scan. Rate is available,
+// because PORCTRL trims the panel and the emulator's cadence is measured at
+// 59.7447 Hz.
+//
+// Today the write spans about 14,300 us of a 16,738 us frame, so the window is
+// about 2,400 us and 14 % of frames carry a seam. The default below leaves a
+// little slack rather than filling the period exactly: the consumer has to
+// block SOMEWHERE each frame or core 0 never yields to its idle task.
+//
+//   PLATFORMIO_BUILD_FLAGS='-DPUSH_ORDER=PUSH_COL -DPACED_WRITE=16200'
+#ifdef PACED_WRITE
+#if PUSH_ORDER != PUSH_COL
+#error "PACED_WRITE needs a write that sweeps the scan axis monotonically; that is PUSH_COL."
+#endif
+#if PACED_WRITE < 1000 || PACED_WRITE > 20000
+#error "PACED_WRITE is a span in microseconds, and a frame is 16,738 of them."
+#endif
+#endif
+
 // ─── Tile (PUSH_TILE only) ──────────────────────────────────────────────────
 // How many pieces the image's height is cut into. Each tile is one column
 // group by GAME_H / TILE_SLICES rows, so a boundary is that tall rather than

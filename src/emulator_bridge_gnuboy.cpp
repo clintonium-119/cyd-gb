@@ -606,6 +606,29 @@ static unsigned scale_unit(const uint8_t* tframe, unsigned u,
     return UNIT_ROWS;
 }
 
+#ifdef PACED_WRITE
+/* The span the frame's writes are spread over, live-adjustable so the bench
+ * can sweep it: the optimum is the panel's refresh period, which cannot be
+ * read back and so has to be found by looking. */
+static volatile uint32_t pace_us = PACED_WRITE;
+
+/*
+ * Hold until this column's share of the span has elapsed. The bus is
+ * transferring throughout — this spaces out when transfers START, which is
+ * what stretches the span the write occupies GRAM — and core 0 has nothing
+ * else it could be running, because the push task IS core 0's work. The
+ * frame's own block on framequeue_pop() is what yields to the idle task, and
+ * pace_us is bounded below a frame period so that block still happens.
+ */
+static void pace_to_column(int64_t t0, unsigned cols_done)
+{
+    int64_t deadline = t0 + (int64_t)pace_us * cols_done / GAME_W;
+
+    while (esp_timer_get_time() < deadline) {
+    }
+}
+#endif
+
 /*
  * Consumer half, column order, pinned to core 0. The frame arrives as one
  * queue block whose buffer is stable for the whole frame, so unlike the row
@@ -640,12 +663,19 @@ static void emu_push_task(void* arg)
         unsigned k;
         int64_t t0;
         int64_t t1;
+#ifdef PACED_WRITE
+        int64_t frame_t0;
+        unsigned cols_pushed = 0;
+#endif
 
         if (framequeue_pop(&fq, &slot, &meta) != FRAMEQUEUE_OK) {
             ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2));
             continue;
         }
         tframe = tfb[slot];
+#ifdef PACED_WRITE
+        frame_t0 = esp_timer_get_time();
+#endif
         display_frame_begin(vp_x, vp_y);
 
         for (k = 0; k < COL_UNITS; k++) {
@@ -661,6 +691,10 @@ static void emu_push_task(void* arg)
                 /* This unit will not fit, so the buffer goes now. */
                 t1 = esp_timer_get_time();
                 scale_acc += (uint32_t)(t1 - t0);
+#ifdef PACED_WRITE
+                pace_to_column(frame_t0, cols_pushed);
+                cols_pushed += in_buf;
+#endif
                 display_push_rows_dma(dma_buf[buf],
                                       (size_t)in_buf * GAME_H);
                 push_acc += (uint32_t)(esp_timer_get_time() - t1);
@@ -675,6 +709,10 @@ static void emu_push_task(void* arg)
 
         t1 = esp_timer_get_time();
         if (in_buf) {
+#ifdef PACED_WRITE
+            pace_to_column(frame_t0, cols_pushed);
+            cols_pushed += in_buf;
+#endif
             display_push_rows_dma(dma_buf[buf], (size_t)in_buf * GAME_H);
         }
         display_dma_wait();
@@ -1034,7 +1072,8 @@ static void emu_push_task(void* arg)
 //   Left / Right  horizontal scroll -1 / +1 px per frame
 //   A             stop
 //   B             next pattern: noise, checkerboard, stripes, grid
-//   Start         next panel refresh rate, with PANEL_FRAME_RATE built in
+//   Start         next write-pacing span with PACED_WRITE built in, or the
+//                 next panel refresh rate with PANEL_FRAME_RATE
 //   Select        print the current pattern and rate
 //
 // Vertical scroll is the one that matters for the column-major push: its seam
@@ -1202,7 +1241,27 @@ static void demo_advance()
         demo_pat = (uint8_t)((demo_pat + 1u) % DEMO_PAT_COUNT);
         Serial.printf("[DEMO] pattern %s\n", demo_pat_name());
     }
-#ifdef PANEL_FRAME_RATE
+#ifdef PACED_WRITE
+    if (pressed & START) {
+        /* Sweep the write span, including 0 for unpaced, so the comparison is
+         * button presses rather than a flash each. The optimum is the panel's
+         * refresh period and nothing can read that back, so it is found by
+         * looking. */
+        static const uint16_t pace_steps[] = {
+            0, 14500, 15500, 16200, 16600,
+        };
+        static uint8_t pace_at = 3; /* the built-in default's slot */
+        pace_at = (uint8_t)((pace_at + 1u)
+                            % (sizeof(pace_steps) / sizeof(pace_steps[0])));
+        pace_us = pace_steps[pace_at];
+        if (pace_us) {
+            Serial.printf("[DEMO] write paced over %u us\n",
+                          (unsigned)pace_us);
+        } else {
+            Serial.println("[DEMO] write unpaced");
+        }
+    }
+#elif defined(PANEL_FRAME_RATE)
     if (pressed & START) {
         /* The panel's own refresh, not the emulator's delivery. Nominal: the
          * real rate cannot be read back off this panel. */
