@@ -1,0 +1,211 @@
+# Panel rate trim, 2026-09-21, ws/bench, gnuboy + Pokemon Yellow bench build.
+# PANEL_PORCH_FPA=11 PANEL_PORCH_RATIO=5 QUIET_PERF SERIAL_BAUD=921600.
+# Trim driven over serial; see include/panel_trim.h and display.cpp.
+[TRIM] period mean 16667 min 14053 max 30446 us | <15:23 15-18:573 18-22:1 22-28:0 28-35:2 >35:0
+[TRIM] 600 frames in 10.0 s: [TRIM] cumulative porch 11 + 5/64  panel 59.7683 Hz  emu 59.9959 Hz  beat -0.2276 Hz  null at 9 + 50/64
+[TRIM] period mean 16751 min 16310 max 33541 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 1197 frames in 20.0 s: [TRIM] cumulative porch 11 + 5/64  panel 59.7683 Hz  emu 59.8451 Hz  beat -0.0768 Hz  null at 10 + 41/64
+[TRIM] period mean 16723 min 16251 max 17203 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 1795 frames in 30.0 s: [TRIM] cumulative porch 11 + 5/64  panel 59.7683 Hz  emu 59.8284 Hz  beat -0.0601 Hz  null at 10 + 47/64
+[TRIM] period mean 16751 min 14157 max 33472 us | <15:1 15-18:593 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 2392 frames in 40.0 s: [TRIM] cumulative porch 11 + 5/64  panel 59.7683 Hz  emu 59.7953 Hz  beat -0.0270 Hz  null at 10 + 59/64
+[TRIM] period mean 16667 min 14058 max 33420 us | <15:31 15-18:565 18-22:0 22-28:0 28-35:3 >35:0
+[TRIM] 2992 frames in 50.0 s: [TRIM] cumulative porch 11 + 5/64  panel 59.7683 Hz  emu 59.8356 Hz  beat -0.0673 Hz  null at 10 + 44/64
+[TRIM] period mean 16667 min 14057 max 40325 us | <15:28 15-18:569 18-22:0 22-28:0 28-35:0 >35:2
+[TRIM] 3592 frames in 60.0 s: [TRIM] cumulative porch 11 + 5/64  panel 59.7683 Hz  emu 59.8622 Hz  beat -0.0939 Hz  null at 10 + 35/64
+[TRIM] AUTO-NULL porch 10 + 35/64  panel 59.8610 Hz  emu 59.8622 Hz  beat -0.0012 Hz  null at 10 + 35/64
+[TRIM] period mean 16750 min 14118 max 33623 us | <15:12 15-18:581 18-22:0 22-28:0 28-35:3 >35:0
+[TRIM] 4189 frames in 70.0 s: [TRIM] cumulative porch 10 + 35/64  panel 59.8610 Hz  emu 59.8382 Hz  beat +0.0228 Hz  null at 10 + 43/64
+[TRIM] AUTO-NULL porch 10 + 43/64  panel 59.8392 Hz  emu 59.8382 Hz  beat +0.0009 Hz  null at 10 + 43/64
+[TRIM] period mean 16749 min 14090 max 33606 us | <15:7 15-18:587 18-22:0 22-28:0 28-35:2 >35:0
+[TRIM] 4786 frames in 80.0 s: [TRIM] cumulative porch 10 + 43/64  panel 59.8392 Hz  emu 59.8204 Hz  beat +0.0187 Hz  null at 10 + 50/64
+[TRIM] AUTO-NULL porch 10 + 50/64  panel 59.8201 Hz  emu 59.8204 Hz  beat -0.0004 Hz  null at 10 + 50/64
+[TRIM] period mean 16722 min 15807 max 17207 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 5384 frames in 90.0 s: [TRIM] cumulative porch 10 + 50/64  panel 59.8201 Hz  emu 59.8177 Hz  beat +0.0024 Hz  null at 10 + 51/64
+[TRIM] AUTO-NULL porch 10 + 51/64  panel 59.8173 Hz  emu 59.8177 Hz  beat -0.0003 Hz  null at 10 + 51/64
+[TRIM] set porch 9 + 51/64  panel 59.9923 Hz  emu 59.8177 Hz  beat +0.1747 Hz  null at 10 + 51/64
+[TRIM] set porch 8 + 51/64  panel 60.1684 Hz  emu 59.8177 Hz  beat +0.3507 Hz  null at 10 + 51/64
+[TRIM] period mean 16722 min 14072 max 40592 us | <15:17 15-18:577 18-22:1 22-28:0 28-35:1 >35:1
+[TRIM] 5982 frames in 100.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.8155 Hz  beat +0.3529 Hz  null at 10 + 52/64
+[TRIM] period mean 16751 min 14071 max 33480 us | <15:14 15-18:578 18-22:1 22-28:0 28-35:3 >35:0
+[TRIM] 6579 frames in 110.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.8046 Hz  beat +0.3638 Hz  null at 10 + 56/64
+[TRIM] DISPON
+[TRIM] period mean 16723 min 16248 max 17225 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 7177 frames in 120.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.8038 Hz  beat +0.3645 Hz  null at 10 + 56/64
+[TRIM] DISPON
+[TRIM] DISPON
+[TRIM] period mean 16723 min 14081 max 38381 us | <15:28 15-18:564 18-22:1 22-28:0 28-35:3 >35:1
+[TRIM] 7775 frames in 130.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.8032 Hz  beat +0.3652 Hz  null at 10 + 56/64
+[TRIM] DISPON
+[TRIM] DISPON
+[TRIM] DISPON
+[TRIM] period mean 16751 min 14100 max 33550 us | <15:6 15-18:588 18-22:0 22-28:0 28-35:2 >35:0
+[TRIM] 8372 frames in 140.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7954 Hz  beat +0.3729 Hz  null at 10 + 59/64
+[TRIM] DISPON
+[TRIM] DISPON
+[TRIM] period mean 16751 min 14108 max 33443 us | <15:7 15-18:586 18-22:1 22-28:0 28-35:2 >35:0
+[TRIM] 8969 frames in 150.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7888 Hz  beat +0.3795 Hz  null at 10 + 61/64
+[TRIM] DISPON
+[TRIM] DISPON
+[TRIM] DISPON
+[TRIM] period mean 16723 min 16311 max 17158 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 9567 frames in 160.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7892 Hz  beat +0.3792 Hz  null at 10 + 61/64
+[TRIM] DISPON
+[TRIM] DISPON
+[TRIM] period mean 16751 min 14200 max 33533 us | <15:1 15-18:593 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 10164 frames in 170.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7837 Hz  beat +0.3847 Hz  null at 10 + 63/64
+[TRIM] DISPON
+[TRIM] DISPON
+[TRIM] period mean 16751 min 16309 max 33468 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 10761 frames in 180.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7788 Hz  beat +0.3896 Hz  null at 11 + 1/64
+[TRIM] period mean 16723 min 16243 max 17218 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 11359 frames in 190.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7797 Hz  beat +0.3887 Hz  null at 11 + 1/64
+[TRIM] period mean 16751 min 14092 max 33548 us | <15:8 15-18:585 18-22:1 22-28:0 28-35:2 >35:0
+[TRIM] 11956 frames in 200.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7755 Hz  beat +0.3929 Hz  null at 11 + 2/64
+[TRIM] period mean 16751 min 14097 max 33496 us | <15:7 15-18:587 18-22:0 22-28:0 28-35:2 >35:0
+[TRIM] 12553 frames in 210.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7717 Hz  beat +0.3967 Hz  null at 11 + 4/64
+[TRIM] period mean 16723 min 16223 max 17230 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 13151 frames in 220.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7728 Hz  beat +0.3956 Hz  null at 11 + 3/64
+[TRIM] period mean 16751 min 16293 max 33391 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 13748 frames in 230.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7694 Hz  beat +0.3990 Hz  null at 11 + 5/64
+[TRIM] period mean 16751 min 16330 max 33383 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 14345 frames in 240.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7663 Hz  beat +0.4021 Hz  null at 11 + 6/64
+[TRIM] period mean 16723 min 16220 max 17285 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 14943 frames in 250.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7675 Hz  beat +0.4009 Hz  null at 11 + 5/64
+[TRIM] period mean 16751 min 16294 max 33397 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 15540 frames in 260.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7647 Hz  beat +0.4037 Hz  null at 11 + 6/64
+[TRIM] period mean 16751 min 14102 max 33678 us | <15:7 15-18:587 18-22:0 22-28:0 28-35:2 >35:0
+[TRIM] 16137 frames in 270.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7621 Hz  beat +0.4062 Hz  null at 11 + 7/64
+[TRIM] period mean 16723 min 16220 max 17215 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 16735 frames in 280.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7633 Hz  beat +0.4050 Hz  null at 11 + 7/64
+[TRIM] period mean 16752 min 14077 max 33293 us | <15:1 15-18:593 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 17332 frames in 290.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7609 Hz  beat +0.4075 Hz  null at 11 + 8/64
+[TRIM] period mean 16751 min 16292 max 33486 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 17929 frames in 300.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7588 Hz  beat +0.4096 Hz  null at 11 + 8/64
+[TRIM] period mean 16723 min 16326 max 17157 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 18527 frames in 310.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7600 Hz  beat +0.4084 Hz  null at 11 + 8/64
+[TRIM] period mean 16751 min 14084 max 33473 us | <15:1 15-18:593 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 19124 frames in 320.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7580 Hz  beat +0.4104 Hz  null at 11 + 9/64
+[TRIM] period mean 16751 min 14095 max 33618 us | <15:12 15-18:581 18-22:0 22-28:0 28-35:3 >35:0
+[TRIM] 19721 frames in 330.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7561 Hz  beat +0.4123 Hz  null at 11 + 9/64
+[TRIM] period mean 16723 min 16310 max 17157 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 20319 frames in 340.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7572 Hz  beat +0.4111 Hz  null at 11 + 9/64
+[TRIM] period mean 16751 min 16267 max 33411 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 20916 frames in 350.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7555 Hz  beat +0.4129 Hz  null at 11 + 10/64
+[TRIM] period mean 16751 min 16237 max 33390 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 21513 frames in 360.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7538 Hz  beat +0.4146 Hz  null at 11 + 10/64
+[TRIM] period mean 16751 min 14195 max 33503 us | <15:2 15-18:592 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 22110 frames in 370.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7522 Hz  beat +0.4162 Hz  null at 11 + 11/64
+[TRIM] period mean 16723 min 16241 max 17209 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 22708 frames in 380.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7534 Hz  beat +0.4150 Hz  null at 11 + 10/64
+[TRIM] period mean 16751 min 14109 max 33580 us | <15:2 15-18:592 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 23305 frames in 390.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7519 Hz  beat +0.4165 Hz  null at 11 + 11/64
+[TRIM] period mean 16751 min 16312 max 33386 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 23902 frames in 400.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7505 Hz  beat +0.4179 Hz  null at 11 + 12/64
+[TRIM] period mean 16723 min 16312 max 17230 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 24500 frames in 410.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7516 Hz  beat +0.4168 Hz  null at 11 + 11/64
+[TRIM] period mean 16751 min 14109 max 33427 us | <15:2 15-18:592 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 25097 frames in 420.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7502 Hz  beat +0.4181 Hz  null at 11 + 12/64
+[TRIM] DISPOFF/DISPON
+[TRIM] DISPOFF/DISPON
+[TRIM] period mean 16751 min 16310 max 33762 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 25694 frames in 430.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7490 Hz  beat +0.4194 Hz  null at 11 + 12/64
+[TRIM] DISPOFF/DISPON
+[TRIM] DISPOFF/DISPON
+[TRIM] period mean 16723 min 16246 max 17224 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 26292 frames in 440.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7500 Hz  beat +0.4183 Hz  null at 11 + 12/64
+[TRIM] DISPOFF/DISPON
+[TRIM] DISPOFF/DISPON
+[TRIM] period mean 16751 min 14100 max 33623 us | <15:9 15-18:584 18-22:1 22-28:0 28-35:2 >35:0
+[TRIM] 26889 frames in 450.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7488 Hz  beat +0.4196 Hz  null at 11 + 12/64
+[TRIM] DISPOFF/DISPON
+[TRIM] DISPOFF/DISPON
+[TRIM] period mean 16723 min 14079 max 54442 us | <15:21 15-18:574 18-22:0 22-28:0 28-35:1 >35:1
+[TRIM] 27487 frames in 460.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7498 Hz  beat +0.4185 Hz  null at 11 + 12/64
+[TRIM] DISPOFF/DISPON
+[TRIM] DISPOFF/DISPON
+[TRIM] period mean 16723 min 16231 max 17216 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 28085 frames in 470.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7508 Hz  beat +0.4176 Hz  null at 11 + 11/64
+[TRIM] DISPOFF/DISPON
+[TRIM] DISPOFF/DISPON
+[TRIM] period mean 16751 min 16238 max 33451 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 28682 frames in 480.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7496 Hz  beat +0.4187 Hz  null at 11 + 12/64
+[TRIM] period mean 16751 min 14092 max 33473 us | <15:9 15-18:584 18-22:0 22-28:1 28-35:2 >35:0
+[TRIM] 29279 frames in 490.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7486 Hz  beat +0.4198 Hz  null at 11 + 12/64
+[TRIM] period mean 16723 min 16252 max 17210 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 29877 frames in 500.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7495 Hz  beat +0.4189 Hz  null at 11 + 12/64
+[TRIM] period mean 16751 min 14080 max 33492 us | <15:8 15-18:585 18-22:1 22-28:0 28-35:2 >35:0
+[TRIM] 30474 frames in 510.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7484 Hz  beat +0.4200 Hz  null at 11 + 12/64
+[TRIM] period mean 16751 min 14082 max 33485 us | <15:2 15-18:592 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 31071 frames in 520.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7474 Hz  beat +0.4210 Hz  null at 11 + 13/64
+[TRIM] period mean 16723 min 16233 max 17173 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 31669 frames in 530.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7483 Hz  beat +0.4201 Hz  null at 11 + 12/64
+[TRIM] period mean 16751 min 14132 max 33436 us | <15:1 15-18:593 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 32266 frames in 540.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7473 Hz  beat +0.4210 Hz  null at 11 + 13/64
+[TRIM] period mean 16751 min 14085 max 33447 us | <15:6 15-18:588 18-22:0 22-28:0 28-35:2 >35:0
+[TRIM] 32863 frames in 550.0 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7464 Hz  beat +0.4220 Hz  null at 11 + 13/64
+[TRIM] period mean 16751 min 16319 max 33418 us | <15:0 15-18:596 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 33461 frames in 560.1 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7455 Hz  beat +0.4229 Hz  null at 11 + 13/64
+[TRIM] period mean 16723 min 14090 max 21603 us | <15:2 15-18:594 18-22:1 22-28:0 28-35:0 >35:0
+[TRIM] 34059 frames in 570.1 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7464 Hz  beat +0.4220 Hz  null at 11 + 13/64
+[TRIM] period mean 16751 min 16314 max 33373 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 34656 frames in 580.1 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7455 Hz  beat +0.4229 Hz  null at 11 + 13/64
+[TRIM] period mean 16751 min 16296 max 33429 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 35253 frames in 590.1 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7446 Hz  beat +0.4237 Hz  null at 11 + 14/64
+[TRIM] period mean 16723 min 16244 max 17195 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 35851 frames in 600.1 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7455 Hz  beat +0.4229 Hz  null at 11 + 13/64
+[TRIM] period mean 16751 min 14093 max 33477 us | <15:2 15-18:592 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 36448 frames in 610.1 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7447 Hz  beat +0.4237 Hz  null at 11 + 14/64
+[TRIM] period mean 16751 min 16236 max 33431 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 37045 frames in 620.1 s: [TRIM] cumulative porch 8 + 51/64  panel 60.1684 Hz  emu 59.7439 Hz  beat +0.4245 Hz  null at 11 + 14/64
+[TRIM] set porch 9 + 51/64  panel 59.9923 Hz  emu 59.7439 Hz  beat +0.2485 Hz  null at 11 + 14/64
+[TRIM] set porch 10 + 51/64  panel 59.8173 Hz  emu 59.7439 Hz  beat +0.0735 Hz  null at 11 + 14/64
+[TRIM] set porch 10 + 55/64  panel 59.8064 Hz  emu 59.7439 Hz  beat +0.0626 Hz  null at 11 + 14/64
+[TRIM] set porch 10 + 59/64  panel 59.7955 Hz  emu 59.7439 Hz  beat +0.0517 Hz  null at 11 + 14/64
+[TRIM] set porch 10 + 63/64  panel 59.7846 Hz  emu 59.7439 Hz  beat +0.0408 Hz  null at 11 + 14/64
+[TRIM] set porch 11 + 3/64  panel 59.7737 Hz  emu 59.7439 Hz  beat +0.0299 Hz  null at 11 + 14/64
+[TRIM] set porch 11 + 7/64  panel 59.7629 Hz  emu 59.7439 Hz  beat +0.0190 Hz  null at 11 + 14/64
+[TRIM] set porch 11 + 11/64  panel 59.7520 Hz  emu 59.7439 Hz  beat +0.0081 Hz  null at 11 + 14/64
+[TRIM] set porch 11 + 15/64  panel 59.7411 Hz  emu 59.7439 Hz  beat -0.0028 Hz  null at 11 + 14/64
+[TRIM] period mean 16723 min 14067 max 24029 us | <15:3 15-18:593 18-22:0 22-28:1 28-35:0 >35:0
+[TRIM] 37643 frames in 630.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7447 Hz  beat -0.0036 Hz  null at 11 + 14/64
+[TRIM] period mean 16751 min 14108 max 33433 us | <15:2 15-18:592 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 38240 frames in 640.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7439 Hz  beat -0.0028 Hz  null at 11 + 14/64
+[TRIM] period mean 16751 min 14155 max 33456 us | <15:2 15-18:592 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 38837 frames in 650.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7432 Hz  beat -0.0021 Hz  null at 11 + 14/64
+[TRIM] period mean 16723 min 16309 max 17117 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 39435 frames in 660.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7440 Hz  beat -0.0029 Hz  null at 11 + 14/64
+[TRIM] period mean 16751 min 16253 max 33410 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 40032 frames in 670.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7433 Hz  beat -0.0022 Hz  null at 11 + 14/64
+[TRIM] period mean 16751 min 14078 max 33554 us | <15:1 15-18:593 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 40629 frames in 680.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7426 Hz  beat -0.0015 Hz  null at 11 + 14/64
+[TRIM] period mean 16723 min 16301 max 17167 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 41227 frames in 690.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7433 Hz  beat -0.0022 Hz  null at 11 + 14/64
+[TRIM] period mean 16751 min 14114 max 33585 us | <15:2 15-18:592 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 41824 frames in 700.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7426 Hz  beat -0.0015 Hz  null at 11 + 14/64
+[TRIM] period mean 16751 min 14087 max 33429 us | <15:2 15-18:592 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 42421 frames in 710.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7420 Hz  beat -0.0009 Hz  null at 11 + 15/64
+[TRIM] period mean 16723 min 16375 max 17159 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 43019 frames in 720.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7427 Hz  beat -0.0016 Hz  null at 11 + 14/64
+[TRIM] period mean 16751 min 14089 max 33186 us | <15:2 15-18:592 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 43616 frames in 730.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7421 Hz  beat -0.0010 Hz  null at 11 + 15/64
+[TRIM] period mean 16751 min 16372 max 33433 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 44213 frames in 740.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7414 Hz  beat -0.0003 Hz  null at 11 + 15/64
+[TRIM] period mean 16723 min 16303 max 17165 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 44811 frames in 750.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7422 Hz  beat -0.0011 Hz  null at 11 + 15/64
+[TRIM] period mean 16751 min 16258 max 33425 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 45408 frames in 760.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7415 Hz  beat -0.0005 Hz  null at 11 + 15/64
+[TRIM] period mean 16751 min 14063 max 33496 us | <15:1 15-18:593 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 46005 frames in 770.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7409 Hz  beat +0.0001 Hz  null at 11 + 15/64
+[TRIM] period mean 16723 min 16261 max 17108 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 46603 frames in 780.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7416 Hz  beat -0.0005 Hz  null at 11 + 15/64
+[TRIM] period mean 16751 min 14177 max 33383 us | <15:1 15-18:593 18-22:1 22-28:0 28-35:1 >35:0
+[TRIM] 47200 frames in 790.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7411 Hz  beat +0.0000 Hz  null at 11 + 15/64
+[TRIM] period mean 16751 min 14066 max 33457 us | <15:6 15-18:587 18-22:0 22-28:2 28-35:1 >35:0
+[TRIM] 47797 frames in 800.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7405 Hz  beat +0.0006 Hz  null at 11 + 15/64
+[TRIM] period mean 16751 min 16282 max 33533 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 48394 frames in 810.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7399 Hz  beat +0.0012 Hz  null at 11 + 15/64
+[TRIM] period mean 16723 min 16235 max 17176 us | <15:0 15-18:597 18-22:0 22-28:0 28-35:0 >35:0
+[TRIM] 48992 frames in 820.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7406 Hz  beat +0.0005 Hz  null at 11 + 15/64
+[TRIM] period mean 16751 min 16395 max 33429 us | <15:0 15-18:595 18-22:0 22-28:0 28-35:1 >35:0
+[TRIM] 49589 frames in 830.1 s: [TRIM] cumulative porch 11 + 15/64  panel 59.7411 Hz  emu 59.7401 Hz  beat +0.0010 Hz  null at 11 + 15/64

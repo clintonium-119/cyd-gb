@@ -173,8 +173,16 @@ static void trim_console()
         static int32_t hi = 0;
         static int64_t sum = 0;
         static uint32_t n = 0;
+        static bool skip_one = false;
+        static uint32_t bucket[6];
+        unsigned b;
 
-        if (last != 0) {
+        // The frame a report prints in is not a frame the renderer produced -
+        // Serial.printf blocks - so it is dropped rather than measured.
+        if (skip_one) {
+            skip_one = false;
+            last = now;
+        } else if (last != 0) {
             int32_t dt = (int32_t)(now - last);
 
             if (n == 0 || dt < lo) {
@@ -185,16 +193,29 @@ static void trim_console()
             }
             sum += dt;
             n++;
+            // A histogram, not a maximum: one 40 ms frame in ten seconds is
+            // an event to go and find, and forty of them is the renderer's
+            // normal behaviour. A maximum cannot tell those apart.
+            b = (dt < 15000) ? 0 : (dt < 18000) ? 1 : (dt < 22000) ? 2
+              : (dt < 28000) ? 3 : (dt < 35000) ? 4 : 5;
+            bucket[b]++;
         }
         last = now;
+
         if (now >= next_report && n > 0) {
-            Serial.printf("[TRIM] frame period mean %ld us, min %ld, max %ld, "
-                          "spread %ld us (%.0f%% of a frame)\n",
+            Serial.printf("[TRIM] period mean %ld min %ld max %ld us | "
+                          "<15:%u 15-18:%u 18-22:%u 22-28:%u 28-35:%u "
+                          ">35:%u\n",
                           (long)(sum / n), (long)lo, (long)hi,
-                          (long)(hi - lo), 100.0 * (double)(hi - lo) / 16700.0);
+                          bucket[0], bucket[1], bucket[2], bucket[3],
+                          bucket[4], bucket[5]);
             lo = hi = 0;
             sum = 0;
             n = 0;
+            skip_one = true;
+            for (b = 0; b < 6; b++) {
+                bucket[b] = 0;
+            }
         }
     }
 

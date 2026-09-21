@@ -499,7 +499,14 @@ static void load_and_run(const char* name) {
 
 // ─── Setup ──────────────────────────────────────────────────────────────────
 void setup() {
-    Serial.begin(115200); delay(200);
+    // Bench builds raise this. Serial.printf blocks once the TX buffer
+    // fills, so a 150-character line costs 13 ms at 115200 - most of a
+    // frame, on the frame path - and that is a tearing artefact of the
+    // instrumentation rather than of the renderer (SERIAL_BAUD, 2026-09-21).
+#ifndef SERIAL_BAUD
+#define SERIAL_BAUD 115200
+#endif
+    Serial.begin(SERIAL_BAUD); delay(200);
     Serial.println("\n=== CYD-GB ===");
 
     // First, so the DAC is parked at mid-scale for the whole boot instead of

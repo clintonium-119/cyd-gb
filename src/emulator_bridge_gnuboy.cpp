@@ -689,12 +689,14 @@ void emu_run_frame()
         /* Same key and same field names as the other bridge's line, so one
          * capture tool reads both cores. core=gnuboy is what tells the two
          * captures apart. */
+#ifndef QUIET_PERF
         Serial.printf("[PERF] emu=%uus scale=%uus push=%uus qstall=%uus "
                       "qovf=%u apu=%uus await=%uus aunder=%u aover=%u "
                       "fps=%u split=c0 core=gnuboy\n",
                       emu_us, scale_us, push_us, q_stall_us,
                       framequeue_overflows(&fq), apu_us, await_us, aunder,
                       aover, cfps);
+#endif
     }
 }
 
