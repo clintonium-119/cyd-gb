@@ -3,6 +3,7 @@
 #include "render_config.h"
 #include "display.h"
 #include "panel_trim.h"
+#include "scale_bench.h"
 #include "button_input.h"
 #include "battery.h"
 #include "i2c_bus.h"
@@ -561,6 +562,13 @@ void setup() {
         bool sd_ok = sd_init();
         diag_run(&settings, nfc_ok, sd_ok);
     }
+
+#ifdef SCALE_BENCH
+    // Bench only: the transposed scale cost against the row-major one. Sits
+    // ahead of the tag read because it needs no cartridge, no card and no
+    // display, and it never returns.
+    scale_bench_run();
+#endif
 
 #ifndef DEV_ROM_PATH
     if (!nfc_init()) {
