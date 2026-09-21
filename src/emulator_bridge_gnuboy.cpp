@@ -215,7 +215,13 @@ static int16_t vp_y = GAME_Y;
 // src/emulator_bridge.cpp for the long-form rationale; nothing here diverges
 // from it, because an A/B whose pipeline also changed would measure two
 // things at once.
-#if PUSH_ORDER == PUSH_SCATTER
+#if PUSH_ORDER == PUSH_TILE
+/* A tile, or the frame's final unit which stays full height. Whichever is
+ * larger: at 5/3 that is 6 columns of 240 against 10 of 120. */
+#define TILE_PX (COL_BLOCK_COLS * TILE_ROWS)
+#define TAIL_UNIT_PX (TILE_LAST_COLS * GAME_H)
+static uint16_t dma_buf[2][TILE_PX > TAIL_UNIT_PX ? TILE_PX : TAIL_UNIT_PX];
+#elif PUSH_ORDER == PUSH_SCATTER
 /* One scaler block per transfer: the blocks are not adjacent, so they cannot
  * be packed into a shared window. */
 static uint16_t dma_buf[2][UNIT_ROWS * GAME_H];
@@ -680,7 +686,7 @@ static void emu_push_task(void* arg)
         push_us = push_acc;
     }
 }
-#else /* PUSH_ORDER == PUSH_SCATTER */
+#elif PUSH_ORDER == PUSH_SCATTER
 /*
  * Consumer half, scatter order, pinned to core 0. The same units as the
  * column order, asked for in an interleaved sequence instead of a sweep.
@@ -744,6 +750,138 @@ static void emu_push_task(void* arg)
                 display_push_rows_dma(dma_buf[buf],
                                       (size_t)ncols * GAME_H);
                 push_acc += (uint32_t)(esp_timer_get_time() - t1);
+                buf ^= 1u;
+            }
+        }
+
+        t1 = esp_timer_get_time();
+        display_dma_wait();
+        display_frame_end();
+        push_acc += (uint32_t)(esp_timer_get_time() - t1);
+
+        framequeue_release(&fq, slot);
+        scale_us = scale_acc;
+        push_us = push_acc;
+    }
+}
+
+#else /* PUSH_ORDER == PUSH_TILE */
+/*
+ * Consumer half, tile order, pinned to core 0. The same frame as the column
+ * order, cut into TILE_SLICES bands of height as well as into column groups,
+ * and the tiles visited in interleaved passes.
+ *
+ * This is the only order whose boundaries are shorter than the image. A
+ * boundary appears between two tiles written at temporally distant moments,
+ * and a tile is TILE_ROWS tall, so that is as long as any edge can be. The
+ * join between vertically adjacent tiles is NOT a boundary of that kind: the
+ * scaler's row range blends into the next range's first source row rather
+ * than clamping at its own end, so two ranges together are exactly what one
+ * whole-column call produces, which the host suite pins.
+ *
+ * The frame's last few columns stay full height and unsliced. They are one
+ * scaler block plus the tail, the tail has no row-range entry point of its
+ * own, and at the image's extreme edge a boundary is where it matters least.
+ */
+static void push_tile(const uint8_t* tframe, const uint16_t* const* src_cols,
+                      unsigned tile, uint16_t* buf, uint32_t* scale_acc,
+                      uint32_t* push_acc)
+{
+    int64_t t0 = esp_timer_get_time();
+    int64_t t1;
+    unsigned first_col;
+    unsigned cols;
+    unsigned first_row;
+    unsigned rows;
+
+    if (TILE_LAST_COLS && tile == TILE_COUNT - 1u) {
+        /* The far edge: whatever blocks did not fill a group, plus the tail,
+         * full height. At 5/3 that is one block and one column. */
+        unsigned b;
+        unsigned at = 0;
+
+        first_col = TILE_LAST_COL;
+        cols = TILE_LAST_COLS;
+        first_row = 0;
+        rows = GAME_H;
+        for (b = 0; b < TILE_LEFT_BLOCKS; b++) {
+            at += scale_unit(tframe, TILE_GROUPS * COL_BLOCK_UNITS + b,
+                             src_cols, buf + (size_t)at * GAME_H);
+        }
+        if (COL_TAIL_COLS) {
+            (void)scale_unit(tframe, COL_BLOCKS, src_cols,
+                             buf + (size_t)at * GAME_H);
+        }
+    } else {
+        unsigned g = tile / TILE_SLICES;
+        unsigned k = tile % TILE_SLICES;
+        unsigned b;
+
+        first_col = g * COL_BLOCK_COLS;
+        cols = COL_BLOCK_COLS;
+        first_row = k * TILE_ROWS;
+        rows = TILE_ROWS;
+        for (b = 0; b < COL_BLOCK_UNITS; b++) {
+            unsigned u = g * COL_BLOCK_UNITS + b;
+            unsigned base = u * UNIT_LINES;
+            const uint16_t* la = nullptr;
+            unsigned count = UNIT_LINES;
+
+            if (geom->uses_lookahead && base + UNIT_LINES < SCALER_SRC_W) {
+                count++;
+            }
+            colourize_cols(tframe, base, count);
+            if (count > UNIT_LINES) {
+                la = src_cols[UNIT_LINES];
+            }
+            (void)scaler_scale_col_rows(SCALE_GEOM, SCALER_MODE_BLEND,
+                                        src_cols, la,
+                                        buf + (size_t)b * UNIT_ROWS * rows,
+                                        scratch_row, COL_ORDER,
+                                        k * TILE_SRC_ROWS, TILE_SRC_ROWS);
+        }
+    }
+    t1 = esp_timer_get_time();
+    *scale_acc += (uint32_t)(t1 - t0);
+
+    display_col_tile(vp_x, vp_y, (uint16_t)first_col, (uint16_t)cols,
+                     (uint16_t)first_row, (uint16_t)rows);
+    display_push_rows_dma(buf, (size_t)cols * rows);
+    *push_acc += (uint32_t)(esp_timer_get_time() - t1);
+}
+
+static void emu_push_task(void* arg)
+{
+    const uint16_t* src_cols[COL_BLOCK_SRC + 1];
+    framequeue_meta_t meta;
+    unsigned i;
+    int slot = 0;
+
+    (void)arg;
+    for (i = 0; i < COL_BLOCK_SRC + 1u; i++) {
+        src_cols[i] = lut_cols[i];
+    }
+    for (;;) {
+        const uint8_t* tframe;
+        uint32_t scale_acc = 0;
+        uint32_t push_acc = 0;
+        unsigned buf = 0;
+        unsigned pass;
+        int64_t t1;
+
+        if (framequeue_pop(&fq, &slot, &meta) != FRAMEQUEUE_OK) {
+            ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2));
+            continue;
+        }
+        tframe = tfb[slot];
+        display_frame_begin(vp_x, vp_y);
+
+        for (pass = 0; pass < SCATTER_STRIDE; pass++) {
+            unsigned t;
+
+            for (t = pass; t < TILE_COUNT; t += SCATTER_STRIDE) {
+                push_tile(tframe, src_cols, t, dma_buf[buf], &scale_acc,
+                          &push_acc);
                 buf ^= 1u;
             }
         }
@@ -1268,8 +1406,9 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
 #endif
     Serial.printf("[EMU] gnuboy '%s' %uKB push:%s heap:%u\n", title,
                   romlen / 1024,
-                  (PUSH_ORDER == PUSH_SCATTER) ? "scatter"
-                      : ((PUSH_ORDER == PUSH_COL) ? "col" : "row"),
+                  (PUSH_ORDER == PUSH_TILE) ? "tile"
+                      : ((PUSH_ORDER == PUSH_SCATTER) ? "scatter"
+                      : ((PUSH_ORDER == PUSH_COL) ? "col" : "row")),
                   ESP.getFreeHeap());
     return true;
 }

@@ -469,6 +469,23 @@ void display_frame_begin(int16_t x, int16_t y)
 }
 #endif
 
+#if PUSH_ORDER == PUSH_TILE
+void display_col_tile(int16_t x, int16_t y, uint16_t first_col, uint16_t cols,
+                      uint16_t first_row, uint16_t rows)
+{
+    // A 2D window: a run of output columns by a run of output rows. The
+    // column range maps as display_frame_begin()'s does; the row range is the
+    // fast axis, so it maps the same way the viewport's y does.
+#if FRAME_COLS_DESCENDING
+    tft.setAddrWindow((int16_t)(y + first_row),
+                      (int16_t)(SCREEN_W - x - first_col - cols), rows, cols);
+#else
+    tft.setAddrWindow((int16_t)(SCREEN_H - y - first_row - rows),
+                      (int16_t)(x + first_col), rows, cols);
+#endif
+}
+#endif
+
 #if PUSH_ORDER == PUSH_SCATTER
 void display_col_window(int16_t x, int16_t y, uint16_t first_col,
                         uint16_t cols)

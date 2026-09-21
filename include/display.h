@@ -105,6 +105,14 @@ void display_col_window(int16_t x, int16_t y, uint16_t first_col,
                         uint16_t cols);
 #endif
 
+// PUSH_TILE only: a 2D window, a run of output columns by a run of output
+// rows, so a tile boundary is `rows` tall instead of the whole image. Same
+// landscape viewport origin and same fill direction as the others.
+#if PUSH_ORDER == PUSH_TILE
+void display_col_tile(int16_t x, int16_t y, uint16_t first_col, uint16_t cols,
+                      uint16_t first_row, uint16_t rows);
+#endif
+
 // Block until every queued transfer has completed. The push task calls this
 // at frame end so display_frame_end()'s endWrite cannot truncate a transfer
 // still in flight.

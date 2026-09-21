@@ -185,6 +185,32 @@ int scaler_scale_col_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
                            enum scaler_col_order_e order);
 
 /*
+ * A row RANGE of the transposed walk, for a consumer that writes the frame in
+ * 2D tiles rather than whole columns: the same block, but only output rows
+ * src_first / src_units * dst_units onward, src_rows / src_units *
+ * dst_rows_per_block of them.
+ *
+ * src_cols and lookahead_col still point at whole SCALER_SRC_H columns; the
+ * range selects within them. Both ends must land on a group boundary, or the
+ * pattern's phase inside the group would differ from the whole-column walk's
+ * and the slices would not join.
+ *
+ * The join is seamless rather than merely close. A blend at the end of a
+ * range reads one row past it, which mid-column is the next range's first row
+ * — a real pixel — so two ranges together produce exactly what one
+ * whole-column call produces. Only at the column's true end is there nothing
+ * to reach for, and there it clamps and the edge stays pure.
+ *
+ * scaler_scale_col_block() is this with the whole column.
+ */
+int scaler_scale_col_rows(enum scaler_geom_e geom, enum scaler_mode_e mode,
+                          const uint16_t* const* src_cols,
+                          const uint16_t* lookahead_col,
+                          uint16_t* dst, uint16_t* scratch_col,
+                          enum scaler_col_order_e order,
+                          unsigned src_first, unsigned src_rows);
+
+/*
  * Emit the transposed walk's tail: the SCALER_SRC_W % src_lines_per_block
  * source columns left over past the last whole block, each scaled along its
  * length into one pure output column of dst_h pixels. One column at 5/3, none

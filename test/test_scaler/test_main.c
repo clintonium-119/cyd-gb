@@ -1,5 +1,7 @@
 #include <unity.h>
 
+#include <stdio.h>
+
 #include "render/scaler.h"
 
 /*
@@ -1049,6 +1051,103 @@ static void test_col_order_reverses_the_block_for_every_geometry(void)
                                         SCALER_MODE_NEAREST, lookahead);
 }
 
+/*
+ * A column split into ranges is the same pixels as the whole column. This is
+ * what makes 2D tiling possible at all: if a range's trailing blend clamped
+ * at the range end instead of reading into the next one, every tile boundary
+ * would be a permanent seam in the picture — worse than the moving one the
+ * tiling exists to break up.
+ */
+static void assert_col_ranges_join_seamlessly(enum scaler_geom_e geom,
+                                              enum scaler_mode_e mode,
+                                              unsigned parts)
+{
+    const scaler_geom_info_t* gi = scaler_geom_info(geom);
+    unsigned units = gi->dst_rows_per_block;
+    unsigned span = gi->src_lines_per_block;
+    unsigned dst_h = SCALER_SRC_H / span * units;
+    unsigned rows = SCALER_SRC_H / parts;
+    unsigned slice_h = rows / span * units;
+    static uint16_t whole[SCALER_DST_ROWS_MAX * SCALER_DST_H_MAX];
+    unsigned c;
+    unsigned y;
+    unsigned k;
+
+    TEST_ASSERT_EQUAL_UINT_MESSAGE(0, rows % span,
+        "the range must be whole groups or the phases cannot match");
+
+    reset_dst();
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_col_block(geom, mode, lines, lookahead,
+                               dst.block, scratch.row,
+                               SCALER_COLS_ASCENDING));
+    for (c = 0; c < units * dst_h; c++) {
+        whole[c] = dst.block[c];
+    }
+
+    for (k = 0; k < parts; k++) {
+        reset_dst();
+        TEST_ASSERT_EQUAL_INT(SCALER_OK,
+            scaler_scale_col_rows(geom, mode, lines, lookahead,
+                                  dst.block, scratch.row,
+                                  SCALER_COLS_ASCENDING,
+                                  k * rows, rows));
+        for (c = 0; c < units; c++) {
+            const uint16_t* got = dst.block + (size_t)c * slice_h;
+            const uint16_t* want = whole + (size_t)c * dst_h + k * slice_h;
+
+            for (y = 0; y < slice_h; y++) {
+                char msg[80];
+                sprintf(msg, "range %u of %u, column %u, row %u",
+                        k, parts, c, y);
+                TEST_ASSERT_EQUAL_HEX16_MESSAGE(want[y], got[y], msg);
+            }
+        }
+        assert_canaries_intact(units * slice_h);
+    }
+}
+
+static void test_col_ranges_join_seamlessly(void)
+{
+    /* 144 splits by 2, 3, 4 and 6; each geometry's group has to divide the
+     * range, so 26/16's 8 only permits halves and 5/3's 3 permits all. */
+    assert_col_ranges_join_seamlessly(SCALER_GEOM_5_3,
+                                      SCALER_MODE_BLEND, 2);
+    assert_col_ranges_join_seamlessly(SCALER_GEOM_5_3,
+                                      SCALER_MODE_BLEND, 4);
+    assert_col_ranges_join_seamlessly(SCALER_GEOM_5_3,
+                                      SCALER_MODE_NEAREST, 2);
+    assert_col_ranges_join_seamlessly(SCALER_GEOM_26_16,
+                                      SCALER_MODE_BLEND, 2);
+    assert_col_ranges_join_seamlessly(SCALER_GEOM_24_16,
+                                      SCALER_MODE_BLEND, 2);
+    assert_col_ranges_join_seamlessly(SCALER_GEOM_24_16,
+                                      SCALER_MODE_BLEND, 4);
+}
+
+/* A range that does not land on group boundaries has no correct phase, so it
+ * is refused rather than quietly producing a shifted slice. */
+static void test_col_ranges_reject_a_partial_group(void)
+{
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_rows(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
+                              lines, lookahead, dst.block, scratch.row,
+                              SCALER_COLS_ASCENDING, 0, 70));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_rows(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
+                              lines, lookahead, dst.block, scratch.row,
+                              SCALER_COLS_ASCENDING, 1, 72));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_rows(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
+                              lines, lookahead, dst.block, scratch.row,
+                              SCALER_COLS_ASCENDING, 0, 0));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_rows(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
+                              lines, lookahead, dst.block, scratch.row,
+                              SCALER_COLS_ASCENDING, 72, 144));
+    assert_canaries_intact(0u);
+}
+
 static void test_col_null_and_unknown_arguments_are_rejected(void)
 {
     const uint16_t* holed[SCALER_SRC_LINES_MAX];
@@ -1145,6 +1244,8 @@ int main(void)
     RUN_TEST(test_col_block_null_lookahead_clamps_the_trailing_columns);
     RUN_TEST(test_col_tail_is_one_pure_column_at_5_3_and_nothing_at_k16);
     RUN_TEST(test_col_order_reverses_the_block_for_every_geometry);
+    RUN_TEST(test_col_ranges_join_seamlessly);
+    RUN_TEST(test_col_ranges_reject_a_partial_group);
     RUN_TEST(test_col_null_and_unknown_arguments_are_rejected);
     return UNITY_END();
 }
