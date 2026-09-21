@@ -251,6 +251,27 @@ static void trim_console()
                     trim_fpa--;
                 }
                 break;
+            // Does the panel restart its scan on a display-on? If it does,
+            // the seam jumps to the SAME place every time this is pressed,
+            // and phase becomes something the firmware can set rather than
+            // inherit at boot - which is the difference between a
+            // column-major push being tear-free on some boots and on all of
+            // them. If the seam lands somewhere different each press, it
+            // does not, and phase stays unknowable on this hardware.
+            case 'r':
+                tft.writecommand(0x29);         // DISPON alone
+                Serial.println("[TRIM] DISPON");
+                continue;
+            case 'R':
+                tft.writecommand(0x28);         // DISPOFF, then on
+                delayMicroseconds(200);
+                tft.writecommand(0x29);
+                Serial.println("[TRIM] DISPOFF/DISPON");
+                continue;
+            case 's':
+                tft.writecommand(0x11);         // SLPOUT, the heavier reset
+                Serial.println("[TRIM] SLPOUT");
+                continue;
             default:
                 continue;
         }
