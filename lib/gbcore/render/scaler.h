@@ -114,6 +114,19 @@ enum scaler_mode_e {
     SCALER_MODE_BLEND = 1,   /* interpolated unit is the RGB565 average      */
 };
 
+/*
+ * Which way a block's output columns are laid out in dst, for the transposed
+ * walk. A panel's address window fills in one fixed direction, set by its
+ * scan mapping and not by the caller, so if that direction runs against the
+ * image's own axis the columns have to come out reversed. Choosing it here
+ * costs a sign on a stride; doing it anywhere downstream costs moving every
+ * pixel a second time.
+ */
+enum scaler_col_order_e {
+    SCALER_COLS_ASCENDING = 0,  /* column i of the block at dst + i * dst_h */
+    SCALER_COLS_DESCENDING = 1, /* column i at dst + (n - 1 - i) * dst_h    */
+};
+
 typedef struct scaler_geom_info_s {
     uint8_t src_lines_per_block; /* source lines one block call consumes */
     uint8_t dst_rows_per_block;  /* output rows one block call emits     */
@@ -161,13 +174,15 @@ int scaler_scale_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
  *                  output column is dst_h contiguous pixels
  *   scratch_col    dst_h scratch pixels, required; holds the along-scaled
  *                  lookahead column when a cross-block blend column needs it
+ *   order          which end of dst the block's leftmost column goes to
  *
  * Returns SCALER_OK or SCALER_ERR_ARGS.
  */
 int scaler_scale_col_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
                            const uint16_t* const* src_cols,
                            const uint16_t* lookahead_col,
-                           uint16_t* dst, uint16_t* scratch_col);
+                           uint16_t* dst, uint16_t* scratch_col,
+                           enum scaler_col_order_e order);
 
 /*
  * Emit the transposed walk's tail: the SCALER_SRC_W % src_lines_per_block
@@ -180,7 +195,9 @@ int scaler_scale_col_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
  *   dst       tail columns * dst_h pixels, column-major
  *
  * A tail column never blends across the walk: there is no next group to reach
- * toward, which is what makes the frame's far edge pure.
+ * toward, which is what makes the frame's far edge pure. It takes no column
+ * order: at every geometry the tail is one column or none, and one column has
+ * only one place to go.
  */
 int scaler_scale_col_tail(enum scaler_geom_e geom, enum scaler_mode_e mode,
                           const uint16_t* const* src_cols, uint16_t* dst);

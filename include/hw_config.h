@@ -29,9 +29,22 @@
 // 0 goes with 1, 2 goes with 3 — because the two differ by 180 degrees and
 // the frame path maps the landscape viewport origin through the pair.
 //
-// A wrong pairing is not subtle: the game image appears rotated 180 degrees
-// inside a correctly placed window, with the UI unaffected. Flip this and the
-// column order below follows it.
+// The two candidates differ in BOTH axes, because rotation 2 mirrors the pair
+// rotation 0 leaves alone, so exactly one of them is usable and the probe is
+// what says which. Both place the window correctly; they differ in the
+// direction the window fills:
+//
+//   the fast axis, along a gate line, runs with or against landscape y
+//   the slow axis, across gate lines, runs with or against landscape x
+//
+// The slow axis is free — FRAME_COLS_DESCENDING below hands the scaler's
+// columns over in whichever order it wants, at the cost of a sign on a
+// stride. The fast axis is not: it is the order the pixels inside one column
+// already sit in, so the rotation whose fast axis runs against landscape y
+// would need every column reversed as well, and that is the one to reject.
+//
+// PANEL_FILL_PROBE reports both directions off one boot. Until it has run,
+// this is the pairing the driver's MADCTL table implies and not a measurement.
 #ifndef TFT_ROTATION_PORTRAIT
 #define TFT_ROTATION_PORTRAIT 0
 #endif

@@ -587,6 +587,11 @@ void setup() {
     // Bench only: the panel rate trim owns the boot and never returns.
     panel_trim_run();
 #endif
+#ifdef PANEL_FILL_PROBE
+    // Bench only: which way does the portrait window fill? See display.h.
+    // Needs the display up and nothing else.
+    display_fill_probe();
+#endif
 #ifdef PANEL_PROBE
     // Bench only: does this panel answer reads? See display.h. Runs before the
     // frame path exists, so it has the bus to itself.

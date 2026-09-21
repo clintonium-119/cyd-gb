@@ -183,8 +183,15 @@ const char* emu_get_palette_name(uint8_t idx)
 // pixels, and the queue never sticks on half a frame.
 #if PUSH_ORDER == PUSH_ROW
 static uint8_t slot_src[FRAMEQUEUE_SLOTS][BLOCK_LINES + 1][SCALER_SRC_W];
-#endif
 static uint16_t lut_lines[BLOCK_LINES + 1][SCALER_SRC_W];
+#else
+// The column order's counterpart: a block's source COLUMNS, colourized. One
+// more than the block consumes, for the lookahead column the geometry reads
+// across its own boundary — the same shape lut_lines has, an axis over.
+static uint16_t lut_cols[COL_BLOCK_SRC + 1][GB_SCREEN_H];
+#endif
+// dst_w pixels for the row order, dst_h for the column order, and the row
+// order's is the larger at every geometry, so one size covers both.
 static uint16_t scratch_row[SCALER_DST_W_MAX];
 static const scaler_geom_info_t* geom = nullptr;
 static int16_t vp_x = GAME_X;
@@ -197,7 +204,11 @@ static int16_t vp_y = GAME_Y;
 // src/emulator_bridge.cpp for the long-form rationale; nothing here diverges
 // from it, because an A/B whose pipeline also changed would measure two
 // things at once.
+#if PUSH_ORDER == PUSH_COL
+static uint16_t dma_buf[2][COL_BLOCK_COLS * GAME_H];
+#else
 static uint16_t dma_buf[2][BLOCK_ROWS * GAME_W];
+#endif
 static framequeue_t fq;
 static TaskHandle_t push_task = nullptr;
 static uint16_t frame_seq = 0;
@@ -504,26 +515,140 @@ static void frame_end()
  * framequeue_drained() cannot fire mid-push.
  */
 #if PUSH_ORDER == PUSH_COL
+/* Whole scaler column-blocks a frame is made of, and the leftover columns
+ * past them. 53 and 1 at 5/3; 20 and 0 at 26/16. */
+#define COL_BLOCKS (SCALER_SRC_W / UNIT_LINES)
+#define COL_UNITS  (COL_BLOCKS + (COL_TAIL_COLS ? 1u : 0u))
+
+#if FRAME_COLS_DESCENDING
+#define COL_ORDER SCALER_COLS_DESCENDING
+#else
+#define COL_ORDER SCALER_COLS_ASCENDING
+#endif
+
 /*
- * Consumer half, column order: not wired yet. The column-block walk and the
- * portrait address window are the push path's own work; until they land this
- * drains the queue, so the producer's transpose is measurable with nothing
- * else in the frame and the pipeline never stalls on a full queue. A build
- * with this order therefore emulates and shows nothing, which is the point of
- * measuring the two halves separately.
+ * Colourize `count` source columns starting at `base` out of the frame's
+ * transposed buffer. Both sides are sequential: a source column is
+ * GB_SCREEN_H contiguous index bytes because the producer already transposed
+ * it, and an output column is GB_SCREEN_H contiguous pixels because that is
+ * what the scaler reads. No mask on the raw byte — gnuboy's DMG path bounds
+ * it at 39 and the LUT covers all 64 values.
+ */
+static void colourize_cols(const uint8_t* tframe, unsigned base,
+                           unsigned count)
+{
+    unsigned i;
+
+    for (i = 0; i < count; i++) {
+        const uint8_t* src = tframe + (size_t)(base + i) * GB_SCREEN_H;
+        uint16_t* dst = lut_cols[i];
+        unsigned y;
+
+        for (y = 0; y < GB_SCREEN_H; y++) {
+            dst[y] = lut[src[y]];
+        }
+    }
+}
+
+/*
+ * Consumer half, column order, pinned to core 0. The frame arrives as one
+ * queue block whose buffer is stable for the whole frame, so unlike the row
+ * order this walks its own blocks: it fills a DMA buffer with COL_BLOCK_COLS
+ * output columns and pushes, which is what keeps the transfer size near the
+ * row order's measured one.
+ *
+ * The walk follows the panel, not the image. The address window fills in one
+ * fixed direction and FRAME_COLS_DESCENDING says which, so when that runs
+ * against the image the units come out last-to-first and each block's own
+ * columns come out reversed with them — which the scaler does for the cost of
+ * a sign on a stride, rather than anything here moving a pixel twice.
  */
 static void emu_push_task(void* arg)
 {
+    const uint16_t* src_cols[COL_BLOCK_SRC + 1];
     framequeue_meta_t meta;
+    unsigned i;
     int slot = 0;
 
     (void)arg;
+    for (i = 0; i < COL_BLOCK_SRC + 1u; i++) {
+        src_cols[i] = lut_cols[i];
+    }
     for (;;) {
+        const uint8_t* tframe;
+        uint32_t scale_acc = 0;
+        uint32_t push_acc = 0;
+        unsigned in_buf = 0;
+        unsigned buf = 0;
+        unsigned k;
+        int64_t t0;
+        int64_t t1;
+
         if (framequeue_pop(&fq, &slot, &meta) != FRAMEQUEUE_OK) {
             ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2));
             continue;
         }
+        tframe = tfb[slot];
+        display_frame_begin(vp_x, vp_y);
+
+        for (k = 0; k < COL_UNITS; k++) {
+            /* The unit this step of the walk emits, and how many output
+             * columns it is worth: a whole block, or the tail. */
+            unsigned u = (COL_ORDER == SCALER_COLS_DESCENDING)
+                ? (COL_UNITS - 1u - k) : k;
+            unsigned ncols = (u == COL_BLOCKS) ? COL_TAIL_COLS : UNIT_ROWS;
+            unsigned base = u * UNIT_LINES;
+            uint16_t* at;
+
+            t0 = esp_timer_get_time();
+            if (in_buf + ncols > COL_BLOCK_COLS) {
+                /* This unit will not fit, so the buffer goes now. */
+                t1 = esp_timer_get_time();
+                scale_acc += (uint32_t)(t1 - t0);
+                display_push_rows_dma(dma_buf[buf],
+                                      (size_t)in_buf * GAME_H);
+                push_acc += (uint32_t)(esp_timer_get_time() - t1);
+                buf ^= 1u;
+                in_buf = 0;
+                t0 = esp_timer_get_time();
+            }
+            at = dma_buf[buf] + (size_t)in_buf * GAME_H;
+
+            if (u == COL_BLOCKS) {
+                colourize_cols(tframe, base, COL_TAIL_COLS);
+                (void)scaler_scale_col_tail(SCALE_GEOM, SCALER_MODE_BLEND,
+                                            src_cols, at);
+            } else {
+                const uint16_t* la = nullptr;
+                unsigned count = UNIT_LINES;
+
+                if (geom->uses_lookahead
+                    && base + UNIT_LINES < SCALER_SRC_W) {
+                    count++;
+                }
+                colourize_cols(tframe, base, count);
+                if (count > UNIT_LINES) {
+                    la = src_cols[UNIT_LINES];
+                }
+                (void)scaler_scale_col_block(SCALE_GEOM, SCALER_MODE_BLEND,
+                                             src_cols, la, at, scratch_row,
+                                             COL_ORDER);
+            }
+            in_buf += ncols;
+            scale_acc += (uint32_t)(esp_timer_get_time() - t0);
+        }
+
+        t1 = esp_timer_get_time();
+        if (in_buf) {
+            display_push_rows_dma(dma_buf[buf], (size_t)in_buf * GAME_H);
+        }
+        display_dma_wait();
+        display_frame_end();
+        push_acc += (uint32_t)(esp_timer_get_time() - t1);
+
         framequeue_release(&fq, slot);
+        scale_us = scale_acc;
+        push_us = push_acc;
     }
 }
 #else

@@ -119,6 +119,15 @@ void display_dma_wait();
 void display_bus_acquire();
 void display_bus_release();
 
+// ─── Fill-direction probe (bench only) ──────────────────────────────────────
+// Pushes a pattern of known push ORDER through the real column-major frame
+// window, so the panel reports which way the window fills in each axis — the
+// one thing about the rotation pairing that cannot be inferred. Runs instead
+// of the boot and never returns; see src/display.cpp for how to read it.
+#ifdef PANEL_FILL_PROBE
+void display_fill_probe();
+#endif
+
 // ─── Panel probe (bench only) ───────────────────────────────────────────────
 // Answers the one question a software vsync depends on: does this panel drive
 // MISO, so the firmware can read its scan position (ST7789 GSCAN, 0x45) and

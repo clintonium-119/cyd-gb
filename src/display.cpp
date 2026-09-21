@@ -577,6 +577,78 @@ void display_bus_release()
     // caller that released without drawing.
 }
 
+#ifdef PANEL_FILL_PROBE
+#if PUSH_ORDER != PUSH_COL
+#error "PANEL_FILL_PROBE probes the column-major window; build it with -DPUSH_ORDER=PUSH_COL."
+#endif
+// ─── Fill-direction probe (bench only) ──────────────────────────────────────
+// Which way the portrait address window fills cannot be read back: the panel
+// drives nothing on MISO, so its MADCTL mirror bits are unobservable and the
+// rotation pairing is an inference from the driver's table. This pushes a
+// pattern whose push ORDER is known and lets the panel say where each end of
+// it landed.
+//
+// The pattern is the real frame window, opened by the real
+// display_frame_begin(), so what it measures is what the frame path will do:
+//
+//   first column pushed   white, with its first quarter red
+//   last column pushed    green
+//   everything between    black
+//
+// Read it off the panel and both directions follow:
+//
+//   white at the LEFT    the slow axis runs with landscape x, so the frame
+//                        path hands its columns over left to right
+//   white at the RIGHT   the slow axis runs against it, columns right to left
+//   red at the TOP       the fast axis runs with landscape y — this rotation
+//                        is the usable one
+//   red at the BOTTOM    the fast axis runs against it, so every column would
+//                        come out upside down; use the other rotation
+//
+// Never returns, needs no cartridge and no card.
+//
+//   PLATFORMIO_BUILD_FLAGS='-DPUSH_ORDER=PUSH_COL -DPANEL_FILL_PROBE' \
+//     pio run -e cyd-gnuboy -t upload
+void display_fill_probe()
+{
+    static uint16_t col[GAME_H];
+    unsigned c;
+    unsigned i;
+
+    Serial.printf("[FILL] portrait rot %d, %s columns, window %dx%d\n",
+                  (int)TFT_ROTATION_PORTRAIT,
+                  FRAME_COLS_DESCENDING ? "descending" : "ascending",
+                  (int)GAME_H, (int)GAME_W);
+    Serial.println("[FILL] white = first column pushed, red = its first "
+                   "quarter, green = last column pushed");
+
+    display_frame_begin(GAME_X, GAME_Y);
+    for (c = 0; c < GAME_W; c++) {
+        uint16_t fill = TFT_BLACK;
+
+        if (c == 0) {
+            fill = TFT_WHITE;
+        } else if (c + 1u == GAME_W) {
+            fill = TFT_GREEN;
+        }
+        for (i = 0; i < GAME_H; i++) {
+            col[i] = fill;
+        }
+        if (c == 0) {
+            for (i = 0; i < GAME_H / 4u; i++) {
+                col[i] = TFT_RED;
+            }
+        }
+        display_push_rows(col, GAME_H);
+    }
+    display_frame_end();
+
+    for (;;) {
+        delay(1000);
+    }
+}
+#endif /* PANEL_FILL_PROBE */
+
 #ifdef PANEL_PROBE
 // ─── Panel probe ────────────────────────────────────────────────────────────
 // Tearing is the emulator's 59.727 fps beating against the panel's own

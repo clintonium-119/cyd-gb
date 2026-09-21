@@ -88,6 +88,40 @@
 #endif
 #endif
 
+// ─── Column block (PUSH_COL only) ───────────────────────────────────────────
+// Scaler column-blocks per DMA transfer. One of them is UNIT_ROWS output
+// columns of the full GAME_H, and the count is chosen so a transfer lands near
+// the row order's, because the per-transfer overhead is a measured quantity on
+// this board and not a guess: at 5/3 the row order runs 24 transfers of 2,660
+// pixels a frame, and 2 units gives 10 columns of 240 — 2,400 pixels, 27
+// transfers — while costing LESS DMA buffer than the row order does, 9,600 B
+// against 10,640 B.
+//
+// This one need not divide the frame the way BLOCK_UNITS must. The column
+// order hands a whole frame over in a single queue block and the consumer
+// walks its own blocks out of a buffer that is stable for the frame, so the
+// last transfer is simply shorter: at 5/3, 53 scaler blocks and one tail
+// column come out as 26 transfers of 10 columns and one of 6.
+#ifndef COL_BLOCK_UNITS
+#if RENDER_GEOM == GEOM_5_3
+#define COL_BLOCK_UNITS 2
+#else
+// 1 at either k/16 geometry, where a unit is already 13 or 3 columns wide and
+// the transfer sizes land either side of the row order's without help.
+#define COL_BLOCK_UNITS 1
+#endif
+#endif
+
+#define COL_BLOCK_COLS (UNIT_ROWS * COL_BLOCK_UNITS)  // output cols / transfer
+#define COL_BLOCK_SRC  (UNIT_LINES * COL_BLOCK_UNITS) // source cols / transfer
+// The leftover source columns past the last whole block, one per output
+// column. One at 5/3, none at either k/16 geometry.
+#define COL_TAIL_COLS  (GB_SCREEN_W % UNIT_LINES)
+
+#if COL_BLOCK_COLS < (UNIT_ROWS + COL_TAIL_COLS)
+#error "COL_BLOCK_UNITS must leave one transfer room for a block plus the tail."
+#endif
+
 // UNIT_LINES / UNIT_ROWS repeat the geometry table's numbers because static
 // buffer sizes need them at compile time; emu_init() checks the table agrees.
 #define BLOCK_LINES (UNIT_LINES * BLOCK_UNITS)   // raw source lines per block

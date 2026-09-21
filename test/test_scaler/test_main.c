@@ -540,7 +540,8 @@ static void assert_col_block_matches_spec(enum scaler_geom_e geom,
     reset_dst();
     TEST_ASSERT_EQUAL_INT(SCALER_OK,
         scaler_scale_col_block(geom, mode, lines, lookahead_col,
-                               dst.block, scratch.row));
+                               dst.block, scratch.row,
+                               SCALER_COLS_ASCENDING));
 
     for (c = 0; c < units; c++) {
         const uint16_t* left = lines[spec[c].src];
@@ -983,6 +984,71 @@ static void test_null_and_unknown_arguments_are_rejected(void)
     assert_canaries_intact(0u);
 }
 
+/*
+ * Descending is ascending with the block's columns reversed, and nothing else
+ * about the pixels changes. That is the whole contract: the panel's window
+ * fills one way and the image runs the other, so the columns swap ends while
+ * every column's own contents stay put.
+ */
+static void assert_col_order_reverses_the_block(enum scaler_geom_e geom,
+                                                enum scaler_mode_e mode,
+                                                const uint16_t* lookahead_col)
+{
+    const scaler_geom_info_t* gi = scaler_geom_info(geom);
+    unsigned units = gi->dst_rows_per_block;
+    unsigned dst_h = SCALER_SRC_H / gi->src_lines_per_block * units;
+    static uint16_t up[SCALER_DST_ROWS_MAX * SCALER_DST_H_MAX];
+    unsigned c;
+    unsigned y;
+
+    reset_dst();
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_col_block(geom, mode, lines, lookahead_col,
+                               dst.block, scratch.row,
+                               SCALER_COLS_ASCENDING));
+    for (c = 0; c < units * dst_h; c++) {
+        up[c] = dst.block[c];
+    }
+
+    reset_dst();
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_col_block(geom, mode, lines, lookahead_col,
+                               dst.block, scratch.row,
+                               SCALER_COLS_DESCENDING));
+    for (c = 0; c < units; c++) {
+        const uint16_t* asc = up + (size_t)c * dst_h;
+        const uint16_t* desc = dst.block + (size_t)(units - 1u - c) * dst_h;
+
+        for (y = 0; y < dst_h; y++) {
+            TEST_ASSERT_EQUAL_HEX16_MESSAGE(asc[y], desc[y],
+                "descending is not the ascending block reversed");
+        }
+    }
+    /* And it stays inside the same footprint: a sign error on the stride
+     * writes before the buffer, which the leading canaries catch. */
+    assert_canaries_intact(units * dst_h);
+}
+
+static void test_col_order_reverses_the_block_for_every_geometry(void)
+{
+    assert_col_order_reverses_the_block(SCALER_GEOM_24_16,
+                                        SCALER_MODE_BLEND, lookahead);
+    assert_col_order_reverses_the_block(SCALER_GEOM_24_16,
+                                        SCALER_MODE_NEAREST, lookahead);
+    assert_col_order_reverses_the_block(SCALER_GEOM_26_16,
+                                        SCALER_MODE_BLEND, lookahead);
+    assert_col_order_reverses_the_block(SCALER_GEOM_26_16,
+                                        SCALER_MODE_BLEND, NULL);
+    assert_col_order_reverses_the_block(SCALER_GEOM_26_16,
+                                        SCALER_MODE_NEAREST, lookahead);
+    assert_col_order_reverses_the_block(SCALER_GEOM_5_3,
+                                        SCALER_MODE_BLEND, lookahead);
+    assert_col_order_reverses_the_block(SCALER_GEOM_5_3,
+                                        SCALER_MODE_BLEND, NULL);
+    assert_col_order_reverses_the_block(SCALER_GEOM_5_3,
+                                        SCALER_MODE_NEAREST, lookahead);
+}
+
 static void test_col_null_and_unknown_arguments_are_rejected(void)
 {
     const uint16_t* holed[SCALER_SRC_LINES_MAX];
@@ -995,22 +1061,33 @@ static void test_col_null_and_unknown_arguments_are_rejected(void)
 
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
         scaler_scale_col_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
-                               NULL, lookahead, dst.block, scratch.row));
+                               NULL, lookahead, dst.block, scratch.row,
+                               SCALER_COLS_ASCENDING));
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
         scaler_scale_col_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
-                               holed, lookahead, dst.block, scratch.row));
+                               holed, lookahead, dst.block, scratch.row,
+                               SCALER_COLS_ASCENDING));
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
         scaler_scale_col_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
-                               lines, lookahead, NULL, scratch.row));
+                               lines, lookahead, NULL, scratch.row,
+                               SCALER_COLS_ASCENDING));
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
         scaler_scale_col_block(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
-                               lines, lookahead, dst.block, NULL));
+                               lines, lookahead, dst.block, NULL,
+                               SCALER_COLS_ASCENDING));
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
         scaler_scale_col_block((enum scaler_geom_e)7, SCALER_MODE_BLEND,
-                               lines, lookahead, dst.block, scratch.row));
+                               lines, lookahead, dst.block, scratch.row,
+                               SCALER_COLS_ASCENDING));
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
         scaler_scale_col_block(SCALER_GEOM_24_16, (enum scaler_mode_e)5,
-                               lines, lookahead, dst.block, scratch.row));
+                               lines, lookahead, dst.block, scratch.row,
+                               SCALER_COLS_ASCENDING));
+
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
+                               lines, lookahead, dst.block, scratch.row,
+                               (enum scaler_col_order_e)9));
 
     /* The tail rejects the same way, but only where it has a column to emit:
      * a geometry whose group divides 160 has nothing to write and no buffer
@@ -1067,6 +1144,7 @@ int main(void)
     RUN_TEST(test_col_block_matches_the_spec_for_every_geometry);
     RUN_TEST(test_col_block_null_lookahead_clamps_the_trailing_columns);
     RUN_TEST(test_col_tail_is_one_pure_column_at_5_3_and_nothing_at_k16);
+    RUN_TEST(test_col_order_reverses_the_block_for_every_geometry);
     RUN_TEST(test_col_null_and_unknown_arguments_are_rejected);
     return UNITY_END();
 }

@@ -169,11 +169,11 @@ static void blend_line(uint16_t* dst, const uint16_t* a, const uint16_t* b,
  */
 static void scale_block_24_16_blend(const uint16_t* l0, const uint16_t* l1,
                                     uint16_t* dst, unsigned src_len,
-                                    unsigned unit_len)
+                                    ptrdiff_t unit_step)
 {
     uint16_t* r0 = dst;
-    uint16_t* r1 = dst + unit_len;
-    uint16_t* r2 = dst + 2u * unit_len;
+    uint16_t* r1 = dst + unit_step;
+    uint16_t* r2 = dst + 2 * unit_step;
     unsigned x;
     unsigned o = 0;
 
@@ -260,33 +260,34 @@ static void scale_line_26_16(const uint16_t* src, uint16_t* dst,
 static void scale_block_26_16_blend(const uint16_t* const* src_lines,
                                     const uint16_t* lookahead_line,
                                     uint16_t* dst, uint16_t* scratch_row,
-                                    unsigned src_len, unsigned unit_len)
+                                    unsigned src_len, ptrdiff_t unit_step,
+                                    unsigned unit_len)
 {
     scale_line_26_16(src_lines[0], dst, src_len);
-    scale_line_26_16(src_lines[1], dst + unit_len, src_len);
-    scale_line_26_16(src_lines[2], dst + 3u * unit_len, src_len);
-    scale_line_26_16(src_lines[3], dst + 4u * unit_len, src_len);
-    scale_line_26_16(src_lines[4], dst + 6u * unit_len, src_len);
-    scale_line_26_16(src_lines[5], dst + 8u * unit_len, src_len);
-    scale_line_26_16(src_lines[6], dst + 9u * unit_len, src_len);
-    scale_line_26_16(src_lines[7], dst + 11u * unit_len, src_len);
+    scale_line_26_16(src_lines[1], dst + unit_step, src_len);
+    scale_line_26_16(src_lines[2], dst + 3 * unit_step, src_len);
+    scale_line_26_16(src_lines[3], dst + 4 * unit_step, src_len);
+    scale_line_26_16(src_lines[4], dst + 6 * unit_step, src_len);
+    scale_line_26_16(src_lines[5], dst + 8 * unit_step, src_len);
+    scale_line_26_16(src_lines[6], dst + 9 * unit_step, src_len);
+    scale_line_26_16(src_lines[7], dst + 11 * unit_step, src_len);
 
-    blend_line(dst + 2u * unit_len, dst + unit_len, dst + 3u * unit_len,
+    blend_line(dst + 2 * unit_step, dst + unit_step, dst + 3 * unit_step,
                unit_len);
-    blend_line(dst + 5u * unit_len, dst + 4u * unit_len, dst + 6u * unit_len,
+    blend_line(dst + 5 * unit_step, dst + 4 * unit_step, dst + 6 * unit_step,
                unit_len);
-    blend_line(dst + 7u * unit_len, dst + 6u * unit_len, dst + 8u * unit_len,
+    blend_line(dst + 7 * unit_step, dst + 6 * unit_step, dst + 8 * unit_step,
                unit_len);
-    blend_line(dst + 10u * unit_len, dst + 9u * unit_len, dst + 11u * unit_len,
+    blend_line(dst + 10 * unit_step, dst + 9 * unit_step, dst + 11 * unit_step,
                unit_len);
 
     if (lookahead_line != NULL) {
         scale_line_26_16(lookahead_line, scratch_row, src_len);
-        blend_line(dst + 12u * unit_len, dst + 11u * unit_len, scratch_row,
+        blend_line(dst + 12 * unit_step, dst + 11 * unit_step, scratch_row,
                    unit_len);
     } else {
-        blend_line(dst + 12u * unit_len, dst + 11u * unit_len,
-                   dst + 11u * unit_len, unit_len);
+        blend_line(dst + 12 * unit_step, dst + 11 * unit_step,
+                   dst + 11 * unit_step, unit_len);
     }
 }
 
@@ -363,21 +364,22 @@ static void scale_line_5_3(const uint16_t* src, uint16_t* dst,
 static void scale_block_5_3_blend(const uint16_t* const* src_lines,
                                   const uint16_t* lookahead_line,
                                   uint16_t* dst, uint16_t* scratch_row,
-                                  unsigned src_len, unsigned unit_len)
+                                  unsigned src_len, ptrdiff_t unit_step,
+                                  unsigned unit_len)
 {
     scale_line_5_3(src_lines[0], dst, src_len);
-    scale_line_5_3(src_lines[1], dst + 2u * unit_len, src_len);
-    scale_line_5_3(src_lines[2], dst + 3u * unit_len, src_len);
+    scale_line_5_3(src_lines[1], dst + 2 * unit_step, src_len);
+    scale_line_5_3(src_lines[2], dst + 3 * unit_step, src_len);
 
-    blend_line(dst + unit_len, dst, dst + 2u * unit_len, unit_len);
+    blend_line(dst + unit_step, dst, dst + 2 * unit_step, unit_len);
 
     if (lookahead_line != NULL) {
         scale_line_5_3(lookahead_line, scratch_row, src_len);
-        blend_line(dst + 4u * unit_len, dst + 3u * unit_len, scratch_row,
+        blend_line(dst + 4 * unit_step, dst + 3 * unit_step, scratch_row,
                    unit_len);
     } else {
-        blend_line(dst + 4u * unit_len, dst + 3u * unit_len,
-                   dst + 3u * unit_len, unit_len);
+        blend_line(dst + 4 * unit_step, dst + 3 * unit_step,
+                   dst + 3 * unit_step, unit_len);
     }
 }
 
@@ -392,7 +394,8 @@ static void scale_block_generic(const scaler_geom_info_t* gi,
                                 const uint16_t* const* src_lines,
                                 const uint16_t* lookahead_line,
                                 uint16_t* dst, uint16_t* scratch_row,
-                                unsigned src_len, unsigned unit_len)
+                                unsigned src_len, ptrdiff_t unit_step,
+                                unsigned unit_len)
 {
     uint8_t pure_unit[SCALER_SRC_LINES_MAX];
     unsigned src_units = gi->src_lines_per_block;
@@ -411,7 +414,7 @@ static void scale_block_generic(const scaler_geom_info_t* gi,
         if (!pat[i].is_blend) {
             pure_unit[pat[i].src_offset] = (uint8_t)i;
             scale_line(src_lines[pat[i].src_offset],
-                       dst + (size_t)i * unit_len,
+                       dst + (ptrdiff_t)i * unit_step,
                        pat, src_units, dst_units, blend, src_len);
         }
     }
@@ -421,7 +424,7 @@ static void scale_block_generic(const scaler_geom_info_t* gi,
      * partner is the first line of the NEXT block, which goes via
      * scratch_row. */
     for (i = 0; i < dst_units; i++) {
-        uint16_t* unit = dst + (size_t)i * unit_len;
+        uint16_t* unit = dst + (ptrdiff_t)i * unit_step;
         const uint16_t* a;
         const uint16_t* b;
         unsigned partner;
@@ -430,7 +433,7 @@ static void scale_block_generic(const scaler_geom_info_t* gi,
         if (!pat[i].is_blend) {
             continue;
         }
-        a = dst + (size_t)pure_unit[pat[i].src_offset] * unit_len;
+        a = dst + (ptrdiff_t)pure_unit[pat[i].src_offset] * unit_step;
         if (!blend) {
             /* Nearest-neighbour: duplicate the top or left source unit. */
             for (x = 0; x < unit_len; x++) {
@@ -441,7 +444,7 @@ static void scale_block_generic(const scaler_geom_info_t* gi,
 
         partner = (unsigned)pat[i].src_offset + 1u;
         if (partner < src_units) {
-            b = dst + (size_t)pure_unit[partner] * unit_len;
+            b = dst + (ptrdiff_t)pure_unit[partner] * unit_step;
         } else if (lookahead_line != NULL) {
             if (!scratch_ready) {
                 scale_line(lookahead_line, scratch_row,
@@ -503,22 +506,23 @@ int scaler_scale_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
     if (mode == SCALER_MODE_BLEND) {
         if (geom == SCALER_GEOM_24_16) {
             scale_block_24_16_blend(src_lines[0], src_lines[1], dst,
-                                    SCALER_SRC_W, dst_w);
+                                    SCALER_SRC_W, (ptrdiff_t)dst_w);
             return SCALER_OK;
         }
         if (geom == SCALER_GEOM_26_16) {
             scale_block_26_16_blend(src_lines, lookahead_line, dst,
-                                    scratch_row, SCALER_SRC_W, dst_w);
+                                    scratch_row, SCALER_SRC_W,
+                                    (ptrdiff_t)dst_w, dst_w);
             return SCALER_OK;
         }
         scale_block_5_3_blend(src_lines, lookahead_line, dst, scratch_row,
-                              SCALER_SRC_W, dst_w);
+                              SCALER_SRC_W, (ptrdiff_t)dst_w, dst_w);
         return SCALER_OK;
     }
 
     scale_block_generic(gi, pattern_table[(unsigned)geom], 0,
                         src_lines, lookahead_line, dst, scratch_row,
-                        SCALER_SRC_W, dst_w);
+                        SCALER_SRC_W, (ptrdiff_t)dst_w, dst_w);
     return SCALER_OK;
 }
 
@@ -533,36 +537,52 @@ static unsigned dst_h_of(const scaler_geom_info_t* gi)
 int scaler_scale_col_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
                            const uint16_t* const* src_cols,
                            const uint16_t* lookahead_col,
-                           uint16_t* dst, uint16_t* scratch_col)
+                           uint16_t* dst, uint16_t* scratch_col,
+                           enum scaler_col_order_e order)
 {
     const scaler_geom_info_t* gi;
     unsigned dst_h;
+    ptrdiff_t step;
     int rc = check_args(geom, mode, src_cols, dst, scratch_col, &gi);
 
     if (rc != SCALER_OK) {
         return rc;
     }
+    if (order != SCALER_COLS_ASCENDING && order != SCALER_COLS_DESCENDING) {
+        return SCALER_ERR_ARGS;
+    }
     dst_h = dst_h_of(gi);
+
+    /* Descending reverses the stride and starts at the last column of the
+     * block, so the walk itself is unchanged: the panel's address window
+     * fills in one fixed direction, and this is the only place that can put
+     * the columns in that order without moving pixels twice. */
+    if (order == SCALER_COLS_DESCENDING) {
+        step = -(ptrdiff_t)dst_h;
+        dst += (size_t)(gi->dst_rows_per_block - 1u) * dst_h;
+    } else {
+        step = (ptrdiff_t)dst_h;
+    }
 
     if (mode == SCALER_MODE_BLEND) {
         if (geom == SCALER_GEOM_24_16) {
             scale_block_24_16_blend(src_cols[0], src_cols[1], dst,
-                                    SCALER_SRC_H, dst_h);
+                                    SCALER_SRC_H, step);
             return SCALER_OK;
         }
         if (geom == SCALER_GEOM_26_16) {
             scale_block_26_16_blend(src_cols, lookahead_col, dst,
-                                    scratch_col, SCALER_SRC_H, dst_h);
+                                    scratch_col, SCALER_SRC_H, step, dst_h);
             return SCALER_OK;
         }
         scale_block_5_3_blend(src_cols, lookahead_col, dst, scratch_col,
-                              SCALER_SRC_H, dst_h);
+                              SCALER_SRC_H, step, dst_h);
         return SCALER_OK;
     }
 
     scale_block_generic(gi, pattern_table[(unsigned)geom], 0,
                         src_cols, lookahead_col, dst, scratch_col,
-                        SCALER_SRC_H, dst_h);
+                        SCALER_SRC_H, step, dst_h);
     return SCALER_OK;
 }
 

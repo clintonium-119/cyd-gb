@@ -213,7 +213,7 @@ static unsigned scale_frame_col(enum scaler_geom_e geom,
         TEST_ASSERT_EQUAL_INT(SCALER_OK,
             scaler_scale_col_block(geom, mode, &col_ptrs[first], lookahead,
                                    col_frame + (size_t)b * dst_units * dst_h,
-                                   scratch));
+                                   scratch, SCALER_COLS_ASCENDING));
     }
     TEST_ASSERT_EQUAL_INT(SCALER_OK,
         scaler_scale_col_tail(geom, mode, &col_ptrs[blocks * src_units],
