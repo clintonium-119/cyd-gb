@@ -38,7 +38,31 @@ Work down the list. Write the result in the blank; a blank you cannot fill is th
 11. **Nudge** — the D-pad moves the whole picture one pixel at a time. Line the white frame up inside the
     bezel, then press **A** to save. "Saved" appears for a moment. **B** puts it back to the factory
     position if you want to start over. Final values: `____`.
-12. **System** — Frameskip should read `0`; leave it there unless you were told otherwise. Write down
+12. **Panel trim** — this one takes a few minutes and needs no computer. The screen fills with a field of
+    small grey blocks scrolling steadily upwards (that is the pattern and the speed the trim is measured
+    at; the page will not offer you another). Somewhere on it you will see a **seam** — a vertical line
+    down the screen where the blocks on one side sit a little higher or lower than the blocks on the
+    other — and it drifts sideways, off one edge and back on at the opposite one.
+
+    Press **Start** to begin, then press **Start** again each time the seam goes off one edge and
+    reappears at the other. After the fourth press the screen goes back to the numbers, and the unit has
+    corrected itself once. Read **Crossing** — that is how long it was taking — and do it again. Each
+    round should leave a longer interval than the one before.
+
+    Stop when the crossings are further apart than you are willing to sit and count, or when **Last move**
+    reads `none left to give`, which means the panel cannot be trimmed any finer. Then press **A** to save.
+    "Saved" appears for a moment. **B** puts the porch back to where you found it.
+
+    Under about fifteen seconds between crossings is not finished — keep going. Write down the final
+    **Porch**, both numbers: `____`.
+
+    *If it will not settle:* an interval that gets **shorter** on the round after a correction is normal
+    once — the unit does not know which way to go until it has tried one — but twice in a row means you are
+    marking something other than the seam wrapping. An interval that never grows past a few seconds however
+    many rounds you do, or a Porch that ends up at `1 + 0/64` or `126 + 63/64`, is this panel's oscillator
+    being further out than the trim can reach. That is the fault you came to find; write down what it
+    reached: `____`.
+13. **System** — Frameskip should read `0`; leave it there unless you were told otherwise. Write down
     Version and Built exactly as shown — that is how this unit gets matched to a build later: `____`.
 
 **Finish:** switch the unit off. Put a game cartridge in and switch it on normally. The game should sit
