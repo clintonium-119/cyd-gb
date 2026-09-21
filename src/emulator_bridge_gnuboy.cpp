@@ -132,6 +132,17 @@ static bool pal_valid = false;
 
 static void palette_refresh(bool force)
 {
+#ifdef TEAR_DEMO
+    /* The test pattern's four shades are the palette's four shades, whatever
+     * ROM is running underneath and whatever it does to BGP. 0xE4 is the
+     * identity mapping: colour c is shade c. */
+    if (force || !pal_valid) {
+        pal_bgp = pal_obp0 = pal_obp1 = 0xE4;
+        pal_valid = true;
+        palette_build_lut_gnuboy(curpal, 0xE4, 0xE4, 0xE4, lut);
+    }
+    return;
+#endif
     if (!force && pal_valid && pal_bgp == reg_bgp() && pal_obp0 == reg_obp0() &&
         pal_obp1 == reg_obp1()) {
         return;
@@ -739,6 +750,130 @@ static void emu_push_task(void* arg)
  * Not IRAM_ATTR: it calls straight into flash-resident gbcore, exactly as the
  * other bridge's line callback does.
  */
+#ifdef TEAR_DEMO
+// ─── Tear demo (bench only) ─────────────────────────────────────────────────
+// A scrolling test pattern in place of the emulated picture, for judging the
+// tear without playing a game to find something that moves.
+//
+// It replaces the PICTURE and nothing else. gnuboy still runs, the audio still
+// paces the frame, the producer still transposes, the queue still hands over
+// and the consumer still walks and pushes — so what this shows is what a game
+// shows, and a trim calibrated here is a trim calibrated for a game. That is
+// the whole reason it lives inside the bridge rather than beside it: a fixture
+// that drives its own pipeline measures its own pipeline.
+//
+// The cadence comes free for the same reason. The frame rate is set by
+// speaker_write_frame() blocking on the DMA queue, which is untouched here, so
+// the beat against the panel's oscillator is the one a game beats at — and
+// that beat is the entire subject of the rate trim.
+//
+// Any ROM will do and none of it is seen. Boot with one that loads fast;
+// nothing about this depends on what the cartridge is doing.
+//
+//   Up / Down     vertical scroll -1 / +1 px per frame
+//   Left / Right  horizontal scroll -1 / +1 px per frame
+//   A             stop
+//   Select        print the current rate
+//
+// Vertical scroll is the one that matters for the column-major push: its seam
+// is a vertical line with a vertical displacement across it, and the
+// horizontal rules below are what make a one-pixel step in that displacement
+// impossible to miss.
+//
+//   PLATFORMIO_BUILD_FLAGS="-DDEV_ROM_PATH='\"Black Castle.gb\"' -DTEAR_DEMO" \
+//     pio run -e cyd-gnuboy -t upload
+#define DEMO_RATE_MAX 6
+
+static int16_t demo_sx = 0;
+static int16_t demo_sy = 0;
+static int8_t demo_vx = 0;
+static int8_t demo_vy = 1; /* scrolling on boot: a static pattern has no tear */
+static uint8_t demo_prev_pad = 0;
+
+/*
+ * One pixel of the endless background. Horizontal rules every 8 rows are the
+ * instrument: a vertical step across the seam breaks them and the break is
+ * countable in pixels. Vertical rules do the same for a horizontal step, and
+ * the diagonal means a pure vertical shift cannot be mistaken for no shift.
+ */
+static uint8_t demo_shade(unsigned u, unsigned v)
+{
+    if ((v & 7u) == 0u) {
+        return 3u;
+    }
+    if ((u & 7u) == 0u) {
+        return 2u;
+    }
+    if (((u + v) & 15u) < 2u) {
+        return 1u;
+    }
+    return 0u;
+}
+
+/* Line `y` of the pattern into fb, where gnuboy's own line would have gone,
+ * and before the hook below reads it. */
+static void demo_line(unsigned y)
+{
+    uint8_t* dst = fb + (size_t)y * SCALER_SRC_W;
+    unsigned v = (unsigned)(int)((int)y + demo_sy);
+    unsigned x;
+
+    for (x = 0; x < SCALER_SRC_W; x++) {
+        dst[x] = demo_shade((unsigned)(int)((int)x + demo_sx), v);
+    }
+}
+
+/* Once per frame, at the first drawn line. Reads the joypad the emulator has
+ * already debounced for this frame, so this costs no I2C of its own. */
+static void demo_advance()
+{
+    /* Same order and values as the firmware's GB_BTN_* masks. */
+    const uint8_t RIGHT = 0x01, LEFT = 0x02, UP = 0x04, DOWN = 0x08;
+    const uint8_t A = 0x10, SELECT = 0x40;
+    uint8_t pressed = (uint8_t)(jpad & ~demo_prev_pad);
+    int8_t was_x = demo_vx;
+    int8_t was_y = demo_vy;
+
+    demo_prev_pad = jpad;
+    if (pressed & UP) {
+        demo_vy--;
+    }
+    if (pressed & DOWN) {
+        demo_vy++;
+    }
+    if (pressed & LEFT) {
+        demo_vx--;
+    }
+    if (pressed & RIGHT) {
+        demo_vx++;
+    }
+    if (pressed & A) {
+        demo_vx = 0;
+        demo_vy = 0;
+    }
+    if (demo_vx > DEMO_RATE_MAX) {
+        demo_vx = DEMO_RATE_MAX;
+    }
+    if (demo_vx < -DEMO_RATE_MAX) {
+        demo_vx = -DEMO_RATE_MAX;
+    }
+    if (demo_vy > DEMO_RATE_MAX) {
+        demo_vy = DEMO_RATE_MAX;
+    }
+    if (demo_vy < -DEMO_RATE_MAX) {
+        demo_vy = -DEMO_RATE_MAX;
+    }
+    if ((pressed & SELECT) || demo_vx != was_x || demo_vy != was_y) {
+        /* Once, on a change, and never on the frame path's own account: a
+         * print every frame would itself cost most of one. */
+        Serial.printf("[DEMO] scroll %+d,%+d px/frame\n", (int)demo_vx,
+                      (int)demo_vy);
+    }
+    demo_sx = (int16_t)(demo_sx + demo_vx);
+    demo_sy = (int16_t)(demo_sy + demo_vy);
+}
+#endif /* TEAR_DEMO */
+
 void emu_gnuboy_line(const unsigned char* line, int index)
 {
     int blk;
@@ -764,6 +899,14 @@ void emu_gnuboy_line(const unsigned char* line, int index)
         frame_flush();
     }
     blk = index / BLOCK_LINES;
+#ifdef TEAR_DEMO
+    if (!frame_open) {
+        demo_advance();
+    }
+    /* Before the transpose and before the block copy, which is exactly where
+     * gnuboy's own pixels for this line already sit. */
+    demo_line((unsigned)index);
+#endif
     if (!frame_open) {
         /* First drawn line of this frame. The sequence counts drawn frames
          * and jumps over skipped ones. Lines before this one — the LCD
@@ -932,6 +1075,10 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     fpst = millis();
 
     rom_title(title, sizeof(title));
+#ifdef TEAR_DEMO
+    Serial.println("[DEMO] tear demo: Up/Down vertical, Left/Right "
+                   "horizontal, A stop, Select print");
+#endif
     Serial.printf("[EMU] gnuboy '%s' %uKB push:%s heap:%u\n", title,
                   romlen / 1024,
                   (PUSH_ORDER == PUSH_COL) ? "col" : "row",
