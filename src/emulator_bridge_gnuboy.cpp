@@ -215,7 +215,11 @@ static int16_t vp_y = GAME_Y;
 // src/emulator_bridge.cpp for the long-form rationale; nothing here diverges
 // from it, because an A/B whose pipeline also changed would measure two
 // things at once.
-#if PUSH_ORDER == PUSH_COL
+#if PUSH_ORDER == PUSH_SCATTER
+/* One scaler block per transfer: the blocks are not adjacent, so they cannot
+ * be packed into a shared window. */
+static uint16_t dma_buf[2][UNIT_ROWS * GAME_H];
+#elif PUSH_ORDER == PUSH_COL
 static uint16_t dma_buf[2][COL_BLOCK_COLS * GAME_H];
 #else
 static uint16_t dma_buf[2][BLOCK_ROWS * GAME_W];
@@ -228,7 +232,7 @@ static bool frame_dropped = false;
 // framebuffer. Heap, not static: 23 KB, and the static DRAM segment is nearly
 // full.
 static uint8_t* fb = nullptr;
-#if PUSH_ORDER == PUSH_COL
+#if PUSH_TRANSPOSED
 // The same frame as columns: GB_SCREEN_H index bytes per column, one buffer
 // per queue slot. An output column needs every source row, so the consumer
 // cannot start on a frame until it is whole, and the producer must therefore
@@ -326,14 +330,14 @@ void emu_set_viewport(int16_t x, int16_t y)
  * that is stable for the whole frame — so there is exactly one. */
 static uint8_t blocks_per_frame()
 {
-#if PUSH_ORDER == PUSH_COL
+#if PUSH_TRANSPOSED
     return 1u;
 #else
     return (uint8_t)(GB_SCREEN_H / BLOCK_LINES);
 #endif
 }
 
-#if PUSH_ORDER == PUSH_COL
+#if PUSH_TRANSPOSED
 /*
  * Source lines [from, to] into the frame's transposed buffer: 160 stores of
  * stride GB_SCREEN_H each, on core 1, which has about 3.3 ms spare. The
@@ -425,7 +429,7 @@ static void commit_blocks(int from, int to)
 }
 #endif /* PUSH_ORDER == PUSH_ROW */
 
-#if PUSH_ORDER == PUSH_COL
+#if PUSH_TRANSPOSED
 /*
  * Producer half, column order: take the slot this frame will be transposed
  * into. Called on the frame's first drawn line rather than at its end, so the
@@ -472,7 +476,7 @@ static void commit_frame()
         xTaskNotifyGive(push_task);
     }
 }
-#endif /* PUSH_ORDER == PUSH_COL */
+#endif /* PUSH_TRANSPOSED */
 
 /*
  * Close whatever frame is open. Whatever block was still collecting lines goes
@@ -488,7 +492,7 @@ static void frame_flush()
 {
     if (frame_open) {
         if (!frame_dropped) {
-#if PUSH_ORDER == PUSH_COL
+#if PUSH_TRANSPOSED
             /* Whatever the frame never drew comes out of fb, which still
              * holds the previous frame's pixels there. */
             transpose_lines((unsigned)tpose_next, GB_SCREEN_H - 1u);
@@ -500,7 +504,7 @@ static void frame_flush()
         frame_open = false;
         cur_block = -1;
         last_line = -1;
-#if PUSH_ORDER == PUSH_COL
+#if PUSH_TRANSPOSED
         tpose_slot = -1;
         tpose_next = 0;
 #endif
@@ -525,7 +529,7 @@ static void frame_end()
  * are consumed, except the frame's last, which waits for the transfer so that
  * framequeue_drained() cannot fire mid-push.
  */
-#if PUSH_ORDER == PUSH_COL
+#if PUSH_TRANSPOSED
 /* Whole scaler column-blocks a frame is made of, and the leftover columns
  * past them. 53 and 1 at 5/3; 20 and 0 at 26/16. */
 #define COL_BLOCKS (SCALER_SRC_W / UNIT_LINES)
@@ -562,6 +566,41 @@ static void colourize_cols(const uint8_t* tframe, unsigned base,
 }
 
 /*
+ * One unit — a whole scaler block, or the frame's tail — colourized out of the
+ * transposed frame and scaled into `at`. Returns the output columns it wrote.
+ * Shared by both transposed consumers, which differ only in what order they
+ * ask for the units and where they put them.
+ */
+static unsigned scale_unit(const uint8_t* tframe, unsigned u,
+                           const uint16_t* const* src_cols, uint16_t* at)
+{
+    unsigned base = u * UNIT_LINES;
+
+    if (u == COL_BLOCKS) {
+        colourize_cols(tframe, base, COL_TAIL_COLS);
+        (void)scaler_scale_col_tail(SCALE_GEOM, SCALER_MODE_BLEND,
+                                    src_cols, at);
+        return COL_TAIL_COLS;
+    }
+    {
+        const uint16_t* la = nullptr;
+        unsigned count = UNIT_LINES;
+
+        if (geom->uses_lookahead && base + UNIT_LINES < SCALER_SRC_W) {
+            count++;
+        }
+        colourize_cols(tframe, base, count);
+        if (count > UNIT_LINES) {
+            la = src_cols[UNIT_LINES];
+        }
+        (void)scaler_scale_col_block(SCALE_GEOM, SCALER_MODE_BLEND,
+                                     src_cols, la, at, scratch_row,
+                                     COL_ORDER);
+    }
+    return UNIT_ROWS;
+}
+
+/*
  * Consumer half, column order, pinned to core 0. The frame arrives as one
  * queue block whose buffer is stable for the whole frame, so unlike the row
  * order this walks its own blocks: it fills a DMA buffer with COL_BLOCK_COLS
@@ -574,6 +613,7 @@ static void colourize_cols(const uint8_t* tframe, unsigned base,
  * columns come out reversed with them — which the scaler does for the cost of
  * a sign on a stride, rather than anything here moving a pixel twice.
  */
+#if PUSH_ORDER == PUSH_COL
 static void emu_push_task(void* arg)
 {
     const uint16_t* src_cols[COL_BLOCK_SRC + 1];
@@ -608,7 +648,6 @@ static void emu_push_task(void* arg)
             unsigned u = (COL_ORDER == SCALER_COLS_DESCENDING)
                 ? (COL_UNITS - 1u - k) : k;
             unsigned ncols = (u == COL_BLOCKS) ? COL_TAIL_COLS : UNIT_ROWS;
-            unsigned base = u * UNIT_LINES;
             uint16_t* at;
 
             t0 = esp_timer_get_time();
@@ -624,28 +663,7 @@ static void emu_push_task(void* arg)
                 t0 = esp_timer_get_time();
             }
             at = dma_buf[buf] + (size_t)in_buf * GAME_H;
-
-            if (u == COL_BLOCKS) {
-                colourize_cols(tframe, base, COL_TAIL_COLS);
-                (void)scaler_scale_col_tail(SCALE_GEOM, SCALER_MODE_BLEND,
-                                            src_cols, at);
-            } else {
-                const uint16_t* la = nullptr;
-                unsigned count = UNIT_LINES;
-
-                if (geom->uses_lookahead
-                    && base + UNIT_LINES < SCALER_SRC_W) {
-                    count++;
-                }
-                colourize_cols(tframe, base, count);
-                if (count > UNIT_LINES) {
-                    la = src_cols[UNIT_LINES];
-                }
-                (void)scaler_scale_col_block(SCALE_GEOM, SCALER_MODE_BLEND,
-                                             src_cols, la, at, scratch_row,
-                                             COL_ORDER);
-            }
-            in_buf += ncols;
+            in_buf += scale_unit(tframe, u, src_cols, at);
             scale_acc += (uint32_t)(esp_timer_get_time() - t0);
         }
 
@@ -662,6 +680,85 @@ static void emu_push_task(void* arg)
         push_us = push_acc;
     }
 }
+#else /* PUSH_ORDER == PUSH_SCATTER */
+/*
+ * Consumer half, scatter order, pinned to core 0. The same units as the
+ * column order, asked for in an interleaved sequence instead of a sweep.
+ *
+ * The point is not to write fewer wrong pixels — it is the same frame's worth
+ * of temporal inconsistency either way — but to stop them lining up. A
+ * monotonic sweep puts every boundary along one long straight edge, which the
+ * eye finds instantly; visiting every SCATTER_STRIDE-th block and then
+ * filling the gaps chops the same inconsistency into short pieces scattered
+ * across the width.
+ *
+ * The cost is that blocks are no longer adjacent, so each needs its own
+ * address window and its own transfer: 54 a frame at 5/3 against the column
+ * order's 27. Nothing else about the frame path changes.
+ */
+static void emu_push_task(void* arg)
+{
+    const uint16_t* src_cols[COL_BLOCK_SRC + 1];
+    framequeue_meta_t meta;
+    unsigned i;
+    int slot = 0;
+
+    (void)arg;
+    for (i = 0; i < COL_BLOCK_SRC + 1u; i++) {
+        src_cols[i] = lut_cols[i];
+    }
+    for (;;) {
+        const uint8_t* tframe;
+        uint32_t scale_acc = 0;
+        uint32_t push_acc = 0;
+        unsigned buf = 0;
+        unsigned pass;
+        int64_t t0;
+        int64_t t1;
+
+        if (framequeue_pop(&fq, &slot, &meta) != FRAMEQUEUE_OK) {
+            ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2));
+            continue;
+        }
+        tframe = tfb[slot];
+        display_frame_begin(vp_x, vp_y);
+
+        /* Interleaved passes: every SCATTER_STRIDE-th unit, then the units
+         * between them. Covers each exactly once whatever COL_UNITS is, which
+         * a stride walk would need to be coprime with it to manage. */
+        for (pass = 0; pass < SCATTER_STRIDE; pass++) {
+            unsigned u;
+
+            for (u = pass; u < COL_UNITS; u += SCATTER_STRIDE) {
+                unsigned ncols;
+
+                t0 = esp_timer_get_time();
+                ncols = scale_unit(tframe, u, src_cols, dma_buf[buf]);
+                t1 = esp_timer_get_time();
+                scale_acc += (uint32_t)(t1 - t0);
+
+                /* One window per block, because the next block is not the
+                 * next columns. */
+                display_col_window(vp_x, vp_y, (uint16_t)(u * UNIT_ROWS),
+                                   (uint16_t)ncols);
+                display_push_rows_dma(dma_buf[buf],
+                                      (size_t)ncols * GAME_H);
+                push_acc += (uint32_t)(esp_timer_get_time() - t1);
+                buf ^= 1u;
+            }
+        }
+
+        t1 = esp_timer_get_time();
+        display_dma_wait();
+        display_frame_end();
+        push_acc += (uint32_t)(esp_timer_get_time() - t1);
+
+        framequeue_release(&fq, slot);
+        scale_us = scale_acc;
+        push_us = push_acc;
+    }
+}
+#endif /* PUSH_ORDER */
 #else
 static void emu_push_task(void* arg)
 {
@@ -773,7 +870,8 @@ static void emu_push_task(void* arg)
 //   Up / Down     vertical scroll -1 / +1 px per frame
 //   Left / Right  horizontal scroll -1 / +1 px per frame
 //   A             stop
-//   Select        print the current rate
+//   B             next pattern: noise, checkerboard, stripes, grid
+//   Select        print the current pattern and rate
 //
 // Vertical scroll is the one that matters for the column-major push: its seam
 // is a vertical line with a vertical displacement across it, and the
@@ -787,27 +885,112 @@ static void emu_push_task(void* arg)
 static int16_t demo_sx = 0;
 static int16_t demo_sy = 0;
 static int8_t demo_vx = 0;
-static int8_t demo_vy = 1; /* scrolling on boot: a static pattern has no tear */
+/* 2 px/frame on boot, not 1: the bench found that the sharpest rate for the
+ * periodic patterns, and a static pattern has no tear to show at all. */
+static int8_t demo_vy = 2;
 static uint8_t demo_prev_pad = 0;
 
 /*
- * One pixel of the endless background. Horizontal rules every 8 rows are the
- * instrument: a vertical step across the seam breaks them and the break is
- * countable in pixels. Vertical rules do the same for a horizontal step, and
- * the diagonal means a pure vertical shift cannot be mistaken for no shift.
+ * One pixel of the endless background, in one of three patterns.
+ *
+ * What reveals a seam is spatial frequency along the axis the two sides are
+ * displaced on, and plenty of it. A sparse grid on an empty field is easy to
+ * read but weak: the mismatch appears only where a rule crosses the seam, and
+ * one broken thin line does not catch the eye. The checkerboard and the
+ * stripes put an edge on almost every row instead, so a one-pixel vertical
+ * step misaligns the whole length of the seam at once.
+ *
+ *   DEMO_PAT_NOISE   4x4 blocks of pseudo-random shade. The honest one and the
+ *                    default. Every other pattern here is singly periodic, so
+ *                    its sensitivity OSCILLATES with the scroll rate: the
+ *                    displacement across a seam is one frame of motion, and
+ *                    when that equals a whole period the two sides line up
+ *                    and a real seam becomes invisible. Measured on the
+ *                    bench: the stripes show a seam at 2 px/frame and hide it
+ *                    completely at 4. Random blocks have no period to line up
+ *                    with, so a displacement of any size decorrelates them.
+ *
+ *                    Share of pixels that change under a one-frame
+ *                    displacement, by scroll rate, counted over a frame:
+ *
+ *                      rate        1    2    3    4    5    6    7    8
+ *                      noise 4x2  38%  76%  75%  73%  75%  76%  76%  76%
+ *                      stripe     50% 100%  50%   0%  50% 100%  50%   0%
+ *                      check      25%  50%  75% 100%  75%  50%  25%   0%
+ *
+ *                    Blocks 4 wide by 2 tall rather than 4 by 1: one pixel of
+ *                    vertical detail scores better on that table and then
+ *                    loses most of it to the 5/3 vertical blend, which
+ *                    averages adjacent source rows. Two rows keeps a pure row
+ *                    per block. Pixels changed is not the same as seen.
+ *   DEMO_PAT_CHECK   4x4 checkerboard. Frequency on both axes, so it shows a
+ *                    displacement whichever way it runs — but blind wherever
+ *                    the rate hits a multiple of its 8px period.
+ *   DEMO_PAT_STRIPE  Horizontal bands, two rows on and two off. All of the
+ *                    frequency on the vertical axis, which is the one the
+ *                    column-major seam displaces, and the sharpest of these
+ *                    AT 2 px/frame — a half-period shift inverts it — and
+ *                    blind at 4.
+ *   DEMO_PAT_GRID    8px rules with a diagonal. The least sensitive and the
+ *                    only one that lets the step be COUNTED in pixels rather
+ *                    than just seen.
+ *
+ * All three are periodic on a power of two, so they stay endless under a
+ * negative offset: the masks below work on the wrapped value.
  */
+#define DEMO_PAT_NOISE 0
+#define DEMO_PAT_CHECK 1
+#define DEMO_PAT_STRIPE 2
+#define DEMO_PAT_GRID 3
+#define DEMO_PAT_COUNT 4
+
+static uint8_t demo_pat = DEMO_PAT_NOISE;
+
+/* One 4x4 block's shade. Any decent integer hash does; this is the mix from
+ * the xorshift family the audio dither already uses, over the block
+ * coordinates rather than a sequence, so the field is stable in space and
+ * scrolls with the offset instead of fizzing. */
+static uint8_t demo_noise(unsigned u, unsigned v)
+{
+    uint32_t h = (u >> 2) * 0x9E3779B1u ^ (v >> 1) * 0x85EBCA77u;
+
+    h ^= h >> 15;
+    h *= 0x2545F491u;
+    h ^= h >> 13;
+    return (uint8_t)(h & 3u);
+}
+
 static uint8_t demo_shade(unsigned u, unsigned v)
 {
-    if ((v & 7u) == 0u) {
-        return 3u;
+    switch (demo_pat) {
+    case DEMO_PAT_NOISE:
+        return demo_noise(u, v);
+    case DEMO_PAT_STRIPE:
+        return ((v >> 1) & 1u) ? 3u : 0u;
+    case DEMO_PAT_GRID:
+        if ((v & 7u) == 0u) {
+            return 3u;
+        }
+        if ((u & 7u) == 0u) {
+            return 2u;
+        }
+        if (((u + v) & 15u) < 2u) {
+            return 1u;
+        }
+        return 0u;
+    default:
+        return (((u >> 2) ^ (v >> 2)) & 1u) ? 3u : 0u;
     }
-    if ((u & 7u) == 0u) {
-        return 2u;
+}
+
+static const char* demo_pat_name()
+{
+    switch (demo_pat) {
+    case DEMO_PAT_CHECK:  return "check";
+    case DEMO_PAT_STRIPE: return "stripe";
+    case DEMO_PAT_GRID:   return "grid";
+    default:              return "noise";
     }
-    if (((u + v) & 15u) < 2u) {
-        return 1u;
-    }
-    return 0u;
 }
 
 /* Line `y` of the pattern into fb, where gnuboy's own line would have gone,
@@ -829,7 +1012,7 @@ static void demo_advance()
 {
     /* Same order and values as the firmware's GB_BTN_* masks. */
     const uint8_t RIGHT = 0x01, LEFT = 0x02, UP = 0x04, DOWN = 0x08;
-    const uint8_t A = 0x10, SELECT = 0x40;
+    const uint8_t A = 0x10, B = 0x20, SELECT = 0x40;
     uint8_t pressed = (uint8_t)(jpad & ~demo_prev_pad);
     int8_t was_x = demo_vx;
     int8_t was_y = demo_vy;
@@ -851,6 +1034,10 @@ static void demo_advance()
         demo_vx = 0;
         demo_vy = 0;
     }
+    if (pressed & B) {
+        demo_pat = (uint8_t)((demo_pat + 1u) % DEMO_PAT_COUNT);
+        Serial.printf("[DEMO] pattern %s\n", demo_pat_name());
+    }
     if (demo_vx > DEMO_RATE_MAX) {
         demo_vx = DEMO_RATE_MAX;
     }
@@ -866,8 +1053,8 @@ static void demo_advance()
     if ((pressed & SELECT) || demo_vx != was_x || demo_vy != was_y) {
         /* Once, on a change, and never on the frame path's own account: a
          * print every frame would itself cost most of one. */
-        Serial.printf("[DEMO] scroll %+d,%+d px/frame\n", (int)demo_vx,
-                      (int)demo_vy);
+        Serial.printf("[DEMO] %s scroll %+d,%+d px/frame\n", demo_pat_name(),
+                      (int)demo_vx, (int)demo_vy);
     }
     demo_sx = (int16_t)(demo_sx + demo_vx);
     demo_sy = (int16_t)(demo_sy + demo_vy);
@@ -914,7 +1101,7 @@ void emu_gnuboy_line(const unsigned char* line, int index)
          * the frame is whole. */
         frame_open = true;
         frame_seq++;
-#if PUSH_ORDER == PUSH_COL
+#if PUSH_TRANSPOSED
         open_frame_slot();
 #else
         commit_blocks(0, blk - 1);
@@ -925,7 +1112,7 @@ void emu_gnuboy_line(const unsigned char* line, int index)
     if (frame_dropped) {
         return;
     }
-#if PUSH_ORDER == PUSH_COL
+#if PUSH_TRANSPOSED
     /* Everything up to and including this line, which on the frame's first
      * drawn line covers the undrawn ones above it. gnuboy wrote the line into
      * fb before the hook fired, so it is there before this reads it. Nothing
@@ -987,7 +1174,7 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     if (!fb) {
         return false;
     }
-#if PUSH_ORDER == PUSH_COL
+#if PUSH_TRANSPOSED
     for (unsigned i = 0; i < FRAMEQUEUE_SLOTS; i++) {
         if (!tfb[i]) {
             tfb[i] = (uint8_t*)malloc((size_t)GB_SCREEN_H * SCALER_SRC_W);
@@ -1064,7 +1251,7 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     frame_open = false;
     cur_block = -1;
     last_line = -1;
-#if PUSH_ORDER == PUSH_COL
+#if PUSH_TRANSPOSED
     tpose_slot = -1;
     tpose_next = 0;
 #endif
@@ -1081,7 +1268,8 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
 #endif
     Serial.printf("[EMU] gnuboy '%s' %uKB push:%s heap:%u\n", title,
                   romlen / 1024,
-                  (PUSH_ORDER == PUSH_COL) ? "col" : "row",
+                  (PUSH_ORDER == PUSH_SCATTER) ? "scatter"
+                      : ((PUSH_ORDER == PUSH_COL) ? "col" : "row"),
                   ESP.getFreeHeap());
     return true;
 }

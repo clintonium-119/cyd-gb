@@ -151,15 +151,46 @@
 // Select the other order per invocation:
 //
 //   PLATFORMIO_BUILD_FLAGS=-DPUSH_ORDER=PUSH_COL pio run -e cyd-gnuboy
+// PUSH_SCATTER is the third option and it attacks a different property. The
+// other two differ in the artefact's SHAPE — a diagonal staircase against a
+// vertical line — because the write sweeps monotonically either way, so the
+// frame's temporal inconsistency lands along long, straight, continuous
+// edges. A long straight edge is about the most salient thing a display can
+// produce. Scatter writes the same blocks in an interleaved order, so the
+// same wrong pixels are chopped into many short boundaries with no coherent
+// line to lock onto. Same quantity of artefact, spread out.
+//
+// It costs one address window per block instead of one per frame, and a
+// transfer per block rather than per group: 54 transfers a frame at 5/3
+// against the column order's 27. Whether that reads better is an eye
+// question; whether the transfer count is affordable is a measurement.
 #define PUSH_ROW 0
 #define PUSH_COL 1
+#define PUSH_SCATTER 2
 
 #ifndef PUSH_ORDER
 #define PUSH_ORDER PUSH_ROW
 #endif
 
-#if PUSH_ORDER != PUSH_ROW && PUSH_ORDER != PUSH_COL
-#error "PUSH_ORDER must be PUSH_ROW or PUSH_COL."
+#if PUSH_ORDER != PUSH_ROW && PUSH_ORDER != PUSH_COL \
+    && PUSH_ORDER != PUSH_SCATTER
+#error "PUSH_ORDER must be PUSH_ROW, PUSH_COL or PUSH_SCATTER."
+#endif
+
+// Both transposed orders share the whole producer half — the second indexed
+// frame, the per-line transpose, the frame handed over in one queue block —
+// and differ only in how the consumer walks it.
+#define PUSH_TRANSPOSED (PUSH_ORDER != PUSH_ROW)
+
+// How far apart consecutive writes land, in scaler blocks. The walk is
+// interleaved passes — every Nth unit, then the gaps — which covers every
+// unit exactly once for any unit count, needing no coprimality with it.
+// 8 blocks is 40 output columns at 5/3, about 15% of the width.
+#ifndef SCATTER_STRIDE
+#define SCATTER_STRIDE 8
+#endif
+#if SCATTER_STRIDE < 2
+#error "SCATTER_STRIDE below 2 is not a scatter."
 #endif
 
 // ─── Game area ──────────────────────────────────────────────────────────────

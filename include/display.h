@@ -2,6 +2,7 @@
 #include <TFT_eSPI.h>
 #include <stddef.h>
 
+#include "render_config.h"   // PUSH_ORDER, GAME_W / GAME_H
 #include "ui/canvas.h"
 
 // Boot screens, the in-game menu and the save toast draw through the driver
@@ -93,6 +94,16 @@ void display_frame_end();
 //
 // The pointer is non-const for exactly that reason.
 void display_push_rows_dma(uint16_t* px, size_t n);
+
+// PUSH_SCATTER only: narrow the window to `cols` output columns starting at
+// `first_col` of the image, so blocks can be written out of order. The
+// viewport origin is the landscape one display_frame_begin() takes, and the
+// fill direction inside the window is unchanged — only which columns it
+// covers. Call inside the frame's write transaction, once per block.
+#if PUSH_ORDER == PUSH_SCATTER
+void display_col_window(int16_t x, int16_t y, uint16_t first_col,
+                        uint16_t cols);
+#endif
 
 // Block until every queued transfer has completed. The push task calls this
 // at frame end so display_frame_end()'s endWrite cannot truncate a transfer

@@ -442,7 +442,7 @@ int16_t display_draw_wrapped(const char* s, int16_t cx, int16_t top,
     return (int16_t)(top + row * row_h);
 }
 
-#if PUSH_ORDER == PUSH_COL
+#if PUSH_TRANSPOSED
 void display_frame_begin(int16_t x, int16_t y)
 {
     // Portrait, so that filling the window advances along a gate line and the
@@ -466,6 +466,25 @@ void display_frame_begin(int16_t x, int16_t y)
     set_orientation(TFT_ROTATION_LANDSCAPE);
     tft.startWrite();
     tft.setAddrWindow(x, y, GAME_W, GAME_H);
+}
+#endif
+
+#if PUSH_ORDER == PUSH_SCATTER
+void display_col_window(int16_t x, int16_t y, uint16_t first_col,
+                        uint16_t cols)
+{
+    // The same mapping display_frame_begin() uses, narrowed to a run of
+    // output columns. The scatter order writes blocks out of sequence, so the
+    // window moves with each one instead of the frame filling a single
+    // window; the fill direction inside it is unchanged, which is why the
+    // scaler still lays each block's columns down the same way.
+#if FRAME_COLS_DESCENDING
+    tft.setAddrWindow(y, (int16_t)(SCREEN_W - x - first_col - cols),
+                      GAME_H, cols);
+#else
+    tft.setAddrWindow((int16_t)(SCREEN_H - y - GAME_H),
+                      (int16_t)(x + first_col), GAME_H, cols);
+#endif
 }
 #endif
 
@@ -619,8 +638,8 @@ void display_bus_release()
 }
 
 #ifdef PANEL_FILL_PROBE
-#if PUSH_ORDER != PUSH_COL
-#error "PANEL_FILL_PROBE probes the column-major window; build it with -DPUSH_ORDER=PUSH_COL."
+#if !PUSH_TRANSPOSED
+#error "PANEL_FILL_PROBE probes the transposed window; build it with -DPUSH_ORDER=PUSH_COL."
 #endif
 // ─── Fill-direction probe (bench only) ──────────────────────────────────────
 // Which way the portrait address window fills cannot be read back: the panel
