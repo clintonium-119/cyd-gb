@@ -796,7 +796,12 @@ static void push_tile(const uint8_t* tframe, const uint16_t* const* src_cols,
 
     if (TILE_LAST_COLS && tile == TILE_COUNT - 1u) {
         /* The far edge: whatever blocks did not fill a group, plus the tail,
-         * full height. At 5/3 that is one block and one column. */
+         * full height. At 5/3 that is one block and one column.
+         *
+         * Buffer position 0 is whichever end of the landscape x axis the
+         * window fills FIRST, so under a descending fill the tail leads and
+         * the blocks follow in descending index order. Packing them the other
+         * way swaps them on screen, which a static picture shows outright. */
         unsigned b;
         unsigned at = 0;
 
@@ -804,6 +809,15 @@ static void push_tile(const uint8_t* tframe, const uint16_t* const* src_cols,
         cols = TILE_LAST_COLS;
         first_row = 0;
         rows = GAME_H;
+#if FRAME_COLS_DESCENDING
+        if (COL_TAIL_COLS) {
+            at += scale_unit(tframe, COL_BLOCKS, src_cols, buf);
+        }
+        for (b = TILE_LEFT_BLOCKS; b-- > 0;) {
+            at += scale_unit(tframe, TILE_GROUPS * COL_BLOCK_UNITS + b,
+                             src_cols, buf + (size_t)at * GAME_H);
+        }
+#else
         for (b = 0; b < TILE_LEFT_BLOCKS; b++) {
             at += scale_unit(tframe, TILE_GROUPS * COL_BLOCK_UNITS + b,
                              src_cols, buf + (size_t)at * GAME_H);
@@ -812,6 +826,7 @@ static void push_tile(const uint8_t* tframe, const uint16_t* const* src_cols,
             (void)scale_unit(tframe, COL_BLOCKS, src_cols,
                              buf + (size_t)at * GAME_H);
         }
+#endif
     } else {
         unsigned g = tile / TILE_SLICES;
         unsigned k = tile % TILE_SLICES;
@@ -826,6 +841,16 @@ static void push_tile(const uint8_t* tframe, const uint16_t* const* src_cols,
             unsigned base = u * UNIT_LINES;
             const uint16_t* la = nullptr;
             unsigned count = UNIT_LINES;
+            /* Where in the buffer this block's columns belong. Position 0 is
+             * the end of the landscape x axis the window fills first, so a
+             * descending fill wants the group's blocks in reverse — and
+             * getting it wrong swaps the halves of every tile, which a static
+             * picture shows outright rather than hiding in the artefact. */
+#if FRAME_COLS_DESCENDING
+            unsigned slot = COL_BLOCK_UNITS - 1u - b;
+#else
+            unsigned slot = b;
+#endif
 
             if (geom->uses_lookahead && base + UNIT_LINES < SCALER_SRC_W) {
                 count++;
@@ -836,7 +861,7 @@ static void push_tile(const uint8_t* tframe, const uint16_t* const* src_cols,
             }
             (void)scaler_scale_col_rows(SCALE_GEOM, SCALER_MODE_BLEND,
                                         src_cols, la,
-                                        buf + (size_t)b * UNIT_ROWS * rows,
+                                        buf + (size_t)slot * UNIT_ROWS * rows,
                                         scratch_row, COL_ORDER,
                                         k * TILE_SRC_ROWS, TILE_SRC_ROWS);
         }
