@@ -37,6 +37,9 @@ static bool dma_ready = false;
 // the real cadence is measured rather than assumed.
 static uint8_t trim_fpa = PANEL_PORCH_FPA;
 static uint8_t trim_ratio = PANEL_PORCH_RATIO;
+// Any serial key hands control over for good: an auto-null that argued with
+// the person turning the knob would be unusable.
+static bool manual = false;
 
 static void write_porch(uint8_t fpa)
 {
@@ -69,14 +72,48 @@ static void porch_advance()
     }
 }
 
-/* Panel rate this trim gives, from the one fixed point the bench has: the
- * fixture nulled at 11 + 20/64 against a 59.7275 Hz source, so the panel runs
- * at that rate there and scales inversely with the total line count. This is
- * a measurement of THIS panel, not a datasheet number. */
+// The anchor: one porch setting whose true panel rate is known, from which
+// every other setting follows, because the rate scales inversely with the
+// total line count. It is per unit - it measures THIS panel's oscillator
+// error, which the datasheet does not give and no register reports - and it
+// is the one number in the whole scheme that needs a human, because a null is
+// the only observable this hardware offers.
+//
+// Default: the stripe fixture nulled at 11 + 20/64 against its own 59.7275 Hz
+// pacing on 2026-09-20. The eye placed that null to about +/-4/64, which is
+// +/-0.011 Hz, which is the floor on how well any of this can park a seam.
+#ifndef PANEL_ANCHOR_FPA
+#define PANEL_ANCHOR_FPA 11
+#endif
+#ifndef PANEL_ANCHOR_RATIO
+#define PANEL_ANCHOR_RATIO 20
+#endif
+#ifndef PANEL_ANCHOR_HZ
+#define PANEL_ANCHOR_HZ 59.7275
+#endif
+#define PANEL_ANCHOR_LINES \
+    (332.0 + (double)PANEL_ANCHOR_FPA + (double)PANEL_ANCHOR_RATIO / 64.0)
+
 static double panel_hz(uint8_t fpa, uint8_t ratio)
 {
-    return 59.7275 * (332.0 + 11.0 + 20.0 / 64.0)
-                   / (332.0 + (double)fpa + (double)ratio / 64.0);
+    return PANEL_ANCHOR_HZ * PANEL_ANCHOR_LINES
+                           / (332.0 + (double)fpa + (double)ratio / 64.0);
+}
+
+/* The porch that would put the panel on `hz`, in 64ths of a line. Returns
+ * false if it lands outside what PORCTRL can express. */
+static bool porch_for(double hz, uint8_t* fpa, uint8_t* ratio)
+{
+    double lines = PANEL_ANCHOR_HZ * PANEL_ANCHOR_LINES / hz - 332.0;
+    long sixtyfourths;
+
+    if (hz < 1.0 || lines < 1.0 || lines > 126.0) {
+        return false;
+    }
+    sixtyfourths = (long)(lines * 64.0 + 0.5);
+    *fpa = (uint8_t)(sixtyfourths / 64);
+    *ratio = (uint8_t)(sixtyfourths % 64);
+    return true;
 }
 
 static void trim_report(const char* why, double emu_hz)
@@ -167,6 +204,23 @@ static void trim_console()
                       (double)(now - t0) / 1000000.0);
         trim_report("cumulative", emu_hz);
         next_report = now + 10000000;
+
+        // Apply the null the measurement implies, once the estimate has had
+        // long enough to be worth applying and thereafter only when it has
+        // actually moved. Sixty seconds of frames is about 0.006 Hz of
+        // counting error, finer than the anchor itself, so waiting longer
+        // buys nothing the anchor has not already lost.
+        if (now - t0 >= 60000000 && !manual) {
+            uint8_t want_fpa;
+            uint8_t want_ratio;
+
+            if (porch_for(emu_hz, &want_fpa, &want_ratio)
+                && (want_fpa != trim_fpa || want_ratio != trim_ratio)) {
+                trim_fpa = want_fpa;
+                trim_ratio = want_ratio;
+                trim_report("AUTO-NULL", emu_hz);
+            }
+        }
     }
 
     while (Serial.available() > 0) {
@@ -200,6 +254,7 @@ static void trim_console()
             default:
                 continue;
         }
+        manual = true;
         trim_report("set", emu_hz);
     }
 }
