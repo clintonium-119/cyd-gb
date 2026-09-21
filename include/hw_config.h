@@ -76,6 +76,35 @@
 #define PANEL_SCAN_REVERSE 1
 #endif
 
+// ─── Panel rate trim ────────────────────────────────────────────────────────
+// PORCTRL's front porch, in whole lines plus 64ths of a line, which is what a
+// unit carries in NVS once it has been calibrated. One line is about 0.17 Hz —
+// coarser than the oscillator error being cancelled — so the porch alternates
+// between neighbouring values and the 64ths are the duty of that alternation.
+//
+// These are the values an UNCALIBRATED unit runs at, not a constant the code
+// relies on: every unit's own pair overrides them from the store. They are the
+// batch-typical null rather than the panel's power-on porch, because the blind
+// trial of 2026-09-21 scored a foreign constant at 9-12 s between seam
+// crossings against under 5 s for power-on — so a shared value makes an
+// unvisited unit mediocre where power-on makes it bad. Evidence is one board,
+// which is why the choice is cheap to move and lives here.
+//
+// The pair is the committed anchor, 11 + 20/64: the stripe fixture's null of
+// 2026-09-20 and the rate every build since has been measured against.
+#ifndef PANEL_TRIM_FPA
+#define PANEL_TRIM_FPA 11
+#endif
+#ifndef PANEL_TRIM_RATIO
+#define PANEL_TRIM_RATIO 20
+#endif
+#if PANEL_TRIM_FPA < 1 || PANEL_TRIM_FPA > 126
+#error "PANEL_TRIM_FPA is a PORCTRL front porch in lines: 1..126."
+#endif
+#if PANEL_TRIM_RATIO > 63
+#error "PANEL_TRIM_RATIO is 64ths of a line: 0..63."
+#endif
+
 // Which end of the landscape x axis the portrait address window starts at.
 // Rotation 2 advances against landscape x once a gate line is filled, so the
 // frame path hands its output columns over right to left; rotation 0 runs the

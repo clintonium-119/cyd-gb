@@ -11,7 +11,6 @@ TFT_eSPI tft = TFT_eSPI();
 // this is false - see display_push_rows_dma().
 static bool dma_ready = false;
 
-#ifdef PANEL_PORCH_FPA
 // ─── Panel rate trim ────────────────────────────────────────────────────────
 // The tear is the emulator's audio-locked 59.7275 fps beating against the
 // panel's free-running refresh, and PANEL_PROBE established that this panel
@@ -21,25 +20,11 @@ static bool dma_ready = false;
 // makes the average continuous. Both numbers are per unit, because the null
 // measures that panel's own oscillator error.
 //
-// Trim values come from the PANEL_TRIM fixture. This is the verification
-// build that applies one: a real game, the real frame path, the numbers the
-// bench found.
-//
-//   PLATFORMIO_BUILD_FLAGS='-DPANEL_PORCH_FPA=11 -DPANEL_PORCH_RATIO=16 ...'
-#ifndef PANEL_PORCH_RATIO
-#define PANEL_PORCH_RATIO 0
-#endif
-
-// Live, because the fixture's null was measured against a timer set to the
-// emulator's ASSUMED 59.7275 fps, and the game is paced by the audio DMA at
-// whatever rate the I2S divider really produces. The two are not the same
-// question, so the trim is driven over the serial port while a game runs and
-// the real cadence is measured rather than assumed.
-static uint8_t trim_fpa = PANEL_PORCH_FPA;
-static uint8_t trim_ratio = PANEL_PORCH_RATIO;
-// Any serial key hands control over for good: an auto-null that argued with
-// the person turning the knob would be unusable.
-static bool manual = false;
+// They arrive from NVS through display_set_trim(), which is why these hold the
+// uncalibrated default rather than a build flag: the bench's trim flags were
+// the mechanism before a unit could carry its own, and they are not it now.
+static uint8_t trim_fpa = PANEL_TRIM_FPA;
+static uint8_t trim_ratio = PANEL_TRIM_RATIO;
 
 static void write_porch(uint8_t fpa)
 {
@@ -52,9 +37,9 @@ static void write_porch(uint8_t fpa)
 }
 
 // One frame of the divider, from display_frame_end(): the panel spends
-// PANEL_PORCH_RATIO frames in 64 on the longer porch, so the average line
-// count is fractional even though each frame's is not. Six bytes of SPI on
-// the frames where the value changes, with the bus already idle.
+// trim_ratio frames in 64 on the longer porch, so the average line count is
+// fractional even though each frame's is not. Six bytes of SPI on the frames
+// where the value changes, with the bus already idle.
 static void porch_advance()
 {
     static uint8_t acc = 0;
@@ -71,6 +56,30 @@ static void porch_advance()
         applied = want;
     }
 }
+
+void display_set_trim(uint8_t fpa, uint8_t ratio)
+{
+    trim_fpa = fpa;
+    trim_ratio = ratio;
+    // Applied here rather than left to the next frame end, so a unit that
+    // never reaches the frame path - the diagnostic screen, the boot flow -
+    // still runs at its own rate. The divider picks it up from the next frame.
+    write_porch(trim_fpa);
+    Serial.printf("[TFT] porch trim %u + %u/64\n", (unsigned)trim_fpa,
+                  (unsigned)trim_ratio);
+}
+
+#ifdef PANEL_TRIM_CONSOLE
+// The bench instrument, not the shipping mechanism: it drives the live trim
+// over the serial port while a game runs, and measures the cadence the frame
+// path is REALLY paced at, because the null was originally placed against an
+// assumed 59.7275 fps rather than whatever the I2S divider produces.
+//
+//   PLATFORMIO_BUILD_FLAGS='-DPANEL_TRIM_CONSOLE ...'
+//
+// Any serial key hands control over for good: an auto-null that argued with
+// the person turning the knob would be unusable.
+static bool manual = false;
 
 // The anchor: one porch setting whose true panel rate is known, from which
 // every other setting follows, because the rate scales inversely with the
@@ -423,11 +432,10 @@ void display_init()
     if (!dma_ready) {
         Serial.println("[TFT] DMA init FAILED - frame path unavailable");
     }
-#ifdef PANEL_PORCH_FPA
-    write_porch(PANEL_PORCH_FPA);
-    Serial.printf("[TFT] porch trim %d + %d/64\n", (int)PANEL_PORCH_FPA,
-                  (int)PANEL_PORCH_RATIO);
-#endif
+    // The uncalibrated default, applied now so the panel has a rate before
+    // anything is loaded from NVS. display_set_trim() replaces it with the
+    // unit's own pair once settings are in hand.
+    write_porch(trim_fpa);
     tft.fillScreen(TFT_BLACK);
     ledcSetup(0, 5000, 8);
     ledcAttachPin(TFT_PIN_BL, 0);
@@ -518,8 +526,8 @@ void display_push_rows(const uint16_t* px, size_t n)
 void display_frame_end()
 {
     tft.endWrite();
-#ifdef PANEL_PORCH_FPA
     porch_advance();
+#ifdef PANEL_TRIM_CONSOLE
     trim_console();
 #endif
 }

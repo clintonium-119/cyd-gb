@@ -31,6 +31,11 @@ void settings_defaults(settings_t* s) {
     s->volume = SETTINGS_VOL_HIGH + 1;
     s->game_x = GAME_X;
     s->game_y = GAME_Y;
+    // The batch-typical null, not the panel's power-on porch. An
+    // uncalibrated unit is then mediocre rather than bad; a calibrated one
+    // overwrites both from the store.
+    s->trim_fpa = PANEL_TRIM_FPA;
+    s->trim_ratio = PANEL_TRIM_RATIO;
 }
 
 bool settings_load(settings_t* s) {
@@ -43,6 +48,8 @@ bool settings_load(settings_t* s) {
         s->volume = prefs.getUChar("vol", s->volume);
         s->game_x = prefs.getShort("gx", s->game_x);
         s->game_y = prefs.getShort("gy", s->game_y);
+        s->trim_fpa = prefs.getUChar("tfpa", s->trim_fpa);
+        s->trim_ratio = prefs.getUChar("trat", s->trim_ratio);
     }
     prefs.end();
 
@@ -73,6 +80,18 @@ bool settings_load(settings_t* s) {
     } else if (s->game_y > (int16_t)(SCREEN_H - GAME_H)) {
         s->game_y = (int16_t)(SCREEN_H - GAME_H);
     }
+    // A porch of 0 would be a frame the panel cannot scan and a ratio past
+    // 63 would carry into the whole-line count on the wrong frame, so both
+    // are clamped on the way in — the same stance as volume and the nudge,
+    // and for the same reason: one place knows the encoding.
+    if (s->trim_fpa == 0) {
+        s->trim_fpa = 1;
+    } else if (s->trim_fpa > 126) {
+        s->trim_fpa = 126;
+    }
+    if (s->trim_ratio > 63) {
+        s->trim_ratio = 63;
+    }
     return has;
 }
 
@@ -84,6 +103,8 @@ void settings_save(const settings_t* s) {
     prefs.putUChar("vol", s->volume);
     prefs.putShort("gx", s->game_x);
     prefs.putShort("gy", s->game_y);
+    prefs.putUChar("tfpa", s->trim_fpa);
+    prefs.putUChar("trat", s->trim_ratio);
     prefs.end();
 }
 

@@ -557,6 +557,7 @@ void setup() {
         settings_load(&settings);
         display_init();
         display_set_backlight(settings.brightness);
+        display_set_trim(settings.trim_fpa, settings.trim_ratio);
         // A missing card is a page result in this mode, not a halt: a unit
         // whose card is the fault is exactly the unit a builder is holding.
         bool sd_ok = sd_init();
@@ -598,6 +599,7 @@ void setup() {
     display_panel_probe();
 #endif
     display_set_backlight(settings.brightness);
+    display_set_trim(settings.trim_fpa, settings.trim_ratio);
     emu_set_palette(settings.palette);
 #ifdef DEV_FRAMESKIP
     // Bench only: force the frameskip setting for a measurement build.

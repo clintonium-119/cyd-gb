@@ -11,6 +11,16 @@ extern TFT_eSPI tft;
 
 void display_init();
 void display_set_backlight(uint8_t level);
+
+// The per-unit panel rate trim: PORCTRL's front porch in whole lines, and the
+// 64ths of a line the frame-end divider dithers on top of it. Call it once the
+// settings are loaded, the same way the backlight is handed over; until then
+// the panel runs at the uncalibrated default in hw_config.h.
+//
+// Nulls the beat between the panel's free-running refresh and the emulator's
+// audio-paced cadence, which is what decides how often the seam crosses the
+// screen — not whether there is one. That is the push order's question.
+void display_set_trim(uint8_t fpa, uint8_t ratio);
 void display_clear(uint16_t color = TFT_BLACK);
 
 // ─── Wrapped text ───────────────────────────────────────────────────────────

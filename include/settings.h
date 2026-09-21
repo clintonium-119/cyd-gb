@@ -13,6 +13,13 @@ struct settings_t {
     uint8_t volume;
     int16_t game_x;
     int16_t game_y;
+    // The panel rate trim: PORCTRL's front porch in whole lines, and the
+    // 64ths of a line the fractional divider dithers on top of it. Per unit
+    // for the same reason the nudge is — it measures this panel's own
+    // oscillator error against the emulator's audio-paced cadence, and that
+    // number does not travel between boards.
+    uint8_t trim_fpa;
+    uint8_t trim_ratio;
 };
 
 // volume is an index, not a level: design §4's vol_lut is {high, med, low} and
