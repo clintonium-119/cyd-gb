@@ -138,6 +138,22 @@ void display_dma_wait();
 void display_bus_acquire();
 void display_bus_release();
 
+// ─── Panel frame rate (bench only) ──────────────────────────────────────────
+// Step the panel's own refresh rate through FRCTRL2's RTNA values, applied at
+// the next frame boundary by the core that owns the bus. Returns the nominal
+// rate in Hz of the step landed on - the datasheet's figure at the default
+// porch, which is a label rather than a measurement, because this panel's
+// oscillator is its own and nothing can read the real rate back.
+//
+// Raising the rate is the opposite bet from the rest of the tearing work: it
+// makes no frame clean, and hopes a fast enough artefact stops reading as a
+// line. See src/display.cpp.
+//
+//   PLATFORMIO_BUILD_FLAGS='-DPANEL_FRAME_RATE=0x0F' pio run -e cyd-gnuboy
+#ifdef PANEL_FRAME_RATE
+uint16_t display_frame_rate_step(int delta);
+#endif
+
 // ─── Fill-direction probe (bench only) ──────────────────────────────────────
 // Pushes a pattern of known push ORDER through the real column-major frame
 // window, so the panel reports which way the window fills in each axis — the

@@ -1034,6 +1034,7 @@ static void emu_push_task(void* arg)
 //   Left / Right  horizontal scroll -1 / +1 px per frame
 //   A             stop
 //   B             next pattern: noise, checkerboard, stripes, grid
+//   Start         next panel refresh rate, with PANEL_FRAME_RATE built in
 //   Select        print the current pattern and rate
 //
 // Vertical scroll is the one that matters for the column-major push: its seam
@@ -1175,7 +1176,7 @@ static void demo_advance()
 {
     /* Same order and values as the firmware's GB_BTN_* masks. */
     const uint8_t RIGHT = 0x01, LEFT = 0x02, UP = 0x04, DOWN = 0x08;
-    const uint8_t A = 0x10, B = 0x20, SELECT = 0x40;
+    const uint8_t A = 0x10, B = 0x20, SELECT = 0x40, START = 0x80;
     uint8_t pressed = (uint8_t)(jpad & ~demo_prev_pad);
     int8_t was_x = demo_vx;
     int8_t was_y = demo_vy;
@@ -1201,6 +1202,16 @@ static void demo_advance()
         demo_pat = (uint8_t)((demo_pat + 1u) % DEMO_PAT_COUNT);
         Serial.printf("[DEMO] pattern %s\n", demo_pat_name());
     }
+#ifdef PANEL_FRAME_RATE
+    if (pressed & START) {
+        /* The panel's own refresh, not the emulator's delivery. Nominal: the
+         * real rate cannot be read back off this panel. */
+        Serial.printf("[DEMO] panel refresh ~%u Hz nominal\n",
+                      (unsigned)display_frame_rate_step(1));
+    }
+#else
+    (void)START;
+#endif
     if (demo_vx > DEMO_RATE_MAX) {
         demo_vx = DEMO_RATE_MAX;
     }
