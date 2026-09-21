@@ -29,35 +29,41 @@
 // 0 goes with 1, 2 goes with 3 — because the two differ by 180 degrees and
 // the frame path maps the landscape viewport origin through the pair.
 //
-// The two candidates differ in BOTH axes, because rotation 2 mirrors the pair
-// rotation 0 leaves alone, so exactly one of them is usable and the probe is
-// what says which. Both place the window correctly; they differ in the
-// direction the window fills:
+// MEASURED, not inferred, by PANEL_FILL_PROBE on 2026-09-21: pushing a known
+// column order through the real window at rotation 0 put the first column at
+// the LEFT and the first pixels of a column at the BOTTOM. So at rotation 0
+// the slow axis runs with landscape x and the fast axis runs AGAINST
+// landscape y — which would render every column upside down, because the
+// order of the pixels inside a column is the one thing the frame path cannot
+// cheaply reverse.
 //
-//   the fast axis, along a gate line, runs with or against landscape y
-//   the slow axis, across gate lines, runs with or against landscape x
+// Rotation 2 mirrors both, so its fast axis runs with landscape y and its
+// slow axis against landscape x. That is the usable pairing, and the
+// backwards slow axis is free: FRAME_COLS_DESCENDING below has the scaler lay
+// each block's columns down in reverse, which costs a sign on a stride.
 //
-// The slow axis is free — FRAME_COLS_DESCENDING below hands the scaler's
-// columns over in whichever order it wants, at the cost of a sign on a
-// stride. The fast axis is not: it is the order the pixels inside one column
-// already sit in, so the rotation whose fast axis runs against landscape y
-// would need every column reversed as well, and that is the one to reject.
-//
-// PANEL_FILL_PROBE reports both directions off one boot. Until it has run,
-// this is the pairing the driver's MADCTL table implies and not a measurement.
+// It follows the landscape rotation rather than standing alone, because the
+// two landscape values are 180 degrees apart and so are the two portrait
+// ones: flipping TFT_ROTATION_LANDSCAPE to 3 for a shell that puts the USB
+// socket on the other side has to flip this with it, or the game image turns
+// over while the UI does not.
 #ifndef TFT_ROTATION_PORTRAIT
+#if TFT_ROTATION_LANDSCAPE == 1
+#define TFT_ROTATION_PORTRAIT 2
+#else
 #define TFT_ROTATION_PORTRAIT 0
+#endif
 #endif
 #if TFT_ROTATION_PORTRAIT != 0 && TFT_ROTATION_PORTRAIT != 2
 #error "TFT_ROTATION_PORTRAIT must be 0 or 2 — a landscape value is not a scan-order mapping."
 #endif
 
 // Which end of the landscape x axis the portrait address window starts at.
-// Rotation 0 against landscape 1 advances AGAINST landscape x once a gate
-// line is filled, so the frame path hands its output columns over right to
-// left; rotation 2 reverses both. Derived here rather than at the two call
-// sites so the window origin and the walk direction cannot disagree.
-#if TFT_ROTATION_PORTRAIT == 0
+// Rotation 2 advances against landscape x once a gate line is filled, so the
+// frame path hands its output columns over right to left; rotation 0 runs the
+// other way in both axes. Derived here rather than at the two call sites so
+// the window origin and the walk direction cannot disagree.
+#if TFT_ROTATION_PORTRAIT == 2
 #define FRAME_COLS_DESCENDING 1
 #else
 #define FRAME_COLS_DESCENDING 0

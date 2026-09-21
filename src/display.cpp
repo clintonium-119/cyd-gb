@@ -308,12 +308,53 @@ static void trim_console()
 // portrait every frame and gets a no-op on all but the first after a menu.
 static uint8_t rot_now = TFT_ROTATION_LANDSCAPE;
 
+#ifdef PANEL_SCAN_REVERSE
+// MADCTL's ML bit, the vertical refresh order: it reverses the order the gate
+// lines are SCANNED OUT without touching how the frame memory maps to them, so
+// the image does not move and only the direction the refresh sweeps does.
+//
+// That is the one lever left on the direction the write and the refresh pass
+// each other. Writing against the sweep crosses it exactly once every frame,
+// which is a seam on every frame of every boot; writing with it can leave the
+// write ahead of the scan for a whole frame, which is no seam at all. The
+// bench says every boot has a seam, so this board's sweep runs against the
+// order the portrait window fills, and this is the bit that turns it round.
+//
+// The value is the rotation's own MADCTL with ML set. TFT_eSPI's ST7789 table
+// writes MX | MY | COLOR_ORDER for rotation 2, and this project builds
+// TFT_RGB_ORDER=TFT_BGR, so that is 0x40 | 0x80 | 0x08 — and 0x10 on top.
+#define MADCTL_MX 0x40u
+#define MADCTL_MY 0x80u
+#define MADCTL_ML 0x10u
+#define MADCTL_BGR 0x08u
+
+static void write_madctl_scan_reversed(uint8_t rot)
+{
+    uint8_t madctl = MADCTL_BGR | MADCTL_ML;
+
+    if (rot == 2) {
+        madctl |= MADCTL_MX | MADCTL_MY;
+    }
+    tft.writecommand(0x36);
+    tft.writedata(madctl);
+}
+#endif
+
 static void set_orientation(uint8_t rot)
 {
     if (rot_now == rot) {
         return;
     }
     tft.setRotation(rot);
+#ifdef PANEL_SCAN_REVERSE
+    // After setRotation, which writes MADCTL itself: this re-writes it with
+    // the refresh order reversed. Only for the frame path's orientation — the
+    // UI has no seam to chase, and leaving its scan alone keeps the probe
+    // honest about what changed.
+    if (rot == TFT_ROTATION_PORTRAIT) {
+        write_madctl_scan_reversed(rot);
+    }
+#endif
     rot_now = rot;
 }
 
