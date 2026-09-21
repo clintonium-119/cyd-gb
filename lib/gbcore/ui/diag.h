@@ -50,8 +50,21 @@ enum diag_page_e {
     DIAG_PAGE_AUDIO,
     DIAG_PAGE_DISPLAY,
     DIAG_PAGE_NUDGE,
+    DIAG_PAGE_TRIM,
     DIAG_PAGE_SYSTEM,
     DIAG_PAGE_COUNT,
+};
+
+/*
+ * The panel-trim page's two states. It is the only page with any, and it has
+ * them because the fixture it calibrates against fills the whole window: at
+ * the shipped geometry the window is 266 x 240 of a 320 x 240 panel, so there
+ * is no margin to put a readout in. The page therefore either shows numbers or
+ * shows the fixture, never both.
+ */
+enum diag_trim_state_e {
+    DIAG_TRIM_IDLE = 0,
+    DIAG_TRIM_RUNNING,
 };
 
 enum diag_pattern_e {
@@ -81,6 +94,73 @@ enum diag_nfc_state_e {
 /* How long "Saved" stays up after the nudge is committed. */
 #define DIAG_TOAST_MS 800
 
+/* ─── Panel trim ─────────────────────────────────────────────────────────────
+ * The page nulls the beat between the panel's free-running refresh and the
+ * emulator's audio-paced cadence, by lengthening the frame with PORCTRL's
+ * front porch. It does not ask the builder to judge when the seam has stopped
+ * — a static discontinuity in scrolling content is perceived as travelling
+ * with the content, which is what biased the measurement this replaces. It
+ * asks them to COUNT, which that illusion cannot affect: the seam wraps as
+ * often as it wraps whatever it looks like it is doing between wraps.
+ *
+ * The arithmetic needs no clock and no anchor. One crossing is exactly one
+ * frame of slip, so over N frames between crossings the two rates differ by
+ * 1 part in N, and the frame's line count has to move by the same fraction:
+ *
+ *     correction, in 64ths of a line  =  (64 * total lines) / N
+ *
+ * with the total in 64ths already, which makes it a single integer divide. N
+ * is a count of frames the page itself pushed, so the cadence it nulls against
+ * is by construction the one it ran at.
+ */
+
+/* 64ths of a line per Up/Down press, carrying into the whole-line knob. One
+ * press is about 0.011 Hz, which parks a seam for a minute and a half, and is
+ * the finest distinction an eye can make. */
+#define DIAG_TRIM_FINE 4
+
+/* Crossings averaged before the page corrects itself. Three, because a
+ * builder's reaction spread is a few tenths of a second either way: at the
+ * 9-12 s interval a badly trimmed unit shows, that is a few per cent on one
+ * interval and the mean of three brings it under two. */
+#define DIAG_TRIM_MARKS 3
+
+/* A mark this soon after the last one is a bounced button rather than a
+ * crossing — half a second at the emulator's cadence. */
+#define DIAG_TRIM_MIN_FRAMES 30
+
+/* Output pixels the fixture scrolls per frame, vertically. Stated rather than
+ * left to the page because the rate is half of what makes a fixture
+ * sensitive: a periodic pattern goes blind wherever the scroll equals a whole
+ * period, and this one is scrolled by exactly one block height so a one-frame
+ * displacement lands on a fresh row of blocks every time. Vertical because
+ * the column-major push makes the seam a vertical line with a vertical
+ * displacement across it. */
+#define DIAG_TRIM_SCROLL 2
+
+/* The fixture's block, in output pixels. Four across for texture, two down so
+ * one frame of scroll is one whole block. */
+#define DIAG_TRIM_BLOCK_W 4
+#define DIAG_TRIM_BLOCK_H 2
+
+/* Lines in a frame the front porch does not contribute, in 64ths: the panel's
+ * active lines plus its back porch and pulse width. Mirrored from
+ * render/panel_rate.h's PANEL_RATE_BASE_LINES rather than included, for the
+ * same reason this file mirrors the combo module's button bits — the state
+ * machine reaches for nothing below itself. */
+#define DIAG_TRIM_BASE_LINES_X64 (332 * 64)
+
+/* The emulator's audio-paced cadence, x100, for turning a frame count into
+ * the seconds a builder can relate to. Display only: nothing the page
+ * calculates uses it, which is why an approximate cadence here costs the
+ * calibration nothing. */
+#define DIAG_TRIM_FPS_X100 5973
+
+/* What PORCTRL's 7-bit front porch can hold, in 64ths. The top is 126 + 63/64
+ * because the divider programs one line more on its long frames. */
+#define DIAG_TRIM_MIN_X64 (1 * 64)
+#define DIAG_TRIM_MAX_X64 (126 * 64 + 63)
+
 /* Length cap on the two build strings the binding copies in, terminator
  * included. A `git describe` on this repository plus a UTC stamp both fit
  * inside it with room to spare. */
@@ -96,6 +176,10 @@ enum diag_nfc_state_e {
 #define DIAG_EV_NFC_SCAN    0x08
 #define DIAG_EV_TONE        0x10
 #define DIAG_EV_FRAMESKIP   0x20
+#define DIAG_EV_SAVE_TRIM   0x40
+/* The trim page entered or left its fixture: the binding runs a different
+ * loop in each state, so this is the one event it must not miss. */
+#define DIAG_EV_TRIM_STATE  0x80
 
 enum diag_result_e {
     DIAG_OK = 0,
@@ -183,6 +267,24 @@ typedef struct diag_s {
     uint8_t frameskip;
     uint32_t toast_until_ms;
     bool toast;
+
+    /* Panel trim. The working porch, the one B restores, and everything the
+     * crossing count needs. */
+    uint8_t trim_fpa;
+    uint8_t trim_ratio;
+    uint8_t default_trim_fpa;
+    uint8_t default_trim_ratio;
+    uint8_t trim_state;       /* enum diag_trim_state_e                     */
+    /* Which way the last correction moved the porch. Never asked of the
+     * builder: a correction that made the interval shorter went the wrong
+     * way, and the page reads that off its own two measurements. */
+    int8_t trim_dir;
+    uint8_t trim_marks;       /* crossings marked this run                  */
+    uint32_t trim_frames;     /* frames the binding has pushed this run     */
+    uint32_t trim_first_frame; /* the frame count the first mark landed on   */
+    uint32_t trim_span;       /* mean frames per crossing, last run         */
+    uint32_t trim_prev_span;  /* the run before, for the direction test     */
+    int16_t trim_step;        /* 64ths the last correction moved, signed    */
 } diag_t;
 
 /*
@@ -194,6 +296,8 @@ typedef struct diag_s {
  *   default_x/y  the compile-time origin, clamped the same way
  *   volume       stored volume index, clamped into MIX_VOL_HIGH..MIX_VOL_OFF
  *   frameskip    stored frameskip, clamped into 0..DIAG_FRAMESKIP_MAX
+ *   trim_fpa     stored front porch in whole lines, clamped into 1..126
+ *   trim_ratio   stored 64ths of a line, clamped into 0..63
  *
  * A stored value that arrives out of range is clamped rather than refused:
  * the page has to show something, and a setting that repairs itself is better
@@ -205,7 +309,8 @@ typedef struct diag_s {
 int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
               int16_t win_w, int16_t win_h, int16_t x, int16_t y,
               int16_t default_x, int16_t default_y,
-              uint8_t volume, uint8_t frameskip);
+              uint8_t volume, uint8_t frameskip,
+              uint8_t trim_fpa, uint8_t trim_ratio);
 
 /*
  * One sample taken at now_ms: the combo event this call produced (an
@@ -239,6 +344,44 @@ uint8_t diag_volume(const diag_t* d);
 uint8_t diag_pattern(const diag_t* d);
 uint8_t diag_frameskip(const diag_t* d);
 bool diag_toast_active(const diag_t* d, uint32_t now_ms);
+
+/* ─── Panel trim ─────────────────────────────────────────────────────────── */
+
+/* The working porch. Both pointers may be NULL. */
+void diag_trim(const diag_t* d, uint8_t* fpa, uint8_t* ratio);
+
+/* True while the page wants the fixture pushed rather than the page drawn. */
+bool diag_trim_running(const diag_t* d);
+
+/*
+ * One pushed frame of the fixture, counted. The binding calls this once per
+ * frame it puts on the panel and nowhere else — the count IS the measurement,
+ * so a frame counted that was not pushed, or pushed and not counted, is an
+ * error in the calibration rather than in the bookkeeping.
+ *
+ * Returns DIAG_EV_REDRAW on the frame that ends a run, which is the frame
+ * after the last crossing the page needed; 0 otherwise.
+ */
+uint16_t diag_trim_frame(diag_t* d);
+
+/*
+ * The fixture's shade, 0..3, at output pixel (u, v). A pseudo-random field of
+ * DIAG_TRIM_BLOCK_W x DIAG_TRIM_BLOCK_H blocks, deterministic in its block
+ * coordinates so it scrolls with the offset instead of fizzing.
+ *
+ * Random rather than periodic on purpose. Every periodic pattern is
+ * CONDITIONALLY BLIND: the displacement across a seam is one frame of motion,
+ * and where that equals a whole period the two sides line up and a real seam
+ * disappears. Stripes measured 100 % of pixels changed at 2 px/frame and 0 %
+ * at 4. A field with no period has nothing to line up with.
+ */
+uint8_t diag_trim_shade(int32_t u, int32_t v);
+
+/* The fixture's vertical offset for the frame about to be pushed. */
+int32_t diag_trim_offset(const diag_t* d);
+
+/* The last run's mean frames between crossings, 0 before the first run. */
+uint32_t diag_trim_span(const diag_t* d);
 
 /* The page's name, for its header and for the serial line on every switch.
  * NULL for DIAG_PAGE_COUNT and anything past it. */

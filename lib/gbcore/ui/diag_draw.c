@@ -82,6 +82,7 @@ static const char* const FOOTERS[DIAG_PAGE_COUNT] = {
     "A: tone   Up/Down: volume   Select+L/R: page",
     "Up/Down: pattern   Select+L/R: page",
     "D-pad: move   A: save   B: default",
+    "Start: count   D-pad: porch   A: save   B: default",
     "Up/Down: frameskip   Select+L/R: page",
 };
 
@@ -524,6 +525,61 @@ static void page_nudge(const ui_canvas_t* cv, const diag_layout_t* g,
     }
 }
 
+/*
+ * The trim page, idle. There is no drawing for the running state: the fixture
+ * fills the window and the binding pushes it frame by frame, which is the
+ * whole reason the page has two states rather than a live readout.
+ */
+static void page_trim(const ui_canvas_t* cv, const diag_layout_t* g,
+                      const diag_t* d, uint32_t now_ms)
+{
+    uint8_t fpa = 0;
+    uint8_t ratio = 0;
+    uint32_t span = diag_trim_span(d);
+    char buf[40];
+
+    diag_trim(d, &fpa, &ratio);
+
+    snprintf(buf, sizeof(buf), "%u + %u/64", (unsigned)fpa, (unsigned)ratio);
+    kv_row(cv, g, 0, "Porch", buf, COL_TEXT);
+
+    snprintf(buf, sizeof(buf), "%u + %u/64", (unsigned)d->default_trim_fpa,
+             (unsigned)d->default_trim_ratio);
+    kv_row(cv, g, 1, "Default", buf, COL_DIM);
+
+    if (span > 0u) {
+        uint32_t tenths = (span * 1000u + DIAG_TRIM_FPS_X100 / 2u)
+                        / (uint32_t)DIAG_TRIM_FPS_X100;
+
+        snprintf(buf, sizeof(buf), "%lu frames, %lu.%lu s",
+                 (unsigned long)span, (unsigned long)(tenths / 10u),
+                 (unsigned long)(tenths % 10u));
+        kv_row(cv, g, 2, "Crossing", buf, COL_TEXT);
+    } else {
+        kv_row(cv, g, 2, "Crossing", "not counted yet", COL_DIM);
+    }
+
+    if (d->trim_step != 0) {
+        snprintf(buf, sizeof(buf), "%+d/64", (int)-d->trim_step);
+        kv_row(cv, g, 3, "Last move", buf, COL_TEXT);
+    } else if (span > 0u) {
+        /* A run long enough that the correction rounded to nothing is the
+         * end of the road, not a failure: the register cannot express a
+         * smaller change. */
+        kv_row(cv, g, 3, "Last move", "none left to give", COL_OK);
+    } else {
+        kv_row(cv, g, 3, "Last move", "-", COL_DIM);
+    }
+
+    snprintf(buf, sizeof(buf), "Start, then mark each of %u crossings",
+             (unsigned)DIAG_TRIM_MARKS);
+    full_row(cv, g, 5, buf, COL_DIM);
+
+    if (diag_toast_active(d, now_ms)) {
+        full_row(cv, g, 6, "Saved", COL_OK);
+    }
+}
+
 static void page_system(const ui_canvas_t* cv, const diag_layout_t* g,
                         const diag_data_t* data, const diag_t* d)
 {
@@ -578,6 +634,9 @@ void diag_draw(const diag_t* d, const diag_data_t* data,
         break;
     case DIAG_PAGE_NUDGE:
         page_nudge(cv, g, d, now_ms);
+        break;
+    case DIAG_PAGE_TRIM:
+        page_trim(cv, g, d, now_ms);
         break;
     case DIAG_PAGE_SYSTEM:
         page_system(cv, g, data, d);

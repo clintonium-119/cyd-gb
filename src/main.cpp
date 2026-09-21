@@ -2,7 +2,6 @@
 #include "hw_config.h"
 #include "render_config.h"
 #include "display.h"
-#include "panel_trim.h"
 #include "scale_bench.h"
 #include "button_input.h"
 #include "battery.h"
@@ -584,10 +583,6 @@ void setup() {
     in.pending_set = settings_pending_load(&in.pending);
 
     display_init();
-#ifdef PANEL_TRIM
-    // Bench only: the panel rate trim owns the boot and never returns.
-    panel_trim_run();
-#endif
 #ifdef PANEL_FILL_PROBE
     // Bench only: which way does the portrait window fill? See display.h.
     // Needs the display up and nothing else.

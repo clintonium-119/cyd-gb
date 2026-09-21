@@ -8,6 +8,10 @@
 #include "input/combo.h"
 #include "ui/diag_draw.h"
 
+/* A stored trim to init from; the same two numbers the state suite uses. */
+#define TRIM_FPA 20
+#define TRIM_RATIO 32
+
 /*
  * Framebuffer bounds suite — the exit criterion "every page renders on host in
  * a framebuffer test" made mechanical, the way the writer's suite did it.
@@ -58,6 +62,9 @@ typedef struct {
     unsigned dark_boxes;
 
     unsigned saved_texts;    /* text calls whose string is "Saved"        */
+    char seen[48][40];       /* every string drawn, for the pages that
+                              * report a number rather than a picture     */
+    unsigned seen_n;
 
     int16_t last_img_w, last_img_rows;
     unsigned img_w_faults, img_rows_faults;
@@ -161,6 +168,11 @@ static void fk_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
     }
     if (strcmp(s, "Saved") == 0) {
         f->saved_texts++;
+    }
+    if (f->seen_n < sizeof f->seen / sizeof f->seen[0]) {
+        strncpy(f->seen[f->seen_n], s, sizeof f->seen[0] - 1);
+        f->seen[f->seen_n][sizeof f->seen[0] - 1] = '\0';
+        f->seen_n++;
     }
     /* The box the driver will clip into: rows lines at the font's pitch. */
     h = (int16_t)(rows * UI_ROW_PITCH(ui_font_height(font)));
@@ -300,7 +312,8 @@ static void draw_page(int16_t w, int16_t h, uint8_t page, uint8_t pattern,
 
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(w, h, &geom));
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
-        diag_init(&st, 320, 240, w, h, 40, 12, 40, 12, MIX_VOL_MED, 1));
+        diag_init(&st, 320, 240, w, h, 40, 12, 40, 12, MIX_VOL_MED, 1,
+                  TRIM_FPA, TRIM_RATIO));
 
     for (i = 0; i < page; i++) {
         diag_input(&st, COMBO_EVENT_BRIGHT_UP, COMBO_BTN_SELECT, 0);
@@ -673,6 +686,79 @@ static void test_the_nudge_page_shows_saved_only_while_the_toast_is_up(void)
     TEST_ASSERT_EQUAL_UINT(0, fk.saved_texts);
 }
 
+
+/* Did any text box on the page carry this string? */
+static bool drew_text(const char* want)
+{
+    unsigned i;
+
+    for (i = 0; i < fk.seen_n; i++) {
+        if (strcmp(fk.seen[i], want) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void test_the_trim_page_shows_the_porch_it_would_store(void)
+{
+    fill_data();
+    draw_page(GEOM_24_W, GEOM_24_H, DIAG_PAGE_TRIM, 0, true, 0);
+    assert_clean();
+
+    /* The two numbers a builder writes on the unit, in the form the
+     * procedure asks for them. */
+    TEST_ASSERT_TRUE(drew_text("Porch"));
+    TEST_ASSERT_TRUE(drew_text("20 + 32/64"));
+    /* And nothing measured yet, which has to read as absent rather than as a
+     * zero-length crossing. */
+    TEST_ASSERT_TRUE(drew_text("not counted yet"));
+}
+
+static void test_the_trim_page_follows_the_porch_as_it_is_stepped(void)
+{
+    ui_canvas_t cv;
+
+    fill_data();
+    draw_page(GEOM_24_W, GEOM_24_H, DIAG_PAGE_TRIM, 0, true, 0);
+
+    diag_input(&st, COMBO_EVENT_NONE, COMBO_BTN_RIGHT, 100);
+
+    memset(&fk, 0, sizeof(fk));
+    fk.w = geom.w;
+    fk.h = geom.h;
+    cv = canvas_over(&fk, &geom);
+    diag_draw(&st, &data, &geom, &ck, 100, &cv);
+    assert_clean();
+    TEST_ASSERT_TRUE(drew_text("21 + 32/64"));
+    /* The default stays what the page was entered with, so B has somewhere
+     * to go back to and the builder can see where that is. */
+    TEST_ASSERT_TRUE(drew_text("20 + 32/64"));
+}
+
+static void test_the_trim_page_shows_saved_only_while_the_toast_is_up(void)
+{
+    fill_data();
+    draw_page(GEOM_24_W, GEOM_24_H, DIAG_PAGE_TRIM, 0, true, 0);
+    assert_clean();
+    TEST_ASSERT_EQUAL_UINT(0, fk.saved_texts);
+
+    diag_input(&st, COMBO_EVENT_NONE, COMBO_BTN_A, 1000);
+    {
+        ui_canvas_t cv = canvas_over(&fk, &geom);
+        diag_draw(&st, &data, &geom, &ck, 1000, &cv);
+    }
+    assert_clean();
+    TEST_ASSERT_EQUAL_UINT(1, fk.saved_texts);
+
+    {
+        ui_canvas_t cv = canvas_over(&fk, &geom);
+        diag_draw(&st, &data, &geom, &ck, 1000 + DIAG_TOAST_MS, &cv);
+    }
+    assert_clean();
+    TEST_ASSERT_EQUAL_UINT(0, fk.saved_texts);
+}
+
 static void test_a_missing_build_string_still_paints(void)
 {
     fill_data();
@@ -704,7 +790,7 @@ static void test_a_null_argument_paints_nothing(void)
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(GEOM_24_W, GEOM_24_H, &geom));
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&st, 320, 240, GEOM_24_W, GEOM_24_H, 40, 12, 40, 12,
-                  MIX_VOL_MED, 0));
+                  MIX_VOL_MED, 0, TRIM_FPA, TRIM_RATIO));
 
     cv = canvas_over(&fk, &geom);
     diag_draw(NULL, &data, &geom, &ck, 0, &cv);
@@ -740,6 +826,9 @@ int main(void)
     RUN_TEST(test_the_buttons_page_lights_a_box_per_pressed_button);
     RUN_TEST(test_the_tag_page_dumps_four_hex_rows);
     RUN_TEST(test_the_nudge_page_shows_saved_only_while_the_toast_is_up);
+    RUN_TEST(test_the_trim_page_shows_the_porch_it_would_store);
+    RUN_TEST(test_the_trim_page_follows_the_porch_as_it_is_stepped);
+    RUN_TEST(test_the_trim_page_shows_saved_only_while_the_toast_is_up);
     RUN_TEST(test_a_missing_build_string_still_paints);
     RUN_TEST(test_a_missing_card_and_catalog_still_paint);
     RUN_TEST(test_a_null_argument_paints_nothing);

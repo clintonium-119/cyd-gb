@@ -16,6 +16,7 @@ static const char* const page_titles[DIAG_PAGE_COUNT] = {
     "Audio",
     "Display",
     "Nudge",
+    "Panel trim",
     "System",
 };
 
@@ -54,6 +55,12 @@ static uint16_t on_leave(diag_t* d)
         d->tone_on = false;
         return DIAG_EV_TONE;
     }
+    /* A run left going would hold the binding in the fixture loop with
+     * another page's header under it. */
+    if (d->page == DIAG_PAGE_TRIM && d->trim_state == DIAG_TRIM_RUNNING) {
+        d->trim_state = DIAG_TRIM_IDLE;
+        return DIAG_EV_TRIM_STATE;
+    }
     return 0;
 }
 
@@ -83,7 +90,8 @@ static uint16_t change_page(diag_t* d, int8_t dir)
 int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
               int16_t win_w, int16_t win_h, int16_t x, int16_t y,
               int16_t default_x, int16_t default_y,
-              uint8_t volume, uint8_t frameskip)
+              uint8_t volume, uint8_t frameskip,
+              uint8_t trim_fpa, uint8_t trim_ratio)
 {
     if (d == NULL) {
         return DIAG_ERR_ARGS;
@@ -111,6 +119,22 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
     d->frameskip = combo_step_u8(frameskip, 0, 0, DIAG_FRAMESKIP_MAX, 1);
     d->toast_until_ms = 0;
     d->toast = false;
+
+    d->trim_fpa = (uint8_t)clamp_i16((int16_t)trim_fpa, 1, 126);
+    d->trim_ratio = (uint8_t)clamp_i16((int16_t)trim_ratio, 0, 63);
+    d->default_trim_fpa = d->trim_fpa;
+    d->default_trim_ratio = d->trim_ratio;
+    d->trim_state = DIAG_TRIM_IDLE;
+    /* Either way is a guess until a run has been measured against another.
+     * Shortening the porch speeds the panel up, which is the direction a
+     * panel running slow needs, and one of the two has to go first. */
+    d->trim_dir = +1;
+    d->trim_marks = 0;
+    d->trim_frames = 0;
+    d->trim_first_frame = 0;
+    d->trim_span = 0;
+    d->trim_prev_span = 0;
+    d->trim_step = 0;
 
     return DIAG_OK;
 }
@@ -199,6 +223,203 @@ static uint16_t frameskip_step(diag_t* d, uint8_t dir_bits)
                           ? (DIAG_EV_FRAMESKIP | DIAG_EV_REDRAW) : 0);
 }
 
+
+/* ─── Panel trim ─────────────────────────────────────────────────────────── */
+
+/* The working porch as one number, in 64ths of a line, which is the unit the
+ * fine knob steps in and the unit the correction comes out in. */
+static int32_t trim_x64(const diag_t* d)
+{
+    return (int32_t)d->trim_fpa * 64 + (int32_t)d->trim_ratio;
+}
+
+static void trim_set_x64(diag_t* d, int32_t x64)
+{
+    if (x64 < DIAG_TRIM_MIN_X64) {
+        x64 = DIAG_TRIM_MIN_X64;
+    } else if (x64 > DIAG_TRIM_MAX_X64) {
+        x64 = DIAG_TRIM_MAX_X64;
+    }
+    d->trim_fpa = (uint8_t)(x64 / 64);
+    d->trim_ratio = (uint8_t)(x64 % 64);
+}
+
+/*
+ * Left/Right a whole line, Up/Down DIAG_TRIM_FINE 64ths. The fine knob
+ * carries into the coarse one, which is the fixture's model and worth
+ * keeping: a null that sits just the other side of a line boundary is
+ * otherwise reachable only by knowing to step the porch.
+ */
+static uint16_t trim_step(diag_t* d, uint8_t dir_bits)
+{
+    int32_t before = trim_x64(d);
+
+    switch (dir_bits) {
+    case COMBO_BTN_RIGHT:
+        trim_set_x64(d, before + 64);
+        break;
+    case COMBO_BTN_LEFT:
+        trim_set_x64(d, before - 64);
+        break;
+    case COMBO_BTN_UP:
+        trim_set_x64(d, before + DIAG_TRIM_FINE);
+        break;
+    case COMBO_BTN_DOWN:
+        trim_set_x64(d, before - DIAG_TRIM_FINE);
+        break;
+    default:
+        break;
+    }
+
+    return (uint16_t)((trim_x64(d) != before) ? DIAG_EV_REDRAW : 0);
+}
+
+/* A run starts with nothing measured: the marks from the last one describe a
+ * porch this one has already moved off. */
+static void trim_run_begin(diag_t* d)
+{
+    d->trim_state = DIAG_TRIM_RUNNING;
+    d->trim_marks = 0;
+    d->trim_frames = 0;
+    d->trim_first_frame = 0;
+}
+
+/*
+ * The correction, applied at the end of a run. One crossing is one frame of
+ * slip, so a mean of N frames between crossings means the two rates differ by
+ * one part in N and the frame's line count has to move by the same fraction.
+ * The total is already in 64ths, which makes that a single divide.
+ *
+ * Nothing here needs a clock, an anchor, or a frequency: N is a count of
+ * frames this page pushed, so the cadence being nulled is the one it ran at.
+ */
+static void trim_apply(diag_t* d)
+{
+    int32_t span = (int32_t)d->trim_span;
+    int32_t lines_x64 = DIAG_TRIM_BASE_LINES_X64 + trim_x64(d);
+    int32_t step;
+
+    if (span <= 0) {
+        d->trim_step = 0;
+        return;
+    }
+
+    /* A run whose interval collapsed to well under the last one's was
+     * corrected the wrong way: the beat grew. A quarter is the margin — wide
+     * enough that a builder's reaction spread and the 64th-of-a-line rounding
+     * cannot trip it, narrow enough that a genuine reversal always does. */
+    if (d->trim_prev_span > 0 && span * 4 < (int32_t)d->trim_prev_span * 3) {
+        d->trim_dir = (int8_t)-d->trim_dir;
+    }
+
+    step = (lines_x64 + span / 2) / span;
+    /* Below one 64th there is nothing left to give: the register cannot
+     * express a smaller change, and a run this long is already at the floor
+     * the hardware sets. */
+    if (step < 1) {
+        d->trim_step = 0;
+        return;
+    }
+
+    d->trim_step = (int16_t)(step * d->trim_dir);
+    trim_set_x64(d, trim_x64(d) - (int32_t)d->trim_step);
+}
+
+/*
+ * A crossing, marked. The first one only starts the baseline — an interval
+ * needs two — and the run ends on the mark that completes DIAG_TRIM_MARKS
+ * intervals, applying the correction the marks imply.
+ */
+static uint16_t trim_mark(diag_t* d)
+{
+    uint32_t since;
+
+    if (d->trim_state != DIAG_TRIM_RUNNING) {
+        return 0;
+    }
+
+    if (d->trim_marks == 0) {
+        d->trim_marks = 1;
+        d->trim_first_frame = d->trim_frames;
+        return DIAG_EV_REDRAW;
+    }
+
+    since = d->trim_frames - d->trim_first_frame;
+    /* A bounced button is not a crossing. Measured against the first mark
+     * rather than the last, because only the span matters and re-marking the
+     * same crossing twice would otherwise halve it. */
+    if (since < (uint32_t)DIAG_TRIM_MIN_FRAMES * d->trim_marks) {
+        return 0;
+    }
+
+    d->trim_marks++;
+    if (d->trim_marks <= (uint8_t)DIAG_TRIM_MARKS) {
+        return DIAG_EV_REDRAW;
+    }
+
+    /* marks - 1 intervals between the first mark and this one. */
+    d->trim_prev_span = d->trim_span;
+    d->trim_span = since / (uint32_t)(d->trim_marks - 1u);
+    trim_apply(d);
+    d->trim_state = DIAG_TRIM_IDLE;
+
+    return DIAG_EV_REDRAW | DIAG_EV_TRIM_STATE;
+}
+
+uint8_t diag_trim_shade(int32_t u, int32_t v)
+{
+    /* The mix from the xorshift family the audio dither already uses, over
+     * the block coordinates rather than a sequence, so the field is stable in
+     * space and scrolls with the offset instead of fizzing. */
+    uint32_t h = ((uint32_t)u / DIAG_TRIM_BLOCK_W) * 0x9E3779B1u
+               ^ ((uint32_t)v / DIAG_TRIM_BLOCK_H) * 0x85EBCA77u;
+
+    h ^= h >> 15;
+    h *= 0x2545F491u;
+    h ^= h >> 13;
+    return (uint8_t)(h & 3u);
+}
+
+int32_t diag_trim_offset(const diag_t* d)
+{
+    if (d == NULL) {
+        return 0;
+    }
+    return (int32_t)(d->trim_frames * (uint32_t)DIAG_TRIM_SCROLL);
+}
+
+uint16_t diag_trim_frame(diag_t* d)
+{
+    if (d == NULL || d->trim_state != DIAG_TRIM_RUNNING) {
+        return 0;
+    }
+    d->trim_frames++;
+    return 0;
+}
+
+bool diag_trim_running(const diag_t* d)
+{
+    return (d != NULL) && d->trim_state == DIAG_TRIM_RUNNING;
+}
+
+void diag_trim(const diag_t* d, uint8_t* fpa, uint8_t* ratio)
+{
+    if (d == NULL) {
+        return;
+    }
+    if (fpa != NULL) {
+        *fpa = d->trim_fpa;
+    }
+    if (ratio != NULL) {
+        *ratio = d->trim_ratio;
+    }
+}
+
+uint32_t diag_trim_span(const diag_t* d)
+{
+    return (d != NULL) ? d->trim_span : 0u;
+}
+
 /*
  * The held-direction cadence, taken from the list module so a nudge held down
  * moves at the same rate as a cursor held down: nothing for the first
@@ -267,6 +488,13 @@ uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
         case DIAG_PAGE_DISPLAY:
             ev |= pattern_step(d, dir_bits);
             break;
+        case DIAG_PAGE_TRIM:
+            /* Only while idle: during a run the D-pad would move the porch
+             * out from under the count that is measuring it. */
+            if (d->trim_state == DIAG_TRIM_IDLE) {
+                ev |= trim_step(d, dir_bits);
+            }
+            break;
         case DIAG_PAGE_SYSTEM:
             ev |= frameskip_step(d, dir_bits);
             break;
@@ -291,6 +519,18 @@ uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
             d->tone_on = !d->tone_on;
             ev |= DIAG_EV_TONE | DIAG_EV_REDRAW;
             break;
+        case DIAG_PAGE_TRIM:
+            if (d->trim_state == DIAG_TRIM_RUNNING) {
+                /* Abandon the run rather than save from it: half a count is
+                 * not a measurement. */
+                d->trim_state = DIAG_TRIM_IDLE;
+                ev |= DIAG_EV_REDRAW | DIAG_EV_TRIM_STATE;
+            } else {
+                d->toast = true;
+                d->toast_until_ms = now_ms + (uint32_t)DIAG_TOAST_MS;
+                ev |= DIAG_EV_SAVE_TRIM | DIAG_EV_REDRAW;
+            }
+            break;
         default:
             break;
         }
@@ -301,6 +541,31 @@ uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
             d->x = d->default_x;
             d->y = d->default_y;
             ev |= DIAG_EV_REDRAW;
+        } else if (d->page == DIAG_PAGE_TRIM
+                   && d->trim_state == DIAG_TRIM_IDLE) {
+            d->trim_fpa = d->default_trim_fpa;
+            d->trim_ratio = d->default_trim_ratio;
+            /* The direction this unit was heading is a property of the porch
+             * it was heading from, so it goes back with it. */
+            d->trim_dir = +1;
+            d->trim_span = 0;
+            d->trim_prev_span = 0;
+            d->trim_step = 0;
+            ev |= DIAG_EV_REDRAW;
+        }
+    }
+
+    /* Start is the crossing mark, and the trim page is the only place it
+     * means anything: every other page leaves it to the combo module, which
+     * is where Start+Select got the builder into this mode in the first
+     * place. It starts the run as well as marking within one, so the builder
+     * never has to reach for a second button mid-count. */
+    if ((pressed & COMBO_BTN_START) && d->page == DIAG_PAGE_TRIM) {
+        if (d->trim_state == DIAG_TRIM_IDLE) {
+            trim_run_begin(d);
+            ev |= DIAG_EV_REDRAW | DIAG_EV_TRIM_STATE;
+        } else {
+            ev |= trim_mark(d);
         }
     }
 

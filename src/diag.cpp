@@ -19,6 +19,8 @@
 #include "ui/diag.h"
 #include "ui/diag_draw.h"
 
+#include <stdlib.h>
+
 #include <Arduino.h>
 
 // The diagnostic screen's binding.
@@ -218,6 +220,114 @@ static void say_scanning()
              TFT_WHITE, TFT_BLACK);
 }
 
+// ─── the panel-trim fixture ─────────────────────────────────────────────────
+// The one page that pushes frames rather than drawing them, and the two
+// properties that make its calibration mean anything:
+//
+//   * It pushes in the SHIPPING ORDER. Under PUSH_COL display_frame_begin()
+//     opens a transposed portrait window that fills along a gate line, so it
+//     owes that window whole output COLUMNS of GAME_H pixels, descending
+//     landscape x. A row-major push through it still totals the right pixel
+//     count and still draws something — just not the pattern it claims, which
+//     is how the fixture this page replaces went stale.
+//   * It pays the EMULATOR'S pacer. The page loop's delay(DIAG_POLL_MS) is
+//     about 62.5 fps and the beat being nulled is against the audio-paced
+//     59.7275 — 2.8 Hz apart, which is wider than the whole trim range. So
+//     this blocks in speaker_write_frame() on a frame of silence, the same
+//     way the tone page already takes its cadence from the DMA queue.
+//
+// The 12-colour pixel byte's background ramp, which is where the palette LUT
+// keeps the four shades a game's background is drawn in. The fixture borrows
+// them so a builder judges the seam in the colours they will be looking at.
+#define TRIM_LUT_BG 0x20
+
+// Output columns (or rows) per transfer, matching the frame path's own block
+// so the transfer size a game produces is the transfer size this produces.
+#if PUSH_TRANSPOSED
+#define TRIM_BLOCK_N   COL_BLOCK_COLS
+#define TRIM_BLOCK_PX  (COL_BLOCK_COLS * GAME_H)
+#define TRIM_LINE_PX   GAME_H
+#define TRIM_LINES     GAME_W
+#else
+#define TRIM_BLOCK_N   BLOCK_ROWS
+#define TRIM_BLOCK_PX  (BLOCK_ROWS * GAME_W)
+#define TRIM_LINE_PX   GAME_W
+#define TRIM_LINES     GAME_H
+#endif
+
+// Two, alternating, for the same reason the frame path has two: a pushed
+// buffer belongs to the driver until the transfer completes. Heap rather than
+// static — 10 KB would not fit in the static segment beside the frame path's
+// own buffers, and the diagnostic mode never returns, so nothing frees them.
+static uint16_t* trim_buf[2] = { nullptr, nullptr };
+
+static bool trim_buffers()
+{
+    if (trim_buf[0] != nullptr) {
+        return true;
+    }
+    trim_buf[0] = (uint16_t*)malloc(TRIM_BLOCK_PX * sizeof(uint16_t));
+    trim_buf[1] = (uint16_t*)malloc(TRIM_BLOCK_PX * sizeof(uint16_t));
+    if (trim_buf[0] == nullptr || trim_buf[1] == nullptr) {
+        free(trim_buf[0]);
+        free(trim_buf[1]);
+        trim_buf[0] = trim_buf[1] = nullptr;
+        return false;
+    }
+    return true;
+}
+
+// One line of the fixture — an output column under PUSH_COL, an output row
+// otherwise — at window-relative landscape (x, y). The scroll is vertical
+// either way, because the seam the page is here to count is a vertical line
+// with a vertical displacement across it.
+static void trim_line(uint16_t* px, int16_t line, int32_t sy,
+                      const uint16_t* lut)
+{
+    int16_t i;
+
+    for (i = 0; i < TRIM_LINE_PX; i++) {
+#if PUSH_TRANSPOSED
+        int32_t u = line;
+        int32_t v = (int32_t)i + sy;
+#else
+        int32_t u = i;
+        int32_t v = (int32_t)line + sy;
+#endif
+        px[i] = lut[TRIM_LUT_BG + diag_trim_shade(u, v)];
+    }
+}
+
+static void trim_push(int16_t ox, int16_t oy, int32_t sy, const uint16_t* lut)
+{
+    int16_t at = 0;
+    int16_t n = 0;
+    unsigned buf = 0;
+
+    display_frame_begin(ox, oy);
+    while (at < TRIM_LINES) {
+        int16_t line;
+
+#if FRAME_COLS_DESCENDING && PUSH_TRANSPOSED
+        // The walk follows the panel, not the image: the window fills from
+        // the right-hand edge of the game window inwards.
+        line = (int16_t)(TRIM_LINES - 1 - (at + n));
+#else
+        line = (int16_t)(at + n);
+#endif
+        trim_line(trim_buf[buf] + (size_t)n * TRIM_LINE_PX, line, sy, lut);
+        n++;
+        if (n == TRIM_BLOCK_N || at + n == TRIM_LINES) {
+            display_push_rows_dma(trim_buf[buf], (size_t)n * TRIM_LINE_PX);
+            buf ^= 1u;
+            at = (int16_t)(at + n);
+            n = 0;
+        }
+    }
+    display_dma_wait();
+    display_frame_end();
+}
+
 // ─── the mode ───────────────────────────────────────────────────────────────
 
 void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
@@ -255,7 +365,8 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
         return;
     }
     if (diag_init(&d, SCREEN_W, SCREEN_H, GAME_W, GAME_H, s->game_x,
-                  s->game_y, GAME_X, GAME_Y, s->volume, s->frameskip)
+                  s->game_y, GAME_X, GAME_Y, s->volume, s->frameskip,
+                  s->trim_fpa, s->trim_ratio)
         != DIAG_OK) {
         Serial.println("[DIAG] state refused the window");
         return;
@@ -298,6 +409,32 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
             Serial.printf("[DIAG] nudge saved gx=%d gy=%d\n", s->game_x,
                           s->game_y);
         }
+        if (flags & DIAG_EV_SAVE_TRIM) {
+            diag_trim(&d, &s->trim_fpa, &s->trim_ratio);
+            settings_save(s);
+            display_set_trim(s->trim_fpa, s->trim_ratio);
+            Serial.printf("[DIAG] trim saved porch %u + %u/64\n",
+                          (unsigned)s->trim_fpa, (unsigned)s->trim_ratio);
+        }
+        if (flags & DIAG_EV_TRIM_STATE) {
+            if (diag_trim_running(&d)) {
+                if (trim_buffers()) {
+                    // The fixture's four shades are the running palette's
+                    // background ramp, which diag_checker_build() already
+                    // builds for the checkerboard pattern.
+                    diag_checker_build(&checker, data.palette);
+                } else {
+                    Serial.println("[DIAG] no heap for the trim fixture");
+                }
+            } else {
+                // The frame path left the panel in its own orientation and an
+                // address window behind; the handover puts both back.
+                display_bus_acquire();
+                drawn_ox = -1;
+                drawn_oy = -1;
+                flags |= DIAG_EV_REDRAW;
+            }
+        }
         if (flags & DIAG_EV_FRAMESKIP) {
             s->frameskip = diag_frameskip(&d);
             settings_save(s);
@@ -331,7 +468,7 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
             dirty = true;
         }
 
-        if ((flags & DIAG_EV_REDRAW) || dirty) {
+        if (((flags & DIAG_EV_REDRAW) || dirty) && !diag_trim_running(&d)) {
             uint32_t began = micros();
 
             redraw(now);
@@ -344,7 +481,23 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
             }
         }
 
-        if (diag_tone_on(&d)) {
+        if (diag_trim_running(&d) && trim_buf[0] != nullptr) {
+            int16_t ox = 0;
+            int16_t oy = 0;
+
+            diag_origin(&d, &ox, &oy);
+            trim_push(ox, oy, diag_trim_offset(&d), checker.lut);
+            // Counted only once it is on the panel: the count IS the
+            // measurement, and a frame counted that was not pushed would put
+            // the calibration out by exactly its own error.
+            diag_trim_frame(&d);
+            // A frame of silence, for the pacing and nothing else. This is
+            // the emulator's own pacer — the DMA queue — rather than an
+            // interval this loop picks, which is the whole point: the beat
+            // being nulled is against the audio clock.
+            memset(mono, 128, SPEAKER_SAMPLES_PER_FRAME);
+            speaker_write_frame(mono, SPEAKER_SAMPLES_PER_FRAME);
+        } else if (diag_tone_on(&d)) {
             // One frame per pass, so the DMA queue paces the loop at about
             // 16.7 ms — near enough the poll interval that button response is
             // the same either way.
