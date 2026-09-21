@@ -45,6 +45,38 @@
 // exists only as the golden suite's A/B baseline, takes the pattern-driven
 // code. Both are the same function to the caller.
 //
+// Transposed walk: scaler_scale_col_block() emits output COLUMNS instead of
+// output rows, for a consumer that pushes along the panel's gate lines. A
+// geometry applies identically on both axes, so the same src_units ->
+// dst_units ratio runs with the two passes swapping roles: the walk ALONG a
+// column takes SCALER_SRC_H source rows to dst_h output pixels, and the walk
+// ACROSS columns takes SCALER_SRC_W source columns to dst_w output columns.
+// Read the geometry table's src_lines_per_block as source COLUMNS and
+// dst_rows_per_block as output COLUMNS for this walk, and dst_h as
+//
+//   SCALER_SRC_H / src_lines_per_block * dst_rows_per_block
+//
+// which is 216, 234 and 240 for the three geometries.
+//
+// The tail moves axis with the walk. The row walk's tail is along its walk:
+// 5/3's group leaves one source pixel over at the end of every row, emitted
+// pure, and 144 divides by 2, 8 and 3 alike so nothing is ever left over
+// vertically. Transposed, the along-column walk has no tail of its own and
+// the leftover lands ACROSS the walk, as a whole output column: at 5/3 the
+// last output column is the pure scale of source column 159 and belongs to no
+// block. scaler_scale_col_tail() emits it, and emits nothing for the two k/16
+// geometries whose group divides 160. What the row walk reaches by a tail, the
+// column walk's along-axis reaches by a clamp — its last whole group's blend
+// partner is past the end — and both leave that edge pure.
+//
+// The two walks are not bit-identical in BLEND mode. At a pixel that is both a
+// horizontal and a vertical seam they average the same four sources in a
+// different order: the row walk averages two horizontally scaled rows, the
+// column walk two vertically scaled columns, and scaler_avg565() is a
+// per-channel floor((a + b) / 2), which is not associative across that
+// regrouping. They differ by at most 1 per channel, and only there; every pure
+// or singly-blended pixel, and the whole of NEAREST mode, transposes exactly.
+//
 // Byte order: scaler_avg565() assumes NATIVE RGB565 bit layout. Blend BEFORE
 // any byte swap — averaging byte-swapped values mixes misaligned channel
 // fields and produces colour fringing.
@@ -60,7 +92,9 @@ extern "C" {
 #endif
 
 #define SCALER_SRC_W 160        /* Game Boy line width, pixels           */
+#define SCALER_SRC_H 144        /* Game Boy frame height, lines          */
 #define SCALER_DST_W_MAX 266    /* widest output row (5/3)               */
+#define SCALER_DST_H_MAX 240    /* tallest output column (5/3)           */
 #define SCALER_DST_ROWS_MAX 13  /* most output rows per block (26/16)    */
 #define SCALER_SRC_LINES_MAX 8  /* most source lines per block (26/16)   */
 
@@ -112,6 +146,44 @@ int scaler_scale_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
                        const uint16_t* const* src_lines,
                        const uint16_t* lookahead_line,
                        uint16_t* dst, uint16_t* scratch_row);
+
+/*
+ * Scale one block of source COLUMNS into dst_rows_per_block output columns,
+ * the transposed counterpart of scaler_scale_block(). Same geometry, same
+ * modes, same caller-owned buffers; the axes swap.
+ *
+ *   src_cols       array of src_lines_per_block pointers to SCALER_SRC_H-px
+ *                  source columns, leftmost first
+ *   lookahead_col  first source column of the NEXT block, or NULL at the
+ *                  frame's right edge (the trailing blend columns then stay
+ *                  pure); ignored by a geometry with uses_lookahead 0
+ *   dst            dst_rows_per_block * dst_h pixels, COLUMN-major: one
+ *                  output column is dst_h contiguous pixels
+ *   scratch_col    dst_h scratch pixels, required; holds the along-scaled
+ *                  lookahead column when a cross-block blend column needs it
+ *
+ * Returns SCALER_OK or SCALER_ERR_ARGS.
+ */
+int scaler_scale_col_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
+                           const uint16_t* const* src_cols,
+                           const uint16_t* lookahead_col,
+                           uint16_t* dst, uint16_t* scratch_col);
+
+/*
+ * Emit the transposed walk's tail: the SCALER_SRC_W % src_lines_per_block
+ * source columns left over past the last whole block, each scaled along its
+ * length into one pure output column of dst_h pixels. One column at 5/3, none
+ * at either k/16 geometry, where it returns SCALER_OK having written nothing
+ * and src_cols and dst may be NULL.
+ *
+ *   src_cols  pointers to the leftover source columns, leftmost first
+ *   dst       tail columns * dst_h pixels, column-major
+ *
+ * A tail column never blends across the walk: there is no next group to reach
+ * toward, which is what makes the frame's far edge pure.
+ */
+int scaler_scale_col_tail(enum scaler_geom_e geom, enum scaler_mode_e mode,
+                          const uint16_t* const* src_cols, uint16_t* dst);
 
 /*
  * Average of two native-bit-layout RGB565 pixels, per channel, without
