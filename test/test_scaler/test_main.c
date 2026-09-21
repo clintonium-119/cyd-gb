@@ -411,6 +411,120 @@ static void test_col_tail_is_one_pure_column(void)
 
 /* ── 5/3 ─────────────────────────────────────────────────────────────── */
 
+/* Fill every source line, and the lookahead, with one value each, so the
+ * horizontal pass is the identity and only the vertical rhythm reaches the
+ * output. */
+static void set_uniform_lines(const uint16_t* values, uint16_t lookahead_value)
+{
+    unsigned l;
+    unsigned i;
+
+    for (l = 0; l < SCALER_SRC_LINES_MAX; l++) {
+        for (i = 0; i < SCALER_SRC_W; i++) {
+            src[l][i] = values[l];
+        }
+    }
+    for (i = 0; i < SCALER_SRC_W; i++) {
+        lookahead[i] = lookahead_value;
+    }
+}
+
+/* One block of uniform lines, every output pixel checked against `want`. The
+ * whole row is checked rather than a sample because a uniform source makes
+ * the horizontal pass the identity, so any pixel that differs is a real
+ * defect and the tail is covered for free. */
+static void assert_vertical_rows(const uint16_t* lines_in,
+                                 const uint16_t* lookahead_in,
+                                 const uint16_t want[5])
+{
+    unsigned r;
+    unsigned x;
+
+    set_uniform_lines(lines_in, lookahead_in ? *lookahead_in : 0u);
+    reset_dst();
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_block(SCALER_GEOM_5_3, SCALER_MODE_BLEND, lines,
+                           lookahead_in ? lookahead : NULL,
+                           dst.block, scratch.row));
+    for (r = 0; r < 5u; r++) {
+        for (x = 0; x < 266u; x++) {
+            char msg[64];
+            sprintf(msg, "output row %u, pixel %u", r, x);
+            TEST_ASSERT_EQUAL_HEX16_MESSAGE(want[r], row_of(r, 266)[x], msg);
+        }
+    }
+    assert_canaries_intact(5u * 266u);
+}
+
+/*
+ * The vertical rhythm against constants worked out by hand.
+ *
+ * Everything else covering this compares the scaler against something derived
+ * from the same understanding of the rhythm. The spec sweep checks it against
+ * a table in this file that says what the scaler says, so a rhythm
+ * misunderstood in both passes. The golden hashes pin bytes that were blessed
+ * by eye once, so a rhythm misunderstood from the start is enshrined rather
+ * than caught. Neither is independent.
+ *
+ * These constants come from the design instead: 3 source lines to 5 output
+ * rows as copy, blend, copy, copy, blend, where a blend is the per-channel
+ * floor((a + b) / 2) and the last row's partner is the next block's first
+ * line. Work the numbers out from that and a shared misreading cannot survive
+ * them.
+ */
+static void test_5_3_vertical_rhythm_against_hand_computed_constants(void)
+{
+    /* Black and white: the blend is the exact half of every channel, 15 of
+     * 31 in red and blue and 31 of 63 in green, which is 0x7BEF. */
+    {
+        const uint16_t in[3] = { 0x0000u, 0xFFFFu, 0x0000u };
+        const uint16_t la = 0xFFFFu;
+        const uint16_t want[5] = {
+            0x0000u,  /* row 0: source line 0, pure                        */
+            0x7BEFu,  /* row 1: avg(black, white)                          */
+            0xFFFFu,  /* row 2: source line 1, pure                        */
+            0x0000u,  /* row 3: source line 2, pure                        */
+            0x7BEFu,  /* row 4: avg(line 2, the next block's first line)   */
+        };
+        assert_vertical_rows(in, &la, want);
+    }
+
+    /* One primary per line, so a blend that leaked between channels shows:
+     * red with green averages to 15 red and 31 green and no blue, 0x7BE0;
+     * blue with red to 15 red and no green and 15 blue, 0x780F. */
+    {
+        const uint16_t in[3] = { 0xF800u, 0x07E0u, 0x001Fu };
+        const uint16_t la = 0xF800u;
+        const uint16_t want[5] = {
+            0xF800u, 0x7BE0u, 0x07E0u, 0x001Fu, 0x780Fu,
+        };
+        assert_vertical_rows(in, &la, want);
+    }
+
+    /* The frame's last block has no next line, so row 4's blend clamps to
+     * line 2 and comes out pure — the same three lines as above, one row
+     * different. */
+    {
+        const uint16_t in[3] = { 0xF800u, 0x07E0u, 0x001Fu };
+        const uint16_t want[5] = {
+            0xF800u, 0x7BE0u, 0x07E0u, 0x001Fu, 0x001Fu,
+        };
+        assert_vertical_rows(in, NULL, want);
+    }
+
+    /* Each channel at 1 against 0. floor((1 + 0) / 2) is 0 in all three, so
+     * the blend is black — the truncation the 0xF7DE mask exists to make
+     * per-channel rather than a borrow across channel boundaries. */
+    {
+        const uint16_t in[3] = { 0x0821u, 0x0000u, 0x0821u };
+        const uint16_t la = 0x0000u;
+        const uint16_t want[5] = {
+            0x0821u, 0x0000u, 0x0000u, 0x0821u, 0x0000u,
+        };
+        assert_vertical_rows(in, &la, want);
+    }
+}
+
 static void test_5_3_matches_the_spec_in_both_modes(void)
 {
     assert_block_matches_spec(SCALER_GEOM_5_3, SCALER_MODE_NEAREST,
@@ -839,6 +953,7 @@ int main(void)
     RUN_TEST(test_geom_info_reports_the_geometry);
     RUN_TEST(test_every_geometry_dst_w_matches_its_group_arithmetic);
     RUN_TEST(test_geom_info_rejects_an_unknown_geometry);
+    RUN_TEST(test_5_3_vertical_rhythm_against_hand_computed_constants);
     RUN_TEST(test_5_3_matches_the_spec_in_both_modes);
     RUN_TEST(test_5_3_horizontal_tail_is_the_last_source_pixel_pure);
     RUN_TEST(test_5_3_lookahead_row_uses_the_next_block);
