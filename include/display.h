@@ -95,24 +95,6 @@ void display_frame_end();
 // The pointer is non-const for exactly that reason.
 void display_push_rows_dma(uint16_t* px, size_t n);
 
-// PUSH_SCATTER only: narrow the window to `cols` output columns starting at
-// `first_col` of the image, so blocks can be written out of order. The
-// viewport origin is the landscape one display_frame_begin() takes, and the
-// fill direction inside the window is unchanged — only which columns it
-// covers. Call inside the frame's write transaction, once per block.
-#if PUSH_ORDER == PUSH_SCATTER
-void display_col_window(int16_t x, int16_t y, uint16_t first_col,
-                        uint16_t cols);
-#endif
-
-// PUSH_TILE only: a 2D window, a run of output columns by a run of output
-// rows, so a tile boundary is `rows` tall instead of the whole image. Same
-// landscape viewport origin and same fill direction as the others.
-#if PUSH_ORDER == PUSH_TILE
-void display_col_tile(int16_t x, int16_t y, uint16_t first_col, uint16_t cols,
-                      uint16_t first_row, uint16_t rows);
-#endif
-
 // Block until every queued transfer has completed. The push task calls this
 // at frame end so display_frame_end()'s endWrite cannot truncate a transfer
 // still in flight.
@@ -137,22 +119,6 @@ void display_dma_wait();
 // yet pushed will be drawn over the menu.
 void display_bus_acquire();
 void display_bus_release();
-
-// ─── Panel frame rate (bench only) ──────────────────────────────────────────
-// Step the panel's own refresh rate through FRCTRL2's RTNA values, applied at
-// the next frame boundary by the core that owns the bus. Returns the nominal
-// rate in Hz of the step landed on - the datasheet's figure at the default
-// porch, which is a label rather than a measurement, because this panel's
-// oscillator is its own and nothing can read the real rate back.
-//
-// Raising the rate is the opposite bet from the rest of the tearing work: it
-// makes no frame clean, and hopes a fast enough artefact stops reading as a
-// line. See src/display.cpp.
-//
-//   PLATFORMIO_BUILD_FLAGS='-DPANEL_FRAME_RATE=0x0F' pio run -e cyd-gnuboy
-#ifdef PANEL_FRAME_RATE
-uint16_t display_frame_rate_step(int delta);
-#endif
 
 // ─── Fill-direction probe (bench only) ──────────────────────────────────────
 // Pushes a pattern of known push ORDER through the real column-major frame

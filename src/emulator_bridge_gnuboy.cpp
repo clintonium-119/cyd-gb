@@ -215,17 +215,7 @@ static int16_t vp_y = GAME_Y;
 // src/emulator_bridge.cpp for the long-form rationale; nothing here diverges
 // from it, because an A/B whose pipeline also changed would measure two
 // things at once.
-#if PUSH_ORDER == PUSH_TILE
-/* A tile, or the frame's final unit which stays full height. Whichever is
- * larger: at 5/3 that is 6 columns of 240 against 10 of 120. */
-#define TILE_PX (COL_BLOCK_COLS * TILE_ROWS)
-#define TAIL_UNIT_PX (TILE_LAST_COLS * GAME_H)
-static uint16_t dma_buf[2][TILE_PX > TAIL_UNIT_PX ? TILE_PX : TAIL_UNIT_PX];
-#elif PUSH_ORDER == PUSH_SCATTER
-/* One scaler block per transfer: the blocks are not adjacent, so they cannot
- * be packed into a shared window. */
-static uint16_t dma_buf[2][UNIT_ROWS * GAME_H];
-#elif PUSH_ORDER == PUSH_COL
+#if PUSH_TRANSPOSED
 static uint16_t dma_buf[2][COL_BLOCK_COLS * GAME_H];
 #else
 static uint16_t dma_buf[2][BLOCK_ROWS * GAME_W];
@@ -606,29 +596,6 @@ static unsigned scale_unit(const uint8_t* tframe, unsigned u,
     return UNIT_ROWS;
 }
 
-#ifdef PACED_WRITE
-/* The span the frame's writes are spread over, live-adjustable so the bench
- * can sweep it: the optimum is the panel's refresh period, which cannot be
- * read back and so has to be found by looking. */
-static volatile uint32_t pace_us = PACED_WRITE;
-
-/*
- * Hold until this column's share of the span has elapsed. The bus is
- * transferring throughout — this spaces out when transfers START, which is
- * what stretches the span the write occupies GRAM — and core 0 has nothing
- * else it could be running, because the push task IS core 0's work. The
- * frame's own block on framequeue_pop() is what yields to the idle task, and
- * pace_us is bounded below a frame period so that block still happens.
- */
-static void pace_to_column(int64_t t0, unsigned cols_done)
-{
-    int64_t deadline = t0 + (int64_t)pace_us * cols_done / GAME_W;
-
-    while (esp_timer_get_time() < deadline) {
-    }
-}
-#endif
-
 /*
  * Consumer half, column order, pinned to core 0. The frame arrives as one
  * queue block whose buffer is stable for the whole frame, so unlike the row
@@ -642,7 +609,6 @@ static void pace_to_column(int64_t t0, unsigned cols_done)
  * columns come out reversed with them — which the scaler does for the cost of
  * a sign on a stride, rather than anything here moving a pixel twice.
  */
-#if PUSH_ORDER == PUSH_COL
 static void emu_push_task(void* arg)
 {
     const uint16_t* src_cols[COL_BLOCK_SRC + 1];
@@ -663,19 +629,12 @@ static void emu_push_task(void* arg)
         unsigned k;
         int64_t t0;
         int64_t t1;
-#ifdef PACED_WRITE
-        int64_t frame_t0;
-        unsigned cols_pushed = 0;
-#endif
 
         if (framequeue_pop(&fq, &slot, &meta) != FRAMEQUEUE_OK) {
             ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2));
             continue;
         }
         tframe = tfb[slot];
-#ifdef PACED_WRITE
-        frame_t0 = esp_timer_get_time();
-#endif
         display_frame_begin(vp_x, vp_y);
 
         for (k = 0; k < COL_UNITS; k++) {
@@ -691,10 +650,6 @@ static void emu_push_task(void* arg)
                 /* This unit will not fit, so the buffer goes now. */
                 t1 = esp_timer_get_time();
                 scale_acc += (uint32_t)(t1 - t0);
-#ifdef PACED_WRITE
-                pace_to_column(frame_t0, cols_pushed);
-                cols_pushed += in_buf;
-#endif
                 display_push_rows_dma(dma_buf[buf],
                                       (size_t)in_buf * GAME_H);
                 push_acc += (uint32_t)(esp_timer_get_time() - t1);
@@ -709,10 +664,6 @@ static void emu_push_task(void* arg)
 
         t1 = esp_timer_get_time();
         if (in_buf) {
-#ifdef PACED_WRITE
-            pace_to_column(frame_t0, cols_pushed);
-            cols_pushed += in_buf;
-#endif
             display_push_rows_dma(dma_buf[buf], (size_t)in_buf * GAME_H);
         }
         display_dma_wait();
@@ -724,242 +675,6 @@ static void emu_push_task(void* arg)
         push_us = push_acc;
     }
 }
-#elif PUSH_ORDER == PUSH_SCATTER
-/*
- * Consumer half, scatter order, pinned to core 0. The same units as the
- * column order, asked for in an interleaved sequence instead of a sweep.
- *
- * The point is not to write fewer wrong pixels — it is the same frame's worth
- * of temporal inconsistency either way — but to stop them lining up. A
- * monotonic sweep puts every boundary along one long straight edge, which the
- * eye finds instantly; visiting every SCATTER_STRIDE-th block and then
- * filling the gaps chops the same inconsistency into short pieces scattered
- * across the width.
- *
- * The cost is that blocks are no longer adjacent, so each needs its own
- * address window and its own transfer: 54 a frame at 5/3 against the column
- * order's 27. Nothing else about the frame path changes.
- */
-static void emu_push_task(void* arg)
-{
-    const uint16_t* src_cols[COL_BLOCK_SRC + 1];
-    framequeue_meta_t meta;
-    unsigned i;
-    int slot = 0;
-
-    (void)arg;
-    for (i = 0; i < COL_BLOCK_SRC + 1u; i++) {
-        src_cols[i] = lut_cols[i];
-    }
-    for (;;) {
-        const uint8_t* tframe;
-        uint32_t scale_acc = 0;
-        uint32_t push_acc = 0;
-        unsigned buf = 0;
-        unsigned pass;
-        int64_t t0;
-        int64_t t1;
-
-        if (framequeue_pop(&fq, &slot, &meta) != FRAMEQUEUE_OK) {
-            ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2));
-            continue;
-        }
-        tframe = tfb[slot];
-        display_frame_begin(vp_x, vp_y);
-
-        /* Interleaved passes: every SCATTER_STRIDE-th unit, then the units
-         * between them. Covers each exactly once whatever COL_UNITS is, which
-         * a stride walk would need to be coprime with it to manage. */
-        for (pass = 0; pass < SCATTER_STRIDE; pass++) {
-            unsigned u;
-
-            for (u = pass; u < COL_UNITS; u += SCATTER_STRIDE) {
-                unsigned ncols;
-
-                t0 = esp_timer_get_time();
-                ncols = scale_unit(tframe, u, src_cols, dma_buf[buf]);
-                t1 = esp_timer_get_time();
-                scale_acc += (uint32_t)(t1 - t0);
-
-                /* One window per block, because the next block is not the
-                 * next columns. */
-                display_col_window(vp_x, vp_y, (uint16_t)(u * UNIT_ROWS),
-                                   (uint16_t)ncols);
-                display_push_rows_dma(dma_buf[buf],
-                                      (size_t)ncols * GAME_H);
-                push_acc += (uint32_t)(esp_timer_get_time() - t1);
-                buf ^= 1u;
-            }
-        }
-
-        t1 = esp_timer_get_time();
-        display_dma_wait();
-        display_frame_end();
-        push_acc += (uint32_t)(esp_timer_get_time() - t1);
-
-        framequeue_release(&fq, slot);
-        scale_us = scale_acc;
-        push_us = push_acc;
-    }
-}
-
-#else /* PUSH_ORDER == PUSH_TILE */
-/*
- * Consumer half, tile order, pinned to core 0. The same frame as the column
- * order, cut into TILE_SLICES bands of height as well as into column groups,
- * and the tiles visited in interleaved passes.
- *
- * This is the only order whose boundaries are shorter than the image. A
- * boundary appears between two tiles written at temporally distant moments,
- * and a tile is TILE_ROWS tall, so that is as long as any edge can be. The
- * join between vertically adjacent tiles is NOT a boundary of that kind: the
- * scaler's row range blends into the next range's first source row rather
- * than clamping at its own end, so two ranges together are exactly what one
- * whole-column call produces, which the host suite pins.
- *
- * The frame's last few columns stay full height and unsliced. They are one
- * scaler block plus the tail, the tail has no row-range entry point of its
- * own, and at the image's extreme edge a boundary is where it matters least.
- */
-static void push_tile(const uint8_t* tframe, const uint16_t* const* src_cols,
-                      unsigned tile, uint16_t* buf, uint32_t* scale_acc,
-                      uint32_t* push_acc)
-{
-    int64_t t0 = esp_timer_get_time();
-    int64_t t1;
-    unsigned first_col;
-    unsigned cols;
-    unsigned first_row;
-    unsigned rows;
-
-    if (TILE_LAST_COLS && tile == TILE_COUNT - 1u) {
-        /* The far edge: whatever blocks did not fill a group, plus the tail,
-         * full height. At 5/3 that is one block and one column.
-         *
-         * Buffer position 0 is whichever end of the landscape x axis the
-         * window fills FIRST, so under a descending fill the tail leads and
-         * the blocks follow in descending index order. Packing them the other
-         * way swaps them on screen, which a static picture shows outright. */
-        unsigned b;
-        unsigned at = 0;
-
-        first_col = TILE_LAST_COL;
-        cols = TILE_LAST_COLS;
-        first_row = 0;
-        rows = GAME_H;
-#if FRAME_COLS_DESCENDING
-        if (COL_TAIL_COLS) {
-            at += scale_unit(tframe, COL_BLOCKS, src_cols, buf);
-        }
-        for (b = TILE_LEFT_BLOCKS; b-- > 0;) {
-            at += scale_unit(tframe, TILE_GROUPS * COL_BLOCK_UNITS + b,
-                             src_cols, buf + (size_t)at * GAME_H);
-        }
-#else
-        for (b = 0; b < TILE_LEFT_BLOCKS; b++) {
-            at += scale_unit(tframe, TILE_GROUPS * COL_BLOCK_UNITS + b,
-                             src_cols, buf + (size_t)at * GAME_H);
-        }
-        if (COL_TAIL_COLS) {
-            (void)scale_unit(tframe, COL_BLOCKS, src_cols,
-                             buf + (size_t)at * GAME_H);
-        }
-#endif
-    } else {
-        unsigned g = tile / TILE_SLICES;
-        unsigned k = tile % TILE_SLICES;
-        unsigned b;
-
-        first_col = g * COL_BLOCK_COLS;
-        cols = COL_BLOCK_COLS;
-        first_row = k * TILE_ROWS;
-        rows = TILE_ROWS;
-        for (b = 0; b < COL_BLOCK_UNITS; b++) {
-            unsigned u = g * COL_BLOCK_UNITS + b;
-            unsigned base = u * UNIT_LINES;
-            const uint16_t* la = nullptr;
-            unsigned count = UNIT_LINES;
-            /* Where in the buffer this block's columns belong. Position 0 is
-             * the end of the landscape x axis the window fills first, so a
-             * descending fill wants the group's blocks in reverse — and
-             * getting it wrong swaps the halves of every tile, which a static
-             * picture shows outright rather than hiding in the artefact. */
-#if FRAME_COLS_DESCENDING
-            unsigned slot = COL_BLOCK_UNITS - 1u - b;
-#else
-            unsigned slot = b;
-#endif
-
-            if (geom->uses_lookahead && base + UNIT_LINES < SCALER_SRC_W) {
-                count++;
-            }
-            colourize_cols(tframe, base, count);
-            if (count > UNIT_LINES) {
-                la = src_cols[UNIT_LINES];
-            }
-            (void)scaler_scale_col_rows(SCALE_GEOM, SCALER_MODE_BLEND,
-                                        src_cols, la,
-                                        buf + (size_t)slot * UNIT_ROWS * rows,
-                                        scratch_row, COL_ORDER,
-                                        k * TILE_SRC_ROWS, TILE_SRC_ROWS);
-        }
-    }
-    t1 = esp_timer_get_time();
-    *scale_acc += (uint32_t)(t1 - t0);
-
-    display_col_tile(vp_x, vp_y, (uint16_t)first_col, (uint16_t)cols,
-                     (uint16_t)first_row, (uint16_t)rows);
-    display_push_rows_dma(buf, (size_t)cols * rows);
-    *push_acc += (uint32_t)(esp_timer_get_time() - t1);
-}
-
-static void emu_push_task(void* arg)
-{
-    const uint16_t* src_cols[COL_BLOCK_SRC + 1];
-    framequeue_meta_t meta;
-    unsigned i;
-    int slot = 0;
-
-    (void)arg;
-    for (i = 0; i < COL_BLOCK_SRC + 1u; i++) {
-        src_cols[i] = lut_cols[i];
-    }
-    for (;;) {
-        const uint8_t* tframe;
-        uint32_t scale_acc = 0;
-        uint32_t push_acc = 0;
-        unsigned buf = 0;
-        unsigned pass;
-        int64_t t1;
-
-        if (framequeue_pop(&fq, &slot, &meta) != FRAMEQUEUE_OK) {
-            ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2));
-            continue;
-        }
-        tframe = tfb[slot];
-        display_frame_begin(vp_x, vp_y);
-
-        for (pass = 0; pass < SCATTER_STRIDE; pass++) {
-            unsigned t;
-
-            for (t = pass; t < TILE_COUNT; t += SCATTER_STRIDE) {
-                push_tile(tframe, src_cols, t, dma_buf[buf], &scale_acc,
-                          &push_acc);
-                buf ^= 1u;
-            }
-        }
-
-        t1 = esp_timer_get_time();
-        display_dma_wait();
-        display_frame_end();
-        push_acc += (uint32_t)(esp_timer_get_time() - t1);
-
-        framequeue_release(&fq, slot);
-        scale_us = scale_acc;
-        push_us = push_acc;
-    }
-}
-#endif /* PUSH_ORDER */
 #else
 static void emu_push_task(void* arg)
 {
@@ -1072,8 +787,6 @@ static void emu_push_task(void* arg)
 //   Left / Right  horizontal scroll -1 / +1 px per frame
 //   A             stop
 //   B             next pattern: noise, checkerboard, stripes, grid
-//   Start         next write-pacing span with PACED_WRITE built in, or the
-//                 next panel refresh rate with PANEL_FRAME_RATE
 //   Select        print the current pattern and rate
 //
 // Vertical scroll is the one that matters for the column-major push: its seam
@@ -1241,36 +954,8 @@ static void demo_advance()
         demo_pat = (uint8_t)((demo_pat + 1u) % DEMO_PAT_COUNT);
         Serial.printf("[DEMO] pattern %s\n", demo_pat_name());
     }
-#ifdef PACED_WRITE
-    if (pressed & START) {
-        /* Sweep the write span, including 0 for unpaced, so the comparison is
-         * button presses rather than a flash each. The optimum is the panel's
-         * refresh period and nothing can read that back, so it is found by
-         * looking. */
-        static const uint16_t pace_steps[] = {
-            0, 14500, 15500, 16200, 16600,
-        };
-        static uint8_t pace_at = 3; /* the built-in default's slot */
-        pace_at = (uint8_t)((pace_at + 1u)
-                            % (sizeof(pace_steps) / sizeof(pace_steps[0])));
-        pace_us = pace_steps[pace_at];
-        if (pace_us) {
-            Serial.printf("[DEMO] write paced over %u us\n",
-                          (unsigned)pace_us);
-        } else {
-            Serial.println("[DEMO] write unpaced");
-        }
-    }
-#elif defined(PANEL_FRAME_RATE)
-    if (pressed & START) {
-        /* The panel's own refresh, not the emulator's delivery. Nominal: the
-         * real rate cannot be read back off this panel. */
-        Serial.printf("[DEMO] panel refresh ~%u Hz nominal\n",
-                      (unsigned)display_frame_rate_step(1));
-    }
-#else
     (void)START;
-#endif
+
     if (demo_vx > DEMO_RATE_MAX) {
         demo_vx = DEMO_RATE_MAX;
     }
@@ -1286,15 +971,8 @@ static void demo_advance()
     if ((pressed & SELECT) || demo_vx != was_x || demo_vy != was_y) {
         /* Once, on a change, and never on the frame path's own account: a
          * print every frame would itself cost most of one. */
-        Serial.printf("[DEMO] %s scroll %+d,%+d px/frame"
-#ifdef PACED_WRITE
-                      " pace %u us"
-#endif
-                      "\n", demo_pat_name(), (int)demo_vx, (int)demo_vy
-#ifdef PACED_WRITE
-                      , (unsigned)pace_us
-#endif
-                      );
+        Serial.printf("[DEMO] %s scroll %+d,%+d px/frame\n",
+                      demo_pat_name(), (int)demo_vx, (int)demo_vy);
     }
     demo_sx = (int16_t)(demo_sx + demo_vx);
     demo_sy = (int16_t)(demo_sy + demo_vy);
@@ -1508,9 +1186,7 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
 #endif
     Serial.printf("[EMU] gnuboy '%s' %uKB push:%s heap:%u\n", title,
                   romlen / 1024,
-                  (PUSH_ORDER == PUSH_TILE) ? "tile"
-                      : ((PUSH_ORDER == PUSH_SCATTER) ? "scatter"
-                      : ((PUSH_ORDER == PUSH_COL) ? "col" : "row")),
+                  PUSH_TRANSPOSED ? "col" : "row",
                   ESP.getFreeHeap());
     return true;
 }
@@ -1572,21 +1248,10 @@ void emu_run_frame()
 #ifndef QUIET_PERF
         Serial.printf("[PERF] emu=%uus scale=%uus push=%uus qstall=%uus "
                       "qovf=%u apu=%uus await=%uus aunder=%u aover=%u "
-                      "fps=%u split=c0 core=gnuboy"
-#ifdef PACED_WRITE
-                      " pace=%uus"
-#endif
-                      "\n",
+                      "fps=%u split=c0 core=gnuboy\n",
                       emu_us, scale_us, push_us, q_stall_us,
                       framequeue_overflows(&fq), apu_us, await_us, aunder,
-                      aover, cfps
-#ifdef PACED_WRITE
-                      /* In the line that prints every second, not only when
-                       * it changes: a sweep is unreadable if the current step
-                       * cannot be recovered after the fact. */
-                      , (unsigned)pace_us
-#endif
-                      );
+                      aover, cfps);
 #endif
     }
 }

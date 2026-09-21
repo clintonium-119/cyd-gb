@@ -58,6 +58,24 @@
 #error "TFT_ROTATION_PORTRAIT must be 0 or 2 — a landscape value is not a scan-order mapping."
 #endif
 
+// The panel's scan-out order, reversed. MADCTL's ML bit, which changes the
+// order the gate lines are refreshed without touching how frame memory maps
+// onto them — so the image does not move and only the direction the refresh
+// sweeps does.
+//
+// On by default, and half of what makes the column-major push worth having.
+// Measured on the bench of 2026-09-21: with the write running against the
+// sweep a seam is permanently on screen, and with it running along the sweep
+// the write can stay ahead for whole frames, so the seam becomes an occasional
+// fast crossing instead. The panel honoured it in two independent ways — the
+// column artefact went intermittent, and the row-major one's diagonal
+// reversed its lean.
+//
+// Set to 0 to compare against the panel's own order.
+#ifndef PANEL_SCAN_REVERSE
+#define PANEL_SCAN_REVERSE 1
+#endif
+
 // Which end of the landscape x axis the portrait address window starts at.
 // Rotation 2 advances against landscape x once a gate line is filled, so the
 // frame path hands its output columns over right to left; rotation 0 runs the

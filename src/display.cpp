@@ -308,7 +308,7 @@ static void trim_console()
 // portrait every frame and gets a no-op on all but the first after a menu.
 static uint8_t rot_now = TFT_ROTATION_LANDSCAPE;
 
-#ifdef PANEL_SCAN_REVERSE
+#if PANEL_SCAN_REVERSE
 // MADCTL's ML bit, the vertical refresh order: it reverses the order the gate
 // lines are SCANNED OUT without touching how the frame memory maps to them, so
 // the image does not move and only the direction the refresh sweeps does.
@@ -377,7 +377,7 @@ static void write_madctl_scan_reversed(uint8_t rot)
 static void apply_orientation(uint8_t rot)
 {
     tft.setRotation(rot);
-#ifdef PANEL_SCAN_REVERSE
+#if PANEL_SCAN_REVERSE
     // After setRotation, which writes MADCTL itself: re-written here with the
     // refresh order reversed, for whichever orientation the frame path uses.
     // ML is a property of the panel's scan-out and applies to any write order.
@@ -510,110 +510,14 @@ void display_frame_begin(int16_t x, int16_t y)
 }
 #endif
 
-#if PUSH_ORDER == PUSH_TILE
-void display_col_tile(int16_t x, int16_t y, uint16_t first_col, uint16_t cols,
-                      uint16_t first_row, uint16_t rows)
-{
-    // A 2D window: a run of output columns by a run of output rows. The
-    // column range maps as display_frame_begin()'s does; the row range is the
-    // fast axis, so it maps the same way the viewport's y does.
-#if FRAME_COLS_DESCENDING
-    tft.setAddrWindow((int16_t)(y + first_row),
-                      (int16_t)(SCREEN_W - x - first_col - cols), rows, cols);
-#else
-    tft.setAddrWindow((int16_t)(SCREEN_H - y - first_row - rows),
-                      (int16_t)(x + first_col), rows, cols);
-#endif
-}
-#endif
-
-#if PUSH_ORDER == PUSH_SCATTER
-void display_col_window(int16_t x, int16_t y, uint16_t first_col,
-                        uint16_t cols)
-{
-    // The same mapping display_frame_begin() uses, narrowed to a run of
-    // output columns. The scatter order writes blocks out of sequence, so the
-    // window moves with each one instead of the frame filling a single
-    // window; the fill direction inside it is unchanged, which is why the
-    // scaler still lays each block's columns down the same way.
-#if FRAME_COLS_DESCENDING
-    tft.setAddrWindow(y, (int16_t)(SCREEN_W - x - first_col - cols),
-                      GAME_H, cols);
-#else
-    tft.setAddrWindow((int16_t)(SCREEN_H - y - GAME_H),
-                      (int16_t)(x + first_col), GAME_H, cols);
-#endif
-}
-#endif
-
 void display_push_rows(const uint16_t* px, size_t n)
 {
     tft.pushPixels(px, (uint32_t)n);
 }
 
-#ifdef PANEL_FRAME_RATE
-// ─── Panel frame rate (bench only) ──────────────────────────────────────────
-// FRCTRL2, the normal-mode frame rate. The opposite bet from everything else
-// on the tearing list: rather than trying to leave the write ahead of the
-// scan for a whole frame, it gives that up and makes the scan pass several
-// times DURING one write, so the boundary lands somewhere different on each
-// pass instead of sitting on one slow-drifting edge.
-//
-// It is the only lever that costs nothing in delivered frames, which is why it
-// is worth a look at all. The arithmetic is against it: the share of frames
-// with no seam is about (P - W) / P for a refresh period P and a write span W
-// of about 14.3 ms, so any rate above roughly 70 Hz makes that zero by
-// construction. The bet is purely that a fast enough artefact stops reading as
-// a line.
-//
-// RTNA is the low five bits. The nominal rates below are the datasheet's at
-// the default porch; this panel's oscillator is its own, PORCTRL moves it too,
-// and nothing can read the real rate back — so treat them as labels, not
-// measurements.
-static const uint8_t rtna_steps[] = { 0x0F, 0x0A, 0x05, 0x00, 0x1F };
-static const uint16_t rtna_nominal_hz[] = { 60, 72, 90, 119, 39 };
-#define RTNA_STEPS (sizeof(rtna_steps) / sizeof(rtna_steps[0]))
-
-static volatile uint8_t rtna_want = PANEL_FRAME_RATE;
-static uint8_t rtna_applied = 0xFF;
-
-uint16_t display_frame_rate_step(int delta)
-{
-    unsigned i;
-
-    for (i = 0; i < RTNA_STEPS; i++) {
-        if (rtna_steps[i] == rtna_want) {
-            break;
-        }
-    }
-    if (i >= RTNA_STEPS) {
-        i = 0;
-    }
-    i = (unsigned)((int)i + delta + (int)RTNA_STEPS) % RTNA_STEPS;
-    rtna_want = rtna_steps[i];
-    return rtna_nominal_hz[i];
-}
-
-// From display_frame_end() on the core that owns the bus, with the frame's
-// transaction still open - the same place and the same reason porch_advance()
-// writes PORCTRL there. Two bytes of SPI on the frames where it changed.
-static void frame_rate_advance()
-{
-    if (rtna_applied == rtna_want) {
-        return;
-    }
-    rtna_applied = rtna_want;
-    tft.writecommand(0xC6);
-    tft.writedata(rtna_applied);
-}
-#endif
-
 void display_frame_end()
 {
     tft.endWrite();
-#ifdef PANEL_FRAME_RATE
-    frame_rate_advance();
-#endif
 #ifdef PANEL_PORCH_FPA
     porch_advance();
     trim_console();

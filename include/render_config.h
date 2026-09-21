@@ -151,138 +151,31 @@
 // Select the other order per invocation:
 //
 //   PLATFORMIO_BUILD_FLAGS=-DPUSH_ORDER=PUSH_COL pio run -e cyd-gnuboy
-// PUSH_SCATTER is the third option and it attacks a different property. The
-// other two differ in the artefact's SHAPE — a diagonal staircase against a
-// vertical line — because the write sweeps monotonically either way, so the
-// frame's temporal inconsistency lands along long, straight, continuous
-// edges. A long straight edge is about the most salient thing a display can
-// produce. Scatter writes the same blocks in an interleaved order, so the
-// same wrong pixels are chopped into many short boundaries with no coherent
-// line to lock onto. Same quantity of artefact, spread out.
-//
-// It costs one address window per block instead of one per frame, and a
-// transfer per block rather than per group: 54 transfers a frame at 5/3
-// against the column order's 27. Whether that reads better is an eye
-// question; whether the transfer count is affordable is a measurement.
-// PUSH_TILE is scatter in two dimensions. Scatter alone could not shorten a
-// boundary, only multiply it: the scaler emits full-height columns, so every
-// boundary it can produce is the full height of the image whatever order the
-// columns go in. The bench confirmed that — numerous full-height seams, judged
-// worse than the two a monotonic sweep gives.
-//
-// Tiling splits the height as well, so a boundary is TILE_ROWS tall instead of
-// GAME_H. That needs the scaler to emit a row RANGE of a block, and needs the
-// range's trailing blend to read into the next range rather than clamp at it,
-// or every tile join would be a permanent seam in the picture — which is the
-// invariant scaler_scale_col_rows() carries and the host suite pins.
 #define PUSH_ROW 0
 #define PUSH_COL 1
-#define PUSH_SCATTER 2
-#define PUSH_TILE 3
 
+// PUSH_COL is the default, settled on the bench of 2026-09-21 — and only in
+// company with the panel's reversed scan order. On its own it produces a seam
+// permanently on screen; together with PANEL_SCAN_REVERSE, one that is mostly
+// absent. Both halves are needed, and the pairing explains why: a row-major
+// write sweeps the gate axis once per SCREEN ROW, 240 times a frame, so it
+// crosses the scan whichever way the scan runs and reversing it only changes
+// which way the artefact leans. Column-major is the geometry that makes the
+// write cross the gate axis once, monotonically, which is the only
+// arrangement in which running WITH the scan is something it can do.
 #ifndef PUSH_ORDER
-#define PUSH_ORDER PUSH_ROW
+#define PUSH_ORDER PUSH_COL
 #endif
 
-#if PUSH_ORDER != PUSH_ROW && PUSH_ORDER != PUSH_COL \
-    && PUSH_ORDER != PUSH_SCATTER && PUSH_ORDER != PUSH_TILE
-#error "PUSH_ORDER must be PUSH_ROW, PUSH_COL, PUSH_SCATTER or PUSH_TILE."
+#if PUSH_ORDER != PUSH_ROW && PUSH_ORDER != PUSH_COL
+#error "PUSH_ORDER must be PUSH_ROW or PUSH_COL."
 #endif
 
-// Every transposed order shares the whole producer half — the second indexed
-// frame, the per-line transpose, the frame handed over in one queue block —
-// and differ only in how the consumer walks it.
-#define PUSH_TRANSPOSED (PUSH_ORDER != PUSH_ROW)
-
-// How far apart consecutive writes land, in scaler blocks. The walk is
-// interleaved passes — every Nth unit, then the gaps — which covers every
-// unit exactly once for any unit count, needing no coprimality with it.
-// 8 blocks is 40 output columns at 5/3, about 15% of the width.
-#ifndef SCATTER_STRIDE
-#define SCATTER_STRIDE 8
-#endif
-#if SCATTER_STRIDE < 2
-#error "SCATTER_STRIDE below 2 is not a scatter."
-#endif
-
-// ─── Paced write (PUSH_COL only) ────────────────────────────────────────────
-// How long, in microseconds, the frame's writes should be spread over.
-//
-// This is the one lever the tearing arithmetic actually points at, and it took
-// until the bench of 2026-09-21 to see it. A seam exists only when the scan
-// overtakes the write or the write overtakes the scan partway across, and the
-// phase window in which that happens has width |P - W|, for a refresh period
-// P and a write span W. So the crossing fraction is |P - W| / P, and it goes
-// to ZERO when the write takes exactly one refresh period. The write then
-// tracks the scan and never crosses it.
-//
-// What makes it worth building is that it needs no knowledge of the scan's
-// PHASE — only its rate. Phase is what this panel cannot give up: MISO is
-// dead, TE is not routed, and nothing restarts the scan. Rate is available,
-// because PORCTRL trims the panel and the emulator's cadence is measured at
-// 59.7447 Hz.
-//
-// Today the write spans about 14,300 us of a 16,738 us frame, so the window is
-// about 2,400 us and 14 % of frames carry a seam. The default below leaves a
-// little slack rather than filling the period exactly: the consumer has to
-// block SOMEWHERE each frame or core 0 never yields to its idle task.
-//
-//   PLATFORMIO_BUILD_FLAGS='-DPUSH_ORDER=PUSH_COL -DPACED_WRITE=16200'
-#ifdef PACED_WRITE
-#if PUSH_ORDER != PUSH_COL
-#error "PACED_WRITE needs a write that sweeps the scan axis monotonically; that is PUSH_COL."
-#endif
-#if PACED_WRITE < 1000 || PACED_WRITE > 20000
-#error "PACED_WRITE is a span in microseconds, and a frame is 16,738 of them."
-#endif
-#endif
-
-// ─── Tile (PUSH_TILE only) ──────────────────────────────────────────────────
-// How many pieces the image's height is cut into. Each tile is one column
-// group by GAME_H / TILE_SLICES rows, so a boundary is that tall rather than
-// the full image.
-//
-// 2 is what the bus affords. A tile is a transfer with its own address window,
-// measured at about 24.6 us each, and the frame's pixels alone occupy 12.77 ms
-// of a 16.74 ms frame at the ESP32's maximum 80 MHz SPI: 27 groups x 2 slices
-// is 54 transfers, the same count the one-dimensional scatter already
-// measured at 97 % of core 0. 4 slices would need about 2.2 ms the bus does
-// not have — 12-bit colour would free roughly 3.2 ms and is what makes 4
-// reachable.
-#ifndef TILE_SLICES
-#define TILE_SLICES 2
-#endif
-
-#define TILE_ROWS (GAME_H / TILE_SLICES)             // output rows per tile
-#define TILE_SRC_ROWS (GB_SCREEN_H / TILE_SLICES)    // source rows per tile
-
-#if TILE_SLICES < 2
-#error "TILE_SLICES below 2 is not a tiling; use PUSH_SCATTER."
-#endif
-#if (GAME_H % TILE_SLICES) != 0 || (GB_SCREEN_H % TILE_SLICES) != 0
-#error "TILE_SLICES must divide both GAME_H and GB_SCREEN_H."
-#endif
-#if (TILE_SRC_ROWS % UNIT_LINES) != 0
-#error "TILE_SLICES must cut the source axis on scaler group boundaries."
-#endif
-
-// Whole column groups, and whatever is left past them.
-//
-// At 5/3 there is a remainder and it matters: 53 scaler blocks do not divide
-// into groups of 2, so 26 groups cover output columns 0..259 and one block
-// plus the tail column covers 260..265. At either k/16 geometry the blocks
-// divide the frame exactly and there is nothing left over, so TILE_LAST_COLS
-// is 0 and the final unit does not exist.
-#define TILE_BLOCKS (GB_SCREEN_W / UNIT_LINES)
-#define TILE_GROUPS (TILE_BLOCKS / COL_BLOCK_UNITS)
-#define TILE_LEFT_BLOCKS (TILE_BLOCKS % COL_BLOCK_UNITS)
-#define TILE_LAST_COL (TILE_GROUPS * COL_BLOCK_COLS)
-#define TILE_LAST_COLS (GAME_W - TILE_LAST_COL)
-#define TILE_COUNT (TILE_GROUPS * TILE_SLICES + (TILE_LAST_COLS ? 1 : 0))
-
-#if TILE_LAST_COLS != (TILE_LEFT_BLOCKS * UNIT_ROWS + COL_TAIL_COLS)
-#error "the leftover columns must be the leftover blocks plus the tail."
-#endif
+// A name rather than the comparison spelled out at a dozen guards: the
+// transposed order shares the whole producer half — the second indexed frame,
+// the per-line transpose, the frame handed over in one queue block — and
+// differs only in how the consumer walks it.
+#define PUSH_TRANSPOSED (PUSH_ORDER == PUSH_COL)
 
 // ─── Game area ──────────────────────────────────────────────────────────────
 // Each geometry states its own GAME_W / GAME_H above, because 5/3's width is
