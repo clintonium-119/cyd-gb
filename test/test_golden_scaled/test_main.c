@@ -9,13 +9,13 @@
 /*
  * Scaled golden-frame regression pins.
  *
- * The index-buffer suite next door pins Peanut-GB's own output. These six
+ * The index-buffer suite next door pins Peanut-GB's own output. These two
  * pins cover everything downstream of it: the palette LUT, the scaler's
- * pattern tables for all three geometries, and the blend. Each hash is
- * FNV-1a 64 over the whole scaled RGB565 frame after running dmg-acid2 for
- * GOLDEN_FRAME_COUNT frames and colourizing it through palette 0.
+ * pattern table, and the blend. Each hash is FNV-1a 64 over the whole scaled
+ * RGB565 frame after running dmg-acid2 for GOLDEN_FRAME_COUNT frames and
+ * colourizing it through palette 0.
  *
- * The six constants are independent measurements, not derived from each
+ * The two constants are independent measurements, not derived from each
  * other. What legitimately changes them:
  *
  *   - a deliberate change to the scaler's pattern tables or blend
@@ -32,10 +32,6 @@
  */
 #define GOLDEN_FRAME_COUNT 60u
 
-#define GOLDEN_24_16_NEAREST 0xC14E4D5E7D8F3294ULL
-#define GOLDEN_24_16_BLEND   0x7879A9E86DB38D3FULL
-#define GOLDEN_26_16_NEAREST 0x8C129E3C797D7FA8ULL
-#define GOLDEN_26_16_BLEND   0x57BB983C883E96FFULL
 #define GOLDEN_5_3_NEAREST   0x83CB60D3C84CEC38ULL
 #define GOLDEN_5_3_BLEND     0x5E331E79E1250913ULL
 
@@ -47,8 +43,8 @@
 static uint8_t rom[ROM_MAX];
 static uint16_t lines[GB_RUNNER_H][SCALER_SRC_W];
 static const uint16_t* line_ptrs[GB_RUNNER_H];
-/* The panel is 240 rows and no geometry is wider than SCALER_DST_W_MAX, so
- * this bounds every geometry's frame. 5/3 reaches it exactly. */
+/* The panel is 240 rows and 5/3's output row is SCALER_DST_W_MAX wide, so
+ * this is the frame exactly. */
 #define FRAME_MAX_PX (SCALER_DST_W_MAX * 240)
 
 static uint16_t frame[FRAME_MAX_PX];
@@ -161,29 +157,14 @@ static uint64_t scale_frame_and_hash(enum scaler_geom_e geom,
                    (size_t)dst_h * gi->dst_w * sizeof(frame[0]));
 }
 
-/* Which output unit of each geometry's group is an interpolated one, restated
- * from the design's duplication rhythms — 1,2 for 24/16, 1,2,1,2,2,1,2,2 for
- * 26/16 and 2,1,2 for 5/3 — and applied on both axes. */
-static const uint8_t blend_unit_24_16[3] = { 0, 1, 0 };
-static const uint8_t blend_unit_26_16[13] = {
-    0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1,
-};
+/* Which output unit of the group is an interpolated one, restated from the
+ * design's 2,1,2 duplication rhythm and applied on both axes. */
 static const uint8_t blend_unit_5_3[5] = { 0, 1, 0, 0, 1 };
-
-static const uint8_t* blend_units(enum scaler_geom_e geom)
-{
-    switch (geom) {
-    case SCALER_GEOM_24_16: return blend_unit_24_16;
-    case SCALER_GEOM_26_16: return blend_unit_26_16;
-    default:                return blend_unit_5_3;
-    }
-}
 
 /* Scale the whole frame as columns, the counterpart of scale_frame_and_hash().
  * Blocks are written straight into col_frame, which is column-major at dst_h:
- * one output column is dst_h contiguous pixels. The leftover source columns
- * past the last whole block — one at 5/3, none at either k/16 geometry — are
- * the tail, and belong to no block. */
+ * one output column is dst_h contiguous pixels. The one leftover source
+ * column past the last whole block is the tail, and belongs to no block. */
 static unsigned scale_frame_col(enum scaler_geom_e geom,
                                 enum scaler_mode_e mode)
 {
@@ -206,8 +187,8 @@ static unsigned scale_frame_col(enum scaler_geom_e geom,
         unsigned first = b * src_units;
         /* At the frame's right edge there is no next column, so the trailing
          * blend columns clamp — the same branch the row walk takes at the
-         * bottom edge. At 5/3 that edge is the tail column below, not a
-         * block, so every block there has a real lookahead. */
+         * bottom edge. That edge is the tail column below rather than a
+         * block, so in practice every block here has a real lookahead. */
         const uint16_t* lookahead = (first + src_units < SCALER_SRC_W)
             ? col_ptrs[first + src_units] : NULL;
         TEST_ASSERT_EQUAL_INT(SCALER_OK,
@@ -246,38 +227,6 @@ static unsigned channel_gap(uint16_t a, uint16_t b)
     "commit body; otherwise this is a regression. Check the index-buffer pin " \
     "first — if that failed too, the change is upstream of the scaler."
 
-static void test_golden_24_16_nearest(void)
-{
-    render_source_lines();
-    TEST_ASSERT_EQUAL_HEX64_MESSAGE(GOLDEN_24_16_NEAREST,
-        scale_frame_and_hash(SCALER_GEOM_24_16, SCALER_MODE_NEAREST, 216u),
-        GOLDEN_MESSAGE);
-}
-
-static void test_golden_24_16_blend(void)
-{
-    render_source_lines();
-    TEST_ASSERT_EQUAL_HEX64_MESSAGE(GOLDEN_24_16_BLEND,
-        scale_frame_and_hash(SCALER_GEOM_24_16, SCALER_MODE_BLEND, 216u),
-        GOLDEN_MESSAGE);
-}
-
-static void test_golden_26_16_nearest(void)
-{
-    render_source_lines();
-    TEST_ASSERT_EQUAL_HEX64_MESSAGE(GOLDEN_26_16_NEAREST,
-        scale_frame_and_hash(SCALER_GEOM_26_16, SCALER_MODE_NEAREST, 234u),
-        GOLDEN_MESSAGE);
-}
-
-static void test_golden_26_16_blend(void)
-{
-    render_source_lines();
-    TEST_ASSERT_EQUAL_HEX64_MESSAGE(GOLDEN_26_16_BLEND,
-        scale_frame_and_hash(SCALER_GEOM_26_16, SCALER_MODE_BLEND, 234u),
-        GOLDEN_MESSAGE);
-}
-
 static void test_golden_5_3_nearest(void)
 {
     render_source_lines();
@@ -295,7 +244,7 @@ static void test_golden_5_3_blend(void)
 }
 
 /* The blend must actually change the picture: a mode that silently fell back
- * to nearest-neighbour would otherwise pass half the pins above by matching
+ * to nearest-neighbour would otherwise pass one of the pins above by matching
  * a constant measured from the same broken code. */
 static void test_blend_differs_from_nearest(void)
 {
@@ -303,14 +252,6 @@ static void test_blend_differs_from_nearest(void)
     uint64_t blend;
 
     render_source_lines();
-    nearest = scale_frame_and_hash(SCALER_GEOM_24_16, SCALER_MODE_NEAREST, 216u);
-    blend = scale_frame_and_hash(SCALER_GEOM_24_16, SCALER_MODE_BLEND, 216u);
-    TEST_ASSERT_NOT_EQUAL(nearest, blend);
-
-    nearest = scale_frame_and_hash(SCALER_GEOM_26_16, SCALER_MODE_NEAREST, 234u);
-    blend = scale_frame_and_hash(SCALER_GEOM_26_16, SCALER_MODE_BLEND, 234u);
-    TEST_ASSERT_NOT_EQUAL(nearest, blend);
-
     nearest = scale_frame_and_hash(SCALER_GEOM_5_3, SCALER_MODE_NEAREST, 240u);
     blend = scale_frame_and_hash(SCALER_GEOM_5_3, SCALER_MODE_BLEND, 240u);
     TEST_ASSERT_NOT_EQUAL(nearest, blend);
@@ -318,7 +259,7 @@ static void test_blend_differs_from_nearest(void)
 
 /*
  * The column walk equals the row walk transposed. One assertion covers the
- * whole geometry: the 5/3 tail, the clamping at the frame's right and bottom
+ * whole geometry: the tail, the clamping at the frame's right and bottom
  * edges, and the cross-block lookahead rule, over the same dmg-acid2 frame the
  * hashes above pin — which exercises every one of those branches.
  *
@@ -336,7 +277,7 @@ static void assert_column_walk_transposes_the_row_walk(enum scaler_geom_e geom,
                                                        unsigned expected_h)
 {
     const scaler_geom_info_t* gi = scaler_geom_info(geom);
-    const uint8_t* blend = blend_units(geom);
+    const uint8_t* blend = blend_unit_5_3;
     unsigned dst_units = gi->dst_rows_per_block;
     unsigned dst_w = gi->dst_w;
     unsigned whole_w = SCALER_SRC_W / gi->src_lines_per_block * dst_units;
@@ -351,9 +292,8 @@ static void assert_column_walk_transposes_the_row_walk(enum scaler_geom_e geom,
 
     for (x = 0; x < dst_w; x++) {
         /* A column past the last whole group is the tail: pure, never a seam
-         * across the walk. Vertically there is no tail — 144 divides by 2, 8
-         * and 3 alike — so every row's unit index is its position in the
-         * group. */
+         * across the walk. Vertically there is no tail — three divides 144 —
+         * so every row's unit index is its position in the group. */
         int seam_x = (x < whole_w) && blend[x % dst_units];
 
         for (y = 0; y < dst_h; y++) {
@@ -387,14 +327,6 @@ static void assert_column_walk_transposes_the_row_walk(enum scaler_geom_e geom,
 static void test_column_walk_transposes_the_row_walk(void)
 {
     render_source_lines();
-    assert_column_walk_transposes_the_row_walk(SCALER_GEOM_24_16,
-                                               SCALER_MODE_NEAREST, 216u);
-    assert_column_walk_transposes_the_row_walk(SCALER_GEOM_24_16,
-                                               SCALER_MODE_BLEND, 216u);
-    assert_column_walk_transposes_the_row_walk(SCALER_GEOM_26_16,
-                                               SCALER_MODE_NEAREST, 234u);
-    assert_column_walk_transposes_the_row_walk(SCALER_GEOM_26_16,
-                                               SCALER_MODE_BLEND, 234u);
     assert_column_walk_transposes_the_row_walk(SCALER_GEOM_5_3,
                                                SCALER_MODE_NEAREST, 240u);
     assert_column_walk_transposes_the_row_walk(SCALER_GEOM_5_3,
@@ -432,10 +364,6 @@ static void test_5_3_tail_column_is_the_last_source_column(void)
 int main(void)
 {
     UNITY_BEGIN();
-    RUN_TEST(test_golden_24_16_nearest);
-    RUN_TEST(test_golden_24_16_blend);
-    RUN_TEST(test_golden_26_16_nearest);
-    RUN_TEST(test_golden_26_16_blend);
     RUN_TEST(test_golden_5_3_nearest);
     RUN_TEST(test_golden_5_3_blend);
     RUN_TEST(test_blend_differs_from_nearest);

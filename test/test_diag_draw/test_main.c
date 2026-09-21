@@ -22,7 +22,9 @@
  * not a literal copied from a run.
  */
 
-/* The windows render_config.h's geometries give. */
+/* Three window sizes. Only 266 x 240 is a render geometry now — the other two
+ * were, and stay here because diag_layout() takes any window and the small
+ * ones are where a layout runs out of room first. */
 #define GEOM_24_W 240
 #define GEOM_24_H 216
 #define GEOM_26_W 260
@@ -33,10 +35,8 @@
 /* 5/3 is both the widest and the tallest, so its window bounds the canvas. */
 #define FB_MAX (GEOM_53_W * GEOM_53_H)
 
-/* body_y is DIAG_HEADER_H + 2 = 20, so the checkerboard has 196 rows to fill
- * at 24/16, 214 at 26/16 and 220 at 5/3, and only whole blocks are pushed. */
-#define CHECKER_BLOCKS_24 ((GEOM_24_H - (DIAG_HEADER_H + 2)) / 3)   /* 65 */
-#define CHECKER_BLOCKS_26 ((GEOM_26_H - (DIAG_HEADER_H + 2)) / 13)  /* 16 */
+/* body_y is DIAG_HEADER_H + 2 = 20, so the checkerboard has 220 rows to fill,
+ * and only whole blocks are pushed. */
 #define CHECKER_BLOCKS_53 ((GEOM_53_H - (DIAG_HEADER_H + 2)) / 5)   /* 44 */
 
 /* ─── the fake canvas ─────────────────────────────────────────────────────── */
@@ -349,8 +349,8 @@ static void test_the_layout_accepts_every_window(void)
 
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(GEOM_53_W, GEOM_53_H, &geom));
     TEST_ASSERT_EQUAL_INT16(DIAG_HEADER_H + 2, geom.body_y);
-    /* (240 - 20 - 2) / 10 = 21 — no fewer than 26/16 gives, and the footer
-     * is inside the window. */
+    /* (240 - 20 - 2) / 10 = 21 — no fewer than the old 260 x 234 gave, and
+     * the footer is inside the window. */
     TEST_ASSERT_EQUAL_UINT8(21, geom.rows);
     TEST_ASSERT_EQUAL_INT16(GEOM_53_W / 8, geom.bar_w);
     TEST_ASSERT_EQUAL_INT16(GEOM_53_H - DIAG_ROW_H - 2, geom.footer_y);
@@ -473,24 +473,6 @@ static void test_the_checkerboard_pushes_whole_scaler_blocks(void)
 
     fill_data();
 
-    draw_page(GEOM_24_W, GEOM_24_H, DIAG_PAGE_DISPLAY, DIAG_PATTERN_CHECKER,
-              true, 0);
-    assert_clean();
-    info = scaler_geom_info(SCALER_GEOM_24_16);
-    TEST_ASSERT_EQUAL_UINT16(GEOM_24_W, info->dst_w);
-    TEST_ASSERT_EQUAL_UINT(CHECKER_BLOCKS_24, fk.images);
-    TEST_ASSERT_EQUAL_INT16(info->dst_rows_per_block, fk.last_img_rows);
-    TEST_ASSERT_EQUAL_INT16(GEOM_24_W, fk.last_img_w);
-
-    draw_page(GEOM_26_W, GEOM_26_H, DIAG_PAGE_DISPLAY, DIAG_PATTERN_CHECKER,
-              true, 0);
-    assert_clean();
-    info = scaler_geom_info(SCALER_GEOM_26_16);
-    TEST_ASSERT_EQUAL_UINT16(GEOM_26_W, info->dst_w);
-    TEST_ASSERT_EQUAL_UINT(CHECKER_BLOCKS_26, fk.images);
-    TEST_ASSERT_EQUAL_INT16(info->dst_rows_per_block, fk.last_img_rows);
-    TEST_ASSERT_EQUAL_INT16(GEOM_26_W, fk.last_img_w);
-
     draw_page(GEOM_53_W, GEOM_53_H, DIAG_PAGE_DISPLAY, DIAG_PATTERN_CHECKER,
               true, 0);
     assert_clean();
@@ -504,7 +486,7 @@ static void test_the_checkerboard_pushes_whole_scaler_blocks(void)
 static void test_the_checkerboard_without_a_buffer_pushes_no_image(void)
 {
     fill_data();
-    draw_page(GEOM_24_W, GEOM_24_H, DIAG_PAGE_DISPLAY, DIAG_PATTERN_CHECKER,
+    draw_page(GEOM_53_W, GEOM_53_H, DIAG_PAGE_DISPLAY, DIAG_PATTERN_CHECKER,
               false, 0);
     assert_clean();
     TEST_ASSERT_EQUAL_UINT(0, fk.images);
@@ -521,7 +503,7 @@ static void test_the_checkerboards_first_block_is_the_blend_the_game_uses(void)
     const uint16_t* row1;
 
     fill_data();
-    draw_page(GEOM_24_W, GEOM_24_H, DIAG_PAGE_DISPLAY, DIAG_PATTERN_CHECKER,
+    draw_page(GEOM_53_W, GEOM_53_H, DIAG_PAGE_DISPLAY, DIAG_PATTERN_CHECKER,
               true, 0);
     TEST_ASSERT_TRUE(fk.have_first_block);
 
@@ -533,27 +515,33 @@ static void test_the_checkerboards_first_block_is_the_blend_the_game_uses(void)
         "the palette's two background ends are the same colour");
 
     row0 = fk.first_block;
-    row1 = fk.first_block + GEOM_24_W;
+    row1 = fk.first_block + GEOM_53_W;
 
-    /* 24/16 is 2 source units to 3 output units: copy, blend, copy. So the
-     * top output row reads dark, avg, light across the first source pair —
-     * and the middle row of every block is the vertical blend of the two
-     * source lines, which at a one-pixel cell is the same average again. */
+    /* 5/3 is 3 source units to 5: copy, blend, copy, copy, blend. Across the
+     * first group of a one-pixel chequer — dark, light, dark, then light
+     * again — the top output row therefore reads dark, avg, light, dark,
+     * avg. */
     TEST_ASSERT_EQUAL_HEX16(dark, row0[0]);
     TEST_ASSERT_EQUAL_HEX16(scaler_avg565(dark, light), row0[1]);
     TEST_ASSERT_EQUAL_HEX16(light, row0[2]);
+    TEST_ASSERT_EQUAL_HEX16(dark, row0[3]);
+    TEST_ASSERT_EQUAL_HEX16(scaler_avg565(dark, light), row0[4]);
 
+    /* Row 1 is the vertical blend of the block's first two source lines,
+     * which are opposite ends of the chequer, so at a one-pixel cell every
+     * pixel of it is that same average — sharp and blended pixels alike. */
     TEST_ASSERT_EQUAL_HEX16(scaler_avg565(dark, light), row1[0]);
-    TEST_ASSERT_EQUAL_HEX16(scaler_avg565(light, dark), row1[2]);
+    TEST_ASSERT_EQUAL_HEX16(scaler_avg565(dark, light), row1[1]);
+    TEST_ASSERT_EQUAL_HEX16(scaler_avg565(dark, light), row1[2]);
 }
 
 /*
  * The chequer alternates every source line, so a block's source lines are
  * phased on the block's own first line — not on line 0. With an even
  * lines-per-block every block starts even and the distinction is invisible,
- * which is why it survived two geometries; 5/3's three is the first to show
- * it. Against the old code block 1 repeated block 0's lines and every block's
- * lookahead was line 0's parity.
+ * which is why it survived the two k/16 geometries this one replaced; three
+ * source lines is what showed it. Against the old code block 1 repeated
+ * block 0's lines and every block's lookahead was line 0's parity.
  */
 static void test_the_checkerboard_phases_source_lines_on_the_block_index(void)
 {
@@ -593,8 +581,9 @@ static void test_the_checkerboard_phases_source_lines_on_the_block_index(void)
     TEST_ASSERT_FALSE(b0[3 * GEOM_53_W] == b0[4 * GEOM_53_W]);
 }
 
-/* A width no geometry claims has nothing to push, and the page says so
- * rather than drawing a wrong one. */
+/* A width the geometry table does not claim has nothing to push, and the page
+ * says so rather than drawing a wrong one. 240 and 260 are such widths now,
+ * and this case has always used a third that was never anyone's. */
 static void test_the_checkerboard_refuses_an_unclaimed_width(void)
 {
     fill_data();

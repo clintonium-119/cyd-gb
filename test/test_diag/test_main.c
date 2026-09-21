@@ -9,8 +9,11 @@
 /*
  * The diagnostic mode's decisions, driven with literal timestamps.
  *
- * Two windows appear throughout, because both ship: 240x216 at scale 24/16
- * and 260x234 at 26/16, both on a 320x240 panel. The nudge clamps therefore
+ * Two windows appear throughout — 240x216 and 260x234 on a 320x240 panel —
+ * because diag_init() takes any window and the clamp is arithmetic on its
+ * size, not on a geometry. They were the two shipped render geometries when
+ * this suite was written, and they stay because two sizes prove the clamp
+ * moves with the window. The nudge clamps therefore
  * fall at 320 - 240 = 80 by 240 - 216 = 24, and at 320 - 260 = 60 by
  * 240 - 234 = 6 — the second window has almost no vertical slack, which is
  * exactly the case a one-pixel nudge has to get right.
@@ -245,7 +248,7 @@ static void hammer(uint8_t word, int presses)
     }
 }
 
-static void test_the_nudge_clamps_at_the_panel_edges_at_24_16(void)
+static void test_the_nudge_clamps_at_the_panel_edges_in_a_240x216_window(void)
 {
     goto_page(DIAG_PAGE_NUDGE);
 
@@ -264,7 +267,7 @@ static void test_the_nudge_clamps_at_the_panel_edges_at_24_16(void)
     TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_UP, 9005));
 }
 
-static void test_the_nudge_clamps_at_the_panel_edges_at_26_16(void)
+static void test_the_nudge_clamps_at_the_panel_edges_in_a_260x234_window(void)
 {
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&d, PANEL_W, PANEL_H, WIN26_W, WIN26_H, 30, 3, 30, 3,
@@ -517,8 +520,8 @@ int main(void)
     RUN_TEST(test_the_menu_and_volume_combos_do_nothing_here);
     RUN_TEST(test_a_held_direction_steps_once_then_repeats_at_the_cadence);
     RUN_TEST(test_two_directions_at_once_do_nothing);
-    RUN_TEST(test_the_nudge_clamps_at_the_panel_edges_at_24_16);
-    RUN_TEST(test_the_nudge_clamps_at_the_panel_edges_at_26_16);
+    RUN_TEST(test_the_nudge_clamps_at_the_panel_edges_in_a_240x216_window);
+    RUN_TEST(test_the_nudge_clamps_at_the_panel_edges_in_a_260x234_window);
     RUN_TEST(test_a_saves_the_nudge_and_the_toast_expires_once);
     RUN_TEST(test_b_restores_the_compile_time_default);
     RUN_TEST(test_a_held_a_fires_once);

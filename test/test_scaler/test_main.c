@@ -10,40 +10,24 @@
  * result whose per-channel value never leaves the two inputs' range.
  *
  * The geometry cases come in two flavours deliberately. The "literal" tests
- * isolate one axis at a time (uniform source lines isolate the vertical
- * pattern; identical source lines isolate the horizontal one) and assert
- * hand-computed RGB565 constants, so a misunderstanding of the duplication
- * rhythm fails loudly. The "spec" tests then sweep every output pixel of a
- * block against the unit table restated below, which catches indexing and
- * overrun bugs the literal tests cannot reach.
+ * name hand-computed RGB565 constants at the places the arithmetic is easiest
+ * to get wrong — the horizontal tail, the cross-block lookahead row, and a
+ * source that alternates every pixel on both axes — so a misunderstanding of
+ * the duplication rhythm fails loudly. The "spec" tests then sweep every
+ * output pixel of a block against the unit table restated below, which
+ * catches indexing and overrun bugs the literal tests cannot reach.
  */
 
 #define CANARY 0xC5C5u
 #define GUARD 4
 
 /* One output unit: the source unit copied, and the unit averaged with it
- * (-1 = pure). Restated from the design's duplication rhythms — 1,2 for
- * 24/16, 1,2,1,2,2,1,2,2 for 26/16 and 2,1,2 for 5/3 — and applied on both
- * axes. */
+ * (-1 = pure). Restated from the design's 2,1,2 duplication rhythm, and
+ * applied on both axes. */
 typedef struct {
     int src;
     int partner;
 } unit_spec_t;
-
-static const unit_spec_t spec_24_16[3] = {
-    { 0, -1 }, { 0, 1 }, { 1, -1 },
-};
-
-static const unit_spec_t spec_26_16[13] = {
-    { 0, -1 },
-    { 1, -1 }, { 1, 2 },
-    { 2, -1 },
-    { 3, -1 }, { 3, 4 },
-    { 4, -1 }, { 4, 5 },
-    { 5, -1 },
-    { 6, -1 }, { 6, 7 },
-    { 7, -1 }, { 7, 8 },
-};
 
 /* 5/3: three source units to five output units, blending on half-steps.
  * Unit 4's partner is unit 3 — the next group's first, so horizontally that
@@ -54,10 +38,10 @@ static const unit_spec_t spec_5_3[5] = {
 };
 
 /* Destination block and scratch row wrapped in canary guards. The block is
- * sized for the tallest geometry's rows (26/16's 13) by the widest one's
- * pixels (5/3's 266), so it bounds every geometry's block with room to
- * spare; the unused tail is checked too, so a per-row overrun at dst_w 240
- * shows up as a clobbered canary. */
+ * the geometry table's own maxima, dst_rows_per_block by dst_w, which at one
+ * geometry is a block exactly — so a row that overruns its width lands in
+ * the trailing canaries rather than in the next row, and the last row's
+ * overrun lands in dst.post. */
 static struct {
     uint16_t pre[GUARD];
     uint16_t block[SCALER_DST_ROWS_MAX * SCALER_DST_W_MAX];
@@ -133,37 +117,6 @@ static void assert_canaries_intact(unsigned used)
     }
 }
 
-/* Fill every source line, and the lookahead, with one value each. */
-static void set_uniform_lines(const uint16_t* values, unsigned count,
-                              uint16_t lookahead_value)
-{
-    unsigned l;
-    unsigned i;
-    for (l = 0; l < count; l++) {
-        for (i = 0; i < SCALER_SRC_W; i++) {
-            src[l][i] = values[l];
-        }
-    }
-    for (i = 0; i < SCALER_SRC_W; i++) {
-        lookahead[i] = lookahead_value;
-    }
-}
-
-/* Give every source line, and the lookahead, the same repeating ramp, so
- * vertical blending is the identity and only the horizontal pattern shows. */
-static void set_identical_ramp(unsigned period, unsigned step)
-{
-    unsigned l;
-    unsigned i;
-    for (i = 0; i < SCALER_SRC_W; i++) {
-        uint16_t v = (uint16_t)(((i % period) * step) << 11);
-        for (l = 0; l < SCALER_SRC_LINES_MAX; l++) {
-            src[l][i] = v;
-        }
-        lookahead[i] = v;
-    }
-}
-
 /* ── avg565 properties ────────────────────────────────────────────────── */
 
 static void test_avg565_is_the_identity_for_equal_inputs(void)
@@ -230,33 +183,20 @@ static void test_avg565_is_symmetric_and_stays_within_channel_ranges(void)
 
 /* ── geometry table ──────────────────────────────────────────────────── */
 
-static void test_geom_info_reports_all_three_geometries(void)
+static void test_geom_info_reports_the_geometry(void)
 {
-    const scaler_geom_info_t* g = scaler_geom_info(SCALER_GEOM_24_16);
+    const scaler_geom_info_t* g = scaler_geom_info(SCALER_GEOM_5_3);
     unsigned i;
 
-    TEST_ASSERT_NOT_NULL(g);
-    TEST_ASSERT_EQUAL_UINT(2, g->src_lines_per_block);
-    TEST_ASSERT_EQUAL_UINT(3, g->dst_rows_per_block);
-    TEST_ASSERT_EQUAL_UINT(240, g->dst_w);
-    TEST_ASSERT_EQUAL_UINT(0, g->uses_lookahead);
-
-    g = scaler_geom_info(SCALER_GEOM_26_16);
-    TEST_ASSERT_NOT_NULL(g);
-    TEST_ASSERT_EQUAL_UINT(8, g->src_lines_per_block);
-    TEST_ASSERT_EQUAL_UINT(13, g->dst_rows_per_block);
-    TEST_ASSERT_EQUAL_UINT(260, g->dst_w);
-    TEST_ASSERT_EQUAL_UINT(1, g->uses_lookahead);
-
-    g = scaler_geom_info(SCALER_GEOM_5_3);
     TEST_ASSERT_NOT_NULL(g);
     TEST_ASSERT_EQUAL_UINT(3, g->src_lines_per_block);
     TEST_ASSERT_EQUAL_UINT(5, g->dst_rows_per_block);
     TEST_ASSERT_EQUAL_UINT(266, g->dst_w);
     TEST_ASSERT_EQUAL_UINT(1, g->uses_lookahead);
 
-    /* Every table sized so one set of caller buffers covers all of them. */
-    for (i = 0; i < 3u; i++) {
+    /* The table's maxima are what a caller sizes its buffers from, so no row
+     * of it may exceed them. */
+    for (i = 0; i < 1u; i++) {
         g = scaler_geom_info((enum scaler_geom_e)i);
         TEST_ASSERT_NOT_NULL(g);
         TEST_ASSERT_TRUE(g->dst_w <= SCALER_DST_W_MAX);
@@ -274,7 +214,7 @@ static void test_every_geometry_dst_w_matches_its_group_arithmetic(void)
 {
     unsigned i;
 
-    for (i = 0; i < 3u; i++) {
+    for (i = 0; i < 1u; i++) {
         const scaler_geom_info_t* g = scaler_geom_info((enum scaler_geom_e)i);
         unsigned span;
         TEST_ASSERT_NOT_NULL(g);
@@ -287,160 +227,8 @@ static void test_every_geometry_dst_w_matches_its_group_arithmetic(void)
 
 static void test_geom_info_rejects_an_unknown_geometry(void)
 {
-    TEST_ASSERT_NULL(scaler_geom_info((enum scaler_geom_e)3));
+    TEST_ASSERT_NULL(scaler_geom_info((enum scaler_geom_e)1));
     TEST_ASSERT_NULL(scaler_geom_info((enum scaler_geom_e)99));
-}
-
-/* ── 24/16 ───────────────────────────────────────────────────────────── */
-
-static void test_24_16_nearest_keeps_the_placeholder_semantics(void)
-{
-    unsigned k;
-    unsigned x;
-
-    TEST_ASSERT_EQUAL_INT(SCALER_OK,
-        scaler_scale_block(SCALER_GEOM_24_16, SCALER_MODE_NEAREST,
-                           lines, lookahead, dst.block, scratch.row));
-
-    /* Each source pair (a, b) becomes (a, a, b), and the middle output row
-     * duplicates the top one. */
-    for (k = 0; k * 2u + 1u < SCALER_SRC_W; k++) {
-        uint16_t a0 = src[0][k * 2u];
-        uint16_t b0 = src[0][k * 2u + 1u];
-        uint16_t a1 = src[1][k * 2u];
-        uint16_t b1 = src[1][k * 2u + 1u];
-        TEST_ASSERT_EQUAL_HEX16(a0, row_of(0, 240)[k * 3u]);
-        TEST_ASSERT_EQUAL_HEX16(a0, row_of(0, 240)[k * 3u + 1u]);
-        TEST_ASSERT_EQUAL_HEX16(b0, row_of(0, 240)[k * 3u + 2u]);
-        TEST_ASSERT_EQUAL_HEX16(a1, row_of(2, 240)[k * 3u]);
-        TEST_ASSERT_EQUAL_HEX16(a1, row_of(2, 240)[k * 3u + 1u]);
-        TEST_ASSERT_EQUAL_HEX16(b1, row_of(2, 240)[k * 3u + 2u]);
-    }
-    for (x = 0; x < 240u; x++) {
-        TEST_ASSERT_EQUAL_HEX16(row_of(0, 240)[x], row_of(1, 240)[x]);
-    }
-    assert_canaries_intact(3u * 240u);
-}
-
-static void test_24_16_blend_horizontal_triple_is_a_blended_seam(void)
-{
-    unsigned x;
-
-    /* One repeating pair per line, identical on every line: R 0 then R 16,
-     * so each triple is (0, 8, 16) in the 5-bit red field. */
-    set_identical_ramp(2u, 16u);
-    reset_dst();
-    TEST_ASSERT_EQUAL_INT(SCALER_OK,
-        scaler_scale_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
-                           lines, lookahead, dst.block, scratch.row));
-
-    for (x = 0; x + 2u < 240u; x += 3u) {
-        TEST_ASSERT_EQUAL_HEX16(0x0000u, row_of(0, 240)[x]);
-        TEST_ASSERT_EQUAL_HEX16(0x4000u, row_of(0, 240)[x + 1u]);
-        TEST_ASSERT_EQUAL_HEX16(0x8000u, row_of(0, 240)[x + 2u]);
-    }
-    assert_canaries_intact(3u * 240u);
-}
-
-static void test_24_16_blend_middle_row_is_the_average_of_the_pure_rows(void)
-{
-    static const uint16_t values[2] = { 0x0000u, 0x8000u }; /* R 0, R 16 */
-    unsigned x;
-
-    set_uniform_lines(values, 2u, 0xF800u);
-    reset_dst();
-    TEST_ASSERT_EQUAL_INT(SCALER_OK,
-        scaler_scale_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
-                           lines, lookahead, dst.block, scratch.row));
-
-    for (x = 0; x < 240u; x++) {
-        TEST_ASSERT_EQUAL_HEX16(0x0000u, row_of(0, 240)[x]);
-        TEST_ASSERT_EQUAL_HEX16(0x4000u, row_of(1, 240)[x]); /* R 8 */
-        TEST_ASSERT_EQUAL_HEX16(0x8000u, row_of(2, 240)[x]);
-        TEST_ASSERT_EQUAL_HEX16(
-            scaler_avg565(row_of(0, 240)[x], row_of(2, 240)[x]),
-            row_of(1, 240)[x]);
-    }
-    assert_canaries_intact(3u * 240u);
-}
-
-/* ── 26/16 ───────────────────────────────────────────────────────────── */
-
-static void test_26_16_vertical_rows_match_the_named_averages(void)
-{
-    /* Uniform lines at R = 0, 3, 6, 9, 12, 15, 18, 21 and lookahead R = 24,
-     * so every output row is uniform and equals one spec entry. Averages
-     * floor: (3,6)->4, (9,12)->10, (12,15)->13, (18,21)->19, (21,24)->22. */
-    static const uint16_t values[8] = {
-        0x0000u, 0x1800u, 0x3000u, 0x4800u,
-        0x6000u, 0x7800u, 0x9000u, 0xA800u,
-    };
-    static const uint16_t expect[13] = {
-        0x0000u,            /* (0, pure)  R 0  */
-        0x1800u, 0x2000u,   /* (1, pure)  R 3  | (1, blend 2)  R 4  */
-        0x3000u,            /* (2, pure)  R 6  */
-        0x4800u, 0x5000u,   /* (3, pure)  R 9  | (3, blend 4)  R 10 */
-        0x6000u, 0x6800u,   /* (4, pure)  R 12 | (4, blend 5)  R 13 */
-        0x7800u,            /* (5, pure)  R 15 */
-        0x9000u, 0x9800u,   /* (6, pure)  R 18 | (6, blend 7)  R 19 */
-        0xA800u, 0xB000u,   /* (7, pure)  R 21 | (7, blend LA) R 22 */
-    };
-    unsigned r;
-    unsigned x;
-
-    set_uniform_lines(values, 8u, 0xC000u); /* lookahead R 24 */
-    reset_dst();
-    TEST_ASSERT_EQUAL_INT(SCALER_OK,
-        scaler_scale_block(SCALER_GEOM_26_16, SCALER_MODE_BLEND,
-                           lines, lookahead, dst.block, scratch.row));
-
-    for (r = 0; r < 13u; r++) {
-        for (x = 0; x < 260u; x++) {
-            TEST_ASSERT_EQUAL_HEX16(expect[r], row_of(r, 260)[x]);
-        }
-    }
-    assert_canaries_intact(13u * 260u);
-}
-
-static void test_26_16_horizontal_pattern_and_right_edge_clamp(void)
-{
-    /* Identical lines with an 8-pixel ramp R = 0,4,...,28 so the block's
-     * final blend reaches the next block's first pixel (R 0) and averages
-     * to R 14 — except in the last block, where it clamps to pixel 159. */
-    static const uint16_t expect[13] = {
-        0x0000u,            /* (0, pure)      R 0  */
-        0x2000u, 0x3000u,   /* (1, pure) R 4  | (1, blend 2)  R 6  */
-        0x4000u,            /* (2, pure)      R 8  */
-        0x6000u, 0x7000u,   /* (3, pure) R 12 | (3, blend 4)  R 14 */
-        0x8000u, 0x9000u,   /* (4, pure) R 16 | (4, blend 5)  R 18 */
-        0xA000u,            /* (5, pure)      R 20 */
-        0xC000u, 0xD000u,   /* (6, pure) R 24 | (6, blend 7)  R 26 */
-        0xE000u, 0x7000u,   /* (7, pure) R 28 | (7, blend next block) R 14 */
-    };
-    unsigned r;
-    unsigned b;
-    unsigned u;
-
-    set_identical_ramp(8u, 4u);
-    reset_dst();
-    TEST_ASSERT_EQUAL_INT(SCALER_OK,
-        scaler_scale_block(SCALER_GEOM_26_16, SCALER_MODE_BLEND,
-                           lines, lookahead, dst.block, scratch.row));
-
-    /* Every row carries the same horizontal pattern, because vertical
-     * blending of identical lines is the identity. */
-    for (r = 0; r < 13u; r++) {
-        for (b = 0; b < 20u; b++) {
-            for (u = 0; u < 13u; u++) {
-                uint16_t want = expect[u];
-                if (b == 19u && u == 12u) {
-                    want = 0xE000u; /* clamped to pixel 159: stays pure */
-                }
-                TEST_ASSERT_EQUAL_HEX16(want, row_of(r, 260)[b * 13u + u]);
-            }
-        }
-    }
-    assert_canaries_intact(13u * 260u);
 }
 
 /* Sweep every output pixel of a block against the unit table. */
@@ -570,23 +358,15 @@ static void assert_col_block_matches_spec(enum scaler_geom_e geom,
                 o++;
             }
         }
-        /* 144 is divisible by 2, 8 and 3 alike, so the walk ends on dst_h
-         * exactly: a tail emitted on this axis would overrun the column. */
+        /* Three divides 144, so the walk ends on dst_h exactly: a tail
+         * emitted on this axis would overrun the column. */
         TEST_ASSERT_EQUAL_UINT(dst_h, o);
     }
     assert_canaries_intact(units * dst_h);
 }
 
-static void test_col_block_matches_the_spec_for_every_geometry(void)
+static void test_col_block_matches_the_spec_in_both_modes(void)
 {
-    assert_col_block_matches_spec(SCALER_GEOM_24_16, SCALER_MODE_NEAREST,
-                                  spec_24_16, lookahead);
-    assert_col_block_matches_spec(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
-                                  spec_24_16, lookahead);
-    assert_col_block_matches_spec(SCALER_GEOM_26_16, SCALER_MODE_NEAREST,
-                                  spec_26_16, lookahead);
-    assert_col_block_matches_spec(SCALER_GEOM_26_16, SCALER_MODE_BLEND,
-                                  spec_26_16, lookahead);
     assert_col_block_matches_spec(SCALER_GEOM_5_3, SCALER_MODE_NEAREST,
                                   spec_5_3, lookahead);
     assert_col_block_matches_spec(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
@@ -597,18 +377,15 @@ static void test_col_block_matches_the_spec_for_every_geometry(void)
  * columns clamp to the column they already hold. */
 static void test_col_block_null_lookahead_clamps_the_trailing_columns(void)
 {
-    assert_col_block_matches_spec(SCALER_GEOM_26_16, SCALER_MODE_BLEND,
-                                  spec_26_16, NULL);
     assert_col_block_matches_spec(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
                                   spec_5_3, NULL);
 }
 
 /*
- * The tail moved axis with the walk: at 5/3 it is a whole output column that
- * belongs to no block, and at either k/16 geometry the group divides 160 and
- * there is nothing left over at all.
+ * The tail moved axis with the walk: it is a whole output column that belongs
+ * to no block, rather than the row walk's one pixel per row.
  */
-static void test_col_tail_is_one_pure_column_at_5_3_and_nothing_at_k16(void)
+static void test_col_tail_is_one_pure_column(void)
 {
     unsigned base;
     unsigned o = 0;
@@ -630,71 +407,6 @@ static void test_col_tail_is_one_pure_column_at_5_3_and_nothing_at_k16(void)
     }
     TEST_ASSERT_EQUAL_UINT(240u, o);
     assert_canaries_intact(240u);
-
-    reset_dst();
-    TEST_ASSERT_EQUAL_INT(SCALER_OK,
-        scaler_scale_col_tail(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
-                              lines, dst.block));
-    TEST_ASSERT_EQUAL_INT(SCALER_OK,
-        scaler_scale_col_tail(SCALER_GEOM_26_16, SCALER_MODE_NEAREST,
-                              lines, dst.block));
-    /* Nothing left over means nothing written, and the buffers may be NULL. */
-    TEST_ASSERT_EQUAL_INT(SCALER_OK,
-        scaler_scale_col_tail(SCALER_GEOM_26_16, SCALER_MODE_BLEND,
-                              NULL, NULL));
-    assert_canaries_intact(0u);
-}
-
-static void test_24_16_matches_the_spec_in_both_modes(void)
-{
-    assert_block_matches_spec(SCALER_GEOM_24_16, SCALER_MODE_NEAREST,
-                              spec_24_16, lookahead);
-    assert_block_matches_spec(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
-                              spec_24_16, lookahead);
-}
-
-static void test_26_16_matches_the_spec_in_both_modes(void)
-{
-    assert_block_matches_spec(SCALER_GEOM_26_16, SCALER_MODE_NEAREST,
-                              spec_26_16, lookahead);
-    assert_block_matches_spec(SCALER_GEOM_26_16, SCALER_MODE_BLEND,
-                              spec_26_16, lookahead);
-}
-
-static void test_null_lookahead_clamps_the_trailing_blend_rows(void)
-{
-    unsigned x;
-
-    /* Frame end: the block's final blend row has no next line, so it
-     * clamps to the block's last line and stays pure. */
-    assert_block_matches_spec(SCALER_GEOM_26_16, SCALER_MODE_BLEND,
-                              spec_26_16, NULL);
-    for (x = 0; x < 260u; x++) {
-        TEST_ASSERT_EQUAL_HEX16(row_of(11, 260)[x], row_of(12, 260)[x]);
-    }
-    /* 24/16 blends only within the block, so the lookahead never matters. */
-    assert_block_matches_spec(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
-                              spec_24_16, NULL);
-}
-
-static void test_26_16_lookahead_row_uses_the_next_block(void)
-{
-    unsigned x;
-
-    reset_dst();
-    TEST_ASSERT_EQUAL_INT(SCALER_OK,
-        scaler_scale_block(SCALER_GEOM_26_16, SCALER_MODE_BLEND,
-                           lines, lookahead, dst.block, scratch.row));
-
-    /* With a real lookahead the final row differs from the pure row above
-     * it, and equals the average of that row and the scaled lookahead. */
-    TEST_ASSERT_FALSE(row_of(11, 260)[0] == row_of(12, 260)[0]);
-    for (x = 0; x < 260u; x++) {
-        TEST_ASSERT_EQUAL_HEX16(
-            scaler_avg565(row_of(11, 260)[x], scratch.row[x]),
-            row_of(12, 260)[x]);
-    }
-    assert_canaries_intact(13u * 260u);
 }
 
 /* ── 5/3 ─────────────────────────────────────────────────────────────── */
@@ -765,13 +477,13 @@ static void test_5_3_lookahead_row_uses_the_next_block(void)
     assert_canaries_intact(5u * 266u);
 }
 
-/* ── 24/16 fixed kernel against the pattern spec ─────────────────────── */
+/* ── the fixed kernel against the pattern spec ───────────────────────── */
 /*
- * 24/16 BLEND is served by an unrolled kernel rather than the pattern walk,
- * and its contract is that nobody can tell: the spec sweep above is the
- * pattern walk restated, so these cases run the kernel over inputs the
- * literal tests never reach — random lines, every mask bit toggling, and
- * both lookahead states, which the geometry must ignore.
+ * BLEND is served by an unrolled kernel rather than the pattern walk, and
+ * its contract is that nobody can tell: the spec sweep above is the pattern
+ * walk restated, so the cases below run the kernel over inputs the literal
+ * tests never reach — random lines, every mask bit toggling, and both
+ * lookahead states.
  */
 
 static uint32_t rng_state;
@@ -795,69 +507,6 @@ static void set_random_lines(void)
         lookahead[i] = rng16();
     }
 }
-
-static void test_24_16_kernel_matches_the_spec_on_random_lines(void)
-{
-    unsigned n;
-
-    rng_state = 0x2416BEEFu;
-    for (n = 0; n < 64u; n++) {
-        set_random_lines();
-        assert_block_matches_spec(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
-                                  spec_24_16, (n & 1u) ? lookahead : NULL);
-    }
-}
-
-static void test_24_16_kernel_keeps_the_right_edge_pure(void)
-{
-    unsigned n;
-
-    /* The last output pixel of each row is the last source pixel of its
-     * line — pixel 159 has no partner to blend with. */
-    rng_state = 0x0159015Au;
-    for (n = 0; n < 16u; n++) {
-        set_random_lines();
-        reset_dst();
-        TEST_ASSERT_EQUAL_INT(SCALER_OK,
-            scaler_scale_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
-                               lines, lookahead, dst.block, scratch.row));
-        TEST_ASSERT_EQUAL_HEX16(src[0][159], row_of(0, 240)[239]);
-        TEST_ASSERT_EQUAL_HEX16(scaler_avg565(src[0][159], src[1][159]),
-                                row_of(1, 240)[239]);
-        TEST_ASSERT_EQUAL_HEX16(src[1][159], row_of(2, 240)[239]);
-        assert_canaries_intact(3u * 240u);
-    }
-}
-
-static void test_24_16_kernel_survives_alternating_extremes(void)
-{
-    unsigned i;
-
-    /* Every channel bit flips between neighbours on both axes, so a blend
-     * that borrowed across a channel boundary would show here. */
-    for (i = 0; i < SCALER_SRC_W; i++) {
-        src[0][i] = (i & 1u) ? 0xFFFFu : 0x0000u;
-        src[1][i] = (i & 1u) ? 0x0000u : 0xFFFFu;
-        lookahead[i] = 0xA5A5u;
-    }
-    assert_block_matches_spec(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
-                              spec_24_16, lookahead);
-    /* The horizontal blend of black and white is mid-grey in every channel
-     * (15, 31, 15), and the vertical blend of two such rows is that grey
-     * where the rows agree and mid-grey again where they cross. */
-    TEST_ASSERT_EQUAL_HEX16(0x7BEFu, row_of(0, 240)[1]);
-    TEST_ASSERT_EQUAL_HEX16(0x7BEFu, row_of(2, 240)[1]);
-    TEST_ASSERT_EQUAL_HEX16(0x7BEFu, row_of(1, 240)[0]);
-    TEST_ASSERT_EQUAL_HEX16(0x7BEFu, row_of(1, 240)[1]);
-    TEST_ASSERT_EQUAL_HEX16(0x7BEFu, row_of(1, 240)[2]);
-}
-
-/* ── 5/3 fixed kernel against the pattern spec ───────────────────────── */
-/*
- * 5/3 BLEND is served by an unrolled kernel too, and under the same
- * contract: the spec sweep is the pattern walk restated, so these cases run
- * the kernel over inputs the literal tests never reach.
- */
 
 static void test_5_3_kernel_matches_the_spec_on_random_lines(void)
 {
@@ -938,18 +587,6 @@ static void test_5_3_kernel_survives_alternating_extremes(void)
 
 /* ── argument checking ───────────────────────────────────────────────── */
 
-static void test_26_16_kernel_matches_the_spec_on_random_lines(void)
-{
-    unsigned n;
-
-    rng_state = 0x2616BEEFu;
-    for (n = 0; n < 64u; n++) {
-        set_random_lines();
-        assert_block_matches_spec(SCALER_GEOM_26_16, SCALER_MODE_BLEND,
-                                  spec_26_16, (n & 1u) ? lookahead : NULL);
-    }
-}
-
 static void test_null_and_unknown_arguments_are_rejected(void)
 {
     const uint16_t* holed[SCALER_SRC_LINES_MAX];
@@ -961,17 +598,14 @@ static void test_null_and_unknown_arguments_are_rejected(void)
     holed[1] = NULL;
 
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
-        scaler_scale_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
+        scaler_scale_block(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
                            NULL, lookahead, dst.block, scratch.row));
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
-        scaler_scale_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
+        scaler_scale_block(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
                            holed, lookahead, dst.block, scratch.row));
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
-        scaler_scale_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
+        scaler_scale_block(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
                            lines, lookahead, NULL, scratch.row));
-    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
-        scaler_scale_block(SCALER_GEOM_26_16, SCALER_MODE_BLEND,
-                           lines, lookahead, dst.block, NULL));
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
         scaler_scale_block(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
                            lines, lookahead, dst.block, NULL));
@@ -979,7 +613,7 @@ static void test_null_and_unknown_arguments_are_rejected(void)
         scaler_scale_block((enum scaler_geom_e)7, SCALER_MODE_BLEND,
                            lines, lookahead, dst.block, scratch.row));
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
-        scaler_scale_block(SCALER_GEOM_24_16, (enum scaler_mode_e)5,
+        scaler_scale_block(SCALER_GEOM_5_3, (enum scaler_mode_e)5,
                            lines, lookahead, dst.block, scratch.row));
 
     /* A rejected call writes nothing. */
@@ -1031,18 +665,8 @@ static void assert_col_order_reverses_the_block(enum scaler_geom_e geom,
     assert_canaries_intact(units * dst_h);
 }
 
-static void test_col_order_reverses_the_block_for_every_geometry(void)
+static void test_col_order_reverses_the_block_in_both_modes(void)
 {
-    assert_col_order_reverses_the_block(SCALER_GEOM_24_16,
-                                        SCALER_MODE_BLEND, lookahead);
-    assert_col_order_reverses_the_block(SCALER_GEOM_24_16,
-                                        SCALER_MODE_NEAREST, lookahead);
-    assert_col_order_reverses_the_block(SCALER_GEOM_26_16,
-                                        SCALER_MODE_BLEND, lookahead);
-    assert_col_order_reverses_the_block(SCALER_GEOM_26_16,
-                                        SCALER_MODE_BLEND, NULL);
-    assert_col_order_reverses_the_block(SCALER_GEOM_26_16,
-                                        SCALER_MODE_NEAREST, lookahead);
     assert_col_order_reverses_the_block(SCALER_GEOM_5_3,
                                         SCALER_MODE_BLEND, lookahead);
     assert_col_order_reverses_the_block(SCALER_GEOM_5_3,
@@ -1109,20 +733,18 @@ static void assert_col_ranges_join_seamlessly(enum scaler_geom_e geom,
 
 static void test_col_ranges_join_seamlessly(void)
 {
-    /* 144 splits by 2, 3, 4 and 6; each geometry's group has to divide the
-     * range, so 26/16's 8 only permits halves and 5/3's 3 permits all. */
+    /* 144 splits by 2, 3, 4 and 6, and the group has to divide the range, so
+     * three permits every one of them. */
     assert_col_ranges_join_seamlessly(SCALER_GEOM_5_3,
                                       SCALER_MODE_BLEND, 2);
     assert_col_ranges_join_seamlessly(SCALER_GEOM_5_3,
+                                      SCALER_MODE_BLEND, 3);
+    assert_col_ranges_join_seamlessly(SCALER_GEOM_5_3,
                                       SCALER_MODE_BLEND, 4);
+    assert_col_ranges_join_seamlessly(SCALER_GEOM_5_3,
+                                      SCALER_MODE_BLEND, 6);
     assert_col_ranges_join_seamlessly(SCALER_GEOM_5_3,
                                       SCALER_MODE_NEAREST, 2);
-    assert_col_ranges_join_seamlessly(SCALER_GEOM_26_16,
-                                      SCALER_MODE_BLEND, 2);
-    assert_col_ranges_join_seamlessly(SCALER_GEOM_24_16,
-                                      SCALER_MODE_BLEND, 2);
-    assert_col_ranges_join_seamlessly(SCALER_GEOM_24_16,
-                                      SCALER_MODE_BLEND, 4);
 }
 
 /* A range that does not land on group boundaries has no correct phase, so it
@@ -1159,15 +781,15 @@ static void test_col_null_and_unknown_arguments_are_rejected(void)
     holed[1] = NULL;
 
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
-        scaler_scale_col_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
+        scaler_scale_col_block(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
                                NULL, lookahead, dst.block, scratch.row,
                                SCALER_COLS_ASCENDING));
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
-        scaler_scale_col_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
+        scaler_scale_col_block(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
                                holed, lookahead, dst.block, scratch.row,
                                SCALER_COLS_ASCENDING));
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
-        scaler_scale_col_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
+        scaler_scale_col_block(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
                                lines, lookahead, NULL, scratch.row,
                                SCALER_COLS_ASCENDING));
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
@@ -1179,18 +801,16 @@ static void test_col_null_and_unknown_arguments_are_rejected(void)
                                lines, lookahead, dst.block, scratch.row,
                                SCALER_COLS_ASCENDING));
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
-        scaler_scale_col_block(SCALER_GEOM_24_16, (enum scaler_mode_e)5,
+        scaler_scale_col_block(SCALER_GEOM_5_3, (enum scaler_mode_e)5,
                                lines, lookahead, dst.block, scratch.row,
                                SCALER_COLS_ASCENDING));
 
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
-        scaler_scale_col_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
+        scaler_scale_col_block(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
                                lines, lookahead, dst.block, scratch.row,
                                (enum scaler_col_order_e)9));
 
-    /* The tail rejects the same way, but only where it has a column to emit:
-     * a geometry whose group divides 160 has nothing to write and no buffer
-     * to check. */
+    /* The tail rejects the same way, over the one column it has to emit. */
     TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
         scaler_scale_col_tail(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
                               NULL, dst.block));
@@ -1216,34 +836,21 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_avg565_is_the_identity_for_equal_inputs);
     RUN_TEST(test_avg565_is_symmetric_and_stays_within_channel_ranges);
-    RUN_TEST(test_geom_info_reports_all_three_geometries);
+    RUN_TEST(test_geom_info_reports_the_geometry);
     RUN_TEST(test_every_geometry_dst_w_matches_its_group_arithmetic);
     RUN_TEST(test_geom_info_rejects_an_unknown_geometry);
-    RUN_TEST(test_24_16_nearest_keeps_the_placeholder_semantics);
-    RUN_TEST(test_24_16_blend_horizontal_triple_is_a_blended_seam);
-    RUN_TEST(test_24_16_blend_middle_row_is_the_average_of_the_pure_rows);
-    RUN_TEST(test_26_16_vertical_rows_match_the_named_averages);
-    RUN_TEST(test_26_16_horizontal_pattern_and_right_edge_clamp);
-    RUN_TEST(test_24_16_matches_the_spec_in_both_modes);
-    RUN_TEST(test_26_16_matches_the_spec_in_both_modes);
-    RUN_TEST(test_null_lookahead_clamps_the_trailing_blend_rows);
-    RUN_TEST(test_26_16_lookahead_row_uses_the_next_block);
     RUN_TEST(test_5_3_matches_the_spec_in_both_modes);
     RUN_TEST(test_5_3_horizontal_tail_is_the_last_source_pixel_pure);
     RUN_TEST(test_5_3_lookahead_row_uses_the_next_block);
-    RUN_TEST(test_24_16_kernel_matches_the_spec_on_random_lines);
-    RUN_TEST(test_24_16_kernel_keeps_the_right_edge_pure);
-    RUN_TEST(test_24_16_kernel_survives_alternating_extremes);
-    RUN_TEST(test_26_16_kernel_matches_the_spec_on_random_lines);
     RUN_TEST(test_5_3_kernel_matches_the_spec_on_random_lines);
     RUN_TEST(test_5_3_kernel_keeps_the_tail_pure);
     RUN_TEST(test_5_3_kernel_frame_end_row_is_pure);
     RUN_TEST(test_5_3_kernel_survives_alternating_extremes);
     RUN_TEST(test_null_and_unknown_arguments_are_rejected);
-    RUN_TEST(test_col_block_matches_the_spec_for_every_geometry);
+    RUN_TEST(test_col_block_matches_the_spec_in_both_modes);
     RUN_TEST(test_col_block_null_lookahead_clamps_the_trailing_columns);
-    RUN_TEST(test_col_tail_is_one_pure_column_at_5_3_and_nothing_at_k16);
-    RUN_TEST(test_col_order_reverses_the_block_for_every_geometry);
+    RUN_TEST(test_col_tail_is_one_pure_column);
+    RUN_TEST(test_col_order_reverses_the_block_in_both_modes);
     RUN_TEST(test_col_ranges_join_seamlessly);
     RUN_TEST(test_col_ranges_reject_a_partial_group);
     RUN_TEST(test_col_null_and_unknown_arguments_are_rejected);

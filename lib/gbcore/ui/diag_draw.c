@@ -401,17 +401,16 @@ void diag_checker_build(diag_checker_t* ck, uint8_t idx)
 /*
  * The checkerboard, pushed through the real scaler in blend mode.
  *
- * Every geometry emits whole blocks only, so the body holds as many complete
- * blocks as fit under the header and stops: 216 - 20 = 196 rows is 65 blocks
- * of 3 at 24/16, 234 - 20 = 214 is 16 blocks of 13 at 26/16, and 240 - 20 =
- * 220 is 44 blocks of 5 at 5/3. The leftover row or six stay background,
- * which is what the border and the bars already show anyway.
+ * The scaler emits whole blocks only, so the body holds as many complete
+ * blocks as fit under the header and stops: 240 - 20 = 220 rows is 44 blocks
+ * of 5 at 5/3. The leftover row or six stay background, which is what the
+ * border and the bars already show anyway.
  */
 static void page_checker(const ui_canvas_t* cv, const diag_layout_t* g,
                          const diag_data_t* data, diag_checker_t* ck)
 {
     const scaler_geom_info_t* info = NULL;
-    enum scaler_geom_e geom = SCALER_GEOM_24_16;
+    enum scaler_geom_e geom = SCALER_GEOM_5_3;
     unsigned idx;
     int16_t blocks;
     int16_t b;
@@ -425,8 +424,9 @@ static void page_checker(const ui_canvas_t* cv, const diag_layout_t* g,
 
     /* The window width picks the geometry, because it is the scaler's own
      * output width. scaler_geom_info() returns NULL past the last one, so
-     * this walk needs no edit when a geometry is added; no match means there
-     * is nothing to push. */
+     * this walk reads the table rather than naming the one geometry there is,
+     * and needs no edit if another is ever added; no match means there is
+     * nothing to push. */
     for (idx = 0; (info = scaler_geom_info((enum scaler_geom_e)idx)) != NULL;
          idx++) {
         if (g->w == (int16_t)info->dst_w) {

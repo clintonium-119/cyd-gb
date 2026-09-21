@@ -1,6 +1,6 @@
 #include "scaler.h"
 
-#define GEOM_COUNT 3
+#define GEOM_COUNT 1
 
 /*
  * One output unit of a geometry's pattern. The pattern is indexed by the
@@ -11,27 +11,6 @@ typedef struct {
     uint8_t src_offset;
     uint8_t is_blend;
 } scaler_pattern_t;
-
-/* 24/16 (3/2): the design's regular 1,2 duplication rhythm. */
-static const scaler_pattern_t pattern_24_16[3] = {
-    { 0, 0 }, { 0, 1 }, { 1, 0 },
-};
-
-/*
- * 26/16 (13/8): the design's 1,2,1,2,2,1,2,2 duplication rhythm. Every
- * source unit emits itself, and where the rhythm says 2 the second copy is
- * the blend with the next source unit — 13 output units from 8 source units.
- */
-static const scaler_pattern_t pattern_26_16[13] = {
-    { 0, 0 },
-    { 1, 0 }, { 1, 1 },
-    { 2, 0 },
-    { 3, 0 }, { 3, 1 },
-    { 4, 0 }, { 4, 1 },
-    { 5, 0 },
-    { 6, 0 }, { 6, 1 },
-    { 7, 0 }, { 7, 1 },
-};
 
 /*
  * 5/3: three source units to five output units. The ideal sample positions
@@ -44,14 +23,10 @@ static const scaler_pattern_t pattern_5_3[5] = {
 };
 
 static const scaler_geom_info_t geom_table[GEOM_COUNT] = {
-    { 2, 3, 240, 0 },  /* SCALER_GEOM_24_16: the blend partner is in-block */
-    { 8, 13, 260, 1 }, /* SCALER_GEOM_26_16: unit 7 blends with unit 8     */
-    { 3, 5, 266, 1 },  /* SCALER_GEOM_5_3:   unit 2 blends with unit 3     */
+    { 3, 5, 266, 1 }, /* SCALER_GEOM_5_3: unit 2 blends with unit 3 */
 };
 
 static const scaler_pattern_t* const pattern_table[GEOM_COUNT] = {
-    pattern_24_16,
-    pattern_26_16,
     pattern_5_3,
 };
 
@@ -129,8 +104,7 @@ static void scale_line(const uint16_t* src, uint16_t* dst,
      * leftover source pixel emits itself once: there is no next group to
      * blend toward, and the alternative is one more iteration of the group
      * loop, which emits dst_units pixels and overruns the output unit. Zero
-     * length for both k/16 geometries on either axis, and for 5/3 on the 144
-     * axis. */
+     * length on the 144 axis, which three divides. */
     for (; base < src_len; base++) {
         dst[o++] = src[base];
     }
@@ -151,153 +125,11 @@ static void blend_line(uint16_t* dst, const uint16_t* a, const uint16_t* b,
 }
 
 /*
- * Fixed 3/2 blend kernel — the shipped geometry, unrolled. One source pair
- * (a, b) becomes (a, avg(a, b), b), and two source lines become three rows:
- * the two scaled lines and, between them, their per-pixel average. These are
- * the pixels the pattern walk produces for 24/16 in BLEND mode, computed in
- * the same order: the middle row averages the two already scaled rows, never
- * the four sources, because avg565 is not associative. No partner clamp is
- * needed (both axes are even, so the partner of the last pair's first pixel
- * is the last pixel) and no lookahead (pattern_24_16's only blend partner is
- * in-block), so there is no frame-end case either. Transposed it is the same
- * kernel over a 144-pixel axis: two source columns to three output columns.
- * 80 pairs x 3 rows = 720 pixels per call, 72 calls a frame.
- *
- * ponytail: plain 16-bit stores; the toolchain does not merge them. Pack to
- * 32-bit stores (dst must then be 4-byte aligned, which the API does not
- * promise) only if the bench says the kernel is still short.
- */
-static void scale_block_24_16_blend(const uint16_t* l0, const uint16_t* l1,
-                                    uint16_t* dst, unsigned src_len,
-                                    ptrdiff_t unit_step)
-{
-    uint16_t* r0 = dst;
-    uint16_t* r1 = dst + unit_step;
-    uint16_t* r2 = dst + 2 * unit_step;
-    unsigned x;
-    unsigned o = 0;
-
-    for (x = 0; x < src_len; x += 2) {
-        uint16_t a0 = l0[x];
-        uint16_t b0 = l0[x + 1];
-        uint16_t a1 = l1[x];
-        uint16_t b1 = l1[x + 1];
-        uint16_t m0 = avg565(a0, b0);
-        uint16_t m1 = avg565(a1, b1);
-
-        r0[o] = a0;
-        r0[o + 1] = m0;
-        r0[o + 2] = b0;
-        r1[o] = avg565(a0, a1);
-        r1[o + 1] = avg565(m0, m1);
-        r1[o + 2] = avg565(b0, b1);
-        r2[o] = a1;
-        r2[o + 1] = m1;
-        r2[o + 2] = b1;
-        o += 3;
-    }
-}
-
-/*
- * Fixed 13/8 blend kernel for 26/16 — the same deletion the 3/2 kernel made,
- * against an irregular rhythm four times the size. Nine live source pixels
- * across eight lines will not sit in the LX6's window, so this keeps the
- * generic path's two-pass shape (scale the 8 pure units along the axis, then
- * average pairs of already-scaled units) and unrolls only the along-axis
- * walk, which is where the per-pixel pattern load, is_blend branch and bounds
- * check lived. 20 groups of 8 source pixels become 13 output pixels each: 260
- * per row, 13 rows, 18 calls a frame. Transposed it is 18 groups to 234.
- *
- * ponytail: plain 16-bit stores, as in the 3/2 kernel; pack to 32-bit only
- * if the bench says this lands short.
- */
-static void scale_line_26_16(const uint16_t* src, uint16_t* dst,
-                             unsigned src_len, unsigned src_end)
-{
-    unsigned base;
-    unsigned o = 0;
-
-    for (base = 0; base < src_len; base += 8) {
-        /* 8 divides both axes, so the last group's partner is always past the
-         * end; it clamps to the final source pixel, the last output pixel is
-         * avg(s, s) and the far edge stays pure. One compare per group, not
-         * per pixel. */
-        uint16_t s0 = src[base];
-        uint16_t s1 = src[base + 1];
-        uint16_t s2 = src[base + 2];
-        uint16_t s3 = src[base + 3];
-        uint16_t s4 = src[base + 4];
-        uint16_t s5 = src[base + 5];
-        uint16_t s6 = src[base + 6];
-        uint16_t s7 = src[base + 7];
-        uint16_t s8 = src[base + 8 < src_end ? base + 8 : src_end - 1];
-
-        dst[o] = s0;
-        dst[o + 1] = s1;
-        dst[o + 2] = avg565(s1, s2);
-        dst[o + 3] = s2;
-        dst[o + 4] = s3;
-        dst[o + 5] = avg565(s3, s4);
-        dst[o + 6] = s4;
-        dst[o + 7] = avg565(s4, s5);
-        dst[o + 8] = s5;
-        dst[o + 9] = s6;
-        dst[o + 10] = avg565(s6, s7);
-        dst[o + 11] = s7;
-        dst[o + 12] = avg565(s7, s8);
-        o += 13;
-    }
-}
-
-/*
- * pattern_26_16 lands source unit i on output unit {0, 1, 3, 4, 6, 8, 9, 11}
- * and leaves units 2, 5, 7, 10 and 12 as blends across the walk. Unit 12's
- * partner is source unit 8 — the next block's first line or column, which
- * arrives as lookahead and is NULL at the frame's far edge; there the generic
- * path averages the unit with itself, so blending unit 11 with unit 11 is the
- * same pixels without a second code path.
- */
-static void scale_block_26_16_blend(const uint16_t* const* src_lines,
-                                    const uint16_t* lookahead_line,
-                                    uint16_t* dst, uint16_t* scratch_row,
-                                    unsigned src_len, unsigned src_end,
-                                    ptrdiff_t unit_step, unsigned unit_len)
-{
-    scale_line_26_16(src_lines[0], dst, src_len, src_end);
-    scale_line_26_16(src_lines[1], dst + unit_step, src_len, src_end);
-    scale_line_26_16(src_lines[2], dst + 3 * unit_step, src_len, src_end);
-    scale_line_26_16(src_lines[3], dst + 4 * unit_step, src_len, src_end);
-    scale_line_26_16(src_lines[4], dst + 6 * unit_step, src_len, src_end);
-    scale_line_26_16(src_lines[5], dst + 8 * unit_step, src_len, src_end);
-    scale_line_26_16(src_lines[6], dst + 9 * unit_step, src_len, src_end);
-    scale_line_26_16(src_lines[7], dst + 11 * unit_step, src_len, src_end);
-
-    blend_line(dst + 2 * unit_step, dst + unit_step, dst + 3 * unit_step,
-               unit_len);
-    blend_line(dst + 5 * unit_step, dst + 4 * unit_step, dst + 6 * unit_step,
-               unit_len);
-    blend_line(dst + 7 * unit_step, dst + 6 * unit_step, dst + 8 * unit_step,
-               unit_len);
-    blend_line(dst + 10 * unit_step, dst + 9 * unit_step, dst + 11 * unit_step,
-               unit_len);
-
-    if (lookahead_line != NULL) {
-        scale_line_26_16(lookahead_line, scratch_row, src_len, src_end);
-        blend_line(dst + 12 * unit_step, dst + 11 * unit_step, scratch_row,
-                   unit_len);
-    } else {
-        blend_line(dst + 12 * unit_step, dst + 11 * unit_step,
-                   dst + 11 * unit_step, unit_len);
-    }
-}
-
-/*
- * Fixed 5/3 blend kernel — the third geometry, unrolled. Its group is small
- * enough to hold outright: four live source pixels become five output
- * pixels, where 13/8 needed nine and had to stay two-pass. The across-walk
- * half keeps the two-pass shape regardless, because avg565 is not associative
- * and a blend unit must average two units that were already scaled along the
- * axis, never the four sources.
+ * Fixed 5/3 blend kernel — the shipped geometry, unrolled. Its group is small
+ * enough to hold outright: four live source pixels become five output pixels.
+ * The across-walk half keeps the generic path's two-pass shape regardless,
+ * because avg565 is not associative and a blend unit must average two units
+ * that were already scaled along the axis, never the four sources.
  *
  * The 3-pixel group divides 144 but not 160, so the two axes reach their far
  * edge by opposite mechanisms and this kernel carries both. On the 160 axis,
@@ -307,8 +139,9 @@ static void scale_block_26_16_blend(const uint16_t* const* src_lines,
  * past the end and clamps — avg(s2, s2) is s2 — for 48 x 5 = 240. Either way
  * the last output pixel is pure. 5 units per call, 48 calls a frame.
  *
- * ponytail: plain 16-bit stores, as in the other two kernels; pack to 32-bit
- * only if the bench says this lands short.
+ * ponytail: plain 16-bit stores; the toolchain does not merge them. Pack to
+ * 32-bit stores (dst must then be 4-byte aligned, which the API does not
+ * promise) only if the bench says this lands short.
  */
 static void scale_line_5_3(const uint16_t* src, uint16_t* dst,
                            unsigned src_len, unsigned src_end)
@@ -388,8 +221,8 @@ static void scale_block_5_3_blend(const uint16_t* const* src_lines,
 }
 
 /*
- * The pattern-driven two-pass walk, which NEAREST always takes and BLEND
- * takes only for a geometry with no fixed kernel. Axis-agnostic: dst is
+ * The pattern-driven two-pass walk, which NEAREST always takes, and which the
+ * 5/3 kernel above is checked against pixel for pixel. Axis-agnostic: dst is
  * dst_units contiguous units of unit_len pixels, whether those are rows of
  * dst_w or columns of dst_h.
  */
@@ -508,17 +341,6 @@ int scaler_scale_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
     dst_w = gi->dst_w;
 
     if (mode == SCALER_MODE_BLEND) {
-        if (geom == SCALER_GEOM_24_16) {
-            scale_block_24_16_blend(src_lines[0], src_lines[1], dst,
-                                    SCALER_SRC_W, (ptrdiff_t)dst_w);
-            return SCALER_OK;
-        }
-        if (geom == SCALER_GEOM_26_16) {
-            scale_block_26_16_blend(src_lines, lookahead_line, dst,
-                                    scratch_row, SCALER_SRC_W, SCALER_SRC_W,
-                                    (ptrdiff_t)dst_w, dst_w);
-            return SCALER_OK;
-        }
         scale_block_5_3_blend(src_lines, lookahead_line, dst, scratch_row,
                               SCALER_SRC_W, SCALER_SRC_W, (ptrdiff_t)dst_w,
                               dst_w);
@@ -532,7 +354,7 @@ int scaler_scale_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
 }
 
 /* Output column height: the along-column walk's src_units -> dst_units ratio
- * applied to the frame's 144 lines. 216, 234 and 240. */
+ * applied to the frame's 144 lines. 240. */
 static unsigned dst_h_of(const scaler_geom_info_t* gi)
 {
     return (unsigned)SCALER_SRC_H / gi->src_lines_per_block
@@ -597,16 +419,6 @@ int scaler_scale_col_rows(enum scaler_geom_e geom, enum scaler_mode_e mode,
     }
 
     if (mode == SCALER_MODE_BLEND) {
-        if (geom == SCALER_GEOM_24_16) {
-            scale_block_24_16_blend(off_cols[0], off_cols[1], dst,
-                                    src_rows, step);
-            return SCALER_OK;
-        }
-        if (geom == SCALER_GEOM_26_16) {
-            scale_block_26_16_blend(off_cols, off_look, dst, scratch_col,
-                                    src_rows, src_end, step, slice_h);
-            return SCALER_OK;
-        }
         scale_block_5_3_blend(off_cols, off_look, dst, scratch_col,
                               src_rows, src_end, step, slice_h);
         return SCALER_OK;

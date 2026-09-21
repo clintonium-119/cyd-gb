@@ -4,23 +4,23 @@
 // Geometry model: a geometry is src_units source units to dst_units output
 // units, applied identically on both axes, so one call consumes a block of
 // src_lines_per_block source lines and emits dst_rows_per_block output rows
-// of dst_w pixels each. Three geometries are supported and ALL are always
-// compiled; the caller selects one per call:
+// of dst_w pixels each. One geometry ships and one is compiled:
 //
-//   SCALER_GEOM_24_16  (3/2)   2 source units -> 3 output units,  160 -> 240
-//   SCALER_GEOM_26_16  (13/8)  8 source units -> 13 output units, 160 -> 260
 //   SCALER_GEOM_5_3    (5/3)   3 source units -> 5 output units,  160 -> 266
 //
-// Tail: the two k/16 geometries have a source group that divides 160, so the
-// horizontal walk is whole groups all the way across. 5/3's does not — 53
-// groups of 3 cover 159 pixels and leave one over — so the walk ends with a
-// tail of SCALER_SRC_W % src_units source pixels, each emitted once, pure.
-// That makes dst_w exactly
+// The caller still names it per call, and the geometry table still describes
+// it rather than the numbers being spelled into the kernels, because that
+// table is what the firmware's own duplicated compile-time sizes are
+// cross-checked against at startup.
+//
+// Tail: 5/3's source group of three does not divide 160 — 53 groups cover 159
+// pixels and leave one over — so the horizontal walk ends with a tail of
+// SCALER_SRC_W % src_units source pixels, each emitted once, pure. That makes
+// dst_w exactly
 //
 //   (160 / src_units) * dst_units + 160 % src_units
 //
-// for every geometry, and the tail zero-length for both k/16 ones. Vertically
-// there is never a tail: 144 is divisible by 2, 8 and 3 alike.
+// which is 266. Vertically there is never a tail: three divides 144.
 //
 // Each output unit either copies a source unit ("pure") or is the average of
 // that source unit and the NEXT one ("blend"). The pure units stay sharp and
@@ -34,16 +34,17 @@
 // pixel never blends at all — there is no next group to reach toward — so at
 // 5/3 the right edge is pure source pixel 159 rather than a clamped average.
 //
-// Lookahead: only a geometry whose block's final blend row reaches into the
-// next block needs the next block's first line. 26/16 does (unit 7 blends
-// with unit 8) and so does 5/3 (unit 2 blends with unit 3); 24/16 does not
-// (its one blend partner is in-block), and uses_lookahead in the geometry
-// table says which, so a caller can skip carrying a line nobody reads.
+// Lookahead: 5/3's block ends on a blend row that reaches into the next block
+// — unit 4 blends unit 2 with the next group's first — so a block needs the
+// next block's first line. uses_lookahead in the geometry table says so, and
+// it is a table field rather than an assumption because a geometry whose
+// every blend partner is in-block lets the caller skip carrying a line that
+// nobody reads.
 //
-// Fast path: every geometry in BLEND mode runs through a fixed, unrolled
-// kernel that produces the same pixels as the pattern walk; NEAREST, which
-// exists only as the golden suite's A/B baseline, takes the pattern-driven
-// code. Both are the same function to the caller.
+// Fast path: BLEND runs through a fixed, unrolled kernel that produces the
+// same pixels as the pattern walk; NEAREST, which exists only as the golden
+// suite's A/B baseline, takes the pattern-driven code. Both are the same
+// function to the caller.
 //
 // Transposed walk: scaler_scale_col_block() emits output COLUMNS instead of
 // output rows, for a consumer that pushes along the panel's gate lines. A
@@ -56,18 +57,18 @@
 //
 //   SCALER_SRC_H / src_lines_per_block * dst_rows_per_block
 //
-// which is 216, 234 and 240 for the three geometries.
+// which is 240, every row of the panel.
 //
 // The tail moves axis with the walk. The row walk's tail is along its walk:
-// 5/3's group leaves one source pixel over at the end of every row, emitted
-// pure, and 144 divides by 2, 8 and 3 alike so nothing is ever left over
-// vertically. Transposed, the along-column walk has no tail of its own and
-// the leftover lands ACROSS the walk, as a whole output column: at 5/3 the
-// last output column is the pure scale of source column 159 and belongs to no
-// block. scaler_scale_col_tail() emits it, and emits nothing for the two k/16
-// geometries whose group divides 160. What the row walk reaches by a tail, the
-// column walk's along-axis reaches by a clamp — its last whole group's blend
-// partner is past the end — and both leave that edge pure.
+// the group leaves one source pixel over at the end of every row, emitted
+// pure, and three divides 144 so nothing is ever left over vertically.
+// Transposed, the along-column walk has no tail of its own and the leftover
+// lands ACROSS the walk, as a whole output column: the last output column is
+// the pure scale of source column 159 and belongs to no block.
+// scaler_scale_col_tail() emits it, and writes nothing for a geometry whose
+// group divides 160. What the row walk reaches by a tail, the column walk's
+// along-axis reaches by a clamp — its last whole group's blend partner is
+// past the end — and both leave that edge pure.
 //
 // The two walks are not bit-identical in BLEND mode. At a pixel that is both a
 // horizontal and a vertical seam they average the same four sources in a
@@ -95,8 +96,8 @@ extern "C" {
 #define SCALER_SRC_H 144        /* Game Boy frame height, lines          */
 #define SCALER_DST_W_MAX 266    /* widest output row (5/3)               */
 #define SCALER_DST_H_MAX 240    /* tallest output column (5/3)           */
-#define SCALER_DST_ROWS_MAX 13  /* most output rows per block (26/16)    */
-#define SCALER_SRC_LINES_MAX 8  /* most source lines per block (26/16)   */
+#define SCALER_DST_ROWS_MAX 5   /* most output rows per block (5/3)      */
+#define SCALER_SRC_LINES_MAX 3  /* most source lines per block (5/3)     */
 
 enum scaler_result_e {
     SCALER_OK = 0,
@@ -104,9 +105,7 @@ enum scaler_result_e {
 };
 
 enum scaler_geom_e {
-    SCALER_GEOM_24_16 = 0, /* 3/2:  160x144 -> 240x216 */
-    SCALER_GEOM_26_16 = 1, /* 13/8: 160x144 -> 260x234 */
-    SCALER_GEOM_5_3 = 2,   /* 5/3:  160x144 -> 266x240 */
+    SCALER_GEOM_5_3 = 0, /* 5/3: 160x144 -> 266x240 */
 };
 
 enum scaler_mode_e {
@@ -151,7 +150,7 @@ const scaler_geom_info_t* scaler_geom_info(enum scaler_geom_e geom);
  *   dst            dst_rows_per_block * dst_w pixels, row-major
  *   scratch_row    dst_w scratch pixels, required; holds the horizontally
  *                  scaled lookahead line when a cross-block blend row needs
- *                  it (26/16 and 5/3, but always checked)
+ *                  it, which at 5/3 it does — but it is always checked
  *
  * Returns SCALER_OK or SCALER_ERR_ARGS.
  */
@@ -213,17 +212,17 @@ int scaler_scale_col_rows(enum scaler_geom_e geom, enum scaler_mode_e mode,
 /*
  * Emit the transposed walk's tail: the SCALER_SRC_W % src_lines_per_block
  * source columns left over past the last whole block, each scaled along its
- * length into one pure output column of dst_h pixels. One column at 5/3, none
- * at either k/16 geometry, where it returns SCALER_OK having written nothing
- * and src_cols and dst may be NULL.
+ * length into one pure output column of dst_h pixels. One column at 5/3. A
+ * geometry whose group divides 160 leaves none, and there it returns
+ * SCALER_OK having written nothing and src_cols and dst may be NULL.
  *
  *   src_cols  pointers to the leftover source columns, leftmost first
  *   dst       tail columns * dst_h pixels, column-major
  *
  * A tail column never blends across the walk: there is no next group to reach
  * toward, which is what makes the frame's far edge pure. It takes no column
- * order: at every geometry the tail is one column or none, and one column has
- * only one place to go.
+ * order: the tail is one column or none, and one column has only one place to
+ * go.
  */
 int scaler_scale_col_tail(enum scaler_geom_e geom, enum scaler_mode_e mode,
                           const uint16_t* const* src_cols, uint16_t* dst);
