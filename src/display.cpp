@@ -303,6 +303,20 @@ static void trim_console()
 #endif
 
 
+// The rotation the panel is in right now. Tracked so the switch costs one
+// MADCTL write per handover rather than one per frame: the frame path asks for
+// portrait every frame and gets a no-op on all but the first after a menu.
+static uint8_t rot_now = TFT_ROTATION_LANDSCAPE;
+
+static void set_orientation(uint8_t rot)
+{
+    if (rot_now == rot) {
+        return;
+    }
+    tft.setRotation(rot);
+    rot_now = rot;
+}
+
 void display_init()
 {
     pinMode(TFT_PIN_BL, OUTPUT);
@@ -319,6 +333,7 @@ void display_init()
     // the ordering design §2.3 requires to avoid colour fringing.
     tft.setSwapBytes(true);
     tft.setRotation(TFT_ROTATION_LANDSCAPE);
+    rot_now = TFT_ROTATION_LANDSCAPE;
     // The frame path is DMA-only, so a failed DMA init is a boot-level fact,
     // not something to paper over at push time: the numbers the bench items
     // collect would silently describe the blocking path instead.
@@ -386,11 +401,32 @@ int16_t display_draw_wrapped(const char* s, int16_t cx, int16_t top,
     return (int16_t)(top + row * row_h);
 }
 
+#if PUSH_ORDER == PUSH_COL
 void display_frame_begin(int16_t x, int16_t y)
 {
+    // Portrait, so that filling the window advances along a gate line and the
+    // write follows the refresh instead of crossing it. The viewport origin
+    // arrives in landscape space — it is the per-unit NVS nudge, and the
+    // D-pad that sets it means landscape — so it is mapped through the
+    // rotation pair here rather than reinterpreted. GAME_W and GAME_H swap
+    // roles with it: the window is GAME_H wide along the gate line and GAME_W
+    // tall across the gate lines.
+    set_orientation(TFT_ROTATION_PORTRAIT);
+    tft.startWrite();
+#if FRAME_COLS_DESCENDING
+    tft.setAddrWindow(y, (int16_t)(SCREEN_W - x - GAME_W), GAME_H, GAME_W);
+#else
+    tft.setAddrWindow((int16_t)(SCREEN_H - y - GAME_H), x, GAME_H, GAME_W);
+#endif
+}
+#else
+void display_frame_begin(int16_t x, int16_t y)
+{
+    set_orientation(TFT_ROTATION_LANDSCAPE);
     tft.startWrite();
     tft.setAddrWindow(x, y, GAME_W, GAME_H);
 }
+#endif
 
 void display_push_rows(const uint16_t* px, size_t n)
 {
@@ -524,14 +560,21 @@ void display_bus_acquire()
     // menu never has to know whether a frame was in progress.
     tft.dmaWait();
     tft.endWrite();
+    // Landscape is the UI's orientation, and under the column-major push the
+    // frame path is not in it. Menu, diagnostic screen and splash all draw
+    // through `tft` in landscape and know nothing of the frame path's
+    // mapping, so the handover is where the two are reconciled.
+    set_orientation(TFT_ROTATION_LANDSCAPE);
 }
 
 void display_bus_release()
 {
     // Nothing to undo: the next display_frame_begin() opens its own
-    // transaction and address window. The function exists so the call sites
-    // read as a matched pair and so a future handover that does need teardown
-    // has one place to live.
+    // transaction and address window, and takes the orientation it needs with
+    // it. Kept because the call sites read as a matched pair, and because the
+    // acquire above now does have teardown to undo — putting the restore here
+    // instead would leave the bus in the frame path's orientation for any
+    // caller that released without drawing.
 }
 
 #ifdef PANEL_PROBE

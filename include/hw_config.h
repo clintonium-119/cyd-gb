@@ -23,6 +23,33 @@
                                    // 3 is the same landscape flipped end for end, so this
                                    // flips if the USB socket lands on the wrong side.
 
+// The panel's own orientation, which the column-major frame path addresses it
+// in: one write then advances along a gate line, which is what writing along
+// the scan means. It must stay the partner of the landscape rotation above —
+// 0 goes with 1, 2 goes with 3 — because the two differ by 180 degrees and
+// the frame path maps the landscape viewport origin through the pair.
+//
+// A wrong pairing is not subtle: the game image appears rotated 180 degrees
+// inside a correctly placed window, with the UI unaffected. Flip this and the
+// column order below follows it.
+#ifndef TFT_ROTATION_PORTRAIT
+#define TFT_ROTATION_PORTRAIT 0
+#endif
+#if TFT_ROTATION_PORTRAIT != 0 && TFT_ROTATION_PORTRAIT != 2
+#error "TFT_ROTATION_PORTRAIT must be 0 or 2 — a landscape value is not a scan-order mapping."
+#endif
+
+// Which end of the landscape x axis the portrait address window starts at.
+// Rotation 0 against landscape 1 advances AGAINST landscape x once a gate
+// line is filled, so the frame path hands its output columns over right to
+// left; rotation 2 reverses both. Derived here rather than at the two call
+// sites so the window origin and the walk direction cannot disagree.
+#if TFT_ROTATION_PORTRAIT == 0
+#define FRAME_COLS_DESCENDING 1
+#else
+#define FRAME_COLS_DESCENDING 0
+#endif
+
 // ─── SD card (onboard, VSPI, now exclusive to SD) ───────────────────────────
 #define SD_PIN_CS       5   // §1.2, confirmed
 #define SD_PIN_MOSI    23   // §1.2, confirmed

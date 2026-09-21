@@ -49,6 +49,25 @@ const ui_canvas_t* display_canvas(int16_t ox, int16_t oy);
 //
 // The display module stays geometry-agnostic: it pushes whatever pixel count
 // it is handed, and the total across a frame must be exactly GAME_W * GAME_H.
+//
+// Orientation is the frame path's, not the UI's, and which one depends on
+// PUSH_ORDER:
+//
+//   PUSH_ROW  landscape, TFT_ROTATION_LANDSCAPE. A window row is GAME_W
+//             pixels of the screen's horizontal, which is the panel's
+//             gate-line axis, so one row crosses every gate line — the reason
+//             the tear reads as a diagonal staircase.
+//   PUSH_COL  portrait, TFT_ROTATION_PORTRAIT. The window is transposed —
+//             GAME_H along a gate line by GAME_W across them — so filling it
+//             advances along the scan. The viewport origin still arrives in
+//             LANDSCAPE space, because it is the per-unit NVS nudge and the
+//             D-pad that sets it means landscape; display_frame_begin() maps
+//             it through the rotation pair.
+//
+// Under PUSH_COL the caller must hand its output columns over in the order
+// the window fills, which FRAME_COLS_DESCENDING states: descending landscape
+// x with the default rotation pair. Each push is a whole number of output
+// columns of GAME_H pixels.
 void display_frame_begin(int16_t x, int16_t y);
 void display_push_rows(const uint16_t* px, size_t n);
 void display_frame_end();
@@ -85,6 +104,14 @@ void display_dma_wait();
 // cannot share the bus with an open frame window. Acquire waits out any
 // transfer and closes the window; release is the documented counterpart —
 // the next display_frame_begin() reopens one, so it has nothing to undo.
+//
+// Acquire also owns the orientation. Under PUSH_COL the frame path leaves the
+// panel in portrait, and every UI surface draws in landscape and knows
+// nothing of that, so acquire restores landscape and the next
+// display_frame_begin() takes portrait back. The switch is a single MADCTL
+// write, and it happens at most twice per menu round-trip rather than once a
+// frame: display_frame_begin() asks every frame and gets a no-op unless the
+// orientation actually moved.
 //
 // Calling contract: pause the producer and wait for the queue to report
 // drained BEFORE calling display_bus_acquire(), or blocks committed but not
