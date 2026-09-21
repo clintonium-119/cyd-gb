@@ -55,6 +55,12 @@ static uint16_t frame[FRAME_MAX_PX];
 static uint16_t scratch[SCALER_DST_W_MAX];
 static uint16_t lut[PALETTE_LUT_SIZE];
 
+/* The same source frame as columns, which is the shape the column walk reads
+ * and the shape the producer will hand it on target. */
+static uint16_t cols[SCALER_SRC_W][GB_RUNNER_H];
+static const uint16_t* col_ptrs[SCALER_SRC_W];
+static uint16_t col_frame[FRAME_MAX_PX];
+
 void setUp(void)
 {
 }
@@ -103,8 +109,12 @@ static void render_source_lines(void)
     for (y = 0; y < GB_RUNNER_H; y++) {
         for (x = 0; x < SCALER_SRC_W; x++) {
             lines[y][x] = lut[px[y * GB_RUNNER_W + x]];
+            cols[x][y] = lines[y][x];
         }
         line_ptrs[y] = lines[y];
+    }
+    for (x = 0; x < SCALER_SRC_W; x++) {
+        col_ptrs[x] = cols[x];
     }
 }
 
@@ -149,6 +159,85 @@ static uint64_t scale_frame_and_hash(enum scaler_geom_e geom,
 
     return fnv1a64((const uint8_t*)frame,
                    (size_t)dst_h * gi->dst_w * sizeof(frame[0]));
+}
+
+/* Which output unit of each geometry's group is an interpolated one, restated
+ * from the design's duplication rhythms — 1,2 for 24/16, 1,2,1,2,2,1,2,2 for
+ * 26/16 and 2,1,2 for 5/3 — and applied on both axes. */
+static const uint8_t blend_unit_24_16[3] = { 0, 1, 0 };
+static const uint8_t blend_unit_26_16[13] = {
+    0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1,
+};
+static const uint8_t blend_unit_5_3[5] = { 0, 1, 0, 0, 1 };
+
+static const uint8_t* blend_units(enum scaler_geom_e geom)
+{
+    switch (geom) {
+    case SCALER_GEOM_24_16: return blend_unit_24_16;
+    case SCALER_GEOM_26_16: return blend_unit_26_16;
+    default:                return blend_unit_5_3;
+    }
+}
+
+/* Scale the whole frame as columns, the counterpart of scale_frame_and_hash().
+ * Blocks are written straight into col_frame, which is column-major at dst_h:
+ * one output column is dst_h contiguous pixels. The leftover source columns
+ * past the last whole block — one at 5/3, none at either k/16 geometry — are
+ * the tail, and belong to no block. */
+static unsigned scale_frame_col(enum scaler_geom_e geom,
+                                enum scaler_mode_e mode)
+{
+    const scaler_geom_info_t* gi = scaler_geom_info(geom);
+    unsigned src_units;
+    unsigned dst_units;
+    unsigned dst_h;
+    unsigned blocks;
+    unsigned b;
+
+    TEST_ASSERT_NOT_NULL(gi);
+    src_units = gi->src_lines_per_block;
+    dst_units = gi->dst_rows_per_block;
+    dst_h = GB_RUNNER_H / src_units * dst_units;
+    blocks = SCALER_SRC_W / src_units;
+    TEST_ASSERT_TRUE((size_t)dst_h * gi->dst_w
+                     <= sizeof(col_frame) / sizeof(col_frame[0]));
+
+    for (b = 0; b < blocks; b++) {
+        unsigned first = b * src_units;
+        /* At the frame's right edge there is no next column, so the trailing
+         * blend columns clamp — the same branch the row walk takes at the
+         * bottom edge. At 5/3 that edge is the tail column below, not a
+         * block, so every block there has a real lookahead. */
+        const uint16_t* lookahead = (first + src_units < SCALER_SRC_W)
+            ? col_ptrs[first + src_units] : NULL;
+        TEST_ASSERT_EQUAL_INT(SCALER_OK,
+            scaler_scale_col_block(geom, mode, &col_ptrs[first], lookahead,
+                                   col_frame + (size_t)b * dst_units * dst_h,
+                                   scratch));
+    }
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_col_tail(geom, mode, &col_ptrs[blocks * src_units],
+                              col_frame + (size_t)blocks * dst_units * dst_h));
+    return dst_h;
+}
+
+/* The largest per-channel gap between two RGB565 pixels. */
+static unsigned channel_gap(uint16_t a, uint16_t b)
+{
+    static const unsigned shift[3] = { 11u, 5u, 0u };
+    static const unsigned mask[3] = { 31u, 63u, 31u };
+    unsigned worst = 0;
+    unsigned f;
+
+    for (f = 0; f < 3; f++) {
+        unsigned ca = (a >> shift[f]) & mask[f];
+        unsigned cb = (b >> shift[f]) & mask[f];
+        unsigned gap = ca > cb ? ca - cb : cb - ca;
+        if (gap > worst) {
+            worst = gap;
+        }
+    }
+    return worst;
 }
 
 #define GOLDEN_MESSAGE \
@@ -227,6 +316,119 @@ static void test_blend_differs_from_nearest(void)
     TEST_ASSERT_NOT_EQUAL(nearest, blend);
 }
 
+/*
+ * The column walk equals the row walk transposed. One assertion covers the
+ * whole geometry: the 5/3 tail, the clamping at the frame's right and bottom
+ * edges, and the cross-block lookahead rule, over the same dmg-acid2 frame the
+ * hashes above pin — which exercises every one of those branches.
+ *
+ * Exact is the rule, with one bounded exception. Where an output pixel is both
+ * a horizontal and a vertical seam, the two walks average the same four
+ * sources in a different order — the row walk averages two horizontally scaled
+ * rows, the column walk two vertically scaled columns — and scaler_avg565() is
+ * a per-channel floor((a + b) / 2), which is not associative across that
+ * regrouping. There the two may differ by 1 in a channel and no more.
+ * Everywhere else, and everywhere at all in NEAREST mode, they agree pixel for
+ * pixel.
+ */
+static void assert_column_walk_transposes_the_row_walk(enum scaler_geom_e geom,
+                                                       enum scaler_mode_e mode,
+                                                       unsigned expected_h)
+{
+    const scaler_geom_info_t* gi = scaler_geom_info(geom);
+    const uint8_t* blend = blend_units(geom);
+    unsigned dst_units = gi->dst_rows_per_block;
+    unsigned dst_w = gi->dst_w;
+    unsigned whole_w = SCALER_SRC_W / gi->src_lines_per_block * dst_units;
+    unsigned dst_h;
+    unsigned x;
+    unsigned y;
+    unsigned tolerated = 0;
+
+    (void)scale_frame_and_hash(geom, mode, expected_h);
+    dst_h = scale_frame_col(geom, mode);
+    TEST_ASSERT_EQUAL_UINT(expected_h, dst_h);
+
+    for (x = 0; x < dst_w; x++) {
+        /* A column past the last whole group is the tail: pure, never a seam
+         * across the walk. Vertically there is no tail — 144 divides by 2, 8
+         * and 3 alike — so every row's unit index is its position in the
+         * group. */
+        int seam_x = (x < whole_w) && blend[x % dst_units];
+
+        for (y = 0; y < dst_h; y++) {
+            int seam_y = blend[y % dst_units] != 0;
+            uint16_t r = frame[(size_t)y * dst_w + x];
+            uint16_t c = col_frame[(size_t)x * dst_h + y];
+            char msg[96];
+
+            if (r == c) {
+                continue;
+            }
+            if (mode == SCALER_MODE_BLEND && seam_x && seam_y) {
+                sprintf(msg, "both-seam pixel (%u, %u) is %u channel steps "
+                             "apart, not 1", x, y, channel_gap(r, c));
+                TEST_ASSERT_EQUAL_UINT_MESSAGE(1u, channel_gap(r, c), msg);
+                tolerated++;
+                continue;
+            }
+            sprintf(msg, "pixel (%u, %u): row walk %04X, column walk %04X",
+                    x, y, r, c);
+            TEST_ASSERT_EQUAL_HEX16_MESSAGE(r, c, msg);
+        }
+    }
+
+    /* NEAREST copies and never averages, so nothing is tolerated there. */
+    if (mode == SCALER_MODE_NEAREST) {
+        TEST_ASSERT_EQUAL_UINT(0u, tolerated);
+    }
+}
+
+static void test_column_walk_transposes_the_row_walk(void)
+{
+    render_source_lines();
+    assert_column_walk_transposes_the_row_walk(SCALER_GEOM_24_16,
+                                               SCALER_MODE_NEAREST, 216u);
+    assert_column_walk_transposes_the_row_walk(SCALER_GEOM_24_16,
+                                               SCALER_MODE_BLEND, 216u);
+    assert_column_walk_transposes_the_row_walk(SCALER_GEOM_26_16,
+                                               SCALER_MODE_NEAREST, 234u);
+    assert_column_walk_transposes_the_row_walk(SCALER_GEOM_26_16,
+                                               SCALER_MODE_BLEND, 234u);
+    assert_column_walk_transposes_the_row_walk(SCALER_GEOM_5_3,
+                                               SCALER_MODE_NEAREST, 240u);
+    assert_column_walk_transposes_the_row_walk(SCALER_GEOM_5_3,
+                                               SCALER_MODE_BLEND, 240u);
+}
+
+/*
+ * The 5/3 tail is a whole output column rather than a pixel per row, and it is
+ * the one column no block emits. Pinned on its own because an off-by-one in
+ * the block count would leave it as whatever the buffer held, and because a
+ * pure column must match the row walk exactly: only one axis interpolates
+ * there, so the tolerance above cannot hide a wrong column.
+ */
+static void test_5_3_tail_column_is_the_last_source_column(void)
+{
+    unsigned dst_h;
+    unsigned y;
+
+    render_source_lines();
+    (void)scale_frame_and_hash(SCALER_GEOM_5_3, SCALER_MODE_BLEND, 240u);
+    dst_h = scale_frame_col(SCALER_GEOM_5_3, SCALER_MODE_BLEND);
+
+    for (y = 0; y < dst_h; y++) {
+        TEST_ASSERT_EQUAL_HEX16_MESSAGE(frame[(size_t)y * 266u + 265u],
+            col_frame[(size_t)265u * dst_h + y],
+            "the 5/3 tail column is not the row walk's last column");
+    }
+    /* And it is the scale of source column 159 alone, not a blend reaching
+     * toward a column that does not exist: its pure rows are source pixels. */
+    TEST_ASSERT_EQUAL_HEX16(cols[159][0], col_frame[(size_t)265u * dst_h]);
+    TEST_ASSERT_EQUAL_HEX16(cols[159][GB_RUNNER_H - 1],
+                            col_frame[(size_t)265u * dst_h + dst_h - 1u]);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -237,5 +439,7 @@ int main(void)
     RUN_TEST(test_golden_5_3_nearest);
     RUN_TEST(test_golden_5_3_blend);
     RUN_TEST(test_blend_differs_from_nearest);
+    RUN_TEST(test_column_walk_transposes_the_row_walk);
+    RUN_TEST(test_5_3_tail_column_is_the_last_source_column);
     return UNITY_END();
 }

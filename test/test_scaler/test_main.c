@@ -442,8 +442,8 @@ static void test_26_16_horizontal_pattern_and_right_edge_clamp(void)
 }
 
 /* Sweep every output pixel of a block against the unit table. */
-static uint16_t expect_h(const uint16_t* line, unsigned base,
-                         const unit_spec_t* u, int blend)
+static uint16_t expect_along(const uint16_t* line, unsigned base,
+                            const unit_spec_t* u, int blend, unsigned src_len)
 {
     unsigned s = base + (unsigned)u->src;
     unsigned p;
@@ -451,10 +451,16 @@ static uint16_t expect_h(const uint16_t* line, unsigned base,
         return line[s];
     }
     p = base + (unsigned)u->partner;
-    if (p >= SCALER_SRC_W) {
-        p = SCALER_SRC_W - 1u;
+    if (p >= src_len) {
+        p = src_len - 1u;
     }
     return scaler_avg565(line[s], line[p]);
+}
+
+static uint16_t expect_h(const uint16_t* line, unsigned base,
+                         const unit_spec_t* u, int blend)
+{
+    return expect_along(line, base, u, blend, SCALER_SRC_W);
 }
 
 static void assert_block_matches_spec(enum scaler_geom_e geom,
@@ -509,6 +515,131 @@ static void assert_block_matches_spec(enum scaler_geom_e geom,
         TEST_ASSERT_EQUAL_UINT(gi->dst_w, o);
     }
     assert_canaries_intact((unsigned)units * gi->dst_w);
+}
+
+/*
+ * The same sweep with the axes swapped: source COLUMNS in, output columns out,
+ * against the same unit table, because a geometry applies identically on both
+ * axes. What differs is the length walked — 144, which every group divides, so
+ * there is no tail here — and the stride of an output unit, which is dst_h.
+ * The canaries are the point of doing this at block level: a column written at
+ * the wrong stride lands outside its footprint and says so.
+ */
+static void assert_col_block_matches_spec(enum scaler_geom_e geom,
+                                          enum scaler_mode_e mode,
+                                          const unit_spec_t* spec,
+                                          const uint16_t* lookahead_col)
+{
+    const scaler_geom_info_t* gi = scaler_geom_info(geom);
+    unsigned units = gi->dst_rows_per_block;
+    unsigned span = gi->src_lines_per_block;
+    unsigned dst_h = SCALER_SRC_H / span * units;
+    int blend = (mode == SCALER_MODE_BLEND);
+    unsigned c;
+
+    reset_dst();
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_col_block(geom, mode, lines, lookahead_col,
+                               dst.block, scratch.row));
+
+    for (c = 0; c < units; c++) {
+        const uint16_t* left = lines[spec[c].src];
+        const uint16_t* right = left;
+        unsigned base;
+        unsigned o = 0;
+
+        if (blend && spec[c].partner >= 0) {
+            if ((unsigned)spec[c].partner < span) {
+                right = lines[spec[c].partner];
+            } else if (lookahead_col != NULL) {
+                right = lookahead_col;
+            }
+        }
+        for (base = 0; base + span <= SCALER_SRC_H; base += span) {
+            unsigned u;
+            for (u = 0; u < units; u++) {
+                uint16_t a = expect_along(left, base, &spec[u], blend,
+                                          SCALER_SRC_H);
+                uint16_t b = expect_along(right, base, &spec[u], blend,
+                                          SCALER_SRC_H);
+                TEST_ASSERT_EQUAL_HEX16(scaler_avg565(a, b),
+                                        dst.block[(size_t)c * dst_h + o]);
+                o++;
+            }
+        }
+        /* 144 is divisible by 2, 8 and 3 alike, so the walk ends on dst_h
+         * exactly: a tail emitted on this axis would overrun the column. */
+        TEST_ASSERT_EQUAL_UINT(dst_h, o);
+    }
+    assert_canaries_intact(units * dst_h);
+}
+
+static void test_col_block_matches_the_spec_for_every_geometry(void)
+{
+    assert_col_block_matches_spec(SCALER_GEOM_24_16, SCALER_MODE_NEAREST,
+                                  spec_24_16, lookahead);
+    assert_col_block_matches_spec(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
+                                  spec_24_16, lookahead);
+    assert_col_block_matches_spec(SCALER_GEOM_26_16, SCALER_MODE_NEAREST,
+                                  spec_26_16, lookahead);
+    assert_col_block_matches_spec(SCALER_GEOM_26_16, SCALER_MODE_BLEND,
+                                  spec_26_16, lookahead);
+    assert_col_block_matches_spec(SCALER_GEOM_5_3, SCALER_MODE_NEAREST,
+                                  spec_5_3, lookahead);
+    assert_col_block_matches_spec(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
+                                  spec_5_3, lookahead);
+}
+
+/* And with no next column: the frame's right edge, where the trailing blend
+ * columns clamp to the column they already hold. */
+static void test_col_block_null_lookahead_clamps_the_trailing_columns(void)
+{
+    assert_col_block_matches_spec(SCALER_GEOM_26_16, SCALER_MODE_BLEND,
+                                  spec_26_16, NULL);
+    assert_col_block_matches_spec(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
+                                  spec_5_3, NULL);
+}
+
+/*
+ * The tail moved axis with the walk: at 5/3 it is a whole output column that
+ * belongs to no block, and at either k/16 geometry the group divides 160 and
+ * there is nothing left over at all.
+ */
+static void test_col_tail_is_one_pure_column_at_5_3_and_nothing_at_k16(void)
+{
+    unsigned base;
+    unsigned o = 0;
+
+    reset_dst();
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_col_tail(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
+                              lines, dst.block));
+    /* Scaled along its length and never across it — a tail column has no next
+     * group to reach toward, which is what keeps the frame's far edge pure. */
+    for (base = 0; base + 3u <= SCALER_SRC_H; base += 3u) {
+        unsigned u;
+        for (u = 0; u < 5u; u++) {
+            TEST_ASSERT_EQUAL_HEX16(
+                expect_along(lines[0], base, &spec_5_3[u], 1, SCALER_SRC_H),
+                dst.block[o]);
+            o++;
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT(240u, o);
+    assert_canaries_intact(240u);
+
+    reset_dst();
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_col_tail(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
+                              lines, dst.block));
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_col_tail(SCALER_GEOM_26_16, SCALER_MODE_NEAREST,
+                              lines, dst.block));
+    /* Nothing left over means nothing written, and the buffers may be NULL. */
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_col_tail(SCALER_GEOM_26_16, SCALER_MODE_BLEND,
+                              NULL, NULL));
+    assert_canaries_intact(0u);
 }
 
 static void test_24_16_matches_the_spec_in_both_modes(void)
@@ -852,6 +983,58 @@ static void test_null_and_unknown_arguments_are_rejected(void)
     assert_canaries_intact(0u);
 }
 
+static void test_col_null_and_unknown_arguments_are_rejected(void)
+{
+    const uint16_t* holed[SCALER_SRC_LINES_MAX];
+    unsigned i;
+
+    for (i = 0; i < SCALER_SRC_LINES_MAX; i++) {
+        holed[i] = lines[i];
+    }
+    holed[1] = NULL;
+
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
+                               NULL, lookahead, dst.block, scratch.row));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
+                               holed, lookahead, dst.block, scratch.row));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_block(SCALER_GEOM_24_16, SCALER_MODE_BLEND,
+                               lines, lookahead, NULL, scratch.row));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_block(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
+                               lines, lookahead, dst.block, NULL));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_block((enum scaler_geom_e)7, SCALER_MODE_BLEND,
+                               lines, lookahead, dst.block, scratch.row));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_block(SCALER_GEOM_24_16, (enum scaler_mode_e)5,
+                               lines, lookahead, dst.block, scratch.row));
+
+    /* The tail rejects the same way, but only where it has a column to emit:
+     * a geometry whose group divides 160 has nothing to write and no buffer
+     * to check. */
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_tail(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
+                              NULL, dst.block));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_tail(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
+                              lines, NULL));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_tail(SCALER_GEOM_5_3, SCALER_MODE_BLEND,
+                              holed + 1, dst.block));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_tail((enum scaler_geom_e)7, SCALER_MODE_BLEND,
+                              lines, dst.block));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_tail(SCALER_GEOM_5_3, (enum scaler_mode_e)5,
+                              lines, dst.block));
+
+    /* A rejected call writes nothing. */
+    assert_canaries_intact(0u);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -881,5 +1064,9 @@ int main(void)
     RUN_TEST(test_5_3_kernel_frame_end_row_is_pure);
     RUN_TEST(test_5_3_kernel_survives_alternating_extremes);
     RUN_TEST(test_null_and_unknown_arguments_are_rejected);
+    RUN_TEST(test_col_block_matches_the_spec_for_every_geometry);
+    RUN_TEST(test_col_block_null_lookahead_clamps_the_trailing_columns);
+    RUN_TEST(test_col_tail_is_one_pure_column_at_5_3_and_nothing_at_k16);
+    RUN_TEST(test_col_null_and_unknown_arguments_are_rejected);
     return UNITY_END();
 }
