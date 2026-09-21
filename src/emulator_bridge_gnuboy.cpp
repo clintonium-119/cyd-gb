@@ -181,7 +181,9 @@ const char* emu_get_palette_name(uint8_t idx)
 // returns early before the line state machine runs — so a frame can commit
 // far fewer than 144 lines. Those blocks go out made of the previous frame's
 // pixels, and the queue never sticks on half a frame.
+#if PUSH_ORDER == PUSH_ROW
 static uint8_t slot_src[FRAMEQUEUE_SLOTS][BLOCK_LINES + 1][SCALER_SRC_W];
+#endif
 static uint16_t lut_lines[BLOCK_LINES + 1][SCALER_SRC_W];
 static uint16_t scratch_row[SCALER_DST_W_MAX];
 static const scaler_geom_info_t* geom = nullptr;
@@ -204,6 +206,22 @@ static bool frame_dropped = false;
 // framebuffer. Heap, not static: 23 KB, and the static DRAM segment is nearly
 // full.
 static uint8_t* fb = nullptr;
+#if PUSH_ORDER == PUSH_COL
+// The same frame as columns: GB_SCREEN_H index bytes per column, one buffer
+// per queue slot. An output column needs every source row, so the consumer
+// cannot start on a frame until it is whole, and the producer must therefore
+// be writing a buffer nobody is reading. The queue's slot ownership already
+// IS that double-buffering — a slot is an index and the wrapper attaches the
+// real buffer to it — so the pipeline shift costs no second handshake, and
+// the producer's acquire is the same backpressure it always was.
+//
+// Heap, not static: 23 KB each, and the static DRAM segment is nearly full.
+static uint8_t* tfb[FRAMEQUEUE_SLOTS] = { nullptr, nullptr };
+// The slot this frame is being transposed into, -1 when no frame is open, and
+// the first line of the frame not yet transposed.
+static int tpose_slot = -1;
+static int tpose_next = 0;
+#endif
 static int cur_block = -1;
 static bool frame_open = false;
 // The last line the hook was handed. A line number that does not advance is
@@ -281,12 +299,53 @@ void emu_set_viewport(int16_t x, int16_t y)
     vp_y = y;
 }
 
-/* Queue blocks one full frame is made of. */
+/* Queue blocks one full frame is made of. The column order hands the frame
+ * over in one piece — the consumer walks its own column blocks out of a buffer
+ * that is stable for the whole frame — so there is exactly one. */
 static uint8_t blocks_per_frame()
 {
+#if PUSH_ORDER == PUSH_COL
+    return 1u;
+#else
     return (uint8_t)(GB_SCREEN_H / BLOCK_LINES);
+#endif
 }
 
+#if PUSH_ORDER == PUSH_COL
+/*
+ * Source lines [from, to] into the frame's transposed buffer: 160 stores of
+ * stride GB_SCREEN_H each, on core 1, which has about 3.3 ms spare. The
+ * consumer then reads a source column as GB_SCREEN_H contiguous bytes. The
+ * strided side has to be somewhere, and this is the core that can afford it.
+ *
+ * Read out of fb rather than the hook's line pointer, and that is what makes
+ * a short frame come out whole. gnuboy draws no line at all while the LCD is
+ * off, so the lines this frame never reached are transposed from fb holding
+ * the previous frame's pixels — exactly what the row order's blocks are made
+ * of in the same case.
+ */
+static void transpose_lines(unsigned from, unsigned to)
+{
+    uint8_t* base;
+    unsigned y;
+
+    if (tpose_slot < 0 || from > to || to >= GB_SCREEN_H) {
+        return;
+    }
+    base = tfb[tpose_slot];
+    for (y = from; y <= to; y++) {
+        const uint8_t* src = fb + (size_t)y * SCALER_SRC_W;
+        uint8_t* dst = base + y;
+        unsigned x;
+
+        for (x = 0; x < SCALER_SRC_W; x++) {
+            dst[(size_t)x * GB_SCREEN_H] = src[x];
+        }
+    }
+}
+#endif
+
+#if PUSH_ORDER == PUSH_ROW
 /*
  * Producer half: copy block `blk` out of the frame buffer into a queue slot
  * and commit it. Waiting for a free slot is the overlap working, and the
@@ -342,6 +401,56 @@ static void commit_blocks(int from, int to)
         commit_block((uint_fast8_t)b);
     }
 }
+#endif /* PUSH_ORDER == PUSH_ROW */
+
+#if PUSH_ORDER == PUSH_COL
+/*
+ * Producer half, column order: take the slot this frame will be transposed
+ * into. Called on the frame's first drawn line rather than at its end, so the
+ * transpose can go straight into the slot as the lines arrive instead of
+ * bursting 23 KB at frame end. Waiting here is the overlap working; a PAUSED
+ * acquire is the menu taking the bus, and the rest of the frame is abandoned.
+ */
+static void open_frame_slot()
+{
+    int slot = 0;
+    int r;
+    int64_t t0;
+
+    t0 = esp_timer_get_time();
+    while ((r = framequeue_acquire(&fq, &slot)) == FRAMEQUEUE_FULL) {
+        taskYIELD();
+    }
+    q_stall_acc += (uint32_t)(esp_timer_get_time() - t0);
+    if (r != FRAMEQUEUE_OK) {
+        frame_dropped = true;
+        return;
+    }
+    tpose_slot = slot;
+    tpose_next = 0;
+}
+
+/* Hand the finished frame over: one block, which is the whole frame. */
+static void commit_frame()
+{
+    framequeue_meta_t meta;
+
+    if (tpose_slot < 0) {
+        return;
+    }
+    meta.block_idx = 0;
+    meta.frame_seq = frame_seq;
+    meta.last_in_frame = 1;
+    if (framequeue_commit(&fq, tpose_slot, &meta) != FRAMEQUEUE_OK) {
+        Serial.println("[EMU] frame queue rejected a frame");
+        frame_dropped = true;
+        return;
+    }
+    if (push_task) {
+        xTaskNotifyGive(push_task);
+    }
+}
+#endif /* PUSH_ORDER == PUSH_COL */
 
 /*
  * Close whatever frame is open. Whatever block was still collecting lines goes
@@ -357,11 +466,22 @@ static void frame_flush()
 {
     if (frame_open) {
         if (!frame_dropped) {
+#if PUSH_ORDER == PUSH_COL
+            /* Whatever the frame never drew comes out of fb, which still
+             * holds the previous frame's pixels there. */
+            transpose_lines((unsigned)tpose_next, GB_SCREEN_H - 1u);
+            commit_frame();
+#else
             commit_blocks(cur_block, (int)blocks_per_frame() - 1);
+#endif
         }
         frame_open = false;
         cur_block = -1;
         last_line = -1;
+#if PUSH_ORDER == PUSH_COL
+        tpose_slot = -1;
+        tpose_next = 0;
+#endif
     }
     frame_dropped = false;
 }
@@ -383,6 +503,30 @@ static void frame_end()
  * are consumed, except the frame's last, which waits for the transfer so that
  * framequeue_drained() cannot fire mid-push.
  */
+#if PUSH_ORDER == PUSH_COL
+/*
+ * Consumer half, column order: not wired yet. The column-block walk and the
+ * portrait address window are the push path's own work; until they land this
+ * drains the queue, so the producer's transpose is measurable with nothing
+ * else in the frame and the pipeline never stalls on a full queue. A build
+ * with this order therefore emulates and shows nothing, which is the point of
+ * measuring the two halves separately.
+ */
+static void emu_push_task(void* arg)
+{
+    framequeue_meta_t meta;
+    int slot = 0;
+
+    (void)arg;
+    for (;;) {
+        if (framequeue_pop(&fq, &slot, &meta) != FRAMEQUEUE_OK) {
+            ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2));
+            continue;
+        }
+        framequeue_release(&fq, slot);
+    }
+}
+#else
 static void emu_push_task(void* arg)
 {
     const uint16_t* src_lines[BLOCK_LINES + 1];
@@ -457,6 +601,7 @@ static void emu_push_task(void* arg)
         buf ^= 1u;
     }
 }
+#endif /* PUSH_ORDER */
 
 // ─── Per-line hook ──────────────────────────────────────────────────────────
 /*
@@ -496,18 +641,31 @@ void emu_gnuboy_line(const unsigned char* line, int index)
     blk = index / BLOCK_LINES;
     if (!frame_open) {
         /* First drawn line of this frame. The sequence counts drawn frames
-         * and jumps over skipped ones. Blocks before this one — the LCD
-         * enabled partway down — go out with the previous frame's lines so
+         * and jumps over skipped ones. Lines before this one — the LCD
+         * enabled partway down — go out with the previous frame's pixels so
          * the frame is whole. */
         frame_open = true;
         frame_seq++;
+#if PUSH_ORDER == PUSH_COL
+        open_frame_slot();
+#else
         commit_blocks(0, blk - 1);
+#endif
         cur_block = blk;
     }
     last_line = index;
     if (frame_dropped) {
         return;
     }
+#if PUSH_ORDER == PUSH_COL
+    /* Everything up to and including this line, which on the frame's first
+     * drawn line covers the undrawn ones above it. gnuboy wrote the line into
+     * fb before the hook fired, so it is there before this reads it. Nothing
+     * is committed per block here: the frame goes over in one piece once it
+     * is whole, because a column of it needs every row. */
+    transpose_lines((unsigned)tpose_next, (unsigned)index);
+    tpose_next = index + 1;
+#else
     if (blk != cur_block) {
         /* This line is the next block's first, and under 26/16 the previous
          * block's lookahead. gnuboy wrote it into fb before the hook fired,
@@ -515,6 +673,7 @@ void emu_gnuboy_line(const unsigned char* line, int index)
         commit_blocks(cur_block, blk - 1);
         cur_block = blk;
     }
+#endif
 }
 
 // ─── API ────────────────────────────────────────────────────────────────────
@@ -560,6 +719,20 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     if (!fb) {
         return false;
     }
+#if PUSH_ORDER == PUSH_COL
+    for (unsigned i = 0; i < FRAMEQUEUE_SLOTS; i++) {
+        if (!tfb[i]) {
+            tfb[i] = (uint8_t*)malloc((size_t)GB_SCREEN_H * SCALER_SRC_W);
+        }
+        if (!tfb[i]) {
+            Serial.println("[EMU] no heap for the transposed frame");
+            return false;
+        }
+        /* Index 0 is the background palette's first shade, the blank the
+         * panel shows until the first frame lands. */
+        memset(tfb[i], 0, (size_t)GB_SCREEN_H * SCALER_SRC_W);
+    }
+#endif
     /* Index 0 is the background palette's first shade: the blank the panel
      * shows until the first frame lands, and what the blocks of a frame the
      * LCD cut short are made of. */
@@ -623,6 +796,10 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     frame_open = false;
     cur_block = -1;
     last_line = -1;
+#if PUSH_ORDER == PUSH_COL
+    tpose_slot = -1;
+    tpose_next = 0;
+#endif
     if (framequeue_init(&fq, blocks_per_frame()) != FRAMEQUEUE_OK) {
         return false;
     }
@@ -630,7 +807,9 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     fpst = millis();
 
     rom_title(title, sizeof(title));
-    Serial.printf("[EMU] gnuboy '%s' %uKB heap:%u\n", title, romlen / 1024,
+    Serial.printf("[EMU] gnuboy '%s' %uKB push:%s heap:%u\n", title,
+                  romlen / 1024,
+                  (PUSH_ORDER == PUSH_COL) ? "col" : "row",
                   ESP.getFreeHeap());
     return true;
 }

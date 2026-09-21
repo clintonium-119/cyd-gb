@@ -96,6 +96,38 @@
 #error "BLOCK_UNITS must divide the frame: GB_SCREEN_H % (UNIT_LINES * BLOCK_UNITS) must be 0"
 #endif
 
+// ─── Push order ─────────────────────────────────────────────────────────────
+// Which axis the frame is written along. The panel's 320 gate lines run along
+// the screen's horizontal under setRotation(1), so a row-major push crosses
+// the refresh perpendicularly and smears the tear into a descending diagonal
+// staircase; writing along the scan collapses that to a single vertical line,
+// absent altogether on the boots whose phase leaves the write ahead of the
+// scan for a whole frame.
+//
+// Both walks are compiled and selected here, as RENDER_GEOM selects one of
+// three geometries, and for the same reason: the trade is one frame of input
+// latency for a change in what the artefact looks like, and that cannot be
+// judged from a description. It needs both behaviours from one environment so
+// the comparison has one variable.
+//
+// PUSH_COL costs a second copy of the indexed frame — one per queue slot, on
+// the heap — and one frame of latency, because an output column needs every
+// source row and so the push cannot overlap emulation of the same frame.
+//
+// Select the other order per invocation:
+//
+//   PLATFORMIO_BUILD_FLAGS=-DPUSH_ORDER=PUSH_COL pio run -e cyd-gnuboy
+#define PUSH_ROW 0
+#define PUSH_COL 1
+
+#ifndef PUSH_ORDER
+#define PUSH_ORDER PUSH_ROW
+#endif
+
+#if PUSH_ORDER != PUSH_ROW && PUSH_ORDER != PUSH_COL
+#error "PUSH_ORDER must be PUSH_ROW or PUSH_COL."
+#endif
+
 // ─── Game area ──────────────────────────────────────────────────────────────
 // Each geometry states its own GAME_W / GAME_H above, because 5/3's width is
 // not 160 x k/16 for any k. 24/16 and 26/16 still land on §2.1's table: 240 x
