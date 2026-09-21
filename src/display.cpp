@@ -1,6 +1,7 @@
 #include "display.h"
 #include "hw_config.h"
 #include "render_config.h"
+#include "render/panel_rate.h"
 #include <Arduino.h>
 #include <math.h>
 #include <string.h>
@@ -36,21 +37,17 @@ static void write_porch(uint8_t fpa)
     tft.writedata(0x33);
 }
 
-// One frame of the divider, from display_frame_end(): the panel spends
-// trim_ratio frames in 64 on the longer porch, so the average line count is
-// fractional even though each frame's is not. Six bytes of SPI on the frames
-// where the value changes, with the bus already idle.
+// One frame of the divider, from display_frame_end(). Six bytes of SPI on the
+// frames where the value changes, with the bus already idle. The arithmetic is
+// gbcore's, so the host suite can pin the one part of this most likely to be
+// quietly wrong: an off-by-one in the accumulator gives an average close
+// enough to look right on a bench and wrong enough to move the seam.
 static void porch_advance()
 {
     static uint8_t acc = 0;
     static uint8_t applied = 0xFF;
-    uint8_t want = trim_fpa;
+    uint8_t want = panel_rate_next_porch(&acc, trim_fpa, trim_ratio);
 
-    acc = (uint8_t)(acc + trim_ratio);
-    if (acc >= 64) {
-        acc = (uint8_t)(acc - 64);
-        want = (uint8_t)(trim_fpa + 1);
-    }
     if (want != applied) {
         write_porch(want);
         applied = want;
@@ -100,43 +97,28 @@ static bool manual = false;
 #ifndef PANEL_ANCHOR_HZ
 #define PANEL_ANCHOR_HZ 59.7275
 #endif
-#define PANEL_ANCHOR_LINES \
-    (332.0 + (double)PANEL_ANCHOR_FPA + (double)PANEL_ANCHOR_RATIO / 64.0)
 
-static double panel_hz(uint8_t fpa, uint8_t ratio)
-{
-    return PANEL_ANCHOR_HZ * PANEL_ANCHOR_LINES
-                           / (332.0 + (double)fpa + (double)ratio / 64.0);
-}
-
-/* The porch that would put the panel on `hz`, in 64ths of a line. Returns
- * false if it lands outside what PORCTRL can express. */
-static bool porch_for(double hz, uint8_t* fpa, uint8_t* ratio)
-{
-    double lines = PANEL_ANCHOR_HZ * PANEL_ANCHOR_LINES / hz - 332.0;
-    long sixtyfourths;
-
-    if (hz < 1.0 || lines < 1.0 || lines > 126.0) {
-        return false;
-    }
-    sixtyfourths = (long)(lines * 64.0 + 0.5);
-    *fpa = (uint8_t)(sixtyfourths / 64);
-    *ratio = (uint8_t)(sixtyfourths % 64);
-    return true;
-}
+static const panel_anchor_t anchor = {
+    PANEL_ANCHOR_FPA, PANEL_ANCHOR_RATIO, PANEL_ANCHOR_HZ
+};
 
 static void trim_report(const char* why, double emu_hz)
 {
-    double p = panel_hz(trim_fpa, trim_ratio);
+    double p = panel_rate_hz(&anchor, trim_fpa, trim_ratio);
 
     Serial.printf("[TRIM] %s porch %u + %u/64  panel %.4f Hz  emu %.4f Hz  "
                   "beat %+.4f Hz", why, (unsigned)trim_fpa,
                   (unsigned)trim_ratio, p, emu_hz, p - emu_hz);
     if (emu_hz > 1.0) {
-        double want = (332.0 + 11.0 + 20.0 / 64.0) * 59.7275 / emu_hz - 332.0;
+        uint8_t want_fpa;
+        uint8_t want_ratio;
 
-        Serial.printf("  null at %u + %u/64", (unsigned)want,
-                      (unsigned)((want - (double)(unsigned)want) * 64.0 + 0.5));
+        if (panel_rate_porch_for(&anchor, emu_hz, &want_fpa, &want_ratio)) {
+            Serial.printf("  null at %u + %u/64", (unsigned)want_fpa,
+                          (unsigned)want_ratio);
+        } else {
+            Serial.printf("  null out of range");
+        }
     }
     Serial.println();
 }
@@ -244,7 +226,8 @@ static void trim_console()
             uint8_t want_fpa;
             uint8_t want_ratio;
 
-            if (porch_for(emu_hz, &want_fpa, &want_ratio)
+            if (panel_rate_porch_for(&anchor, emu_hz, &want_fpa,
+                                     &want_ratio)
                 && (want_fpa != trim_fpa || want_ratio != trim_ratio)) {
                 trim_fpa = want_fpa;
                 trim_ratio = want_ratio;
