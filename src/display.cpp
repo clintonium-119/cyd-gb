@@ -330,6 +330,14 @@ static uint8_t rot_now = TFT_ROTATION_LANDSCAPE;
 
 #define MADCTL_MV 0x20u
 
+// The orientation the FRAME PATH uses, which is the one whose scan-out order
+// matters. The UI's is left alone.
+#if PUSH_TRANSPOSED
+#define FRAME_ROTATION TFT_ROTATION_PORTRAIT
+#else
+#define FRAME_ROTATION TFT_ROTATION_LANDSCAPE
+#endif
+
 static void write_madctl_scan_reversed(uint8_t rot)
 {
     uint8_t madctl = MADCTL_BGR | MADCTL_ML;
@@ -346,32 +354,46 @@ static void write_madctl_scan_reversed(uint8_t rot)
     }
     tft.writecommand(0x36);
     tft.writedata(madctl);
+    // Once, and only that the WRITE happened - whether the panel honours it is
+    // a separate question, and FRCTRL2 is the cautionary tale: a register that
+    // silently does nothing turns a null result into a clean-looking negative
+    // one about the idea instead of the hardware.
+    static bool said = false;
+    if (!said) {
+        said = true;
+        Serial.printf("[TFT] MADCTL 0x%02X, scan order reversed, rot %d\n",
+                      (unsigned)madctl, (int)rot);
+    }
 }
 #endif
+
+/*
+ * Put the panel in `rot`, unconditionally. Split from set_orientation()
+ * because the row-major frame path never leaves landscape, so a function that
+ * returns early when the rotation already matches can never apply anything to
+ * it — which is exactly how the reversed scan order silently failed to reach
+ * that path once already.
+ */
+static void apply_orientation(uint8_t rot)
+{
+    tft.setRotation(rot);
+#ifdef PANEL_SCAN_REVERSE
+    // After setRotation, which writes MADCTL itself: re-written here with the
+    // refresh order reversed, for whichever orientation the frame path uses.
+    // ML is a property of the panel's scan-out and applies to any write order.
+    if (rot == FRAME_ROTATION) {
+        write_madctl_scan_reversed(rot);
+    }
+#endif
+    rot_now = rot;
+}
 
 static void set_orientation(uint8_t rot)
 {
     if (rot_now == rot) {
         return;
     }
-    tft.setRotation(rot);
-#ifdef PANEL_SCAN_REVERSE
-    // After setRotation, which writes MADCTL itself: this re-writes it with
-    // the refresh order reversed. For whichever orientation the frame path
-    // uses — portrait under a transposed push order, landscape under the row
-    // one — because ML is a property of the panel's scan-out and applies to
-    // any write order. The UI's own orientation is left alone: it has no seam
-    // to chase, and not touching it keeps a comparison honest about what
-    // changed.
-#if PUSH_TRANSPOSED
-    if (rot == TFT_ROTATION_PORTRAIT) {
-#else
-    if (rot == TFT_ROTATION_LANDSCAPE) {
-#endif
-        write_madctl_scan_reversed(rot);
-    }
-#endif
-    rot_now = rot;
+    apply_orientation(rot);
 }
 
 void display_init()
@@ -389,8 +411,11 @@ void display_init()
     // anything swaps bytes, so the driver does the swap at push time — this is
     // the ordering design §2.3 requires to avoid colour fringing.
     tft.setSwapBytes(true);
-    tft.setRotation(TFT_ROTATION_LANDSCAPE);
-    rot_now = TFT_ROTATION_LANDSCAPE;
+    // Through apply_orientation, so a frame path that lives in landscape gets
+    // its scan order set at boot: nothing later will change the rotation and
+    // give it another chance.
+    rot_now = 0xFF;
+    apply_orientation(TFT_ROTATION_LANDSCAPE);
     // The frame path is DMA-only, so a failed DMA init is a boot-level fact,
     // not something to paper over at push time: the numbers the bench items
     // collect would silently describe the blocking path instead.
