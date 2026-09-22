@@ -1031,6 +1031,18 @@ static void test_start_means_nothing_on_any_other_page(void)
 
 /* Share of pixels that change under a `shift`-pixel vertical displacement,
  * in tenths of a per cent, over a window the size of the shipping one. */
+/* For the scroll-cycle assertion below: a rate sharing a factor with a
+ * pattern's period makes the field repeat every period / gcd frames. */
+static int gcd_int(int a, int b)
+{
+    while (b != 0) {
+        int t = a % b;
+        a = b;
+        b = t;
+    }
+    return a;
+}
+
 static unsigned changed_permille(uint8_t pat, int32_t shift)
 {
     unsigned changed = 0;
@@ -1115,21 +1127,42 @@ static void test_the_default_rate_is_half_a_feature_on_every_pattern(void)
     TEST_ASSERT_EQUAL_INT(DIAG_TRIM_FEATURE_H, DIAG_TRIM_STRIPE_BAND * 2);
     TEST_ASSERT_EQUAL_INT(0, DIAG_TRIM_GRID_PITCH % DIAG_TRIM_FEATURE_H);
 
-    /* And the default rate is half of it, whichever way it runs. */
-    TEST_ASSERT_EQUAL_INT(DIAG_TRIM_FEATURE_H,
-                          2 * (DIAG_TRIM_SCROLL < 0 ? -DIAG_TRIM_SCROLL
-                                                    : DIAG_TRIM_SCROLL));
+    /* And the default rate stays under it, whichever way it runs: a whole
+     * feature is the point continuity is lost, so the rate must be below it
+     * rather than at any particular fraction of it. */
+    {
+        int rate = (DIAG_TRIM_SCROLL < 0) ? -DIAG_TRIM_SCROLL
+                                          : DIAG_TRIM_SCROLL;
+        TEST_ASSERT_TRUE(rate > 0);
+        TEST_ASSERT_TRUE(rate < DIAG_TRIM_FEATURE_H);
 
-    /* No pattern is blind at it. */
+        /* And the field must SCROLL rather than strobe. A scroll returns to
+         * its own starting position every period / gcd(rate, period) frames,
+         * so a rate sharing a factor with a pattern's period cycles through a
+         * handful of states and a one-frame displacement has to be spotted
+         * inside a flicker. The bench of 2026-09-22 is why this is asserted:
+         * the previous default of 4 gave the stripes and the noise field a
+         * TWO-frame cycle, and a builder could not close a run on it.
+         *
+         * Every period here is 8 or 16, so coprimality with 8 carries both. */
+        TEST_ASSERT_EQUAL_INT_MESSAGE(1, gcd_int(rate, DIAG_TRIM_FEATURE_H),
+            "the default scroll shares a factor with the feature height, so "
+            "the fixture strobes instead of scrolling");
+    }
+
+    /* No pattern is blind at the default rate. */
     for (pat = 0; pat < (uint8_t)DIAG_TRIM_PAT_COUNT; pat++) {
-        TEST_ASSERT_TRUE(changed_permille(pat, DIAG_TRIM_FEATURE_H / 2) > 0u);
+        unsigned rate = (unsigned)((DIAG_TRIM_SCROLL < 0) ? -DIAG_TRIM_SCROLL
+                                                          : DIAG_TRIM_SCROLL);
+        TEST_ASSERT_TRUE(changed_permille(pat, rate) > 0u);
     }
 }
 
 static void test_the_noise_field_carries_over_at_the_default_rate(void)
 {
     unsigned moved = changed_permille(DIAG_TRIM_PAT_NOISE,
-                                      DIAG_TRIM_FEATURE_H / 2);
+                                      (DIAG_TRIM_SCROLL < 0) ? -DIAG_TRIM_SCROLL
+                                                             : DIAG_TRIM_SCROLL);
 
     /*
      * The two bounds that pull against each other, on the pattern where the
@@ -1259,13 +1292,16 @@ static void test_a_run_starts_on_the_documented_pattern_and_rate(void)
     int8_t vx = 99;
     int8_t vy = 99;
 
-    /* The checkerboard scrolling down at 4, which is the pair the bench found
-     * a seam legible in and the pair the procedure names. */
+    /* The stripes scrolling at 5, which is the pair a builder could read on
+     * glass and the pair the procedure names. Spelled out as well as compared
+     * against the macro, so changing the macro has to come here and face the
+     * documented procedure rather than sliding through. */
     TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_PAT_DEFAULT, diag_trim_pattern(&d));
-    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_PAT_CHECK, diag_trim_pattern(&d));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_PAT_STRIPE, diag_trim_pattern(&d));
     diag_trim_rate(&d, &vx, &vy);
     TEST_ASSERT_EQUAL_INT8(0, vx);
     TEST_ASSERT_EQUAL_INT8(DIAG_TRIM_SCROLL, vy);
+    TEST_ASSERT_EQUAL_INT8(-5, vy);
 }
 
 static void test_the_dpad_scrolls_the_fixture_during_a_run(void)

@@ -149,15 +149,24 @@ enum diag_nfc_state_e {
  * of the setting rather than a detail — the bench found the seam legible
  * scrolling one way and asked for this value specifically.
  *
- * Four, because every pattern here has an 8-pixel feature and half of one is
- * the operating point. A displacement of a WHOLE feature height loses the
- * continuity the eye needs: the random field re-randomises every block, and a
- * periodic field inverts or realigns. Half is the largest step that still
- * reads as the same picture, translated — which is the thing a seam has to be
- * a break in. The first version of this page scrolled a whole block a frame
- * and showed a builder a field with nothing in it.
+ * Five. The bound this has to stay under is the feature height: a
+ * displacement of a WHOLE feature loses the continuity the eye needs, because
+ * the random field re-randomises every block and a periodic field inverts or
+ * realigns, and a seam has to be a break in a picture that is otherwise the
+ * same picture translated. Every feature here is 8 tall, so anything below 8
+ * clears that, and the first version of this page scrolled a whole block a
+ * frame and showed a builder a field with nothing in it.
+ *
+ * Five rather than four within that range, because four made the field
+ * STROBE. The scroll returns to its own starting position every
+ * period / gcd(rate, period) frames: at four that is two frames for the
+ * stripes and the noise field, four for the checkerboard and the grid. A
+ * fixture cycling through two states is not a scrolling field, and a
+ * one-frame displacement inside a two-state flicker is the thing a builder
+ * could not see. Five is coprime with 8 and with 16, so the shortest cycle
+ * any pattern has is 8 frames and all four genuinely move.
  */
-#define DIAG_TRIM_SCROLL (-4)
+#define DIAG_TRIM_SCROLL (-5)
 
 /* Output pixels per frame the D-pad can reach, either way on either axis. */
 #define DIAG_TRIM_RATE_MAX 8
@@ -186,25 +195,41 @@ enum diag_trim_pat_e {
 
 /*
  * What the page enters a run on, which is what the documented procedure
- * calibrates at. The checkerboard rather than the random field, on the bench's
- * evidence: it is the one a builder could actually see the seam in, and at the
- * default rate it is the safer of the two anyway.
+ * calibrates at: the stripe field, scrolled at five output pixels a frame.
+ * Chosen on the bench of 2026-09-22, where a builder calibrating a real unit
+ * found it the one they could actually read, after the checkerboard at four
+ * had left them unable to close a run.
  *
- * That last part is not obvious and is the reason this is allowed to differ
- * from DEC-0123. A periodic pattern's hazard is going BLIND — where the
- * displacement equals a whole period the two sides of a seam line up and a
- * real seam vanishes — and the checkerboard's period is 16 px, which the
- * D-pad's ±8 cannot reach. Inside the range the page offers it cannot go
- * blind at all, while carrying twice the contrast of the random field. The
- * random field remains for the same rate, and remains the one with no period
- * at any distance.
+ * Two properties decide a fixture and only one of them was encoded here
+ * before.
+ *
+ *   * A pattern must not go BLIND: where the one-frame DISPLACEMENT equals a
+ *     whole period the two sides of a seam line up and a real seam vanishes.
+ *     Stripes have the shortest period of the four at 8, so they are the only
+ *     one the D-pad can blind at all, and only at its extreme of 8. At five
+ *     they are nowhere near it.
+ *   * A pattern must also SCROLL, and that is a different arithmetic: the
+ *     field returns to its own starting position every period / gcd(rate,
+ *     period) frames. At the old default of four that is TWO frames for the
+ *     stripes and for the noise field, and four for the checkerboard and the
+ *     grid — so the fixture did not scroll, it strobed between a handful of
+ *     states. Spotting a one-frame displacement inside a two-state flicker is
+ *     the hard problem the builder ran into. Five is coprime with every
+ *     pattern's period, so the shortest cycle any of them has is 8 frames.
+ *
+ * Five costs the old default's tidiest property — it is no longer half a
+ * feature, the largest displacement that still translates rather than
+ * decorrelating. That bound was reasoning about what the eye could follow;
+ * the bench is a builder reporting what the eye could follow, and it wins.
+ * Five-eighths of a stripe period is still most of the way to inversion.
  */
-#define DIAG_TRIM_PAT_DEFAULT DIAG_TRIM_PAT_CHECK
+#define DIAG_TRIM_PAT_DEFAULT DIAG_TRIM_PAT_STRIPE
 
-/* Every pattern's feature is 8 output pixels tall, so one default rate is half
- * of all of them and switching pattern mid-run never lands on a whole-feature
- * displacement. The noise block is square at 8; a 4-tall block was the first
- * version's and put the default rate back on the pathological point. */
+/* Every pattern's feature is 8 output pixels tall, which is what makes one
+ * default rate safe for all of them: switching pattern mid-run never lands on
+ * a whole-feature displacement, because the default rate is below 8 and every
+ * period is 8 or 16. The noise block is square at 8; a 4-tall block was the
+ * first version's and put the default rate on a pathological point. */
 #define DIAG_TRIM_BLOCK_W 8
 #define DIAG_TRIM_BLOCK_H 8
 #define DIAG_TRIM_FEATURE_H 8
