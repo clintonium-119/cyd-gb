@@ -1,0 +1,30 @@
+# capture start 2026-09-22T14:45:28-0400 port=/dev/ttyUSB0 baud=115200 duration=75s
+[   0.401] [DIAG] fixture noise +0,+0 px/frame
+[   0.601] [DIAG] fixture check +0,+0 px/frame
+[   1.803] [DIAG] fixture check +0,-1 px/frame
+[   2.203] [DIAG] fixture check +0,-2 px/frame
+[   2.403] [DIAG] fixture check +0,-3 px/frame
+[   2.804] [DIAG] fixture check +0,-4 px/frame
+[  21.030] [DIAG] fixture check +0,-5 px/frame
+[  21.430] [DIAG] fixture check +0,-6 px/frame
+[  25.235] [DIAG] fixture check +0,-7 px/frame
+[  26.437] [DIAG] fixture check +0,-8 px/frame
+[  32.245] [TFT] porch trim 12 + 7/64
+[  33.847] [TFT] porch trim 12 + 3/64
+[  34.448] [TFT] porch trim 12 + 7/64
+[  34.848] [TFT] porch trim 12 + 11/64
+[  42.458] [DIAG] fixture check +0,-7 px/frame
+[  42.659] [DIAG] fixture check +0,-6 px/frame
+[  42.859] [DIAG] fixture check +0,-5 px/frame
+[  43.059] [DIAG] fixture check +0,-4 px/frame
+[  43.460] [DIAG] fixture check +0,-3 px/frame
+[  43.660] [DIAG] fixture check +0,-2 px/frame
+[  44.260] [DIAG] fixture check +0,-1 px/frame
+[  44.861] [DIAG] fixture check +0,+0 px/frame
+[  45.462] [DIAG] fixture check +0,+1 px/frame
+[  45.662] [DIAG] fixture check +0,+2 px/frame
+[  45.863] [DIAG] fixture check +0,+3 px/frame
+[  46.063] [DIAG] fixture check +0,+4 px/frame
+[  55.475] [DIAG] fixture stripe +0,+4 px/frame
+[  62.809] # link dropped: device reports readiness to read but returned no data (device disconnected or multiple access on port?)
+# capture end, elapsed 75.3s

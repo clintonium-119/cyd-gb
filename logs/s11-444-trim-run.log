@@ -1,0 +1,56 @@
+# capture start 2026-09-22T14:48:40-0400 port=/dev/ttyUSB0 baud=115200 duration=180s
+[   1.602] [DIAG] fixture stripe +0,-8 px/frame
+[   4.206] [DIAG] fixture grid +0,-8 px/frame
+[   7.010] [DIAG] fixture noise +0,-8 px/frame
+[   8.212] [DIAG] fixture check +0,-8 px/frame
+[   9.213] [DIAG] fixture check +0,-7 px/frame
+[   9.614] [DIAG] fixture check +0,-6 px/frame
+[   9.814] [DIAG] fixture check +0,-5 px/frame
+[  10.215] [DIAG] fixture check +0,-4 px/frame
+[  10.415] [DIAG] fixture check +0,-3 px/frame
+[  10.615] [DIAG] fixture check +0,-2 px/frame
+[  11.015] [DIAG] fixture check +0,-1 px/frame
+[  11.015] [DIAG] fixture check +0,+0 px/frame
+[  11.216] [DIAG] fixture check +0,+1 px/frame
+[  11.416] [DIAG] fixture check +0,+2 px/frame
+[  11.616] [DIAG] fixture check +0,+3 px/frame
+[  11.816] [DIAG] fixture check +0,+4 px/frame
+[  12.017] [DIAG] fixture check +0,+5 px/frame
+[  12.217] [DIAG] fixture check +0,+6 px/frame
+[  12.417] [DIAG] fixture check +0,+7 px/frame
+[  12.417] [DIAG] fixture check +0,+8 px/frame
+[  14.019] [DIAG] fixture stripe +0,+8 px/frame
+[  15.221] [DIAG] fixture stripe +0,+7 px/frame
+[  15.621] [DIAG] fixture stripe +0,+6 px/frame
+[  16.022] [DIAG] fixture stripe +0,+5 px/frame
+[  42.060] [DIAG] trim run thrown away: the marks disagreed too much to average
+[  46.873] [TFT] porch trim 11 + 20/64
+[  51.886] [TFT] porch trim 11 + 24/64
+[  52.287] [TFT] porch trim 11 + 28/64
+[  52.889] [TFT] porch trim 12 + 28/64
+[  53.289] [TFT] porch trim 13 + 28/64
+[  54.291] [TFT] porch trim 12 + 28/64
+[  55.092] [TFT] porch trim 11 + 28/64
+[  56.294] [TFT] porch trim 10 + 28/64
+[  56.694] [TFT] porch trim 10 + 24/64
+[  57.094] [TFT] porch trim 10 + 20/64
+[  57.495] [TFT] porch trim 10 + 16/64
+[  58.096] [TFT] porch trim 11 + 20/64
+[  63.282] # link dropped: device reports readiness to read but returned no data (device disconnected or multiple access on port?)
+[  65.306] # link reopened (no reset)
+[  65.907] [TFT] 320x240 OK
+[  65.907] [TFT] porch trim 12 + 11/64
+[  66.308] [SD] Type:2 Size:120MB
+[  68.310] [DIAG] enter f504d9b-dirty built 2026-09-22T18:33Z
+[  68.310] [TFT] porch trim 12 + 11/64
+[  68.310] [DIAG] redraw 18656 us
+[  69.712] [DIAG] page System
+[  70.513] [DIAG] page Panel trim
+[  75.320] [TFT] MADCTL 0xD8, scan order reversed, rot 2
+[  75.320] [TFT] COLMOD 0x53 for the frame path
+[  76.121] [DIAG] fixture stripe +0,-4 px/frame
+[  76.522] [DIAG] fixture grid +0,-4 px/frame
+[  77.323] [DIAG] fixture noise +0,-4 px/frame
+[  77.723] [DIAG] fixture check +0,-4 px/frame
+[  78.124] [DIAG] fixture stripe +0,-4 px/frame
+[  89.739] [TFT] porch trim 8 + 63/64
