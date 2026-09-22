@@ -594,7 +594,15 @@ void setup() {
     display_panel_probe();
 #endif
     display_set_backlight(settings.brightness);
+#ifdef PANEL_TRIM_FORCE
+    // Bench only: one arm of a blind trim trial. Applies the porch the build
+    // was given and ignores the stored one, so neither arm depends on what
+    // NVS happens to hold and the two differ in exactly two numbers.
+    // scripts/trim_ab.sh picks the arm and is the only thing that knows it.
+    display_set_trim(PANEL_TRIM_FPA, PANEL_TRIM_RATIO);
+#else
     display_set_trim(settings.trim_fpa, settings.trim_ratio);
+#endif
     emu_set_palette(settings.palette);
 #ifdef DEV_FRAMESKIP
     // Bench only: force the frameskip setting for a measurement build.
