@@ -54,6 +54,26 @@ static struct {
     uint16_t post[GUARD];
 } scratch;
 
+/* The same block packed: two pixels in three bytes, so three quarters the
+ * size, with byte canaries either side and a byte canary through the middle.
+ * PACKED_CANARY is not a byte the fixture can produce at both nibbles, so a
+ * pixel the packer failed to write reads as one it wrote wrongly. */
+#define PACKED_CANARY 0xC5u
+static struct {
+    uint8_t pre[GUARD];
+    uint8_t block[SCALER_DST_ROWS_MAX * SCALER_DST_W_MAX * 3 / 2];
+    uint8_t post[GUARD];
+} pdst;
+
+/* Four units where the 565 calls take one: the packed walk keeps every scaled
+ * source unit of the block alive so the blend units can be built without a
+ * second pass. Guarded the same way. */
+static struct {
+    uint16_t pre[GUARD];
+    uint16_t px[SCALER_SCRATCH_444_MAX];
+    uint16_t post[GUARD];
+} scratch444;
+
 static uint16_t src[SCALER_SRC_LINES_MAX][SCALER_SRC_W];
 static uint16_t lookahead[SCALER_SRC_W];
 static const uint16_t* lines[SCALER_SRC_LINES_MAX];
@@ -70,6 +90,16 @@ static void reset_dst(void)
     }
     for (i = 0; i < SCALER_DST_W_MAX; i++) {
         scratch.row[i] = CANARY;
+    }
+    for (i = 0; i < GUARD; i++) {
+        pdst.pre[i] = pdst.post[i] = PACKED_CANARY;
+        scratch444.pre[i] = scratch444.post[i] = CANARY;
+    }
+    for (i = 0; i < sizeof(pdst.block); i++) {
+        pdst.block[i] = PACKED_CANARY;
+    }
+    for (i = 0; i < SCALER_SCRATCH_444_MAX; i++) {
+        scratch444.px[i] = CANARY;
     }
 }
 
@@ -945,6 +975,235 @@ static void test_col_null_and_unknown_arguments_are_rejected(void)
     assert_canaries_intact(0u);
 }
 
+/* ── packed RGB444 ───────────────────────────────────────────────────── */
+/*
+ * The packed cases are the 565 cases' shadow: the same call with the same
+ * inputs, asserted to hold the same picture four bits a channel shallower.
+ * That is the only claim worth making about the format, and it is the one a
+ * swapped nibble or a stride in pixels where bytes were meant fails.
+ *
+ * quant444() restates the truncation from the 565 field layout — five, six
+ * and five bits, top four of each kept — rather than from the packer's mask
+ * constants, so a wrong mask in the packer cannot agree with a wrong mask
+ * here.
+ */
+static unsigned quant444(uint16_t c)
+{
+    unsigned r = (unsigned)((c >> 11) & 0x1Fu);
+    unsigned g = (unsigned)((c >> 5) & 0x3Fu);
+    unsigned b = (unsigned)(c & 0x1Fu);
+
+    return ((r >> 1) << 8) | ((g >> 2) << 4) | (b >> 1);
+}
+
+/* Pixel i out of a packed stream, by the nibble order the header documents:
+ * byte 0 = R0 G0, byte 1 = B0 R1, byte 2 = G1 B1. */
+static unsigned packed_px(const uint8_t* p, size_t i)
+{
+    size_t b = (i >> 1) * 3u;
+
+    if (i & 1u) {
+        return (unsigned)(((p[b + 1] & 0x0Fu) << 8) | p[b + 2]);
+    }
+    return (unsigned)((p[b] << 4) | (p[b + 1] >> 4));
+}
+
+static void assert_packed_matches_565(const uint8_t* p, const uint16_t* q,
+                                      unsigned n)
+{
+    unsigned i;
+
+    for (i = 0; i < n; i++) {
+        TEST_ASSERT_EQUAL_HEX16_MESSAGE(quant444(q[i]), packed_px(p, i),
+            "packed pixel is not its 565 pixel truncated to four bits");
+    }
+}
+
+/* Exactly n pixels' worth of bytes written and not one more, and the packed
+ * walk never reaches past its scratch. */
+static void assert_packed_footprint(unsigned n)
+{
+    size_t used = SCALER_PACKED_BYTES(n);
+    size_t i;
+
+    for (i = 0; i < GUARD; i++) {
+        TEST_ASSERT_EQUAL_HEX8(PACKED_CANARY, pdst.pre[i]);
+        TEST_ASSERT_EQUAL_HEX8(PACKED_CANARY, pdst.post[i]);
+        TEST_ASSERT_EQUAL_HEX16(CANARY, scratch444.pre[i]);
+        TEST_ASSERT_EQUAL_HEX16(CANARY, scratch444.post[i]);
+    }
+    for (i = used; i < sizeof(pdst.block); i++) {
+        TEST_ASSERT_EQUAL_HEX8_MESSAGE(PACKED_CANARY, pdst.block[i],
+            "the packed block wrote past width * height * 3 / 2");
+    }
+}
+
+/* The row walk: a block of five rows of dst_w, packed, against the same block
+ * in 565. */
+static void assert_packed_block_matches(enum scaler_geom_e geom,
+                                        const uint16_t* lookahead_line)
+{
+    const scaler_geom_info_t* gi = scaler_geom_info(geom);
+    unsigned n = gi->dst_rows_per_block * gi->dst_w;
+
+    reset_dst();
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_block(geom, SCALER_MODE_BLEND, lines, lookahead_line,
+                           dst.block, scratch.row));
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_block_444(geom, SCALER_MODE_BLEND, lines, lookahead_line,
+                               pdst.block, scratch444.px));
+    assert_packed_matches_565(pdst.block, dst.block, n);
+    assert_packed_footprint(n);
+}
+
+static void test_packed_row_block_is_the_565_block_quantised(void)
+{
+    assert_packed_block_matches(SCALER_GEOM_5_3, lookahead);
+    /* And with the frame's far edge, where the trailing blend row clamps and
+     * the packer must still write a whole unit. */
+    assert_packed_block_matches(SCALER_GEOM_5_3, NULL);
+}
+
+/* The transposed walk, in both column orders. Descending puts the block's
+ * leftmost column at the far end, so the comparison is per column: a stride
+ * still counted in pixels lands two thirds of the way along and the columns
+ * would overlap rather than tile. */
+static void assert_packed_col_block_matches(enum scaler_geom_e geom,
+                                            const uint16_t* lookahead_col,
+                                            enum scaler_col_order_e order)
+{
+    const scaler_geom_info_t* gi = scaler_geom_info(geom);
+    unsigned units = gi->dst_rows_per_block;
+    unsigned dst_h = SCALER_SRC_H / gi->src_lines_per_block * units;
+    unsigned c;
+
+    reset_dst();
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_col_block(geom, SCALER_MODE_BLEND, lines, lookahead_col,
+                               dst.block, scratch.row, order));
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_col_block_444(geom, SCALER_MODE_BLEND, lines,
+                                   lookahead_col, pdst.block, scratch444.px,
+                                   order));
+    for (c = 0; c < units; c++) {
+        assert_packed_matches_565(pdst.block + SCALER_PACKED_BYTES((size_t)c
+                                                                   * dst_h),
+                                  dst.block + (size_t)c * dst_h, dst_h);
+    }
+    assert_packed_footprint(units * dst_h);
+}
+
+static void test_packed_col_block_is_the_565_col_block_quantised(void)
+{
+    assert_packed_col_block_matches(SCALER_GEOM_5_3, lookahead,
+                                    SCALER_COLS_ASCENDING);
+    assert_packed_col_block_matches(SCALER_GEOM_5_3, lookahead,
+                                    SCALER_COLS_DESCENDING);
+    assert_packed_col_block_matches(SCALER_GEOM_5_3, NULL,
+                                    SCALER_COLS_DESCENDING);
+}
+
+/*
+ * The nibble order, against hand-computed bytes, because the comparison above
+ * decodes with the same convention it is checking. A source line alternating
+ * pure red and pure blue makes output pixels 0 and 1 of the first row
+ * different — 0xF800 pure, then avg565(0xF800, 0x001F) = 0x780F — so a packer
+ * that put the pair in the other order fails here and nowhere else.
+ *
+ *   0xF800 -> R 31 >> 1 = 15, G 0, B 0             -> 0xF00
+ *   0x780F -> R 15 >> 1 = 7,  G 0, B 15 >> 1 = 7   -> 0x707
+ *
+ * which share bytes F0, 07, 07.
+ */
+static void test_packed_pairs_land_in_the_documented_nibble_order(void)
+{
+    unsigned i;
+
+    for (i = 0; i < SCALER_SRC_W; i++) {
+        src[0][i] = (uint16_t)((i & 1u) ? 0x001Fu : 0xF800u);
+    }
+    reset_dst();
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_block_444(SCALER_GEOM_5_3, SCALER_MODE_BLEND, lines,
+                               lookahead, pdst.block, scratch444.px));
+    TEST_ASSERT_EQUAL_HEX8(0xF0u, pdst.block[0]);
+    TEST_ASSERT_EQUAL_HEX8(0x07u, pdst.block[1]);
+    TEST_ASSERT_EQUAL_HEX8(0x07u, pdst.block[2]);
+    TEST_ASSERT_EQUAL_HEX16(0xF00u, packed_px(pdst.block, 0));
+    TEST_ASSERT_EQUAL_HEX16(0x707u, packed_px(pdst.block, 1));
+}
+
+/* The tail is one column and its own byte count: dst_h * 3 / 2, with the next
+ * column's bytes untouched, which is what lets the consumer place it at a
+ * whole-column offset. */
+static void test_packed_col_tail_is_one_column_of_bytes(void)
+{
+    const scaler_geom_info_t* gi = scaler_geom_info(SCALER_GEOM_5_3);
+    unsigned dst_h = SCALER_SRC_H / gi->src_lines_per_block
+                     * gi->dst_rows_per_block;
+
+    reset_dst();
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_col_tail(SCALER_GEOM_5_3, SCALER_MODE_BLEND, lines,
+                              dst.block));
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_col_tail_444(SCALER_GEOM_5_3, SCALER_MODE_BLEND, lines,
+                                  pdst.block, scratch444.px));
+    assert_packed_matches_565(pdst.block, dst.block, dst_h);
+    assert_packed_footprint(dst_h);
+}
+
+/*
+ * Two refusals of the packed path's own, beside the 565 calls' reasons. An
+ * odd output height has no byte-aligned layout — the next column would start
+ * in the second nibble of a byte no offset can name — and NEAREST has no
+ * consumer, so it is refused rather than carried.
+ */
+static void test_packed_rejects_nearest_and_an_odd_slice(void)
+{
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_block_444(SCALER_GEOM_5_3, SCALER_MODE_NEAREST, lines,
+                               lookahead, pdst.block, scratch444.px));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_block_444(SCALER_GEOM_5_3, SCALER_MODE_NEAREST,
+                                   lines, lookahead, pdst.block,
+                                   scratch444.px, SCALER_COLS_ASCENDING));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_tail_444(SCALER_GEOM_5_3, SCALER_MODE_NEAREST, lines,
+                                  pdst.block, scratch444.px));
+
+    /* One group is five output rows, which is odd; two are ten, which is not
+     * — so the rule is about the range, not about ranges. */
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_rows_444(SCALER_GEOM_5_3, SCALER_MODE_BLEND, lines,
+                                  lookahead, pdst.block, scratch444.px,
+                                  SCALER_COLS_ASCENDING, 0, 3));
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_col_rows_444(SCALER_GEOM_5_3, SCALER_MODE_BLEND, lines,
+                                  lookahead, pdst.block, scratch444.px,
+                                  SCALER_COLS_ASCENDING, 0, 6));
+
+    reset_dst();
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_block_444(SCALER_GEOM_5_3, SCALER_MODE_BLEND, NULL,
+                               lookahead, pdst.block, scratch444.px));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_block_444(SCALER_GEOM_5_3, SCALER_MODE_BLEND, lines,
+                               lookahead, NULL, scratch444.px));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_block_444(SCALER_GEOM_5_3, SCALER_MODE_BLEND, lines,
+                               lookahead, pdst.block, NULL));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_col_tail_444(SCALER_GEOM_5_3, SCALER_MODE_BLEND, lines,
+                                  pdst.block, NULL));
+    TEST_ASSERT_EQUAL_INT(SCALER_ERR_ARGS,
+        scaler_scale_block_444((enum scaler_geom_e)7, SCALER_MODE_BLEND,
+                               lines, lookahead, pdst.block, scratch444.px));
+    /* A rejected call writes nothing. */
+    assert_packed_footprint(0u);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -969,5 +1228,10 @@ int main(void)
     RUN_TEST(test_col_ranges_join_seamlessly);
     RUN_TEST(test_col_ranges_reject_a_partial_group);
     RUN_TEST(test_col_null_and_unknown_arguments_are_rejected);
+    RUN_TEST(test_packed_row_block_is_the_565_block_quantised);
+    RUN_TEST(test_packed_col_block_is_the_565_col_block_quantised);
+    RUN_TEST(test_packed_pairs_land_in_the_documented_nibble_order);
+    RUN_TEST(test_packed_col_tail_is_one_column_of_bytes);
+    RUN_TEST(test_packed_rejects_nearest_and_an_odd_slice);
     return UNITY_END();
 }

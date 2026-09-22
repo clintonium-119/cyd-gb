@@ -57,6 +57,14 @@ static uint16_t cols[SCALER_SRC_W][GB_RUNNER_H];
 static const uint16_t* col_ptrs[SCALER_SRC_W];
 static uint16_t col_frame[FRAME_MAX_PX];
 
+/* The same frame packed: two pixels in three bytes, with a tail of canary
+ * bytes so a walk that wrote a pixel count where bytes were meant runs into
+ * them rather than off the end. */
+#define PACKED_FRAME_BYTES (FRAME_MAX_PX * 3 / 2)
+#define PACKED_CANARY 0xC5u
+static uint8_t packed_frame[PACKED_FRAME_BYTES + 16];
+static uint16_t scratch444[SCALER_SCRATCH_444_MAX];
+
 void setUp(void)
 {
 }
@@ -200,6 +208,144 @@ static unsigned scale_frame_col(enum scaler_geom_e geom,
         scaler_scale_col_tail(geom, mode, &col_ptrs[blocks * src_units],
                               col_frame + (size_t)blocks * dst_units * dst_h));
     return dst_h;
+}
+
+/* The 565 frame's two walks again, packed. Same block placement, same tail,
+ * same lookahead rule; only the destination's units are bytes. */
+static void scale_frame_packed(enum scaler_geom_e geom)
+{
+    const scaler_geom_info_t* gi = scaler_geom_info(geom);
+    unsigned blocks = GB_RUNNER_H / gi->src_lines_per_block;
+    unsigned b;
+
+    for (b = 0; b < sizeof(packed_frame); b++) {
+        packed_frame[b] = PACKED_CANARY;
+    }
+    for (b = 0; b < blocks; b++) {
+        unsigned first = b * gi->src_lines_per_block;
+        const uint16_t* lookahead =
+            (b + 1u < blocks) ? line_ptrs[first + gi->src_lines_per_block]
+                              : NULL;
+        TEST_ASSERT_EQUAL_INT(SCALER_OK,
+            scaler_scale_block_444(geom, SCALER_MODE_BLEND,
+                                   &line_ptrs[first], lookahead,
+                                   packed_frame
+                                   + SCALER_PACKED_BYTES((size_t)b
+                                       * gi->dst_rows_per_block * gi->dst_w),
+                                   scratch444));
+    }
+}
+
+static unsigned scale_frame_col_packed(enum scaler_geom_e geom)
+{
+    const scaler_geom_info_t* gi = scaler_geom_info(geom);
+    unsigned src_units = gi->src_lines_per_block;
+    unsigned dst_units = gi->dst_rows_per_block;
+    unsigned dst_h = GB_RUNNER_H / src_units * dst_units;
+    unsigned blocks = SCALER_SRC_W / src_units;
+    unsigned b;
+
+    for (b = 0; b < sizeof(packed_frame); b++) {
+        packed_frame[b] = PACKED_CANARY;
+    }
+    for (b = 0; b < blocks; b++) {
+        unsigned first = b * src_units;
+        const uint16_t* lookahead = (first + src_units < SCALER_SRC_W)
+            ? col_ptrs[first + src_units] : NULL;
+        TEST_ASSERT_EQUAL_INT(SCALER_OK,
+            scaler_scale_col_block_444(geom, SCALER_MODE_BLEND,
+                                       &col_ptrs[first], lookahead,
+                                       packed_frame
+                                       + SCALER_PACKED_BYTES((size_t)b
+                                           * dst_units * dst_h),
+                                       scratch444, SCALER_COLS_ASCENDING));
+    }
+    TEST_ASSERT_EQUAL_INT(SCALER_OK,
+        scaler_scale_col_tail_444(geom, SCALER_MODE_BLEND,
+                                  &col_ptrs[blocks * src_units],
+                                  packed_frame
+                                  + SCALER_PACKED_BYTES((size_t)blocks
+                                      * dst_units * dst_h),
+                                  scratch444));
+    return dst_h;
+}
+
+/* The truncation, restated from the 565 field layout rather than from the
+ * packer's masks. */
+static unsigned quant444(uint16_t c)
+{
+    unsigned r = (unsigned)((c >> 11) & 0x1Fu);
+    unsigned g = (unsigned)((c >> 5) & 0x3Fu);
+    unsigned b = (unsigned)(c & 0x1Fu);
+
+    return ((r >> 1) << 8) | ((g >> 2) << 4) | (b >> 1);
+}
+
+/* Pixel i out of the packed stream: byte 0 = R0 G0, byte 1 = B0 R1,
+ * byte 2 = G1 B1. */
+static unsigned packed_px(size_t i)
+{
+    size_t b = (i >> 1) * 3u;
+
+    if (i & 1u) {
+        return (unsigned)(((packed_frame[b + 1] & 0x0Fu) << 8)
+                          | packed_frame[b + 2]);
+    }
+    return (unsigned)((packed_frame[b] << 4) | (packed_frame[b + 1] >> 4));
+}
+
+static void assert_packed_frame_matches(const uint16_t* src565, unsigned n)
+{
+    size_t used = SCALER_PACKED_BYTES(n);
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        char msg[80];
+
+        if (quant444(src565[i]) == packed_px(i)) {
+            continue;
+        }
+        sprintf(msg, "packed pixel %u is %03X, not %03X", (unsigned)i,
+                packed_px(i), quant444(src565[i]));
+        TEST_ASSERT_EQUAL_HEX16_MESSAGE(quant444(src565[i]), packed_px(i),
+                                        msg);
+    }
+    for (i = used; i < sizeof(packed_frame); i++) {
+        TEST_ASSERT_EQUAL_HEX8_MESSAGE(PACKED_CANARY, packed_frame[i],
+            "the packed frame is not width * height * 3 / 2 bytes");
+    }
+}
+
+/*
+ * A whole dmg-acid2 frame through both packed walks, against the same frame
+ * in 565. This is the round trip the phase rests on: the picture the panel
+ * gets is the 565 picture with four bits a channel dropped, and nothing else
+ * — no channel shifted, no pair swapped, no column landing a nibble out.
+ *
+ * The frame is the fixture rather than a gradient because a DMG title's
+ * colours ARE its colourised ramps, so this is where a quantisation that
+ * collapses two neighbouring shades into one would show.
+ *
+ * It also pins the packed walks' agreement with each other, transitively:
+ * the column walk transposes the row walk to one channel step above, and
+ * quantisation cannot widen that — floor of a bounded difference is bounded
+ * by it.
+ */
+static void test_packed_frame_is_the_565_frame_quantised(void)
+{
+    const scaler_geom_info_t* gi = scaler_geom_info(SCALER_GEOM_5_3);
+    unsigned dst_h;
+
+    render_source_lines();
+
+    (void)scale_frame_and_hash(SCALER_GEOM_5_3, SCALER_MODE_BLEND, 240u);
+    scale_frame_packed(SCALER_GEOM_5_3);
+    assert_packed_frame_matches(frame, 240u * gi->dst_w);
+
+    dst_h = scale_frame_col(SCALER_GEOM_5_3, SCALER_MODE_BLEND);
+    TEST_ASSERT_EQUAL_UINT(240u, dst_h);
+    TEST_ASSERT_EQUAL_UINT(dst_h, scale_frame_col_packed(SCALER_GEOM_5_3));
+    assert_packed_frame_matches(col_frame, dst_h * gi->dst_w);
 }
 
 /* The largest per-channel gap between two RGB565 pixels. */
@@ -369,5 +515,6 @@ int main(void)
     RUN_TEST(test_blend_differs_from_nearest);
     RUN_TEST(test_column_walk_transposes_the_row_walk);
     RUN_TEST(test_5_3_tail_column_is_the_last_source_column);
+    RUN_TEST(test_packed_frame_is_the_565_frame_quantised);
     return UNITY_END();
 }
