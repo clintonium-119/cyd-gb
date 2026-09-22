@@ -137,7 +137,9 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
     d->trim_state = DIAG_TRIM_IDLE;
     /* Either way is a guess until a run has been measured against another.
      * Shortening the porch speeds the panel up, which is the direction a
-     * panel running slow needs, and one of the two has to go first. */
+     * panel running slow needs, and one of the two has to go first. A unit
+     * that has been calibrated before does better than guess: its binding
+     * hands the stored direction back through diag_trim_set_dir(). */
     d->trim_dir = +1;
     d->trim_marks = 0;
     d->trim_frames = 0;
@@ -633,6 +635,19 @@ bool diag_trim_unsaved(const diag_t* d)
     }
     return d->trim_fpa != d->stored_trim_fpa
         || d->trim_ratio != d->stored_trim_ratio;
+}
+
+int8_t diag_trim_dir(const diag_t* d)
+{
+    return (d != NULL) ? d->trim_dir : (int8_t)+1;
+}
+
+void diag_trim_set_dir(diag_t* d, int8_t dir)
+{
+    if (d == NULL) {
+        return;
+    }
+    d->trim_dir = (dir < 0) ? (int8_t)-1 : (int8_t)+1;
 }
 
 /*

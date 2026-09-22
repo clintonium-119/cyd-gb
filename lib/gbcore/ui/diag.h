@@ -387,7 +387,13 @@ typedef struct diag_s {
     uint8_t trim_state;       /* enum diag_trim_state_e                     */
     /* Which way the last correction moved the porch. Never asked of the
      * builder: a correction that made the interval shorter went the wrong
-     * way, and the page reads that off its own two measurements. */
+     * way, and the page reads that off its own two measurements.
+     *
+     * It travels with the porch into the store, because a direction the page
+     * only learns from a SECOND run is worthless to a builder who power-cycles
+     * between rounds — they would re-guess at every boot, and against a porch
+     * already near its null that guess walks a correctly trimmed unit away
+     * from it. */
     int8_t trim_dir;
     uint8_t trim_marks;       /* crossings marked this run                  */
     uint8_t trim_pat;         /* enum diag_trim_pat_e                       */
@@ -533,6 +539,19 @@ void diag_trim_stored(const diag_t* d, uint8_t* fpa, uint8_t* ratio);
 /* True when the working porch is not the stored one — so the value on screen
  * is not the value a power cycle brings back. */
 bool diag_trim_unsaved(const diag_t* d);
+
+/*
+ * The direction the loop is currently correcting in, and the restore that
+ * puts a stored one back. Saved beside the porch and handed back after
+ * diag_init(), so the first run of a boot continues the last session's
+ * convergence instead of starting the guess over.
+ *
+ * Any non-negative value restores +1 — shorten the porch — which is the guess
+ * a unit that has never been calibrated starts from. One place knows the
+ * encoding, the same stance the porch's own clamp takes.
+ */
+int8_t diag_trim_dir(const diag_t* d);
+void diag_trim_set_dir(diag_t* d, int8_t dir);
 
 /* The page's name, for its header and for the serial line on every switch.
  * NULL for DIAG_PAGE_COUNT and anything past it. */

@@ -449,6 +449,11 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
         Serial.println("[DIAG] state refused the window");
         return;
     }
+    // After the init, which opens on the uncalibrated guess. A unit that has
+    // been trimmed before carries the direction its last session converged
+    // in, so this boot's first run continues that convergence instead of
+    // starting the guess over and walking a good porch off its null.
+    diag_trim_set_dir(&d, s->trim_dir);
     combo_init(&combo);
     mix_init(&mixer, (uint32_t)micros());
     tone_init(&tone_st, TONE_HZ, SPEAKER_SAMPLE_RATE);
@@ -489,9 +494,15 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
         }
         if (flags & DIAG_EV_SAVE_TRIM) {
             diag_trim(&d, &s->trim_fpa, &s->trim_ratio);
+            s->trim_dir = diag_trim_dir(&d);
             settings_save(s);
-            Serial.printf("[DIAG] trim saved porch %u + %u/64\n",
-                          (unsigned)s->trim_fpa, (unsigned)s->trim_ratio);
+            // The direction as a word, not as its sign: +1 means the loop is
+            // SHORTENING the porch, which is the opposite sign to the page's
+            // "Last move" row, and two conventions for one fact is how a
+            // bench session gets read backwards.
+            Serial.printf("[DIAG] trim saved porch %u + %u/64, %s\n",
+                          (unsigned)s->trim_fpa, (unsigned)s->trim_ratio,
+                          (s->trim_dir < 0) ? "lengthening" : "shortening");
         }
         if (flags & DIAG_EV_TRIM_FIXTURE) {
             int8_t vx = 0;

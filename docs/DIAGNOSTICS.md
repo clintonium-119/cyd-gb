@@ -61,8 +61,14 @@ Work down the list. Write the result in the blank; a blank you cannot fill is th
     corrected itself once. Read **Crossing** — that is how long it was taking — and do it again. Each
     round should leave a longer interval than the one before.
 
-    Stop when the crossings are further apart than you are willing to sit and count, or when **Last move**
-    reads `none left to give`, which means the panel cannot be trimmed any finer. Then press **A** to save.
+    Stop when the crossings are further apart than you are willing to sit and count, when **Last move**
+    reads `none left to give`, or **when the seam stops sweeping one way**. That last one is the real
+    finish line and it does not look like success the first time you meet it: the seam takes an age to
+    appear, crawls part of the way across, and may then turn round and go back out the side it came
+    from. Nothing is wrong. Past about six minutes between crossings the two rates differ by under
+    fifty parts in a million, and at that distance the panel's crystal and the board's own drift with
+    temperature by about as much as is left to correct — so which of them is ahead changes while you
+    sit there. There is nothing further to null. Press **A** and write the porch down. Then press **A** to save.
 
     **Watch the Stored row.** Every run ends by moving the porch itself, so what is on screen stops
     being what a power cycle brings back until you save it — the page says `A to save` and turns both
@@ -100,7 +106,11 @@ Work down the list. Write the result in the blank; a blank you cannot fill is th
 
     *If it will not settle:* an interval that gets **shorter** on the round after a correction is normal
     once — the unit does not know which way to go until it has tried one — but twice in a row means you are
-    marking something other than the seam wrapping. An interval that never grows past a few seconds however
+    marking something other than the seam wrapping. The exception is the finish line above: once the seam
+    has stopped sweeping one way, a shorter interval is you catching it on a wander, not a bad count, and
+    the answer is to stop rather than to keep going. That first blind round is once per unit, not once per
+    sitting: saving stores which way the unit was going along with the porch, so coming back to a unit you
+    trimmed last week picks up where you left off rather than guessing again. An interval that never grows past a few seconds however
     many rounds you do, or a Porch that ends up at `1 + 0/64` or `126 + 63/64`, is this panel's oscillator
     being further out than the trim can reach. That is the fault you came to find; write down what it
     reached: `____`.

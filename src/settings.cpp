@@ -36,6 +36,10 @@ void settings_defaults(settings_t* s) {
     // overwrites both from the store.
     s->trim_fpa = PANEL_TRIM_FPA;
     s->trim_ratio = PANEL_TRIM_RATIO;
+    // Shorten. A unit with no calibration behind it has no measured
+    // direction either, so this is the trim page's own opening guess, held
+    // here so the two cannot drift apart.
+    s->trim_dir = +1;
 }
 
 bool settings_load(settings_t* s) {
@@ -50,6 +54,7 @@ bool settings_load(settings_t* s) {
         s->game_y = prefs.getShort("gy", s->game_y);
         s->trim_fpa = prefs.getUChar("tfpa", s->trim_fpa);
         s->trim_ratio = prefs.getUChar("trat", s->trim_ratio);
+        s->trim_dir = prefs.getChar("tdir", s->trim_dir);
     }
     prefs.end();
 
@@ -92,6 +97,14 @@ bool settings_load(settings_t* s) {
     if (s->trim_ratio > 63) {
         s->trim_ratio = 63;
     }
+    // The only two values the loop can act on. A store written by an older
+    // firmware carries no key at all and lands on the default; anything else
+    // is a corrupt read, and shortening is what an uncalibrated unit does.
+    if (s->trim_dir >= 0) {
+        s->trim_dir = +1;
+    } else {
+        s->trim_dir = -1;
+    }
     return has;
 }
 
@@ -105,6 +118,7 @@ void settings_save(const settings_t* s) {
     prefs.putShort("gy", s->game_y);
     prefs.putUChar("tfpa", s->trim_fpa);
     prefs.putUChar("trat", s->trim_ratio);
+    prefs.putChar("tdir", s->trim_dir);
     prefs.end();
 }
 

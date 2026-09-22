@@ -734,6 +734,48 @@ static void test_a_run_that_helped_keeps_going_the_same_way(void)
                      < ((int32_t)TRIM_FPA * 64 + TRIM_RATIO - after_first));
 }
 
+static void test_a_restored_direction_survives_into_the_first_run(void)
+{
+    int32_t before;
+
+    /* What a boot does for a unit whose last session converged by
+     * lengthening the porch: the binding hands the stored direction back
+     * after diag_init(), and the first run continues that way instead of
+     * re-guessing downward and walking a good porch off its null. */
+    diag_trim_set_dir(&d, -1);
+    TEST_ASSERT_EQUAL_INT8(-1, diag_trim_dir(&d));
+
+    goto_page(DIAG_PAGE_TRIM);
+    before = trim_x64_of();
+    trim_run(600);
+    TEST_ASSERT_TRUE(trim_x64_of() > before);
+}
+
+static void test_the_restored_direction_is_clamped_to_the_two_it_can_be(void)
+{
+    /* Anything the store hands back that is not a direction restores the
+     * uncalibrated guess rather than being applied as a multiplier. */
+    diag_trim_set_dir(&d, 0);
+    TEST_ASSERT_EQUAL_INT8(+1, diag_trim_dir(&d));
+    diag_trim_set_dir(&d, 42);
+    TEST_ASSERT_EQUAL_INT8(+1, diag_trim_dir(&d));
+    diag_trim_set_dir(&d, -99);
+    TEST_ASSERT_EQUAL_INT8(-1, diag_trim_dir(&d));
+}
+
+static void test_a_reversal_is_what_the_save_would_store(void)
+{
+    goto_page(DIAG_PAGE_TRIM);
+
+    trim_run(4000);
+    TEST_ASSERT_EQUAL_INT8(+1, diag_trim_dir(&d));
+
+    /* The interval collapsed, so the loop reversed — and that reversal is the
+     * direction the binding reads at the save, not the one it opened on. */
+    trim_run(500);
+    TEST_ASSERT_EQUAL_INT8(-1, diag_trim_dir(&d));
+}
+
 static void test_a_run_too_long_to_correct_leaves_the_porch_alone(void)
 {
     int32_t before;
@@ -1503,6 +1545,9 @@ int main(void)
     RUN_TEST(test_the_correction_is_the_line_count_over_the_frames_counted);
     RUN_TEST(test_a_run_that_made_the_beat_worse_reverses_the_direction);
     RUN_TEST(test_a_run_that_helped_keeps_going_the_same_way);
+    RUN_TEST(test_a_restored_direction_survives_into_the_first_run);
+    RUN_TEST(test_the_restored_direction_is_clamped_to_the_two_it_can_be);
+    RUN_TEST(test_a_reversal_is_what_the_save_would_store);
     RUN_TEST(test_a_run_too_long_to_correct_leaves_the_porch_alone);
     RUN_TEST(test_a_bounced_mark_is_not_a_crossing);
     RUN_TEST(test_a_run_whose_marks_disagree_is_thrown_away);

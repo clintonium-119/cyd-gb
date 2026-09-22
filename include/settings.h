@@ -20,6 +20,12 @@ struct settings_t {
     // number does not travel between boards.
     uint8_t trim_fpa;
     uint8_t trim_ratio;
+    // Which way the trim loop's last correction moved that porch, +1 to
+    // shorten and -1 to lengthen. Stored with the porch it corrects, because
+    // the loop only learns the direction by comparing one run against the
+    // next: without this a builder who power-cycles between rounds re-guesses
+    // at every boot, and the guess walks an already-trimmed unit off its null.
+    int8_t trim_dir;
 };
 
 // volume is an index, not a level: design §4's vol_lut is {high, med, low} and
