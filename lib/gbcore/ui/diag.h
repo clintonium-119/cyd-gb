@@ -129,6 +129,21 @@ enum diag_nfc_state_e {
  * crossing — half a second at the emulator's cadence. */
 #define DIAG_TRIM_MIN_FRAMES 30
 
+/* How far the intervals in one run may disagree before the run is thrown
+ * away rather than averaged: longest over shortest, as a fraction.
+ *
+ * This is the guard against a count that was never a count. A builder who
+ * cannot make out the seam has no way to stop a run except by pressing the
+ * mark button until it ends, and those presses are indistinguishable from
+ * crossings one at a time — but not as a set: marking a real repeating event
+ * gives intervals within a few per cent of each other, and pressing at random
+ * does not. A missed crossing lands at exactly 2, so the threshold has to sit
+ * below that; reaction spread on even a two-second interval is nowhere near
+ * 1.5, so it can sit well below.
+ */
+#define DIAG_TRIM_SPREAD_NUM 3
+#define DIAG_TRIM_SPREAD_DEN 2
+
 /* The fixture's scroll, in output pixels per frame, as the page enters a run.
  * Vertical, because the column-major push makes the seam a vertical line with
  * a vertical displacement across it, and the documented procedure calibrates
@@ -339,7 +354,14 @@ typedef struct diag_s {
     int8_t span_vy;
     uint32_t trim_frames;     /* frames the binding has pushed this run     */
     uint32_t trim_first_frame; /* the frame count the first mark landed on   */
-    uint32_t trim_span;       /* mean frames per crossing, last run         */
+    uint32_t trim_last_mark;  /* frame count the last accepted mark landed on */
+    uint32_t trim_int_min;    /* shortest and longest interval this run       */
+    uint32_t trim_int_max;
+    /* The last run's marks disagreed too much to be a measurement, so no
+     * correction came out of it. Kept so the page can say so: silently
+     * declining to move would look like a page that had stopped working. */
+    bool trim_rejected;
+    uint32_t trim_span;       /* mean frames per crossing, last GOOD run      */
     uint32_t trim_prev_span;  /* the run before, for the direction test     */
     int16_t trim_step;        /* 64ths the last correction moved, signed    */
 } diag_t;
@@ -355,6 +377,8 @@ typedef struct diag_s {
  *   frameskip    stored frameskip, clamped into 0..DIAG_FRAMESKIP_MAX
  *   trim_fpa     stored front porch in whole lines, clamped into 1..126
  *   trim_ratio   stored 64ths of a line, clamped into 0..63
+ *   default_fpa  the compile-time porch B restores, clamped the same way
+ *   default_ratio
  *
  * A stored value that arrives out of range is clamped rather than refused:
  * the page has to show something, and a setting that repairs itself is better
@@ -367,7 +391,8 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
               int16_t win_w, int16_t win_h, int16_t x, int16_t y,
               int16_t default_x, int16_t default_y,
               uint8_t volume, uint8_t frameskip,
-              uint8_t trim_fpa, uint8_t trim_ratio);
+              uint8_t trim_fpa, uint8_t trim_ratio,
+              uint8_t default_fpa, uint8_t default_ratio);
 
 /*
  * One sample taken at now_ms: the combo event this call produced (an
@@ -445,8 +470,12 @@ void diag_trim_rate(const diag_t* d, int8_t* out_vx, int8_t* out_vy);
  * NULL for DIAG_TRIM_PAT_COUNT and anything past it. */
 const char* diag_trim_pat_name(uint8_t pat);
 
-/* The last run's mean frames between crossings, 0 before the first run. */
+/* The last good run's mean frames between crossings, 0 before the first one
+ * that produced a measurement. */
 uint32_t diag_trim_span(const diag_t* d);
+
+/* True when the last run's marks disagreed too much to average. */
+bool diag_trim_rejected(const diag_t* d);
 
 /* The page's name, for its header and for the serial line on every switch.
  * NULL for DIAG_PAGE_COUNT and anything past it. */

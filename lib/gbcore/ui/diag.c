@@ -91,7 +91,8 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
               int16_t win_w, int16_t win_h, int16_t x, int16_t y,
               int16_t default_x, int16_t default_y,
               uint8_t volume, uint8_t frameskip,
-              uint8_t trim_fpa, uint8_t trim_ratio)
+              uint8_t trim_fpa, uint8_t trim_ratio,
+              uint8_t default_fpa, uint8_t default_ratio)
 {
     if (d == NULL) {
         return DIAG_ERR_ARGS;
@@ -122,8 +123,15 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
 
     d->trim_fpa = (uint8_t)clamp_i16((int16_t)trim_fpa, 1, 126);
     d->trim_ratio = (uint8_t)clamp_i16((int16_t)trim_ratio, 0, 63);
-    d->default_trim_fpa = d->trim_fpa;
-    d->default_trim_ratio = d->trim_ratio;
+    /* The COMPILE-TIME porch, not the stored one — the same split the nudge
+     * page has between `x` and `default_x`, and for a sharper reason here.
+     * A correction lands on an arbitrary 64th, while the knobs step by 4 and
+     * by 64, so a porch the page has moved itself can never be walked back to
+     * a round number by hand: the value's remainder mod 4 is invariant under
+     * both knobs. Without a default that is a fixed number, there would be no
+     * way back to a known starting point at all. */
+    d->default_trim_fpa = (uint8_t)clamp_i16((int16_t)default_fpa, 1, 126);
+    d->default_trim_ratio = (uint8_t)clamp_i16((int16_t)default_ratio, 0, 63);
     d->trim_state = DIAG_TRIM_IDLE;
     /* Either way is a guess until a run has been measured against another.
      * Shortening the porch speeds the panel up, which is the direction a
@@ -140,6 +148,10 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
     d->span_vx = 0;
     d->span_vy = 0;
     d->trim_first_frame = 0;
+    d->trim_last_mark = 0;
+    d->trim_int_min = 0;
+    d->trim_int_max = 0;
+    d->trim_rejected = false;
     d->trim_span = 0;
     d->trim_prev_span = 0;
     d->trim_step = 0;
@@ -290,6 +302,10 @@ static void trim_run_begin(diag_t* d)
     d->trim_marks = 0;
     d->trim_frames = 0;
     d->trim_first_frame = 0;
+    d->trim_last_mark = 0;
+    d->trim_int_min = 0;
+    d->trim_int_max = 0;
+    d->trim_rejected = false;
     /* The pattern and the rates carry over between runs, because finding the
      * pair that shows a seam on this panel is the first thing a builder does
      * and having it reset every time would make that unbearable. The offset
@@ -390,11 +406,12 @@ static uint16_t trim_pat_step(diag_t* d)
 /*
  * A crossing, marked. The first one only starts the baseline — an interval
  * needs two — and the run ends on the mark that completes DIAG_TRIM_MARKS
- * intervals, applying the correction the marks imply.
+ * intervals, applying the correction the marks imply unless they disagree too
+ * much to be a measurement.
  */
 static uint16_t trim_mark(diag_t* d)
 {
-    uint32_t since;
+    uint32_t interval;
 
     if (d->trim_state != DIAG_TRIM_RUNNING) {
         return 0;
@@ -403,15 +420,24 @@ static uint16_t trim_mark(diag_t* d)
     if (d->trim_marks == 0) {
         d->trim_marks = 1;
         d->trim_first_frame = d->trim_frames;
+        d->trim_last_mark = d->trim_frames;
         return DIAG_EV_REDRAW;
     }
 
-    since = d->trim_frames - d->trim_first_frame;
-    /* A bounced button is not a crossing. Measured against the first mark
-     * rather than the last, because only the span matters and re-marking the
-     * same crossing twice would otherwise halve it. */
-    if (since < (uint32_t)DIAG_TRIM_MIN_FRAMES * d->trim_marks) {
+    /* A bounced button is not a crossing. The rejected press does not move
+     * the baseline, so two contacts on one crossing fold into that crossing's
+     * interval rather than splitting it in two. */
+    interval = d->trim_frames - d->trim_last_mark;
+    if (interval < (uint32_t)DIAG_TRIM_MIN_FRAMES) {
         return 0;
+    }
+    d->trim_last_mark = d->trim_frames;
+
+    if (d->trim_int_min == 0 || interval < d->trim_int_min) {
+        d->trim_int_min = interval;
+    }
+    if (interval > d->trim_int_max) {
+        d->trim_int_max = interval;
     }
 
     d->trim_marks++;
@@ -419,14 +445,30 @@ static uint16_t trim_mark(diag_t* d)
         return DIAG_EV_REDRAW;
     }
 
+    d->trim_state = DIAG_TRIM_IDLE;
+
+    /*
+     * Intervals that disagree by more than the threshold were not a count of
+     * one repeating event, so the run is thrown away rather than averaged.
+     * Nothing is written: not the span, not the previous span, not the
+     * direction — a bad run that left any of those behind would go on to
+     * decide the next good run's direction from a number that meant nothing.
+     */
+    if (d->trim_int_max * (uint32_t)DIAG_TRIM_SPREAD_DEN
+        > d->trim_int_min * (uint32_t)DIAG_TRIM_SPREAD_NUM) {
+        d->trim_rejected = true;
+        d->trim_step = 0;
+        return DIAG_EV_REDRAW | DIAG_EV_TRIM_STATE;
+    }
+
     /* marks - 1 intervals between the first mark and this one. */
     d->trim_prev_span = d->trim_span;
-    d->trim_span = since / (uint32_t)(d->trim_marks - 1u);
+    d->trim_span = (d->trim_frames - d->trim_first_frame)
+                 / (uint32_t)(d->trim_marks - 1u);
     d->span_pat = d->trim_pat;
     d->span_vx = d->trim_vx;
     d->span_vy = d->trim_vy;
     trim_apply(d);
-    d->trim_state = DIAG_TRIM_IDLE;
 
     return DIAG_EV_REDRAW | DIAG_EV_TRIM_STATE;
 }
@@ -562,6 +604,11 @@ void diag_trim(const diag_t* d, uint8_t* fpa, uint8_t* ratio)
 uint32_t diag_trim_span(const diag_t* d)
 {
     return (d != NULL) ? d->trim_span : 0u;
+}
+
+bool diag_trim_rejected(const diag_t* d)
+{
+    return (d != NULL) && d->trim_rejected;
 }
 
 /*

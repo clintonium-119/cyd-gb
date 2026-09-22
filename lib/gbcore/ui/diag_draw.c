@@ -566,7 +566,13 @@ static void page_trim(const ui_canvas_t* cv, const diag_layout_t* g,
     fixture_text(buf, sizeof(buf), diag_trim_pattern(d), vx, vy);
     kv_row(cv, g, 2, "Fixture", buf, COL_TEXT);
 
-    if (span > 0u) {
+    if (diag_trim_rejected(d)) {
+        /* Declining to move without saying so would look like a page that
+         * had stopped working, which is how a builder learns to distrust it. */
+        kv_row(cv, g, 3, "Crossing", "marks disagreed", COL_WARN);
+        full_row(cv, g, 4, "Nothing counted. Mark only the seam, and only"
+                           " when you can see it.", COL_WARN);
+    } else if (span > 0u) {
         uint32_t tenths = (span * 1000u + DIAG_TRIM_FPS_X100 / 2u)
                         / (uint32_t)DIAG_TRIM_FPS_X100;
 
@@ -585,6 +591,8 @@ static void page_trim(const ui_canvas_t* cv, const diag_layout_t* g,
     if (d->trim_step != 0) {
         snprintf(buf, sizeof(buf), "%+d/64", (int)-d->trim_step);
         kv_row(cv, g, 5, "Last move", buf, COL_TEXT);
+    } else if (diag_trim_rejected(d)) {
+        kv_row(cv, g, 5, "Last move", "none - run thrown away", COL_WARN);
     } else if (span > 0u) {
         /* A run long enough that the correction rounded to nothing is the
          * end of the road, not a failure: the register cannot express a
@@ -597,7 +605,8 @@ static void page_trim(const ui_canvas_t* cv, const diag_layout_t* g,
     snprintf(buf, sizeof(buf), "Start, then mark each of %u crossings",
              (unsigned)DIAG_TRIM_MARKS);
     full_row(cv, g, 7, buf, COL_DIM);
-    full_row(cv, g, 8, "In a run: D-pad scrolls, B changes pattern", COL_DIM);
+    full_row(cv, g, 8, "In a run: D-pad scrolls, B pattern, A gives up",
+             COL_DIM);
 
     if (diag_toast_active(d, now_ms)) {
         full_row(cv, g, 10, "Saved", COL_OK);

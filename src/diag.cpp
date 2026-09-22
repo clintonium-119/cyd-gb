@@ -368,7 +368,8 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
     }
     if (diag_init(&d, SCREEN_W, SCREEN_H, GAME_W, GAME_H, s->game_x,
                   s->game_y, GAME_X, GAME_Y, s->volume, s->frameskip,
-                  s->trim_fpa, s->trim_ratio)
+                  s->trim_fpa, s->trim_ratio, PANEL_TRIM_FPA,
+                  PANEL_TRIM_RATIO)
         != DIAG_OK) {
         Serial.println("[DIAG] state refused the window");
         return;
@@ -428,6 +429,10 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
                           (name != nullptr) ? name : "?", (int)vx, (int)vy);
         }
         if (flags & DIAG_EV_TRIM_STATE) {
+            if (diag_trim_rejected(&d)) {
+                Serial.println("[DIAG] trim run thrown away: the marks "
+                               "disagreed too much to average");
+            }
             if (diag_trim_running(&d)) {
                 if (trim_buffers()) {
                     // The fixture's four shades are the running palette's

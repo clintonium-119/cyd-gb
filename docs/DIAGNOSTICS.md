@@ -45,9 +45,14 @@ Work down the list. Write the result in the blank; a blank you cannot fill is th
 
     **If you cannot see a seam at all, change the picture until you can.** In a run the D-pad sets how
     fast and which way the field scrolls (Up/Down vertical, Left/Right sideways, through zero and out the
-    other side) and **B** cycles the pattern: `noise`, `check`, `stripe`, `grid`. The page starts on
-    `noise` scrolling up at 2 — that is the pair the trim is specified at, and the one to come back to
-    before you count. Nothing you do here is stored; it only changes what is on the glass.
+    other side), **B** cycles the pattern — `noise`, `check`, `stripe`, `grid` — and **A** gives up on the
+    run and puts the numbers back. Nothing you do here is stored; it only changes what is on the glass.
+    The page starts on `noise` scrolling up at 2, which is the pair the trim is specified at.
+
+    **Do not press Start to escape a run.** Start is the mark, so pressing it to get back to the numbers
+    is telling the unit it saw crossings it did not. A run whose marks disagree with each other is thrown
+    away rather than averaged — the page says `marks disagreed` and moves nothing — but leave by **A** and
+    the question does not arise.
 
     Press **Start** to begin, then press **Start** again each time the seam goes off one edge and
     reappears at the other. After the fourth press the screen goes back to the numbers, and the unit has
@@ -56,17 +61,20 @@ Work down the list. Write the result in the blank; a blank you cannot fill is th
 
     Stop when the crossings are further apart than you are willing to sit and count, or when **Last move**
     reads `none left to give`, which means the panel cannot be trimmed any finer. Then press **A** to save.
-    "Saved" appears for a moment. **B** puts the porch back to where you found it.
+    "Saved" appears for a moment. **B** puts the porch back to the **Default** shown on the page, which is
+    the compile-time value and not whatever you last saved — it is the way back to a clean start, and
+    after the page has corrected itself the D-pad alone cannot get you there.
 
     Under about fifteen seconds between crossings is not finished — keep going. Write down the final
     **Porch**, both numbers, and the **Counted on** line beside the crossing: `____`.
 
-    *Count on `noise` if you can.* The other three have more contrast and can be easier to spot a seam
-    in, which is why they are there — but each of them has a scroll speed at which a real seam becomes
-    **invisible**, because the pattern repeats and the two sides line up. `stripe` does it at 8, which the
-    D-pad can reach. `noise` has no repeat to line up with, so it cannot lie to you at any speed. If a
-    seam only ever shows up on one of the other three, count on it and say so in the blank — the reading
-    is still worth having, it just wants qualifying.
+    *Which pattern you count on does not bias the number.* The pattern only decides whether you can see
+    the seam; the count is you pressing Start at something real. So if the seam only shows up on `check`
+    or `grid`, count on that and write it in the blank. The one thing to avoid is a scroll speed at which
+    the pattern you are using goes **blind** — each of the repeating ones has one, because at that speed
+    the two sides of a real seam line up and it vanishes. `stripe` goes blind at 8, which the D-pad can
+    reach; `check` at 16 and `grid` at 32, which it cannot. `noise` has no repeat to line up with and
+    cannot go blind at any speed, which is why it is the default.
 
     *If it will not settle:* an interval that gets **shorter** on the round after a correction is normal
     once — the unit does not know which way to go until it has tried one — but twice in a row means you are

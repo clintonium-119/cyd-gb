@@ -28,6 +28,12 @@
 #define TRIM_FPA 20
 #define TRIM_RATIO 32
 
+/* And the compile-time porch B restores, a THIRD pair — distinct from both the
+ * stored value and the shipping constant, so a test that confused the two
+ * fails here rather than on a bench. */
+#define DEF_FPA 15
+#define DEF_RATIO 8
+
 #define WIN24_W 240
 #define WIN24_H 216
 #define WIN24_X_MAX 80
@@ -45,7 +51,7 @@ void setUp(void)
     memset(&d, 0, sizeof(d));
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&d, PANEL_W, PANEL_H, WIN24_W, WIN24_H, 40, 12, 40, 12,
-                  MIX_VOL_MED, 0, TRIM_FPA, TRIM_RATIO));
+                  MIX_VOL_MED, 0, TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
 }
 
 void tearDown(void)
@@ -96,17 +102,17 @@ static void test_init_rejects_null_and_a_window_bigger_than_the_panel(void)
 {
     TEST_ASSERT_EQUAL_INT(DIAG_ERR_ARGS,
         diag_init(NULL, PANEL_W, PANEL_H, WIN24_W, WIN24_H, 0, 0, 0, 0, 0, 0,
-                  TRIM_FPA, TRIM_RATIO));
+                  TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
     TEST_ASSERT_EQUAL_INT(DIAG_ERR_ARGS,
         diag_init(&d, PANEL_W, PANEL_H, PANEL_W + 1, WIN24_H,
-                  0, 0, 0, 0, 0, 0, TRIM_FPA, TRIM_RATIO));
+                  0, 0, 0, 0, 0, 0, TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
     TEST_ASSERT_EQUAL_INT(DIAG_ERR_ARGS,
         diag_init(&d, PANEL_W, PANEL_H, WIN24_W, PANEL_H + 1,
-                  0, 0, 0, 0, 0, 0, TRIM_FPA, TRIM_RATIO));
+                  0, 0, 0, 0, 0, 0, TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
     /* A window exactly the size of the panel is legal and leaves no slack. */
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&d, PANEL_W, PANEL_H, PANEL_W, PANEL_H, 0, 0, 0, 0, 0, 0,
-                  TRIM_FPA, TRIM_RATIO));
+                  TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
     TEST_ASSERT_EQUAL_INT16(0, d.x_max);
     TEST_ASSERT_EQUAL_INT16(0, d.y_max);
 }
@@ -115,7 +121,7 @@ static void test_init_clamps_a_stored_origin_and_the_default(void)
 {
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&d, PANEL_W, PANEL_H, WIN24_W, WIN24_H, 999, -5, 999, -5,
-                  MIX_VOL_HIGH, 0, TRIM_FPA, TRIM_RATIO));
+                  MIX_VOL_HIGH, 0, TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
     TEST_ASSERT_EQUAL_INT16(WIN24_X_MAX, x_of());
     TEST_ASSERT_EQUAL_INT16(0, y_of());
     TEST_ASSERT_EQUAL_INT16(WIN24_X_MAX, d.default_x);
@@ -126,7 +132,7 @@ static void test_init_clamps_a_stored_volume_and_frameskip(void)
 {
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&d, PANEL_W, PANEL_H, WIN24_W, WIN24_H, 0, 0, 0, 0,
-                  200, 200, 200, 200));
+                  200, 200, 200, 200, 200, 200));
     TEST_ASSERT_EQUAL_UINT8(MIX_VOL_OFF, diag_volume(&d));
     TEST_ASSERT_EQUAL_UINT8(DIAG_FRAMESKIP_MAX, diag_frameskip(&d));
 }
@@ -279,7 +285,7 @@ static void test_the_nudge_clamps_at_the_panel_edges_in_a_260x234_window(void)
 {
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&d, PANEL_W, PANEL_H, WIN26_W, WIN26_H, 30, 3, 30, 3,
-                  MIX_VOL_MED, 0, TRIM_FPA, TRIM_RATIO));
+                  MIX_VOL_MED, 0, TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
     goto_page(DIAG_PAGE_NUDGE);
 
     hammer(COMBO_BTN_RIGHT, 100);
@@ -575,7 +581,7 @@ static void test_init_clamps_a_stored_porch_into_what_the_register_holds(void)
 
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&d, PANEL_W, PANEL_H, WIN24_W, WIN24_H, 0, 0, 0, 0,
-                  MIX_VOL_MED, 0, 0, 200));
+                  MIX_VOL_MED, 0, 0, 200, DEF_FPA, DEF_RATIO));
     diag_trim(&d, &fpa, &ratio);
     /* A porch of 0 is a frame the panel cannot scan; 200 sixty-fourths would
      * carry into the whole-line count on the wrong frame. */
@@ -615,7 +621,7 @@ static void test_the_fine_knob_carries_into_the_whole_line_knob(void)
      * property the fixture this page replaces had and is worth keeping. */
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&d, PANEL_W, PANEL_H, WIN24_W, WIN24_H, 0, 0, 0, 0,
-                  MIX_VOL_MED, 0, 11, 60));
+                  MIX_VOL_MED, 0, 11, 60, DEF_FPA, DEF_RATIO));
     goto_page(DIAG_PAGE_TRIM);
 
     for (i = 0; i < 2; i++) {
@@ -762,6 +768,116 @@ static void test_a_bounced_mark_is_not_a_crossing(void)
     TEST_ASSERT_EQUAL_UINT32(600, diag_trim_span(&d));
 }
 
+
+/* Mark four crossings at the given intervals, which is one whole run. */
+static void trim_run_intervals(const unsigned* spans, unsigned n)
+{
+    unsigned i;
+
+    sample(COMBO_EVENT_NONE, COMBO_BTN_START, 0);
+    sample(COMBO_EVENT_NONE, 0, 0);
+    TEST_ASSERT_TRUE(diag_trim_running(&d));
+    for (i = 0; i < n; i++) {
+        run_frames_then_mark(spans[i]);
+    }
+}
+
+static void test_a_run_whose_marks_disagree_is_thrown_away(void)
+{
+    /* What a builder who cannot see the seam actually does: there is no way
+     * to stop a run except the mark button, so they press it until the run
+     * ends. One at a time those presses are indistinguishable from
+     * crossings; as a set they are not. */
+    static const unsigned random_ish[] = { 600, 200, 1500, 400 };
+    int32_t before;
+
+    goto_page(DIAG_PAGE_TRIM);
+    before = trim_x64_of();
+    trim_run_intervals(random_ish, 4);
+
+    TEST_ASSERT_FALSE(diag_trim_running(&d));
+    TEST_ASSERT_TRUE(diag_trim_rejected(&d));
+    /* Nothing moved and nothing was recorded. */
+    TEST_ASSERT_EQUAL_INT32(before, trim_x64_of());
+    TEST_ASSERT_EQUAL_UINT32(0, diag_trim_span(&d));
+    TEST_ASSERT_EQUAL_INT16(0, d.trim_step);
+}
+
+static void test_a_missed_crossing_is_thrown_away(void)
+{
+    /* The commonest honest mistake, and the one that must not be averaged:
+     * a skipped crossing doubles one interval and would halve the rate the
+     * run reports. */
+    static const unsigned missed_one[] = { 600, 1200, 600, 600 };
+    int32_t before;
+
+    goto_page(DIAG_PAGE_TRIM);
+    before = trim_x64_of();
+    trim_run_intervals(missed_one, 4);
+
+    TEST_ASSERT_TRUE(diag_trim_rejected(&d));
+    TEST_ASSERT_EQUAL_INT32(before, trim_x64_of());
+}
+
+static void test_a_builders_reaction_spread_is_not_a_disagreement(void)
+{
+    /* Two seconds of interval marked a third of a second early and late,
+     * which is about the worst a person does on a real repeating event, and
+     * has to pass — a guard that rejected honest counts would be worse than
+     * no guard. */
+    static const unsigned human[] = { 100, 140, 120, 130 };
+
+    goto_page(DIAG_PAGE_TRIM);
+    trim_run_intervals(human, 4);
+
+    TEST_ASSERT_FALSE(diag_trim_rejected(&d));
+    TEST_ASSERT_TRUE(diag_trim_span(&d) > 0u);
+}
+
+static void test_a_thrown_away_run_cannot_steer_the_next_good_one(void)
+{
+    int32_t after_good;
+    int32_t after_second;
+    static const unsigned junk[] = { 600, 200, 1500, 400 };
+
+    /*
+     * The defect this guard exists for. The direction reversal compares a
+     * run against the one before it, so a junk run left in that slot would
+     * decide a real run's direction from a number that meant nothing — and
+     * the porch would walk off on the strength of it.
+     */
+    goto_page(DIAG_PAGE_TRIM);
+    trim_run_intervals(junk, 4);
+    TEST_ASSERT_TRUE(diag_trim_rejected(&d));
+
+    /* The first GOOD run must behave exactly as a first run does: no
+     * previous span to compare against, so no reversal, so the porch
+     * shortens. */
+    trim_run(4000);
+    after_good = trim_x64_of();
+    TEST_ASSERT_TRUE(after_good < (int32_t)TRIM_FPA * 64 + TRIM_RATIO);
+    TEST_ASSERT_FALSE(diag_trim_rejected(&d));
+
+    /* And the reversal still works from there, on two real runs. */
+    trim_run(500);
+    after_second = trim_x64_of();
+    TEST_ASSERT_TRUE(after_second > after_good);
+}
+
+static void test_a_thrown_away_run_clears_on_the_next_run(void)
+{
+    static const unsigned junk[] = { 600, 200, 1500, 400 };
+
+    goto_page(DIAG_PAGE_TRIM);
+    trim_run_intervals(junk, 4);
+    TEST_ASSERT_TRUE(diag_trim_rejected(&d));
+
+    sample(COMBO_EVENT_NONE, COMBO_BTN_START, 5000);
+    sample(COMBO_EVENT_NONE, 0, 5010);
+    /* The warning belongs to the run that earned it, not to the page. */
+    TEST_ASSERT_FALSE(diag_trim_rejected(&d));
+}
+
 static void test_leaving_the_page_ends_a_run(void)
 {
     goto_page(DIAG_PAGE_TRIM);
@@ -791,15 +907,40 @@ static void test_a_abandons_a_run_and_saves_from_an_idle_page(void)
                       & DIAG_EV_SAVE_TRIM) != 0);
 }
 
-static void test_b_restores_the_porch_the_page_was_entered_with(void)
+static void test_b_restores_the_compile_time_porch_not_the_stored_one(void)
 {
     goto_page(DIAG_PAGE_TRIM);
     hammer(COMBO_BTN_RIGHT, 5);
     TEST_ASSERT_TRUE(trim_x64_of() != (int32_t)TRIM_FPA * 64 + TRIM_RATIO);
 
+    /*
+     * The compile-time porch, the same split the nudge page has between the
+     * stored origin and the one B restores — and load-bearing here in a way
+     * it is not there. A correction lands on an arbitrary 64th while the knobs
+     * step by 4 and by 64, so a porch the page has moved itself can never be
+     * walked back to a round number by hand: the remainder mod 4 survives
+     * both knobs. B is the only way back to a known starting point, so it has
+     * to lead somewhere fixed rather than to whatever was last saved.
+     */
     sample(COMBO_EVENT_NONE, COMBO_BTN_B, 900);
-    TEST_ASSERT_EQUAL_INT32((int32_t)TRIM_FPA * 64 + TRIM_RATIO,
-                            trim_x64_of());
+    TEST_ASSERT_EQUAL_INT32((int32_t)DEF_FPA * 64 + DEF_RATIO, trim_x64_of());
+}
+
+static void test_a_corrected_porch_cannot_be_walked_back_by_hand(void)
+{
+    int32_t landed;
+
+    /* The reason the test above matters, pinned so the day someone makes the
+     * fine step 1 and thinks B is redundant, this says why it was not. */
+    goto_page(DIAG_PAGE_TRIM);
+    trim_run(600);
+    landed = trim_x64_of();
+    TEST_ASSERT_NOT_EQUAL_INT32(0, landed % DIAG_TRIM_FINE);
+
+    hammer(COMBO_BTN_LEFT, 40);
+    hammer(COMBO_BTN_DOWN, 40);
+    TEST_ASSERT_NOT_EQUAL_INT32((int32_t)DEF_FPA * 64 + DEF_RATIO,
+                                trim_x64_of());
 }
 
 static void test_start_means_nothing_on_any_other_page(void)
@@ -1191,9 +1332,15 @@ int main(void)
     RUN_TEST(test_a_run_that_helped_keeps_going_the_same_way);
     RUN_TEST(test_a_run_too_long_to_correct_leaves_the_porch_alone);
     RUN_TEST(test_a_bounced_mark_is_not_a_crossing);
+    RUN_TEST(test_a_run_whose_marks_disagree_is_thrown_away);
+    RUN_TEST(test_a_missed_crossing_is_thrown_away);
+    RUN_TEST(test_a_builders_reaction_spread_is_not_a_disagreement);
+    RUN_TEST(test_a_thrown_away_run_cannot_steer_the_next_good_one);
+    RUN_TEST(test_a_thrown_away_run_clears_on_the_next_run);
     RUN_TEST(test_leaving_the_page_ends_a_run);
     RUN_TEST(test_a_abandons_a_run_and_saves_from_an_idle_page);
-    RUN_TEST(test_b_restores_the_porch_the_page_was_entered_with);
+    RUN_TEST(test_b_restores_the_compile_time_porch_not_the_stored_one);
+    RUN_TEST(test_a_corrected_porch_cannot_be_walked_back_by_hand);
     RUN_TEST(test_start_means_nothing_on_any_other_page);
     RUN_TEST(test_the_fixture_is_deterministic_in_its_block_coordinates);
     RUN_TEST(test_the_noise_field_uses_all_four_shades);

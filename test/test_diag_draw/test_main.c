@@ -12,6 +12,12 @@
 #define TRIM_FPA 20
 #define TRIM_RATIO 32
 
+/* And the compile-time porch B restores, a THIRD pair — distinct from both the
+ * stored value and the shipping constant, so a test that confused the two
+ * fails here rather than on a bench. */
+#define DEF_FPA 15
+#define DEF_RATIO 8
+
 /*
  * Framebuffer bounds suite — the exit criterion "every page renders on host in
  * a framebuffer test" made mechanical, the way the writer's suite did it.
@@ -313,7 +319,7 @@ static void draw_page(int16_t w, int16_t h, uint8_t page, uint8_t pattern,
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(w, h, &geom));
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&st, 320, 240, w, h, 40, 12, 40, 12, MIX_VOL_MED, 1,
-                  TRIM_FPA, TRIM_RATIO));
+                  TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
 
     for (i = 0; i < page; i++) {
         diag_input(&st, COMBO_EVENT_BRIGHT_UP, COMBO_BTN_SELECT, 0);
@@ -710,6 +716,7 @@ static void test_the_trim_page_shows_the_porch_it_would_store(void)
      * procedure asks for them. */
     TEST_ASSERT_TRUE(drew_text("Porch"));
     TEST_ASSERT_TRUE(drew_text("20 + 32/64"));
+    TEST_ASSERT_TRUE(drew_text("15 + 8/64"));
     /* And nothing measured yet, which has to read as absent rather than as a
      * zero-length crossing. */
     TEST_ASSERT_TRUE(drew_text("not counted yet"));
@@ -731,9 +738,10 @@ static void test_the_trim_page_follows_the_porch_as_it_is_stepped(void)
     diag_draw(&st, &data, &geom, &ck, 100, &cv);
     assert_clean();
     TEST_ASSERT_TRUE(drew_text("21 + 32/64"));
-    /* The default stays what the page was entered with, so B has somewhere
-     * to go back to and the builder can see where that is. */
-    TEST_ASSERT_TRUE(drew_text("20 + 32/64"));
+    /* The Default row is the compile-time porch, not the stored one, because
+     * that is where B leads — and after a correction it is the only value a
+     * builder can get back to. */
+    TEST_ASSERT_TRUE(drew_text("15 + 8/64"));
 }
 
 static void test_the_trim_page_shows_saved_only_while_the_toast_is_up(void)
@@ -790,7 +798,7 @@ static void test_a_null_argument_paints_nothing(void)
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(GEOM_24_W, GEOM_24_H, &geom));
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&st, 320, 240, GEOM_24_W, GEOM_24_H, 40, 12, 40, 12,
-                  MIX_VOL_MED, 0, TRIM_FPA, TRIM_RATIO));
+                  MIX_VOL_MED, 0, TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
 
     cv = canvas_over(&fk, &geom);
     diag_draw(NULL, &data, &geom, &ck, 0, &cv);
