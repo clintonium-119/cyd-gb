@@ -24,10 +24,14 @@ void display_set_trim(uint8_t fpa, uint8_t ratio);
 void display_clear(uint16_t color = TFT_BLACK);
 
 // ─── Wrapped text ───────────────────────────────────────────────────────────
-// Draws s across up to max_rows rows of `font`, breaking wherever max_w runs
-// out rather than at word boundaries — a file name has no useful break
-// points. The row pitch is the font's height plus two, so font 2 gives the
-// 18-px rows the boot screens have always used and font 1 gives 10.
+// Draws s across up to max_rows rows of `font`, breaking at the last space
+// that fits on the row. A run with no space in it — a file name, a path, a
+// UID — has no break point to prefer and still breaks wherever max_w runs
+// out, which is the behaviour those callers always had. The spaces a break
+// consumes are dropped, so no row opens with one.
+//
+// The row pitch is the font's height plus two, so font 2 gives the 18-px
+// rows the boot screens have always used and font 1 gives 10.
 //
 // The text datum and colour are the caller's: cx is whatever x that datum
 // makes it (a centre for MC_DATUM, a left edge for TL_DATUM). Returns the y
