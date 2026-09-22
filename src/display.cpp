@@ -534,6 +534,44 @@ static void swap565(uint16_t* px, size_t n)
     }
 }
 
+#ifdef PREVIEW_444
+// Bench only: what 12-bit colour would LOOK like, without building it.
+//
+// PHASE-02 packs RGB444 at the scaler's final store and pushes the packed
+// stream; the visible consequence is four bits per channel instead of 5-6-5,
+// and that consequence is the whole of what the phase risks. This reproduces
+// it one step further down — every pixel on its way to the panel is truncated
+// to 444 and expanded back into 565, so the picture is what the packed path
+// would draw while nothing about the scaler, the bridge, the DMA or COLMOD
+// has to change.
+//
+// Green loses the most: six bits to four. Red and blue lose one each. The
+// expansion replicates the high bits into the low ones, which is what a panel
+// does with a 444 value, so the ends of the range still reach full black and
+// full white rather than drifting dark.
+//
+// Costs time per pixel rather than saving it, which is the opposite of the
+// phase's point — this build is for the eye, never for the stopwatch.
+//
+//   PLATFORMIO_BUILD_FLAGS="-DPREVIEW_444 -DDEV_ROM_PATH='\"...\"'" \
+//     pio run -e cyd-gnuboy -t upload
+static void quantise444(uint16_t* px, size_t n)
+{
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        uint16_t c = px[i];
+        uint8_t r = (uint8_t)((c >> 12) & 0x0F);   // 5 bits -> 4
+        uint8_t g = (uint8_t)((c >> 7) & 0x0F);    // 6 bits -> 4
+        uint8_t b = (uint8_t)((c >> 1) & 0x0F);    // 5 bits -> 4
+
+        px[i] = (uint16_t)(((r << 1 | r >> 3) << 11)
+                         | ((g << 2 | g >> 2) << 5)
+                         | (b << 1 | b >> 3));
+    }
+}
+#endif
+
 void display_push_rows_dma(uint16_t* px, size_t n)
 {
     static bool complained = false;
@@ -545,6 +583,11 @@ void display_push_rows_dma(uint16_t* px, size_t n)
         }
         return;
     }
+#ifdef PREVIEW_444
+    // Ahead of the swap, for the same reason the swap is ahead of the wait:
+    // this block's buffer is not the one in flight.
+    quantise444(px, n);
+#endif
     // Before the wait, not after: this block's buffer is not the one in
     // flight, so swapping it is safe while the previous transfer runs.
     swap565(px, n);
