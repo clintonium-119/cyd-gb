@@ -218,6 +218,8 @@ static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info)
     const char* name;
     bool have_entry = false;
     bool have_art = false;
+    bool art_ok = false;
+    bool shot_ok = false;
     uint16_t* px;
 
     tft.fillRect(s->game_x, s->game_y, GAME_W, GAME_H, TFT_BLACK);
@@ -255,27 +257,36 @@ static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info)
         // no swap to do here.
         px = (uint16_t*)malloc(CART_ART_PX * sizeof(uint16_t));
         if (px) {
-            if (sd_media_read(ART_PATH, name, px, CART_ART_PX)) {
+            art_ok = sd_media_read(ART_PATH, name, px, CART_ART_PX);
+            if (art_ok) {
                 tft.pushImage(x, y, CART_ART_W, CART_ART_H, px);
-                have_art = true;
             }
-            if (sd_media_read(SHOT_PATH, name, px, CART_ART_PX)) {
+            shot_ok = sd_media_read(SHOT_PATH, name, px, CART_ART_PX);
+            if (shot_ok) {
                 tft.pushImage((int16_t)(x + CART_ART_W + CART_ART_GAP), y,
                               CART_ART_W, CART_ART_H, px);
-                have_art = true;
             }
             free(px);
         }
+        have_art = art_ok || shot_ok;
         if (have_art) {
             y = (int16_t)(y + CART_ART_H + CART_ART_GAP);
         }
 
-        // Which of the three lookups the card answered. Media coverage is
-        // partial across the library, so a sparse page is usually the card's
-        // state and not a fault here — this is the line that tells the two
-        // apart without opening the card on a computer.
-        Serial.printf("[INFO] '%s' catalog=%d art=%d desc=%d\n", name,
-                      (int)have_entry, (int)have_art, (int)(desc[0] != '\0'));
+        // What the card answered, one field per thing that can independently
+        // fail. Media coverage is partial across the library, so a sparse
+        // page is usually the card's state and not a fault here — but a
+        // failed allocation looks identical on the panel, which is why buf
+        // is reported separately from the two reads.
+        Serial.printf("[INFO] '%s' catalog=%d desc=%d buf=%d art=%d shot=%d\n",
+                      name, (int)have_entry, (int)(desc[0] != '\0'),
+                      (int)(px != NULL), (int)art_ok, (int)shot_ok);
+        if (!art_ok || !shot_ok) {
+            // The exact path that came up empty, so the card can be checked
+            // against it directly rather than by guessing at the stem rule.
+            Serial.printf("[INFO] wanted %s/<stem>%s and %s/<stem>%s\n",
+                          ART_PATH, ART_SUFFIX, SHOT_PATH, ART_SUFFIX);
+        }
 
         // Whatever is left between the art and the status line. A taller
         // geometry spends it on more of the description rather than on gap.
