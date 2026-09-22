@@ -82,6 +82,32 @@
 // any byte swap — averaging byte-swapped values mixes misaligned channel
 // fields and produces colour fringing.
 //
+// Packed output: the _444 entry points emit RGB444, two pixels in three
+// bytes, where their 565 counterparts emit one pixel in two. A quarter fewer
+// bytes reach the panel for the same pixels, which is the whole of the point;
+// the price is four bits per channel.
+//
+// The pack is the FINAL store, never the input to anything. Blending stays in
+// native RGB565 for the reason the Byte order note below gives, so a packed
+// call scales its source units into a caller-owned 565 scratch and packs each
+// output unit out of it on the way to dst. That is why the scratch is
+// (src_lines_per_block + 1) units where the 565 calls take one: a blend unit
+// reads two scaled units that must both still exist.
+//
+// Nibble order is the panel's: pixels p0 and p1 share three bytes as
+//
+//   byte 0 = R0 G0     byte 1 = B0 R1     byte 2 = G1 B1
+//
+// with each channel the top four bits of its 565 field. So an output unit is
+// unit_len * 3 / 2 bytes and MUST have an even unit_len, or the next one
+// would start mid-byte; every geometry's dst_w and dst_h is even, and a
+// partial column range whose output height is odd is rejected rather than
+// packed into a layout nothing can address.
+//
+// BLEND only. SCALER_MODE_NEAREST exists as the golden suite's A/B baseline
+// and nothing pushes it, so the packed entry points reject it rather than
+// carrying a second kernel no frame reaches.
+//
 // Pure C, no Arduino/ESP-IDF headers, no allocation: all buffers are
 // caller-owned.
 
@@ -98,6 +124,14 @@ extern "C" {
 #define SCALER_DST_H_MAX 240    /* tallest output column (5/3)           */
 #define SCALER_DST_ROWS_MAX 5   /* most output rows per block (5/3)      */
 #define SCALER_SRC_LINES_MAX 3  /* most source lines per block (5/3)     */
+
+/* Scratch one packed call needs, in pixels: one 565 unit per source unit the
+ * block consumes, plus one for the scaled lookahead. The row walk's unit is
+ * the wider of the two. */
+#define SCALER_SCRATCH_444_MAX ((SCALER_SRC_LINES_MAX + 1) * SCALER_DST_W_MAX)
+
+/* Bytes n pixels occupy packed. n must be even. */
+#define SCALER_PACKED_BYTES(n) ((size_t)(n) * 3u / 2u)
 
 enum scaler_result_e {
     SCALER_OK = 0,
@@ -226,6 +260,45 @@ int scaler_scale_col_rows(enum scaler_geom_e geom, enum scaler_mode_e mode,
  */
 int scaler_scale_col_tail(enum scaler_geom_e geom, enum scaler_mode_e mode,
                           const uint16_t* const* src_cols, uint16_t* dst);
+
+/*
+ * The packed counterparts of the four calls above: same geometry, same source
+ * units, same column order, BLEND only, and dst is BYTES rather than pixels —
+ * SCALER_PACKED_BYTES(pixels) of them, in the nibble order the Packed output
+ * note documents. dst is a byte buffer in the signature as well as in the
+ * prose, because a packed buffer sized as though it held uint16_t is three
+ * quarters of the frame and the compiler is the cheapest place to catch it.
+ *
+ *   scratch  SCALER_SCRATCH_444_MAX pixels, required; holds every scaled
+ *            source unit of the block and the scaled lookahead, which the
+ *            packed units are then built from
+ *
+ * Returns SCALER_OK, or SCALER_ERR_ARGS for the 565 calls' reasons plus two
+ * of its own: SCALER_MODE_NEAREST, and a column range whose output height is
+ * odd and so has no byte-aligned layout.
+ */
+int scaler_scale_block_444(enum scaler_geom_e geom, enum scaler_mode_e mode,
+                           const uint16_t* const* src_lines,
+                           const uint16_t* lookahead_line,
+                           uint8_t* dst, uint16_t* scratch);
+
+int scaler_scale_col_block_444(enum scaler_geom_e geom,
+                               enum scaler_mode_e mode,
+                               const uint16_t* const* src_cols,
+                               const uint16_t* lookahead_col,
+                               uint8_t* dst, uint16_t* scratch,
+                               enum scaler_col_order_e order);
+
+int scaler_scale_col_rows_444(enum scaler_geom_e geom, enum scaler_mode_e mode,
+                              const uint16_t* const* src_cols,
+                              const uint16_t* lookahead_col,
+                              uint8_t* dst, uint16_t* scratch,
+                              enum scaler_col_order_e order,
+                              unsigned src_first, unsigned src_rows);
+
+int scaler_scale_col_tail_444(enum scaler_geom_e geom, enum scaler_mode_e mode,
+                              const uint16_t* const* src_cols, uint8_t* dst,
+                              uint16_t* scratch);
 
 /*
  * Average of two native-bit-layout RGB565 pixels, per channel, without

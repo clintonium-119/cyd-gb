@@ -125,6 +125,62 @@ static void blend_line(uint16_t* dst, const uint16_t* a, const uint16_t* b,
 }
 
 /*
+ * One pixel's twelve bits: the top four of each 565 channel, in the panel's
+ * R G B order. Three masked shifts rather than a shift-and-mask per channel,
+ * because the masks are loop-invariant and the shifts are not.
+ */
+static inline __attribute__((always_inline)) unsigned to444(uint16_t c)
+{
+    return (unsigned)(((c & 0xF000u) >> 4) | ((c & 0x0780u) >> 3)
+                      | ((c & 0x001Eu) >> 1));
+}
+
+/*
+ * A pixel PAIR into the three bytes it shares. The pair is the unit of the
+ * format, not the pixel: one pixel alone would leave a half byte, which is
+ * why an output unit's length must be even.
+ */
+static inline __attribute__((always_inline)) void put_pair(uint8_t* d,
+                                                           uint16_t p0,
+                                                           uint16_t p1)
+{
+    unsigned v0 = to444(p0);
+    unsigned v1 = to444(p1);
+
+    d[0] = (uint8_t)(v0 >> 4);
+    d[1] = (uint8_t)((v0 << 4) | (v1 >> 8));
+    d[2] = (uint8_t)v1;
+}
+
+/* One finished 565 unit, packed into unit_len * 3 / 2 bytes. */
+static void pack_line(uint8_t* dst, const uint16_t* src, unsigned unit_len)
+{
+    unsigned x;
+
+    for (x = 0; x < unit_len; x += 2) {
+        put_pair(dst, src[x], src[x + 1]);
+        dst += 3;
+    }
+}
+
+/*
+ * A blend unit straight into packed bytes: the average is taken in 565, as
+ * avg565 requires, and never stored there. This is what keeps the pack from
+ * costing a second pass over the block — the blend units are the only ones
+ * that would otherwise have to be written twice.
+ */
+static void pack_blend_line(uint8_t* dst, const uint16_t* a, const uint16_t* b,
+                            unsigned unit_len)
+{
+    unsigned x;
+
+    for (x = 0; x < unit_len; x += 2) {
+        put_pair(dst, avg565(a[x], b[x]), avg565(a[x + 1], b[x + 1]));
+        dst += 3;
+    }
+}
+
+/*
  * Fixed 5/3 blend kernel — the shipped geometry, unrolled. Its group is small
  * enough to hold outright: four live source pixels become five output pixels.
  * The across-walk half keeps the generic path's two-pass shape regardless,
@@ -221,6 +277,47 @@ static void scale_block_5_3_blend(const uint16_t* const* src_lines,
 }
 
 /*
+ * The same kernel with a packed store. It cannot write its pure units into
+ * dst and read them back the way the 565 one does — they would be packed by
+ * then — so the three scaled source units live in scratch and every output
+ * unit is written to dst exactly once, packed. That is the whole structural
+ * difference, and it is why the pack costs a conversion per pixel rather than
+ * a second pass over the block.
+ *
+ * unit_step is in BYTES here, and negative for a descending column order.
+ * scratch is four units: the block's three source units, plus the scaled
+ * lookahead. avg(s, s) is s, so the frame's far edge packs unit 2 pure
+ * instead of blending it with itself.
+ */
+static void scale_block_5_3_blend_444(const uint16_t* const* src_lines,
+                                      const uint16_t* lookahead_line,
+                                      uint8_t* dst, uint16_t* scratch,
+                                      unsigned src_len, unsigned src_end,
+                                      ptrdiff_t unit_step, unsigned unit_len)
+{
+    uint16_t* s0 = scratch;
+    uint16_t* s1 = scratch + unit_len;
+    uint16_t* s2 = scratch + 2u * unit_len;
+    uint16_t* la = scratch + 3u * unit_len;
+
+    scale_line_5_3(src_lines[0], s0, src_len, src_end);
+    scale_line_5_3(src_lines[1], s1, src_len, src_end);
+    scale_line_5_3(src_lines[2], s2, src_len, src_end);
+
+    pack_line(dst, s0, unit_len);
+    pack_blend_line(dst + unit_step, s0, s1, unit_len);
+    pack_line(dst + 2 * unit_step, s1, unit_len);
+    pack_line(dst + 3 * unit_step, s2, unit_len);
+
+    if (lookahead_line != NULL) {
+        scale_line_5_3(lookahead_line, la, src_len, src_end);
+        pack_blend_line(dst + 4 * unit_step, s2, la, unit_len);
+    } else {
+        pack_line(dst + 4 * unit_step, s2, unit_len);
+    }
+}
+
+/*
  * The pattern-driven two-pass walk, which NEAREST always takes, and which the
  * 5/3 kernel above is checked against pixel for pixel. Axis-agnostic: dst is
  * dst_units contiguous units of unit_len pixels, whether those are rows of
@@ -301,7 +398,7 @@ static void scale_block_generic(const scaler_geom_info_t* gi,
  * buffer, or a NULL source unit. Fills *info on success.
  */
 static int check_args(enum scaler_geom_e geom, enum scaler_mode_e mode,
-                      const uint16_t* const* src_lines, const uint16_t* dst,
+                      const uint16_t* const* src_lines, const void* dst,
                       const uint16_t* scratch_row,
                       const scaler_geom_info_t** info)
 {
@@ -353,6 +450,29 @@ int scaler_scale_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
     return SCALER_OK;
 }
 
+int scaler_scale_block_444(enum scaler_geom_e geom, enum scaler_mode_e mode,
+                           const uint16_t* const* src_lines,
+                           const uint16_t* lookahead_line,
+                           uint8_t* dst, uint16_t* scratch)
+{
+    const scaler_geom_info_t* gi;
+    unsigned dst_w;
+    int rc = check_args(geom, mode, src_lines, dst, scratch, &gi);
+
+    if (rc != SCALER_OK) {
+        return rc;
+    }
+    if (mode != SCALER_MODE_BLEND) {
+        return SCALER_ERR_ARGS;
+    }
+    dst_w = gi->dst_w;
+
+    scale_block_5_3_blend_444(src_lines, lookahead_line, dst, scratch,
+                              SCALER_SRC_W, SCALER_SRC_W,
+                              (ptrdiff_t)SCALER_PACKED_BYTES(dst_w), dst_w);
+    return SCALER_OK;
+}
+
 /* Output column height: the along-column walk's src_units -> dst_units ratio
  * applied to the frame's 144 lines. 240. */
 static unsigned dst_h_of(const scaler_geom_info_t* gi)
@@ -361,12 +481,18 @@ static unsigned dst_h_of(const scaler_geom_info_t* gi)
            * gi->dst_rows_per_block;
 }
 
-int scaler_scale_col_rows(enum scaler_geom_e geom, enum scaler_mode_e mode,
-                          const uint16_t* const* src_cols,
-                          const uint16_t* lookahead_col,
-                          uint16_t* dst, uint16_t* scratch_col,
-                          enum scaler_col_order_e order,
-                          unsigned src_first, unsigned src_rows)
+/*
+ * Both column walks, 565 and packed, share one validation and one walk: they
+ * differ in the size of an output unit and in which kernel writes it, and a
+ * second copy of the range arithmetic would be a second place for the
+ * group-boundary rule to drift.
+ */
+static int col_rows_impl(enum scaler_geom_e geom, enum scaler_mode_e mode,
+                         const uint16_t* const* src_cols,
+                         const uint16_t* lookahead_col,
+                         void* dst, uint16_t* scratch_col,
+                         enum scaler_col_order_e order,
+                         unsigned src_first, unsigned src_rows, int packed)
 {
     const scaler_geom_info_t* gi;
     const uint16_t* off_cols[SCALER_SRC_LINES_MAX];
@@ -394,6 +520,13 @@ int scaler_scale_col_rows(enum scaler_geom_e geom, enum scaler_mode_e mode,
         return SCALER_ERR_ARGS;
     }
     slice_h = src_rows / src_units * gi->dst_rows_per_block;
+    if (packed) {
+        /* BLEND only, and an odd slice would put the next column's first
+         * pixel in the second nibble of a byte no address can name. */
+        if (mode != SCALER_MODE_BLEND || (slice_h & 1u) != 0u) {
+            return SCALER_ERR_ARGS;
+        }
+    }
 
     /* The walk covers src_rows, but a blend at the end of it may read one
      * past — into the next slice's first row, which is a real pixel. Only at
@@ -411,23 +544,75 @@ int scaler_scale_col_rows(enum scaler_geom_e geom, enum scaler_mode_e mode,
      * block, so the walk itself is unchanged: the panel's address window
      * fills in one fixed direction, and this is the only place that can put
      * the columns in that order without moving pixels twice. */
-    if (order == SCALER_COLS_DESCENDING) {
-        step = -(ptrdiff_t)slice_h;
-        dst += (size_t)(gi->dst_rows_per_block - 1u) * slice_h;
-    } else {
-        step = (ptrdiff_t)slice_h;
-    }
+    if (packed) {
+        uint8_t* at = (uint8_t*)dst;
+        unsigned unit_bytes = (unsigned)SCALER_PACKED_BYTES(slice_h);
 
-    if (mode == SCALER_MODE_BLEND) {
-        scale_block_5_3_blend(off_cols, off_look, dst, scratch_col,
-                              src_rows, src_end, step, slice_h);
+        if (order == SCALER_COLS_DESCENDING) {
+            step = -(ptrdiff_t)unit_bytes;
+            at += (size_t)(gi->dst_rows_per_block - 1u) * unit_bytes;
+        } else {
+            step = (ptrdiff_t)unit_bytes;
+        }
+        scale_block_5_3_blend_444(off_cols, off_look, at, scratch_col,
+                                  src_rows, src_end, step, slice_h);
         return SCALER_OK;
     }
 
-    scale_block_generic(gi, pattern_table[(unsigned)geom], 0,
-                        off_cols, off_look, dst, scratch_col,
-                        src_rows, src_end, step, slice_h);
+    {
+        uint16_t* at = (uint16_t*)dst;
+
+        if (order == SCALER_COLS_DESCENDING) {
+            step = -(ptrdiff_t)slice_h;
+            at += (size_t)(gi->dst_rows_per_block - 1u) * slice_h;
+        } else {
+            step = (ptrdiff_t)slice_h;
+        }
+
+        if (mode == SCALER_MODE_BLEND) {
+            scale_block_5_3_blend(off_cols, off_look, at, scratch_col,
+                                  src_rows, src_end, step, slice_h);
+            return SCALER_OK;
+        }
+
+        scale_block_generic(gi, pattern_table[(unsigned)geom], 0,
+                            off_cols, off_look, at, scratch_col,
+                            src_rows, src_end, step, slice_h);
+    }
     return SCALER_OK;
+}
+
+int scaler_scale_col_rows(enum scaler_geom_e geom, enum scaler_mode_e mode,
+                          const uint16_t* const* src_cols,
+                          const uint16_t* lookahead_col,
+                          uint16_t* dst, uint16_t* scratch_col,
+                          enum scaler_col_order_e order,
+                          unsigned src_first, unsigned src_rows)
+{
+    return col_rows_impl(geom, mode, src_cols, lookahead_col, dst, scratch_col,
+                         order, src_first, src_rows, 0);
+}
+
+int scaler_scale_col_rows_444(enum scaler_geom_e geom, enum scaler_mode_e mode,
+                              const uint16_t* const* src_cols,
+                              const uint16_t* lookahead_col,
+                              uint8_t* dst, uint16_t* scratch,
+                              enum scaler_col_order_e order,
+                              unsigned src_first, unsigned src_rows)
+{
+    return col_rows_impl(geom, mode, src_cols, lookahead_col, dst, scratch,
+                         order, src_first, src_rows, 1);
+}
+
+int scaler_scale_col_block_444(enum scaler_geom_e geom,
+                               enum scaler_mode_e mode,
+                               const uint16_t* const* src_cols,
+                               const uint16_t* lookahead_col,
+                               uint8_t* dst, uint16_t* scratch,
+                               enum scaler_col_order_e order)
+{
+    return col_rows_impl(geom, mode, src_cols, lookahead_col, dst, scratch,
+                         order, 0, SCALER_SRC_H, 1);
 }
 
 int scaler_scale_col_block(enum scaler_geom_e geom, enum scaler_mode_e mode,
@@ -475,6 +660,46 @@ int scaler_scale_col_tail(enum scaler_geom_e geom, enum scaler_mode_e mode,
         scale_line(src_cols[i], dst + (size_t)i * dst_h_of(gi),
                    pat, gi->src_lines_per_block, gi->dst_rows_per_block,
                    mode == SCALER_MODE_BLEND, SCALER_SRC_H, SCALER_SRC_H);
+    }
+    return SCALER_OK;
+}
+
+int scaler_scale_col_tail_444(enum scaler_geom_e geom, enum scaler_mode_e mode,
+                              const uint16_t* const* src_cols, uint8_t* dst,
+                              uint16_t* scratch)
+{
+    const scaler_geom_info_t* gi = scaler_geom_info(geom);
+    const scaler_pattern_t* pat;
+    unsigned tail;
+    unsigned dst_h;
+    unsigned i;
+
+    if (gi == NULL || mode != SCALER_MODE_BLEND) {
+        return SCALER_ERR_ARGS;
+    }
+    tail = SCALER_SRC_W % gi->src_lines_per_block;
+    if (tail == 0) {
+        return SCALER_OK; /* the group divides 160: nothing is left over */
+    }
+    if (src_cols == NULL || dst == NULL || scratch == NULL) {
+        return SCALER_ERR_ARGS;
+    }
+    for (i = 0; i < tail; i++) {
+        if (src_cols[i] == NULL) {
+            return SCALER_ERR_ARGS;
+        }
+    }
+    dst_h = dst_h_of(gi);
+
+    /* The same pattern walk the 565 tail takes, into scratch and then packed:
+     * one column of 240 a frame, which is what the 565 tail's own comment
+     * says is too little to earn a kernel. */
+    pat = pattern_table[(unsigned)geom];
+    for (i = 0; i < tail; i++) {
+        scale_line(src_cols[i], scratch, pat, gi->src_lines_per_block,
+                   gi->dst_rows_per_block, 1, SCALER_SRC_H, SCALER_SRC_H);
+        pack_line(dst + SCALER_PACKED_BYTES((size_t)i * dst_h), scratch,
+                  dst_h);
     }
     return SCALER_OK;
 }
