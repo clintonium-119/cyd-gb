@@ -7,6 +7,7 @@
 #include "hw_config.h"
 #include "nfc_cart.h"
 #include "render_config.h"
+#include "render/scaler.h"
 #include "sd_manager.h"
 #include "speaker.h"
 #include "audio/mix.h"
@@ -259,7 +260,19 @@ static void say_scanning()
 // buffer belongs to the driver until the transfer completes. Heap rather than
 // static — 10 KB would not fit in the static segment beside the frame path's
 // own buffers, and the diagnostic mode never returns, so nothing frees them.
-static uint16_t* trim_buf[2] = { nullptr, nullptr };
+//
+// In the panel's format, not in RGB565, for the same reason the transfer size
+// matches the frame path's: a fixture that wrote 16-bit pixels into a window
+// the frame path had put in 12-bit would push a third more bytes than the
+// game it is calibrating for, and the panel would read them as the wrong
+// pixels besides. trim_scratch holds one line in 565 on the way.
+#if PIXEL_PACKED
+typedef uint8_t trim_px_t;
+static uint16_t trim_scratch[TRIM_LINE_PX];
+#else
+typedef uint16_t trim_px_t;
+#endif
+static trim_px_t* trim_buf[2] = { nullptr, nullptr };
 
 // The fixture's pacer. One frame of silence per pushed frame, blocking on the
 // speaker's DMA queue — the emulator's own pacer, not an interval this loop
@@ -310,8 +323,13 @@ static bool trim_buffers()
     if (trim_buf[0] != nullptr) {
         return true;
     }
-    trim_buf[0] = (uint16_t*)malloc(TRIM_BLOCK_PX * sizeof(uint16_t));
-    trim_buf[1] = (uint16_t*)malloc(TRIM_BLOCK_PX * sizeof(uint16_t));
+#if PIXEL_PACKED
+    trim_buf[0] = (trim_px_t*)malloc(SCALER_PACKED_BYTES(TRIM_BLOCK_PX));
+    trim_buf[1] = (trim_px_t*)malloc(SCALER_PACKED_BYTES(TRIM_BLOCK_PX));
+#else
+    trim_buf[0] = (trim_px_t*)malloc(TRIM_BLOCK_PX * sizeof(uint16_t));
+    trim_buf[1] = (trim_px_t*)malloc(TRIM_BLOCK_PX * sizeof(uint16_t));
+#endif
     if (trim_buf[0] == nullptr || trim_buf[1] == nullptr) {
         free(trim_buf[0]);
         free(trim_buf[1]);
@@ -360,11 +378,24 @@ static void trim_push(int16_t ox, int16_t oy, uint8_t pat, int32_t sx,
 #else
         line = (int16_t)(at + n);
 #endif
+#if PIXEL_PACKED
+        trim_line(trim_scratch, line, pat, sx, sy, lut);
+        scaler_pack_444(trim_buf[buf] + SCALER_PACKED_BYTES((size_t)n
+                                                            * TRIM_LINE_PX),
+                        trim_scratch, TRIM_LINE_PX);
+#else
         trim_line(trim_buf[buf] + (size_t)n * TRIM_LINE_PX, line, pat, sx, sy,
                   lut);
+#endif
         n++;
         if (n == TRIM_BLOCK_N || at + n == TRIM_LINES) {
+#if PIXEL_PACKED
+            display_push_packed_dma(trim_buf[buf],
+                                    SCALER_PACKED_BYTES((size_t)n
+                                                        * TRIM_LINE_PX));
+#else
             display_push_rows_dma(trim_buf[buf], (size_t)n * TRIM_LINE_PX);
+#endif
             buf ^= 1u;
             at = (int16_t)(at + n);
             n = 0;

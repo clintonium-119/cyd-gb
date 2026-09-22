@@ -163,6 +163,11 @@ static void pack_line(uint8_t* dst, const uint16_t* src, unsigned unit_len)
     }
 }
 
+void scaler_pack_444(uint8_t* dst, const uint16_t* src, unsigned n)
+{
+    pack_line(dst, src, n);
+}
+
 /*
  * A blend unit straight into packed bytes: the average is taken in 565, as
  * avg565 requires, and never stored there. This is what keeps the pack from

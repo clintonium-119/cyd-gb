@@ -301,6 +301,18 @@ int scaler_scale_col_tail_444(enum scaler_geom_e geom, enum scaler_mode_e mode,
                               uint16_t* scratch);
 
 /*
+ * Pack n finished RGB565 pixels into SCALER_PACKED_BYTES(n) bytes, in the
+ * nibble order the Packed output note documents. n must be even.
+ *
+ * The walks above pack their own output and do not need this; it is here so a
+ * caller that produces a line of 565 pixels some other way — a test fixture
+ * pushing into the same window the frame path uses — reaches the panel's
+ * format through the same code the frame does, rather than restating a nibble
+ * order in a second place.
+ */
+void scaler_pack_444(uint8_t* dst, const uint16_t* src, unsigned n);
+
+/*
  * Average of two native-bit-layout RGB565 pixels, per channel, without
  * unpacking. Callers must pass NATIVE (not byte-swapped) values.
  */
