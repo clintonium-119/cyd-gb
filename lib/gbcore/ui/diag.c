@@ -131,6 +131,14 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
     d->trim_dir = +1;
     d->trim_marks = 0;
     d->trim_frames = 0;
+    d->trim_pat = DIAG_TRIM_PAT_NOISE;
+    d->trim_vx = 0;
+    d->trim_vy = DIAG_TRIM_SCROLL;
+    d->trim_ox = 0;
+    d->trim_oy = 0;
+    d->span_pat = DIAG_TRIM_PAT_NOISE;
+    d->span_vx = 0;
+    d->span_vy = 0;
     d->trim_first_frame = 0;
     d->trim_span = 0;
     d->trim_prev_span = 0;
@@ -282,6 +290,12 @@ static void trim_run_begin(diag_t* d)
     d->trim_marks = 0;
     d->trim_frames = 0;
     d->trim_first_frame = 0;
+    /* The pattern and the rates carry over between runs, because finding the
+     * pair that shows a seam on this panel is the first thing a builder does
+     * and having it reset every time would make that unbearable. The offset
+     * does not: a run starts the field from a known place. */
+    d->trim_ox = 0;
+    d->trim_oy = 0;
 }
 
 /*
@@ -326,6 +340,54 @@ static void trim_apply(diag_t* d)
 }
 
 /*
+ * The fixture's scroll, stepped and clamped. Through zero and out the other
+ * side rather than stopping there: which direction the field runs is half of
+ * what a builder is hunting for, and a knob that would not cross zero would
+ * hide the other half.
+ */
+static uint16_t trim_rate_step(diag_t* d, uint8_t dir_bits)
+{
+    int8_t before_x = d->trim_vx;
+    int8_t before_y = d->trim_vy;
+
+    switch (dir_bits) {
+    case COMBO_BTN_UP:
+        if (d->trim_vy < DIAG_TRIM_RATE_MAX) {
+            d->trim_vy++;
+        }
+        break;
+    case COMBO_BTN_DOWN:
+        if (d->trim_vy > -DIAG_TRIM_RATE_MAX) {
+            d->trim_vy--;
+        }
+        break;
+    case COMBO_BTN_RIGHT:
+        if (d->trim_vx < DIAG_TRIM_RATE_MAX) {
+            d->trim_vx++;
+        }
+        break;
+    case COMBO_BTN_LEFT:
+        if (d->trim_vx > -DIAG_TRIM_RATE_MAX) {
+            d->trim_vx--;
+        }
+        break;
+    default:
+        break;
+    }
+
+    return (uint16_t)((d->trim_vx != before_x || d->trim_vy != before_y)
+                          ? DIAG_EV_TRIM_FIXTURE : 0);
+}
+
+/* The patterns wrap, like the display page's: there are four and no reason to
+ * make a builder walk back the way they came. */
+static uint16_t trim_pat_step(diag_t* d)
+{
+    d->trim_pat = (uint8_t)((d->trim_pat + 1u) % DIAG_TRIM_PAT_COUNT);
+    return DIAG_EV_TRIM_FIXTURE;
+}
+
+/*
  * A crossing, marked. The first one only starts the baseline — an interval
  * needs two — and the run ends on the mark that completes DIAG_TRIM_MARKS
  * intervals, applying the correction the marks imply.
@@ -360,17 +422,28 @@ static uint16_t trim_mark(diag_t* d)
     /* marks - 1 intervals between the first mark and this one. */
     d->trim_prev_span = d->trim_span;
     d->trim_span = since / (uint32_t)(d->trim_marks - 1u);
+    d->span_pat = d->trim_pat;
+    d->span_vx = d->trim_vx;
+    d->span_vy = d->trim_vy;
     trim_apply(d);
     d->trim_state = DIAG_TRIM_IDLE;
 
     return DIAG_EV_REDRAW | DIAG_EV_TRIM_STATE;
 }
 
-uint8_t diag_trim_shade(int32_t u, int32_t v)
+static const char* const trim_pat_names[DIAG_TRIM_PAT_COUNT] = {
+    "noise",
+    "check",
+    "stripe",
+    "grid",
+};
+
+/* One block's shade in the noise field. The mix from the xorshift family the
+ * audio dither already uses, over the block coordinates rather than a
+ * sequence, so the field is stable in space and scrolls with the offset
+ * instead of fizzing. */
+static uint8_t trim_noise(int32_t u, int32_t v)
 {
-    /* The mix from the xorshift family the audio dither already uses, over
-     * the block coordinates rather than a sequence, so the field is stable in
-     * space and scrolls with the offset instead of fizzing. */
     uint32_t h = ((uint32_t)u / DIAG_TRIM_BLOCK_W) * 0x9E3779B1u
                ^ ((uint32_t)v / DIAG_TRIM_BLOCK_H) * 0x85EBCA77u;
 
@@ -380,12 +453,79 @@ uint8_t diag_trim_shade(int32_t u, int32_t v)
     return (uint8_t)(h & 3u);
 }
 
-int32_t diag_trim_offset(const diag_t* d)
+uint8_t diag_trim_shade(uint8_t pat, int32_t u, int32_t v)
+{
+    /* Unsigned before the divides and masks below, so the field stays endless
+     * under a negative offset rather than folding at zero. */
+    uint32_t uu = (uint32_t)u;
+    uint32_t vv = (uint32_t)v;
+
+    switch (pat) {
+    case DIAG_TRIM_PAT_CHECK:
+        /* Frequency on both axes, so it shows a displacement whichever way it
+         * runs — and blind wherever the rate hits a multiple of two cells. */
+        return (((uu / DIAG_TRIM_CHECK_CELL)
+               ^ (vv / DIAG_TRIM_CHECK_CELL)) & 1u) ? 3u : 0u;
+    case DIAG_TRIM_PAT_STRIPE:
+        /* All of the frequency on the vertical axis, which is the one the
+         * column-major seam displaces — the sharpest of these at the right
+         * rate and blind at twice it. */
+        return ((vv / DIAG_TRIM_STRIPE_BAND) & 1u) ? 3u : 0u;
+    case DIAG_TRIM_PAT_GRID:
+        /* The least sensitive, and the only one that lets the step be
+         * COUNTED in pixels rather than just seen. */
+        if (vv % DIAG_TRIM_GRID_PITCH == 0u) {
+            return 3u;
+        }
+        if (uu % DIAG_TRIM_GRID_PITCH == 0u) {
+            return 2u;
+        }
+        if ((uu + vv) % (2u * DIAG_TRIM_GRID_PITCH) < 2u) {
+            return 1u;
+        }
+        return 0u;
+    default:
+        return trim_noise(u, v);
+    }
+}
+
+const char* diag_trim_pat_name(uint8_t pat)
+{
+    if (pat >= DIAG_TRIM_PAT_COUNT) {
+        return NULL;
+    }
+    return trim_pat_names[pat];
+}
+
+void diag_trim_offsets(const diag_t* d, int32_t* out_x, int32_t* out_y)
 {
     if (d == NULL) {
-        return 0;
+        return;
     }
-    return (int32_t)(d->trim_frames * (uint32_t)DIAG_TRIM_SCROLL);
+    if (out_x != NULL) {
+        *out_x = d->trim_ox;
+    }
+    if (out_y != NULL) {
+        *out_y = d->trim_oy;
+    }
+}
+
+uint8_t diag_trim_pattern(const diag_t* d)
+{
+    return (d != NULL) ? d->trim_pat : (uint8_t)DIAG_TRIM_PAT_NOISE;
+}
+
+void diag_trim_rate(const diag_t* d, int8_t* out_vx, int8_t* out_vy)
+{
+    if (d == NULL) {
+        return;
+    }
+    if (out_vx != NULL) {
+        *out_vx = d->trim_vx;
+    }
+    if (out_vy != NULL) {
+        *out_vy = d->trim_vy;
+    }
 }
 
 uint16_t diag_trim_frame(diag_t* d)
@@ -394,6 +534,10 @@ uint16_t diag_trim_frame(diag_t* d)
         return 0;
     }
     d->trim_frames++;
+    /* Accumulated, so a rate changed mid-run moves the field on from where it
+     * had got to rather than teleporting it. */
+    d->trim_ox += d->trim_vx;
+    d->trim_oy += d->trim_vy;
     return 0;
 }
 
@@ -489,10 +633,14 @@ uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
             ev |= pattern_step(d, dir_bits);
             break;
         case DIAG_PAGE_TRIM:
-            /* Only while idle: during a run the D-pad would move the porch
-             * out from under the count that is measuring it. */
+            /* Two jobs, and the page's state picks which. Idle, the D-pad is
+             * the porch. Running, it is the fixture's scroll — the porch must
+             * not move under a count that is measuring it, and the scroll is
+             * exactly what a builder needs to reach while watching. */
             if (d->trim_state == DIAG_TRIM_IDLE) {
                 ev |= trim_step(d, dir_bits);
+            } else {
+                ev |= trim_rate_step(d, dir_bits);
             }
             break;
         case DIAG_PAGE_SYSTEM:
@@ -541,6 +689,9 @@ uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
             d->x = d->default_x;
             d->y = d->default_y;
             ev |= DIAG_EV_REDRAW;
+        } else if (d->page == DIAG_PAGE_TRIM
+                   && d->trim_state == DIAG_TRIM_RUNNING) {
+            ev |= trim_pat_step(d);
         } else if (d->page == DIAG_PAGE_TRIM
                    && d->trim_state == DIAG_TRIM_IDLE) {
             d->trim_fpa = d->default_trim_fpa;

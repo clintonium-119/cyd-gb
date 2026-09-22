@@ -82,7 +82,7 @@ static const char* const FOOTERS[DIAG_PAGE_COUNT] = {
     "A: tone   Up/Down: volume   Select+L/R: page",
     "Up/Down: pattern   Select+L/R: page",
     "D-pad: move   A: save   B: default",
-    "Start: count   D-pad: porch   A: save   B: default",
+    "Start: run   D-pad: porch   A: save   B: default",
     "Up/Down: frameskip   Select+L/R: page",
 };
 
@@ -530,15 +530,28 @@ static void page_nudge(const ui_canvas_t* cv, const diag_layout_t* g,
  * fills the window and the binding pushes it frame by frame, which is the
  * whole reason the page has two states rather than a live readout.
  */
+/* "noise  0,+2" — a pattern and its two signed rates, in output px a frame. */
+static void fixture_text(char* buf, size_t sz, uint8_t pat, int8_t vx,
+                         int8_t vy)
+{
+    const char* name = diag_trim_pat_name(pat);
+
+    snprintf(buf, sz, "%s  %+d,%+d", (name != NULL) ? name : "?", (int)vx,
+             (int)vy);
+}
+
 static void page_trim(const ui_canvas_t* cv, const diag_layout_t* g,
                       const diag_t* d, uint32_t now_ms)
 {
     uint8_t fpa = 0;
     uint8_t ratio = 0;
+    int8_t vx = 0;
+    int8_t vy = 0;
     uint32_t span = diag_trim_span(d);
     char buf[40];
 
     diag_trim(d, &fpa, &ratio);
+    diag_trim_rate(d, &vx, &vy);
 
     snprintf(buf, sizeof(buf), "%u + %u/64", (unsigned)fpa, (unsigned)ratio);
     kv_row(cv, g, 0, "Porch", buf, COL_TEXT);
@@ -547,6 +560,12 @@ static void page_trim(const ui_canvas_t* cv, const diag_layout_t* g,
              (unsigned)d->default_trim_ratio);
     kv_row(cv, g, 1, "Default", buf, COL_DIM);
 
+    /* What the next run will draw, and the only place it can be read: a run
+     * fills the window with the fixture, so there is nowhere to show this
+     * while it is the thing being looked at. */
+    fixture_text(buf, sizeof(buf), diag_trim_pattern(d), vx, vy);
+    kv_row(cv, g, 2, "Fixture", buf, COL_TEXT);
+
     if (span > 0u) {
         uint32_t tenths = (span * 1000u + DIAG_TRIM_FPS_X100 / 2u)
                         / (uint32_t)DIAG_TRIM_FPS_X100;
@@ -554,29 +573,34 @@ static void page_trim(const ui_canvas_t* cv, const diag_layout_t* g,
         snprintf(buf, sizeof(buf), "%lu frames, %lu.%lu s",
                  (unsigned long)span, (unsigned long)(tenths / 10u),
                  (unsigned long)(tenths % 10u));
-        kv_row(cv, g, 2, "Crossing", buf, COL_TEXT);
+        kv_row(cv, g, 3, "Crossing", buf, COL_TEXT);
+        /* A crossing interval means nothing without the fixture it was
+         * counted on, and that is a builder's to change now. */
+        fixture_text(buf, sizeof(buf), d->span_pat, d->span_vx, d->span_vy);
+        kv_row(cv, g, 4, "Counted on", buf, COL_DIM);
     } else {
-        kv_row(cv, g, 2, "Crossing", "not counted yet", COL_DIM);
+        kv_row(cv, g, 3, "Crossing", "not counted yet", COL_DIM);
     }
 
     if (d->trim_step != 0) {
         snprintf(buf, sizeof(buf), "%+d/64", (int)-d->trim_step);
-        kv_row(cv, g, 3, "Last move", buf, COL_TEXT);
+        kv_row(cv, g, 5, "Last move", buf, COL_TEXT);
     } else if (span > 0u) {
         /* A run long enough that the correction rounded to nothing is the
          * end of the road, not a failure: the register cannot express a
          * smaller change. */
-        kv_row(cv, g, 3, "Last move", "none left to give", COL_OK);
+        kv_row(cv, g, 5, "Last move", "none left to give", COL_OK);
     } else {
-        kv_row(cv, g, 3, "Last move", "-", COL_DIM);
+        kv_row(cv, g, 5, "Last move", "-", COL_DIM);
     }
 
     snprintf(buf, sizeof(buf), "Start, then mark each of %u crossings",
              (unsigned)DIAG_TRIM_MARKS);
-    full_row(cv, g, 5, buf, COL_DIM);
+    full_row(cv, g, 7, buf, COL_DIM);
+    full_row(cv, g, 8, "In a run: D-pad scrolls, B changes pattern", COL_DIM);
 
     if (diag_toast_active(d, now_ms)) {
-        full_row(cv, g, 6, "Saved", COL_OK);
+        full_row(cv, g, 10, "Saved", COL_OK);
     }
 }
 

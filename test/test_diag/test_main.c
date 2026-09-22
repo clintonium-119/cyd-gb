@@ -811,6 +811,27 @@ static void test_start_means_nothing_on_any_other_page(void)
 
 /* ─── the fixture ─────────────────────────────────────────────────────────── */
 
+/* Share of pixels that change under a `shift`-pixel vertical displacement,
+ * in tenths of a per cent, over a window the size of the shipping one. */
+static unsigned changed_permille(uint8_t pat, int32_t shift)
+{
+    unsigned changed = 0;
+    unsigned total = 0;
+    int32_t u;
+    int32_t v;
+
+    for (v = 0; v < 240; v++) {
+        for (u = 0; u < 266; u++) {
+            if (diag_trim_shade(pat, u, v)
+                != diag_trim_shade(pat, u, v + shift)) {
+                changed++;
+            }
+            total++;
+        }
+    }
+    return changed * 1000u / total;
+}
+
 static void test_the_fixture_is_deterministic_in_its_block_coordinates(void)
 {
     int32_t u;
@@ -820,18 +841,19 @@ static void test_the_fixture_is_deterministic_in_its_block_coordinates(void)
      * a changing picture under a seam the builder is trying to count. */
     for (v = 0; v < 64; v++) {
         for (u = 0; u < 64; u++) {
-            TEST_ASSERT_EQUAL_UINT8(diag_trim_shade(u, v),
-                                    diag_trim_shade(u, v));
+            TEST_ASSERT_EQUAL_UINT8(diag_trim_shade(DIAG_TRIM_PAT_NOISE, u, v),
+                                    diag_trim_shade(DIAG_TRIM_PAT_NOISE, u, v));
             /* And it is a field of blocks, not of pixels. */
             TEST_ASSERT_EQUAL_UINT8(
-                diag_trim_shade(u - (u % DIAG_TRIM_BLOCK_W),
+                diag_trim_shade(DIAG_TRIM_PAT_NOISE,
+                                u - (u % DIAG_TRIM_BLOCK_W),
                                 v - (v % DIAG_TRIM_BLOCK_H)),
-                diag_trim_shade(u, v));
+                diag_trim_shade(DIAG_TRIM_PAT_NOISE, u, v));
         }
     }
 }
 
-static void test_the_fixture_uses_all_four_shades(void)
+static void test_the_noise_field_uses_all_four_shades(void)
 {
     unsigned seen[4] = { 0, 0, 0, 0 };
     int32_t u;
@@ -839,7 +861,7 @@ static void test_the_fixture_uses_all_four_shades(void)
 
     for (v = 0; v < 240; v++) {
         for (u = 0; u < 266; u++) {
-            uint8_t sh = diag_trim_shade(u, v);
+            uint8_t sh = diag_trim_shade(DIAG_TRIM_PAT_NOISE, u, v);
 
             TEST_ASSERT_TRUE(sh < 4u);
             seen[sh]++;
@@ -852,40 +874,282 @@ static void test_the_fixture_uses_all_four_shades(void)
     }
 }
 
-static void test_the_fixture_decorrelates_at_every_displacement(void)
+static void test_the_default_scroll_both_displaces_and_carries_over(void)
+{
+    unsigned moved = changed_permille(DIAG_TRIM_PAT_NOISE, DIAG_TRIM_SCROLL);
+
+    /*
+     * The two properties a legible fixture needs, and they pull against each
+     * other. A seam is seen as a STEP in the field, so a one-frame
+     * displacement has to change something; but the eye can only judge a step
+     * in a field it can TRACK, so most of the field has to survive the frame.
+     *
+     * The first version of this suite asserted only the first property, with
+     * a floor of a third at every displacement — and the setting that
+     * maximises it is scroll == block height, where the field advances one
+     * whole block a frame and every block takes a fresh shade. That is
+     * maximal by the metric and invisible in the hand: the ancestor this
+     * fixture is lifted from says so in its own comment, "pixels changed is
+     * not the same as seen", and the first board it was shown on read as a
+     * field with nothing in it. Both bounds, or neither is worth asserting.
+     */
+    TEST_ASSERT_TRUE(moved > 100u);   /* something steps          */
+    TEST_ASSERT_TRUE(moved < 500u);   /* most of it carries over  */
+}
+
+static void test_the_noise_field_has_no_period_but_its_own_block(void)
 {
     int32_t shift;
 
     /*
      * The assertion that would catch a periodic pattern being substituted
-     * later. Every periodic field is CONDITIONALLY BLIND: the displacement
-     * across a seam is one frame of motion, and where that equals a whole
-     * period the two sides line up and a real seam disappears. Stripes
-     * measured 100 % of pixels changed at a 2 px displacement and 0 % at 4.
-     * A field with no period has nothing to line up with, so every
-     * displacement has to clear the floor — including the page's own
-     * DIAG_TRIM_SCROLL, which is only one of the rates checked here because
-     * a fixture that were sensitive at just its own rate would be a
-     * coincidence rather than a property.
+     * for the noise field. Every periodic field is CONDITIONALLY BLIND: where
+     * the displacement equals a whole period the two sides of a seam line up
+     * and a real seam disappears. A random field lines up only where the
+     * shift is a whole number of its own blocks — nowhere else, at any
+     * distance — which is what makes it the one pattern safe to calibrate on.
      */
-    for (shift = 1; shift <= 8; shift++) {
-        unsigned changed = 0;
-        unsigned total = 0;
-        int32_t u;
-        int32_t v;
+    for (shift = 1; shift < 240; shift++) {
+        unsigned moved = changed_permille(DIAG_TRIM_PAT_NOISE, shift);
 
-        for (v = 0; v < 240; v++) {
-            for (u = 0; u < 266; u++) {
-                if (diag_trim_shade(u, v) != diag_trim_shade(u, v + shift)) {
-                    changed++;
-                }
-                total++;
+        if (shift % DIAG_TRIM_BLOCK_H == 0) {
+            continue;
+        }
+        TEST_ASSERT_TRUE_MESSAGE(moved > 100u,
+            "the noise field went blind at a displacement that is not a "
+            "whole number of its blocks");
+    }
+}
+
+static void test_every_periodic_pattern_goes_blind_somewhere(void)
+{
+    static const uint8_t pats[] = {
+        DIAG_TRIM_PAT_CHECK, DIAG_TRIM_PAT_STRIPE, DIAG_TRIM_PAT_GRID,
+    };
+    unsigned i;
+
+    /*
+     * The other half of the noise field's claim, asserted rather than
+     * asserted about. These three are on the page so a builder can see for
+     * themselves that they are sharper at some rates — and the reason the
+     * procedure does not calibrate on them is that each has a displacement at
+     * which it shows a seam not at all. Measured here: the checkerboard at
+     * 16 px, the stripes at 8, the grid at 32.
+     *
+     * The range runs past the page's own DIAG_TRIM_RATE_MAX on purpose. Which
+     * patterns alias within reach of the D-pad is a fact about the sizes
+     * chosen, and those are a bench question; that each of them aliases at
+     * all is a fact about being periodic, and that is what a substitution
+     * would have to break.
+     */
+    for (i = 0; i < sizeof pats / sizeof pats[0]; i++) {
+        int32_t shift;
+        bool blind = false;
+
+        for (shift = 1; shift <= 32; shift++) {
+            if (changed_permille(pats[i], shift) == 0u) {
+                blind = true;
             }
         }
-        /* A third, which one row in two of a two-pixel block already clears
-         * and which no periodic field clears at every rate. */
-        TEST_ASSERT_TRUE(changed * 3u > total);
+        TEST_ASSERT_TRUE_MESSAGE(blind,
+            "a periodic pattern showed a displacement at every rate tried, "
+            "which would make it a safer default than the noise field");
     }
+}
+
+static void test_the_stripes_go_blind_within_the_dpads_reach(void)
+{
+    /*
+     * The concrete trap, pinned on its own. The stripes are the sharpest of
+     * these at the right rate — all of their frequency is on the axis the
+     * column-major seam displaces — which makes them the tempting thing to
+     * calibrate on, and they are the one pattern whose blind rate a builder
+     * can reach with the D-pad. A unit trimmed here would read as perfectly
+     * nulled and be wrong.
+     */
+    TEST_ASSERT_TRUE(DIAG_TRIM_STRIPE_BAND * 2 <= DIAG_TRIM_RATE_MAX);
+    TEST_ASSERT_EQUAL_UINT(0, changed_permille(DIAG_TRIM_PAT_STRIPE,
+                                               DIAG_TRIM_STRIPE_BAND * 2));
+    /* And sharpest at half that, which is why it is worth having at all. */
+    TEST_ASSERT_TRUE(changed_permille(DIAG_TRIM_PAT_STRIPE,
+                                      DIAG_TRIM_STRIPE_BAND) > 900u);
+}
+
+static void test_an_unknown_pattern_draws_the_noise_field(void)
+{
+    /* A caller holding a value this enum does not have must never paint a
+     * blank screen. */
+    TEST_ASSERT_EQUAL_UINT8(diag_trim_shade(DIAG_TRIM_PAT_NOISE, 17, 41),
+                            diag_trim_shade(DIAG_TRIM_PAT_COUNT, 17, 41));
+    TEST_ASSERT_EQUAL_UINT8(diag_trim_shade(DIAG_TRIM_PAT_NOISE, 17, 41),
+                            diag_trim_shade(200, 17, 41));
+    TEST_ASSERT_NULL(diag_trim_pat_name(DIAG_TRIM_PAT_COUNT));
+    TEST_ASSERT_NOT_NULL(diag_trim_pat_name(DIAG_TRIM_PAT_NOISE));
+}
+
+/* ─── the fixture's knobs ─────────────────────────────────────────────────── */
+
+static void test_a_run_starts_on_the_documented_pattern_and_rate(void)
+{
+    int8_t vx = 99;
+    int8_t vy = 99;
+
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_PAT_NOISE, diag_trim_pattern(&d));
+    diag_trim_rate(&d, &vx, &vy);
+    TEST_ASSERT_EQUAL_INT8(0, vx);
+    TEST_ASSERT_EQUAL_INT8(DIAG_TRIM_SCROLL, vy);
+}
+
+static void test_the_dpad_scrolls_the_fixture_during_a_run(void)
+{
+    int8_t vx = 0;
+    int8_t vy = 0;
+
+    goto_page(DIAG_PAGE_TRIM);
+    sample(COMBO_EVENT_NONE, COMBO_BTN_START, 0);
+    sample(COMBO_EVENT_NONE, 0, 0);
+
+    TEST_ASSERT_TRUE((sample(COMBO_EVENT_NONE, COMBO_BTN_UP, 100)
+                      & DIAG_EV_TRIM_FIXTURE) != 0);
+    diag_trim_rate(&d, &vx, &vy);
+    TEST_ASSERT_EQUAL_INT8(DIAG_TRIM_SCROLL + 1, vy);
+
+    sample(COMBO_EVENT_NONE, 0, 110);
+    sample(COMBO_EVENT_NONE, COMBO_BTN_RIGHT, 120);
+    diag_trim_rate(&d, &vx, &vy);
+    TEST_ASSERT_EQUAL_INT8(1, vx);
+}
+
+static void test_the_scroll_runs_through_zero_into_the_other_direction(void)
+{
+    int8_t vy = 0;
+
+    /* Which way the field runs is half of what a builder is hunting for. */
+    goto_page(DIAG_PAGE_TRIM);
+    sample(COMBO_EVENT_NONE, COMBO_BTN_START, 0);
+    sample(COMBO_EVENT_NONE, 0, 0);
+
+    hammer(COMBO_BTN_DOWN, 6);
+    diag_trim_rate(&d, NULL, &vy);
+    TEST_ASSERT_EQUAL_INT8(DIAG_TRIM_SCROLL - 6, vy);
+    TEST_ASSERT_TRUE(vy < 0);
+
+    hammer(COMBO_BTN_DOWN, 100);
+    diag_trim_rate(&d, NULL, &vy);
+    TEST_ASSERT_EQUAL_INT8(-DIAG_TRIM_RATE_MAX, vy);
+
+    hammer(COMBO_BTN_UP, 100);
+    diag_trim_rate(&d, NULL, &vy);
+    TEST_ASSERT_EQUAL_INT8(DIAG_TRIM_RATE_MAX, vy);
+}
+
+static void test_b_cycles_the_pattern_during_a_run_and_wraps(void)
+{
+    uint8_t i;
+
+    goto_page(DIAG_PAGE_TRIM);
+    sample(COMBO_EVENT_NONE, COMBO_BTN_START, 0);
+    sample(COMBO_EVENT_NONE, 0, 0);
+
+    for (i = 1; i < (uint8_t)DIAG_TRIM_PAT_COUNT; i++) {
+        sample(COMBO_EVENT_NONE, COMBO_BTN_B, (uint32_t)(i * 100));
+        sample(COMBO_EVENT_NONE, 0, (uint32_t)(i * 100 + 10));
+        TEST_ASSERT_EQUAL_UINT8(i, diag_trim_pattern(&d));
+    }
+    sample(COMBO_EVENT_NONE, COMBO_BTN_B, 9000);
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_PAT_NOISE, diag_trim_pattern(&d));
+}
+
+static void test_the_fixture_offset_accumulates_rather_than_multiplying(void)
+{
+    int32_t ox = 0;
+    int32_t oy = 0;
+    unsigned i;
+
+    /* A rate changed mid-run has to move the field on from where it had got
+     * to. Multiplying a frame count by the current rate would rewrite the
+     * field's whole history every time the knob moved, which would look like
+     * the picture jumping. */
+    goto_page(DIAG_PAGE_TRIM);
+    sample(COMBO_EVENT_NONE, COMBO_BTN_START, 0);
+    sample(COMBO_EVENT_NONE, 0, 0);
+
+    for (i = 0; i < 10u; i++) {
+        diag_trim_frame(&d);
+    }
+    diag_trim_offsets(&d, &ox, &oy);
+    TEST_ASSERT_EQUAL_INT32(10 * DIAG_TRIM_SCROLL, oy);
+
+    /* Stop it dead, run ten more frames: the offset must hold, not reset. */
+    hammer(COMBO_BTN_DOWN, DIAG_TRIM_SCROLL);
+    for (i = 0; i < 10u; i++) {
+        diag_trim_frame(&d);
+    }
+    diag_trim_offsets(&d, &ox, &oy);
+    TEST_ASSERT_EQUAL_INT32(10 * DIAG_TRIM_SCROLL, oy);
+    TEST_ASSERT_EQUAL_INT32(0, ox);
+}
+
+static void test_the_fixture_a_span_was_counted_on_is_kept_with_it(void)
+{
+    goto_page(DIAG_PAGE_TRIM);
+    sample(COMBO_EVENT_NONE, COMBO_BTN_START, 0);
+    sample(COMBO_EVENT_NONE, 0, 0);
+    /* Change the fixture mid-run, then finish the count on it. */
+    sample(COMBO_EVENT_NONE, COMBO_BTN_B, 10);
+    sample(COMBO_EVENT_NONE, 0, 20);
+    hammer(COMBO_BTN_UP, 3);
+
+    run_frames_then_mark(600);
+    run_frames_then_mark(600);
+    run_frames_then_mark(600);
+    run_frames_then_mark(600);
+    TEST_ASSERT_FALSE(diag_trim_running(&d));
+
+    /* A crossing interval without the fixture it was counted on is not a
+     * reading anyone can act on later. */
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_PAT_CHECK, d.span_pat);
+    TEST_ASSERT_EQUAL_INT8(DIAG_TRIM_SCROLL + 3, d.span_vy);
+}
+
+static void test_the_pattern_and_rate_survive_between_runs(void)
+{
+    goto_page(DIAG_PAGE_TRIM);
+    sample(COMBO_EVENT_NONE, COMBO_BTN_START, 0);
+    sample(COMBO_EVENT_NONE, 0, 0);
+    sample(COMBO_EVENT_NONE, COMBO_BTN_B, 10);
+    sample(COMBO_EVENT_NONE, 0, 20);
+    hammer(COMBO_BTN_UP, 2);
+    /* A abandons the run. */
+    sample(COMBO_EVENT_NONE, COMBO_BTN_A, 900);
+    sample(COMBO_EVENT_NONE, 0, 910);
+    TEST_ASSERT_FALSE(diag_trim_running(&d));
+
+    /* Finding the pair that shows a seam on this panel is the first thing a
+     * builder does; having it reset on every run would make that unbearable. */
+    sample(COMBO_EVENT_NONE, COMBO_BTN_START, 1000);
+    sample(COMBO_EVENT_NONE, 0, 1010);
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_PAT_CHECK, diag_trim_pattern(&d));
+    {
+        int8_t vy = 0;
+
+        diag_trim_rate(&d, NULL, &vy);
+        TEST_ASSERT_EQUAL_INT8(DIAG_TRIM_SCROLL + 2, vy);
+    }
+}
+
+static void test_the_dpad_does_not_touch_the_porch_during_a_run(void)
+{
+    int32_t before;
+
+    goto_page(DIAG_PAGE_TRIM);
+    before = trim_x64_of();
+    sample(COMBO_EVENT_NONE, COMBO_BTN_START, 0);
+    sample(COMBO_EVENT_NONE, 0, 0);
+
+    hammer(COMBO_BTN_RIGHT, 20);
+    hammer(COMBO_BTN_UP, 20);
+    TEST_ASSERT_EQUAL_INT32(before, trim_x64_of());
 }
 
 int main(void)
@@ -932,7 +1196,19 @@ int main(void)
     RUN_TEST(test_b_restores_the_porch_the_page_was_entered_with);
     RUN_TEST(test_start_means_nothing_on_any_other_page);
     RUN_TEST(test_the_fixture_is_deterministic_in_its_block_coordinates);
-    RUN_TEST(test_the_fixture_uses_all_four_shades);
-    RUN_TEST(test_the_fixture_decorrelates_at_every_displacement);
+    RUN_TEST(test_the_noise_field_uses_all_four_shades);
+    RUN_TEST(test_the_default_scroll_both_displaces_and_carries_over);
+    RUN_TEST(test_the_noise_field_has_no_period_but_its_own_block);
+    RUN_TEST(test_every_periodic_pattern_goes_blind_somewhere);
+    RUN_TEST(test_the_stripes_go_blind_within_the_dpads_reach);
+    RUN_TEST(test_an_unknown_pattern_draws_the_noise_field);
+    RUN_TEST(test_a_run_starts_on_the_documented_pattern_and_rate);
+    RUN_TEST(test_the_dpad_scrolls_the_fixture_during_a_run);
+    RUN_TEST(test_the_scroll_runs_through_zero_into_the_other_direction);
+    RUN_TEST(test_b_cycles_the_pattern_during_a_run_and_wraps);
+    RUN_TEST(test_the_fixture_offset_accumulates_rather_than_multiplying);
+    RUN_TEST(test_the_fixture_a_span_was_counted_on_is_kept_with_it);
+    RUN_TEST(test_the_pattern_and_rate_survive_between_runs);
+    RUN_TEST(test_the_dpad_does_not_touch_the_porch_during_a_run);
     return UNITY_END();
 }

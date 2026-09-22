@@ -281,24 +281,25 @@ static bool trim_buffers()
 // otherwise — at window-relative landscape (x, y). The scroll is vertical
 // either way, because the seam the page is here to count is a vertical line
 // with a vertical displacement across it.
-static void trim_line(uint16_t* px, int16_t line, int32_t sy,
-                      const uint16_t* lut)
+static void trim_line(uint16_t* px, int16_t line, uint8_t pat, int32_t sx,
+                      int32_t sy, const uint16_t* lut)
 {
     int16_t i;
 
     for (i = 0; i < TRIM_LINE_PX; i++) {
 #if PUSH_TRANSPOSED
-        int32_t u = line;
+        int32_t u = (int32_t)line + sx;
         int32_t v = (int32_t)i + sy;
 #else
-        int32_t u = i;
+        int32_t u = (int32_t)i + sx;
         int32_t v = (int32_t)line + sy;
 #endif
-        px[i] = lut[TRIM_LUT_BG + diag_trim_shade(u, v)];
+        px[i] = lut[TRIM_LUT_BG + diag_trim_shade(pat, u, v)];
     }
 }
 
-static void trim_push(int16_t ox, int16_t oy, int32_t sy, const uint16_t* lut)
+static void trim_push(int16_t ox, int16_t oy, uint8_t pat, int32_t sx,
+                      int32_t sy, const uint16_t* lut)
 {
     int16_t at = 0;
     int16_t n = 0;
@@ -315,7 +316,8 @@ static void trim_push(int16_t ox, int16_t oy, int32_t sy, const uint16_t* lut)
 #else
         line = (int16_t)(at + n);
 #endif
-        trim_line(trim_buf[buf] + (size_t)n * TRIM_LINE_PX, line, sy, lut);
+        trim_line(trim_buf[buf] + (size_t)n * TRIM_LINE_PX, line, pat, sx, sy,
+                  lut);
         n++;
         if (n == TRIM_BLOCK_N || at + n == TRIM_LINES) {
             display_push_rows_dma(trim_buf[buf], (size_t)n * TRIM_LINE_PX);
@@ -416,6 +418,15 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
             Serial.printf("[DIAG] trim saved porch %u + %u/64\n",
                           (unsigned)s->trim_fpa, (unsigned)s->trim_ratio);
         }
+        if (flags & DIAG_EV_TRIM_FIXTURE) {
+            int8_t vx = 0;
+            int8_t vy = 0;
+            const char* name = diag_trim_pat_name(diag_trim_pattern(&d));
+
+            diag_trim_rate(&d, &vx, &vy);
+            Serial.printf("[DIAG] fixture %s %+d,%+d px/frame\n",
+                          (name != nullptr) ? name : "?", (int)vx, (int)vy);
+        }
         if (flags & DIAG_EV_TRIM_STATE) {
             if (diag_trim_running(&d)) {
                 if (trim_buffers()) {
@@ -485,8 +496,12 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
             int16_t ox = 0;
             int16_t oy = 0;
 
+            int32_t sx = 0;
+            int32_t sy = 0;
+
             diag_origin(&d, &ox, &oy);
-            trim_push(ox, oy, diag_trim_offset(&d), checker.lut);
+            diag_trim_offsets(&d, &sx, &sy);
+            trim_push(ox, oy, diag_trim_pattern(&d), sx, sy, checker.lut);
             // Counted only once it is on the panel: the count IS the
             // measurement, and a frame counted that was not pushed would put
             // the calibration out by exactly its own error.

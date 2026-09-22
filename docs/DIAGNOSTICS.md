@@ -39,10 +39,15 @@ Work down the list. Write the result in the blank; a blank you cannot fill is th
     bezel, then press **A** to save. "Saved" appears for a moment. **B** puts it back to the factory
     position if you want to start over. Final values: `____`.
 12. **Panel trim** — this one takes a few minutes and needs no computer. The screen fills with a field of
-    small grey blocks scrolling steadily upwards (that is the pattern and the speed the trim is measured
-    at; the page will not offer you another). Somewhere on it you will see a **seam** — a vertical line
+    small blocks drifting steadily upwards. Somewhere on it you should see a **seam** — a vertical line
     down the screen where the blocks on one side sit a little higher or lower than the blocks on the
-    other — and it drifts sideways, off one edge and back on at the opposite one.
+    other — and it moves sideways, off one edge and back on at the opposite one.
+
+    **If you cannot see a seam at all, change the picture until you can.** In a run the D-pad sets how
+    fast and which way the field scrolls (Up/Down vertical, Left/Right sideways, through zero and out the
+    other side) and **B** cycles the pattern: `noise`, `check`, `stripe`, `grid`. The page starts on
+    `noise` scrolling up at 2 — that is the pair the trim is specified at, and the one to come back to
+    before you count. Nothing you do here is stored; it only changes what is on the glass.
 
     Press **Start** to begin, then press **Start** again each time the seam goes off one edge and
     reappears at the other. After the fourth press the screen goes back to the numbers, and the unit has
@@ -54,7 +59,14 @@ Work down the list. Write the result in the blank; a blank you cannot fill is th
     "Saved" appears for a moment. **B** puts the porch back to where you found it.
 
     Under about fifteen seconds between crossings is not finished — keep going. Write down the final
-    **Porch**, both numbers: `____`.
+    **Porch**, both numbers, and the **Counted on** line beside the crossing: `____`.
+
+    *Count on `noise` if you can.* The other three have more contrast and can be easier to spot a seam
+    in, which is why they are there — but each of them has a scroll speed at which a real seam becomes
+    **invisible**, because the pattern repeats and the two sides line up. `stripe` does it at 8, which the
+    D-pad can reach. `noise` has no repeat to line up with, so it cannot lie to you at any speed. If a
+    seam only ever shows up on one of the other three, count on it and say so in the blank — the reading
+    is still worth having, it just wants qualifying.
 
     *If it will not settle:* an interval that gets **shorter** on the round after a correction is normal
     once — the unit does not know which way to go until it has tried one — but twice in a row means you are

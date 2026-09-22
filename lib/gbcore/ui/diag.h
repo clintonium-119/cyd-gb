@@ -129,19 +129,60 @@ enum diag_nfc_state_e {
  * crossing — half a second at the emulator's cadence. */
 #define DIAG_TRIM_MIN_FRAMES 30
 
-/* Output pixels the fixture scrolls per frame, vertically. Stated rather than
- * left to the page because the rate is half of what makes a fixture
- * sensitive: a periodic pattern goes blind wherever the scroll equals a whole
- * period, and this one is scrolled by exactly one block height so a one-frame
- * displacement lands on a fresh row of blocks every time. Vertical because
- * the column-major push makes the seam a vertical line with a vertical
- * displacement across it. */
+/* The fixture's scroll, in output pixels per frame, as the page enters a run.
+ * Vertical, because the column-major push makes the seam a vertical line with
+ * a vertical displacement across it, and the documented procedure calibrates
+ * here — but it is a starting point, not a fixed setting. The D-pad moves both
+ * rates during a run, because which pattern and which rate actually make a
+ * seam legible on a given panel turned out to be a bench question rather than
+ * one this file could answer: the specified pair showed nothing at all on the
+ * first board it met.
+ *
+ * A rate that equals a whole block height is the one to avoid, in either
+ * direction: the field then advances exactly one block a frame and every
+ * block takes a fresh shade, so there is no continuity left to see a
+ * displacement in. Reachable on purpose, so it can be recognised and left. */
 #define DIAG_TRIM_SCROLL 2
 
-/* The fixture's block, in output pixels. Four across for texture, two down so
- * one frame of scroll is one whole block. */
-#define DIAG_TRIM_BLOCK_W 4
-#define DIAG_TRIM_BLOCK_H 2
+/* Output pixels per frame the D-pad can reach, either way on either axis. */
+#define DIAG_TRIM_RATE_MAX 8
+
+/*
+ * The fixture's patterns. Noise is the default and the one the procedure
+ * names, because it is the only one that is not CONDITIONALLY BLIND: the rest
+ * are periodic on one axis or both, and where the scroll equals a whole
+ * period the two sides of a seam line up and a real seam disappears. Measured
+ * on the bench that built them: stripes changed 100 % of pixels under a
+ * one-frame displacement at one rate and 0 % at another.
+ *
+ * They are all here anyway. A periodic pattern that aliases gives a builder
+ * nothing to press rather than a wrong number to store, because the crossing
+ * count is a human pressing Start at something they can see; and having the
+ * blind ones to hand is how the claim that noise is better stops being a
+ * table in a comment and becomes something a builder can check in a minute.
+ */
+enum diag_trim_pat_e {
+    DIAG_TRIM_PAT_NOISE = 0,
+    DIAG_TRIM_PAT_CHECK,
+    DIAG_TRIM_PAT_STRIPE,
+    DIAG_TRIM_PAT_GRID,
+    DIAG_TRIM_PAT_COUNT,
+};
+
+/* The noise field's block, in output pixels. Eight across for texture; four
+ * down so the default scroll displaces it by half a block — enough of a step
+ * to read at a seam, with half the rows carrying over so the field can still
+ * be tracked between frames. The two properties pull opposite ways and this
+ * is the compromise the other patterns let a builder test. */
+#define DIAG_TRIM_BLOCK_W 8
+#define DIAG_TRIM_BLOCK_H 4
+
+/* The periodic patterns' periods, in output pixels: a checkerboard cell, a
+ * stripe band, and the grid's rule spacing. Sized so they read on the panel
+ * roughly as their ancestors did through the scaler's 5/3 vertical blend. */
+#define DIAG_TRIM_CHECK_CELL 8
+#define DIAG_TRIM_STRIPE_BAND 4
+#define DIAG_TRIM_GRID_PITCH 16
 
 /* Lines in a frame the front porch does not contribute, in 64ths: the panel's
  * active lines plus its back porch and pulse width. Mirrored from
@@ -180,6 +221,11 @@ enum diag_nfc_state_e {
 /* The trim page entered or left its fixture: the binding runs a different
  * loop in each state, so this is the one event it must not miss. */
 #define DIAG_EV_TRIM_STATE  0x80
+/* The fixture's pattern or scroll moved. The binding has no redraw to do — a
+ * run paints every frame anyway — but it does have a serial line to print,
+ * because the fixture a reading was taken on cannot be shown on a screen the
+ * fixture fills. */
+#define DIAG_EV_TRIM_FIXTURE 0x100
 
 enum diag_result_e {
     DIAG_OK = 0,
@@ -280,6 +326,17 @@ typedef struct diag_s {
      * way, and the page reads that off its own two measurements. */
     int8_t trim_dir;
     uint8_t trim_marks;       /* crossings marked this run                  */
+    uint8_t trim_pat;         /* enum diag_trim_pat_e                       */
+    int8_t trim_vx;           /* fixture scroll, output px per frame         */
+    int8_t trim_vy;
+    int32_t trim_ox;          /* accumulated scroll offset, this run         */
+    int32_t trim_oy;
+    /* The fixture the last run was measured on, kept beside its span: a
+     * crossing interval means nothing without the pattern and rate it was
+     * counted at, and those are a builder's to change now. */
+    uint8_t span_pat;
+    int8_t span_vx;
+    int8_t span_vy;
     uint32_t trim_frames;     /* frames the binding has pushed this run     */
     uint32_t trim_first_frame; /* the frame count the first mark landed on   */
     uint32_t trim_span;       /* mean frames per crossing, last run         */
@@ -366,19 +423,27 @@ uint16_t diag_trim_frame(diag_t* d);
 
 /*
  * The fixture's shade, 0..3, at output pixel (u, v). A pseudo-random field of
- * DIAG_TRIM_BLOCK_W x DIAG_TRIM_BLOCK_H blocks, deterministic in its block
- * coordinates so it scrolls with the offset instead of fizzing.
+ * pattern `pat`, deterministic in its own coordinates so the field scrolls
+ * with the offset instead of fizzing.
  *
- * Random rather than periodic on purpose. Every periodic pattern is
- * CONDITIONALLY BLIND: the displacement across a seam is one frame of motion,
- * and where that equals a whole period the two sides line up and a real seam
- * disappears. Stripes measured 100 % of pixels changed at 2 px/frame and 0 %
- * at 4. A field with no period has nothing to line up with.
+ * An unknown pattern draws the noise field, so a caller can never paint a
+ * blank screen by holding a value this enum does not have.
  */
-uint8_t diag_trim_shade(int32_t u, int32_t v);
+uint8_t diag_trim_shade(uint8_t pat, int32_t u, int32_t v);
 
-/* The fixture's vertical offset for the frame about to be pushed. */
-int32_t diag_trim_offset(const diag_t* d);
+/* The fixture's accumulated scroll offset for the frame about to be pushed.
+ * Accumulated rather than derived from the frame count, because the rate is a
+ * knob during a run and a multiply would rewrite the field's whole history
+ * every time it moved. Either pointer may be NULL. */
+void diag_trim_offsets(const diag_t* d, int32_t* out_x, int32_t* out_y);
+
+/* Which pattern the fixture is drawing, and its two scroll rates. */
+uint8_t diag_trim_pattern(const diag_t* d);
+void diag_trim_rate(const diag_t* d, int8_t* out_vx, int8_t* out_vy);
+
+/* The pattern's name, for the readout and the serial line on every change.
+ * NULL for DIAG_TRIM_PAT_COUNT and anything past it. */
+const char* diag_trim_pat_name(uint8_t pat);
 
 /* The last run's mean frames between crossings, 0 before the first run. */
 uint32_t diag_trim_span(const diag_t* d);
