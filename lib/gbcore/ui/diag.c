@@ -132,6 +132,8 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
      * way back to a known starting point at all. */
     d->default_trim_fpa = (uint8_t)clamp_i16((int16_t)default_fpa, 1, 126);
     d->default_trim_ratio = (uint8_t)clamp_i16((int16_t)default_ratio, 0, 63);
+    d->stored_trim_fpa = d->trim_fpa;
+    d->stored_trim_ratio = d->trim_ratio;
     d->trim_state = DIAG_TRIM_IDLE;
     /* Either way is a guess until a run has been measured against another.
      * Shortening the porch speeds the panel up, which is the direction a
@@ -611,6 +613,28 @@ bool diag_trim_rejected(const diag_t* d)
     return (d != NULL) && d->trim_rejected;
 }
 
+void diag_trim_stored(const diag_t* d, uint8_t* fpa, uint8_t* ratio)
+{
+    if (d == NULL) {
+        return;
+    }
+    if (fpa != NULL) {
+        *fpa = d->stored_trim_fpa;
+    }
+    if (ratio != NULL) {
+        *ratio = d->stored_trim_ratio;
+    }
+}
+
+bool diag_trim_unsaved(const diag_t* d)
+{
+    if (d == NULL) {
+        return false;
+    }
+    return d->trim_fpa != d->stored_trim_fpa
+        || d->trim_ratio != d->stored_trim_ratio;
+}
+
 /*
  * The held-direction cadence, taken from the list module so a nudge held down
  * moves at the same rate as a cursor held down: nothing for the first
@@ -721,6 +745,11 @@ uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
                 d->trim_state = DIAG_TRIM_IDLE;
                 ev |= DIAG_EV_REDRAW | DIAG_EV_TRIM_STATE;
             } else {
+                /* The binding writes the store on this event and has no way
+                 * to fail it, so the page records the write here rather than
+                 * waiting to be told. */
+                d->stored_trim_fpa = d->trim_fpa;
+                d->stored_trim_ratio = d->trim_ratio;
                 d->toast = true;
                 d->toast_until_ms = now_ms + (uint32_t)DIAG_TOAST_MS;
                 ev |= DIAG_EV_SAVE_TRIM | DIAG_EV_REDRAW;

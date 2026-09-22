@@ -62,6 +62,12 @@ Work down the list. Write the result in the blank; a blank you cannot fill is th
 
     Stop when the crossings are further apart than you are willing to sit and count, or when **Last move**
     reads `none left to give`, which means the panel cannot be trimmed any finer. Then press **A** to save.
+
+    **Watch the Stored row.** Every run ends by moving the porch itself, so what is on screen stops
+    being what a power cycle brings back until you save it — the page says `A to save` and turns both
+    rows amber while that is true. And note that **A only saves from the numbers screen**: pressed during
+    a run it gives up on the run instead, which is easy to do by accident and leaves the store behind.
+    If Stored and Porch read the same, you are safe to switch off.
     "Saved" appears for a moment. **B** puts the porch back to the **Default** shown on the page, which is
     the compile-time value and not whatever you last saved — it is the way back to a clean start, and
     after the page has corrected itself the D-pad alone cannot get you there.

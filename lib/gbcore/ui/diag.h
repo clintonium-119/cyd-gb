@@ -352,6 +352,13 @@ typedef struct diag_s {
     uint8_t trim_ratio;
     uint8_t default_trim_fpa;
     uint8_t default_trim_ratio;
+    /* What the store holds, as distinct from what the page is showing. The
+     * page moves the working porch on its own — a correction at the end of
+     * every run — so "is what I am looking at the thing that will come back
+     * after a power cycle" is a real question with a non-obvious answer, and
+     * it cost a bench session to ask it the slow way. */
+    uint8_t stored_trim_fpa;
+    uint8_t stored_trim_ratio;
     uint8_t trim_state;       /* enum diag_trim_state_e                     */
     /* Which way the last correction moved the porch. Never asked of the
      * builder: a correction that made the interval shorter went the wrong
@@ -493,6 +500,14 @@ uint32_t diag_trim_span(const diag_t* d);
 
 /* True when the last run's marks disagreed too much to average. */
 bool diag_trim_rejected(const diag_t* d);
+
+/* What the store held when the page opened, plus anything saved since. Both
+ * pointers may be NULL. */
+void diag_trim_stored(const diag_t* d, uint8_t* fpa, uint8_t* ratio);
+
+/* True when the working porch is not the stored one — so the value on screen
+ * is not the value a power cycle brings back. */
+bool diag_trim_unsaved(const diag_t* d);
 
 /* The page's name, for its header and for the serial line on every switch.
  * NULL for DIAG_PAGE_COUNT and anything past it. */

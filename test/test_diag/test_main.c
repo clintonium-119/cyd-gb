@@ -943,6 +943,83 @@ static void test_a_corrected_porch_cannot_be_walked_back_by_hand(void)
                                 trim_x64_of());
 }
 
+
+static void test_the_page_knows_what_the_store_holds(void)
+{
+    uint8_t fpa = 0;
+    uint8_t ratio = 0;
+
+    /* On entry the two agree, because the working porch came from the store. */
+    diag_trim_stored(&d, &fpa, &ratio);
+    TEST_ASSERT_EQUAL_UINT8(TRIM_FPA, fpa);
+    TEST_ASSERT_EQUAL_UINT8(TRIM_RATIO, ratio);
+    TEST_ASSERT_FALSE(diag_trim_unsaved(&d));
+}
+
+static void test_a_correction_leaves_the_porch_unsaved(void)
+{
+    uint8_t fpa = 0;
+    uint8_t ratio = 0;
+
+    /*
+     * The gap that cost a bench session. A run ends by moving the working
+     * porch on its own, so the value on screen stops being the value a power
+     * cycle brings back — without anyone pressing anything. A builder who
+     * read the porch, started another run to watch it, and then pressed A
+     * would have ABANDONED that run rather than saved, and nothing on the
+     * page distinguished the two outcomes.
+     */
+    goto_page(DIAG_PAGE_TRIM);
+    trim_run(600);
+
+    TEST_ASSERT_TRUE(diag_trim_unsaved(&d));
+    diag_trim_stored(&d, &fpa, &ratio);
+    TEST_ASSERT_EQUAL_UINT8(TRIM_FPA, fpa);
+    TEST_ASSERT_EQUAL_UINT8(TRIM_RATIO, ratio);
+}
+
+static void test_saving_makes_the_stored_porch_the_working_one(void)
+{
+    uint8_t fpa = 0;
+    uint8_t ratio = 0;
+
+    goto_page(DIAG_PAGE_TRIM);
+    trim_run(600);
+    TEST_ASSERT_TRUE(diag_trim_unsaved(&d));
+
+    TEST_ASSERT_TRUE((sample(COMBO_EVENT_NONE, COMBO_BTN_A, 9000)
+                      & DIAG_EV_SAVE_TRIM) != 0);
+    TEST_ASSERT_FALSE(diag_trim_unsaved(&d));
+    diag_trim_stored(&d, &fpa, &ratio);
+    TEST_ASSERT_EQUAL_INT32((int32_t)fpa * 64 + ratio, trim_x64_of());
+}
+
+static void test_abandoning_a_run_does_not_save(void)
+{
+    /* A means two things on this page and the state decides which, so the
+     * one that does not save must leave the store visibly behind. */
+    goto_page(DIAG_PAGE_TRIM);
+    trim_run(600);
+    sample(COMBO_EVENT_NONE, 0, 8000);
+
+    sample(COMBO_EVENT_NONE, COMBO_BTN_START, 9000);
+    sample(COMBO_EVENT_NONE, 0, 9010);
+    TEST_ASSERT_TRUE(diag_trim_running(&d));
+
+    TEST_ASSERT_TRUE((sample(COMBO_EVENT_NONE, COMBO_BTN_A, 9100)
+                      & DIAG_EV_SAVE_TRIM) == 0);
+    TEST_ASSERT_TRUE(diag_trim_unsaved(&d));
+}
+
+static void test_b_leaves_the_porch_unsaved_too(void)
+{
+    /* B restores the compile-time porch, which is a change like any other:
+     * it is not stored until it is stored. */
+    goto_page(DIAG_PAGE_TRIM);
+    sample(COMBO_EVENT_NONE, COMBO_BTN_B, 100);
+    TEST_ASSERT_TRUE(diag_trim_unsaved(&d));
+}
+
 static void test_start_means_nothing_on_any_other_page(void)
 {
     goto_page(DIAG_PAGE_NUDGE);
@@ -1401,6 +1478,11 @@ int main(void)
     RUN_TEST(test_a_abandons_a_run_and_saves_from_an_idle_page);
     RUN_TEST(test_b_restores_the_compile_time_porch_not_the_stored_one);
     RUN_TEST(test_a_corrected_porch_cannot_be_walked_back_by_hand);
+    RUN_TEST(test_the_page_knows_what_the_store_holds);
+    RUN_TEST(test_a_correction_leaves_the_porch_unsaved);
+    RUN_TEST(test_saving_makes_the_stored_porch_the_working_one);
+    RUN_TEST(test_abandoning_a_run_does_not_save);
+    RUN_TEST(test_b_leaves_the_porch_unsaved_too);
     RUN_TEST(test_start_means_nothing_on_any_other_page);
     RUN_TEST(test_the_fixture_is_deterministic_in_its_block_coordinates);
     RUN_TEST(test_the_noise_field_uses_all_four_shades);

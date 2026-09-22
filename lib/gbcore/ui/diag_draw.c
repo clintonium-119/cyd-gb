@@ -554,23 +554,39 @@ static void page_trim(const ui_canvas_t* cv, const diag_layout_t* g,
     diag_trim_rate(d, &vx, &vy);
 
     snprintf(buf, sizeof(buf), "%u + %u/64", (unsigned)fpa, (unsigned)ratio);
-    kv_row(cv, g, 0, "Porch", buf, COL_TEXT);
+    kv_row(cv, g, 0, "Porch", buf,
+           diag_trim_unsaved(d) ? COL_WARN : COL_TEXT);
+
+    /* What a power cycle brings back, always on screen beside what the page
+     * is showing. The page corrects the working porch itself at the end of
+     * every run, so the two part company without anyone touching a button —
+     * and a builder who assumed otherwise lost a calibration to it. */
+    {
+        uint8_t sf = 0;
+        uint8_t sr = 0;
+
+        diag_trim_stored(d, &sf, &sr);
+        snprintf(buf, sizeof(buf), "%u + %u/64%s", (unsigned)sf, (unsigned)sr,
+                 diag_trim_unsaved(d) ? "   A to save" : "");
+        kv_row(cv, g, 1, "Stored", buf,
+               diag_trim_unsaved(d) ? COL_WARN : COL_OK);
+    }
 
     snprintf(buf, sizeof(buf), "%u + %u/64", (unsigned)d->default_trim_fpa,
              (unsigned)d->default_trim_ratio);
-    kv_row(cv, g, 1, "Default", buf, COL_DIM);
+    kv_row(cv, g, 2, "Default", buf, COL_DIM);
 
     /* What the next run will draw, and the only place it can be read: a run
      * fills the window with the fixture, so there is nowhere to show this
      * while it is the thing being looked at. */
     fixture_text(buf, sizeof(buf), diag_trim_pattern(d), vx, vy);
-    kv_row(cv, g, 2, "Fixture", buf, COL_TEXT);
+    kv_row(cv, g, 3, "Fixture", buf, COL_TEXT);
 
     if (diag_trim_rejected(d)) {
         /* Declining to move without saying so would look like a page that
          * had stopped working, which is how a builder learns to distrust it. */
-        kv_row(cv, g, 3, "Crossing", "marks disagreed", COL_WARN);
-        full_row(cv, g, 4, "Nothing counted. Mark only the seam, and only"
+        kv_row(cv, g, 4, "Crossing", "marks disagreed", COL_WARN);
+        full_row(cv, g, 5, "Nothing counted. Mark only the seam, and only"
                            " when you can see it.", COL_WARN);
     } else if (span > 0u) {
         uint32_t tenths = (span * 1000u + DIAG_TRIM_FPS_X100 / 2u)
@@ -579,37 +595,37 @@ static void page_trim(const ui_canvas_t* cv, const diag_layout_t* g,
         snprintf(buf, sizeof(buf), "%lu frames, %lu.%lu s",
                  (unsigned long)span, (unsigned long)(tenths / 10u),
                  (unsigned long)(tenths % 10u));
-        kv_row(cv, g, 3, "Crossing", buf, COL_TEXT);
+        kv_row(cv, g, 4, "Crossing", buf, COL_TEXT);
         /* A crossing interval means nothing without the fixture it was
          * counted on, and that is a builder's to change now. */
         fixture_text(buf, sizeof(buf), d->span_pat, d->span_vx, d->span_vy);
-        kv_row(cv, g, 4, "Counted on", buf, COL_DIM);
+        kv_row(cv, g, 5, "Counted on", buf, COL_DIM);
     } else {
-        kv_row(cv, g, 3, "Crossing", "not counted yet", COL_DIM);
+        kv_row(cv, g, 4, "Crossing", "not counted yet", COL_DIM);
     }
 
     if (d->trim_step != 0) {
         snprintf(buf, sizeof(buf), "%+d/64", (int)-d->trim_step);
-        kv_row(cv, g, 5, "Last move", buf, COL_TEXT);
+        kv_row(cv, g, 6, "Last move", buf, COL_TEXT);
     } else if (diag_trim_rejected(d)) {
-        kv_row(cv, g, 5, "Last move", "none - run thrown away", COL_WARN);
+        kv_row(cv, g, 6, "Last move", "none - run thrown away", COL_WARN);
     } else if (span > 0u) {
         /* A run long enough that the correction rounded to nothing is the
          * end of the road, not a failure: the register cannot express a
          * smaller change. */
-        kv_row(cv, g, 5, "Last move", "none left to give", COL_OK);
+        kv_row(cv, g, 6, "Last move", "none left to give", COL_OK);
     } else {
-        kv_row(cv, g, 5, "Last move", "-", COL_DIM);
+        kv_row(cv, g, 6, "Last move", "-", COL_DIM);
     }
 
     snprintf(buf, sizeof(buf), "Start, then mark each of %u crossings",
              (unsigned)DIAG_TRIM_MARKS);
-    full_row(cv, g, 7, buf, COL_DIM);
-    full_row(cv, g, 8, "In a run: D-pad scrolls, B pattern, A gives up",
+    full_row(cv, g, 8, buf, COL_DIM);
+    full_row(cv, g, 9, "In a run: D-pad scrolls, B pattern, A gives up",
              COL_DIM);
 
     if (diag_toast_active(d, now_ms)) {
-        full_row(cv, g, 10, "Saved", COL_OK);
+        full_row(cv, g, 11, "Saved", COL_OK);
     }
 }
 

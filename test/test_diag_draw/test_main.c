@@ -717,6 +717,7 @@ static void test_the_trim_page_shows_the_porch_it_would_store(void)
     TEST_ASSERT_TRUE(drew_text("Porch"));
     TEST_ASSERT_TRUE(drew_text("20 + 32/64"));
     TEST_ASSERT_TRUE(drew_text("15 + 8/64"));
+    TEST_ASSERT_TRUE(drew_text("Stored"));
     /* And nothing measured yet, which has to read as absent rather than as a
      * zero-length crossing. */
     TEST_ASSERT_TRUE(drew_text("not counted yet"));
@@ -738,6 +739,9 @@ static void test_the_trim_page_follows_the_porch_as_it_is_stepped(void)
     diag_draw(&st, &data, &geom, &ck, 100, &cv);
     assert_clean();
     TEST_ASSERT_TRUE(drew_text("21 + 32/64"));
+    /* Moved and not yet stored, so the page says what a power cycle brings
+     * back and how to change that. */
+    TEST_ASSERT_TRUE(drew_text("20 + 32/64   A to save"));
     /* The Default row is the compile-time porch, not the stored one, because
      * that is where B leads — and after a correction it is the only value a
      * builder can get back to. */
