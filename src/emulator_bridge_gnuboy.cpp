@@ -202,8 +202,15 @@ static uint16_t lut_lines[BLOCK_LINES + 1][SCALER_SRC_W];
 static uint16_t lut_cols[COL_BLOCK_SRC + 1][GB_SCREEN_H];
 #endif
 // dst_w pixels for the row order, dst_h for the column order, and the row
-// order's is the larger at every geometry, so one size covers both.
+// order's is the larger at every geometry, so one size covers both. The packed
+// walk wants four units where the 565 one wants one: it keeps every scaled
+// source unit of the block alive so the blend units can be built without a
+// second pass over the block.
+#if PIXEL_PACKED
+static uint16_t scratch_row[SCALER_SCRATCH_444_MAX];
+#else
 static uint16_t scratch_row[SCALER_DST_W_MAX];
+#endif
 static const scaler_geom_info_t* geom = nullptr;
 static int16_t vp_x = GAME_X;
 static int16_t vp_y = GAME_Y;
@@ -215,11 +222,38 @@ static int16_t vp_y = GAME_Y;
 // src/emulator_bridge.cpp for the long-form rationale; nothing here diverges
 // from it, because an A/B whose pipeline also changed would measure two
 // things at once.
-#if PUSH_TRANSPOSED
-static uint16_t dma_buf[2][COL_BLOCK_COLS * GAME_H];
+//
+// A packed buffer is bytes rather than pixels, and three quarters the size.
+// DMA_ELEMS() turns a pixel count into the buffer's own units so the walks
+// below index one buffer the same way whichever format is compiled, and the
+// alignment is stated because the driver hands the pointer to the DMA engine
+// as words.
+#if PIXEL_PACKED
+typedef uint8_t dma_px_t;
+#define DMA_ELEMS(px) SCALER_PACKED_BYTES(px)
 #else
-static uint16_t dma_buf[2][BLOCK_ROWS * GAME_W];
+typedef uint16_t dma_px_t;
+#define DMA_ELEMS(px) ((size_t)(px))
 #endif
+
+#if PUSH_TRANSPOSED
+static dma_px_t dma_buf[2][DMA_ELEMS(COL_BLOCK_COLS * GAME_H)]
+    __attribute__((aligned(4)));
+#else
+static dma_px_t dma_buf[2][DMA_ELEMS(BLOCK_ROWS * GAME_W)]
+    __attribute__((aligned(4)));
+#endif
+
+/* One transfer, in whichever format is compiled: the walks below count in
+ * pixels and this is the one place that knows what a pixel costs. */
+static inline void push_dma(dma_px_t* at, size_t px)
+{
+#if PIXEL_PACKED
+    display_push_packed_dma(at, SCALER_PACKED_BYTES(px));
+#else
+    display_push_rows_dma(at, px);
+#endif
+}
 static framequeue_t fq;
 static TaskHandle_t push_task = nullptr;
 static uint16_t frame_seq = 0;
@@ -568,14 +602,19 @@ static void colourize_cols(const uint8_t* tframe, unsigned base,
  * ask for the units and where they put them.
  */
 static unsigned scale_unit(const uint8_t* tframe, unsigned u,
-                           const uint16_t* const* src_cols, uint16_t* at)
+                           const uint16_t* const* src_cols, dma_px_t* at)
 {
     unsigned base = u * UNIT_LINES;
 
     if (u == COL_BLOCKS) {
         colourize_cols(tframe, base, COL_TAIL_COLS);
+#if PIXEL_PACKED
+        (void)scaler_scale_col_tail_444(SCALE_GEOM, SCALER_MODE_BLEND,
+                                        src_cols, at, scratch_row);
+#else
         (void)scaler_scale_col_tail(SCALE_GEOM, SCALER_MODE_BLEND,
                                     src_cols, at);
+#endif
         return COL_TAIL_COLS;
     }
     {
@@ -589,9 +628,15 @@ static unsigned scale_unit(const uint8_t* tframe, unsigned u,
         if (count > UNIT_LINES) {
             la = src_cols[UNIT_LINES];
         }
+#if PIXEL_PACKED
+        (void)scaler_scale_col_block_444(SCALE_GEOM, SCALER_MODE_BLEND,
+                                         src_cols, la, at, scratch_row,
+                                         COL_ORDER);
+#else
         (void)scaler_scale_col_block(SCALE_GEOM, SCALER_MODE_BLEND,
                                      src_cols, la, at, scratch_row,
                                      COL_ORDER);
+#endif
     }
     return UNIT_ROWS;
 }
@@ -643,28 +688,27 @@ static void emu_push_task(void* arg)
             unsigned u = (COL_ORDER == SCALER_COLS_DESCENDING)
                 ? (COL_UNITS - 1u - k) : k;
             unsigned ncols = (u == COL_BLOCKS) ? COL_TAIL_COLS : UNIT_ROWS;
-            uint16_t* at;
+            dma_px_t* at;
 
             t0 = esp_timer_get_time();
             if (in_buf + ncols > COL_BLOCK_COLS) {
                 /* This unit will not fit, so the buffer goes now. */
                 t1 = esp_timer_get_time();
                 scale_acc += (uint32_t)(t1 - t0);
-                display_push_rows_dma(dma_buf[buf],
-                                      (size_t)in_buf * GAME_H);
+                push_dma(dma_buf[buf], (size_t)in_buf * GAME_H);
                 push_acc += (uint32_t)(esp_timer_get_time() - t1);
                 buf ^= 1u;
                 in_buf = 0;
                 t0 = esp_timer_get_time();
             }
-            at = dma_buf[buf] + (size_t)in_buf * GAME_H;
+            at = dma_buf[buf] + DMA_ELEMS((size_t)in_buf * GAME_H);
             in_buf += scale_unit(tframe, u, src_cols, at);
             scale_acc += (uint32_t)(esp_timer_get_time() - t0);
         }
 
         t1 = esp_timer_get_time();
         if (in_buf) {
-            display_push_rows_dma(dma_buf[buf], (size_t)in_buf * GAME_H);
+            push_dma(dma_buf[buf], (size_t)in_buf * GAME_H);
         }
         display_dma_wait();
         display_frame_end();
@@ -722,10 +766,19 @@ static void emu_push_task(void* arg)
         for (u = 0; u < BLOCK_UNITS; u++) {
             const uint16_t* la = (u + 1u < BLOCK_UNITS)
                 ? lut_lines[(u + 1u) * UNIT_LINES] : lookahead;
+#if PIXEL_PACKED
+            (void)scaler_scale_block_444(SCALE_GEOM, SCALER_MODE_BLEND,
+                                         src_lines + u * UNIT_LINES, la,
+                                         dma_buf[buf]
+                                         + DMA_ELEMS((size_t)u * UNIT_ROWS
+                                                     * GAME_W),
+                                         scratch_row);
+#else
             (void)scaler_scale_block(SCALE_GEOM, SCALER_MODE_BLEND,
                                      src_lines + u * UNIT_LINES, la,
                                      dma_buf[buf] + (size_t)u * UNIT_ROWS * GAME_W,
                                      scratch_row);
+#endif
         }
         t1 = esp_timer_get_time();
         scale_acc += (uint32_t)(t1 - t0);
@@ -736,7 +789,7 @@ static void emu_push_task(void* arg)
         if (meta.block_idx == 0) {
             display_frame_begin(vp_x, vp_y);
         }
-        display_push_rows_dma(dma_buf[buf], (size_t)BLOCK_ROWS * GAME_W);
+        push_dma(dma_buf[buf], (size_t)BLOCK_ROWS * GAME_W);
         if (meta.last_in_frame) {
             display_dma_wait();
             display_frame_end();

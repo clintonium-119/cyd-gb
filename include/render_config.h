@@ -149,6 +149,58 @@
 // differs only in how the consumer walks it.
 #define PUSH_TRANSPOSED (PUSH_ORDER == PUSH_COL)
 
+// ─── Pixel format ───────────────────────────────────────────────────────────
+// How many bits a pixel occupies on the wire. PIXEL_444 packs two pixels into
+// three bytes, taking a quarter off what a frame puts on the SPI bus for the
+// same pixels; PIXEL_565 is the 16-bit stream every build before it pushed.
+//
+// Compiled as a pair and selected here for the reason PUSH_ORDER is: the trade
+// is four bits a channel of colour depth against core-0 time, the saving is a
+// measured quantity rather than an arithmetic one, and a phase that turns out
+// not to earn its keep has to be able to go back in one flag rather than in
+// four reverts. Only the FRAME path packs — the menu's cover images, the
+// diagnostic screen and the splash all draw through `tft` in 16 bits, and
+// display_bus_acquire() is where the panel is put back for them.
+//
+// Only the gnuboy bridge packs. The Peanut-GB bridge next to it pushes 16-bit
+// and is not this phase's scope, and [env:cyd-gnuboy] is documented as
+// differing from [env:cyd] in exactly two things — so the packed path is a
+// flag on an invocation rather than a flag in an environment, and the default
+// stays 16-bit until the bench says the packing earns its core-0 time:
+//
+//   PLATFORMIO_BUILD_FLAGS=-DPIXEL_FORMAT=PIXEL_444 pio run -e cyd-gnuboy
+#define PIXEL_565 16
+#define PIXEL_444 12
+
+#ifndef PIXEL_FORMAT
+#define PIXEL_FORMAT PIXEL_565
+#endif
+
+#if PIXEL_FORMAT != PIXEL_565 && PIXEL_FORMAT != PIXEL_444
+#error "PIXEL_FORMAT must be PIXEL_565 or PIXEL_444."
+#endif
+
+#define PIXEL_PACKED (PIXEL_FORMAT == PIXEL_444)
+
+#if PIXEL_PACKED
+// TFT_eSPI's DMA helper takes a PIXEL count and doubles it for the transfer
+// length in bits, so a packed buffer goes over as len = bytes / 2 — which
+// needs an even byte count, i.e. a pixel count per transfer divisible by four.
+// One transfer is a whole number of output units, so the constraint lands on
+// the unit: a column of GAME_H under PUSH_COL, BLOCK_ROWS rows of GAME_W under
+// PUSH_ROW. Refused at compile time rather than truncating a transfer and
+// skewing the frame.
+#if PUSH_TRANSPOSED
+#if (GAME_H % 4) != 0
+#error "PIXEL_444 needs GAME_H divisible by 4: a packed column transfer is not a whole number of DMA words."
+#endif
+#else
+#if ((BLOCK_ROWS * GAME_W) % 4) != 0
+#error "PIXEL_444 needs BLOCK_ROWS * GAME_W divisible by 4: a packed block transfer is not a whole number of DMA words."
+#endif
+#endif
+#endif
+
 // ─── Game area ──────────────────────────────────────────────────────────────
 // The geometry states its own GAME_W / GAME_H above rather than deriving them,
 // because 5/3's width is not 160 x k/16 for any k and the old derived formula

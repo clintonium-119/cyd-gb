@@ -300,6 +300,51 @@ static void trim_console()
 // portrait every frame and gets a no-op on all but the first after a menu.
 static uint8_t rot_now = TFT_ROTATION_LANDSCAPE;
 
+// ST7789's COLMOD, low nibble: 5 is 16 bits a pixel, 3 is 12. The high nibble
+// is the RGB-interface format, which this panel is not driven through;
+// TFT_eSPI's init writes 0x55, so it is carried unchanged rather than
+// rewritten to something the datasheet says is equally ignored.
+#define COLMOD_565 0x55u
+#define COLMOD_444 0x53u
+
+#if PIXEL_PACKED
+#define FRAME_COLMOD COLMOD_444
+#else
+#define FRAME_COLMOD COLMOD_565
+#endif
+
+// The colour mode the panel is in right now — tracked in its own state, and
+// NOT hung off the rotation. Under PUSH_ROW the frame path's rotation IS the
+// UI's, so set_orientation() returns early and anything conditioned on the
+// rotation having moved never fires; that is exactly how PANEL_SCAN_REVERSE
+// silently failed to reach the row path once already. The frame path asks for
+// its mode every frame and gets a no-op on all but the first after a menu,
+// which is the same bargain rot_now strikes.
+//
+// Initialised to what TFT_eSPI's ST7789 init wrote, so a 16-bit build never
+// touches the register at all.
+static uint8_t colmod_now = COLMOD_565;
+
+static void set_colmod(uint8_t mode)
+{
+    if (colmod_now == mode) {
+        return;
+    }
+    tft.writecommand(0x3A);
+    tft.writedata(mode);
+    colmod_now = mode;
+    // Once, and only that the WRITE happened. This panel is a partial-fidelity
+    // ST7789 and FRCTRL2 silently did nothing on it; unlike FRCTRL2 this one
+    // fails loudly — a panel still in 16 bits fed a packed stream renders
+    // garbage — but the line is what says which of the two was tried.
+    static bool said = false;
+    if (!said) {
+        said = true;
+        Serial.printf("[TFT] COLMOD 0x%02X for the frame path\n",
+                      (unsigned)FRAME_COLMOD);
+    }
+}
+
 #if PANEL_SCAN_REVERSE
 // MADCTL's ML bit, the vertical refresh order: it reverses the order the gate
 // lines are SCANNED OUT without touching how the frame memory maps to them, so
@@ -485,6 +530,7 @@ void display_frame_begin(int16_t x, int16_t y)
     // roles with it: the window is GAME_H wide along the gate line and GAME_W
     // tall across the gate lines.
     set_orientation(TFT_ROTATION_PORTRAIT);
+    set_colmod(FRAME_COLMOD);
     tft.startWrite();
 #if FRAME_COLS_DESCENDING
     tft.setAddrWindow(y, (int16_t)(SCREEN_W - x - GAME_W), GAME_H, GAME_W);
@@ -496,6 +542,7 @@ void display_frame_begin(int16_t x, int16_t y)
 void display_frame_begin(int16_t x, int16_t y)
 {
     set_orientation(TFT_ROTATION_LANDSCAPE);
+    set_colmod(FRAME_COLMOD);
     tft.startWrite();
     tft.setAddrWindow(x, y, GAME_W, GAME_H);
 }
@@ -535,6 +582,9 @@ static void swap565(uint16_t* px, size_t n)
 }
 
 #ifdef PREVIEW_444
+#if PIXEL_PACKED
+#error "PREVIEW_444 imitates the packed path; build it against PIXEL_FORMAT=PIXEL_565."
+#endif
 // Bench only: what 12-bit colour would LOOK like, without building it.
 //
 // PHASE-02 packs RGB444 at the scaler's final store and pushes the packed
@@ -600,6 +650,37 @@ void display_push_rows_dma(uint16_t* px, size_t n)
     // makes the ordering readable.
     tft.dmaWait();
     tft.pushPixelsDMA(px, (uint32_t)n);
+    tft.setSwapBytes(true);
+}
+
+// The packed stream's own entry point rather than a format flag on the one
+// above, because it differs in both of that one's contract points: there is
+// nothing to byte-swap, so the buffer survives the push, and its length in
+// bytes is not twice its length in pixels.
+//
+// TFT_eSPI's helper takes a PIXEL count and sets trans.length to len * 16
+// bits, so a packed buffer goes over as len = bytes / 2 and the byte count
+// must be even — include/render_config.h refuses a geometry where a transfer
+// is not, so the division here cannot silently drop a byte. The cast is to
+// the driver's parameter type only; with setSwapBytes(false) in force it
+// never writes through the pointer, and the caller's buffer is 4-byte aligned
+// for the DMA engine's sake.
+void display_push_packed_dma(const uint8_t* px, size_t n_bytes)
+{
+    static bool complained = false;
+
+    if (!dma_ready) {
+        if (!complained) {
+            complained = true;
+            Serial.println("[TFT] DMA push refused - no DMA, frame path dead");
+        }
+        return;
+    }
+    // The menu's pushImage path needs setSwapBytes(true); a packed stream is
+    // already in the order the panel wants and must not be touched.
+    tft.setSwapBytes(false);
+    tft.dmaWait();
+    tft.pushPixelsDMA((uint16_t*)(void*)px, (uint32_t)(n_bytes / 2));
     tft.setSwapBytes(true);
 }
 
@@ -681,6 +762,10 @@ void display_bus_acquire()
     // through `tft` in landscape and know nothing of the frame path's
     // mapping, so the handover is where the two are reconciled.
     set_orientation(TFT_ROTATION_LANDSCAPE);
+    // And back to 16 bits a pixel: the menu's .565 covers, every drawString
+    // and the diagnostic screen's colour bars all go through `tft`, which
+    // knows nothing of the frame path's format.
+    set_colmod(COLMOD_565);
 }
 
 void display_bus_release()

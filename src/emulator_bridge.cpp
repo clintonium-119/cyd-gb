@@ -5,6 +5,10 @@
 #include "render/palette.h"
 #include "render/framequeue.h"
 #include "render/scaler.h"
+
+#if PIXEL_PACKED
+#error "This bridge pushes 16-bit. PIXEL_FORMAT=PIXEL_444 is the gnuboy bridge's; build -e cyd-gnuboy."
+#endif
 #include "save/autosave.h"
 #include "speaker.h"
 #include "audio/mix.h"

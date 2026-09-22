@@ -105,6 +105,23 @@ void display_frame_end();
 // The pointer is non-const for exactly that reason.
 void display_push_rows_dma(uint16_t* px, size_t n);
 
+// The packed RGB444 counterpart, for a frame path built with
+// PIXEL_FORMAT=PIXEL_444. Takes BYTES, not pixels — two pixels share three of
+// them — and differs from the 565 push in both of its contract points:
+//
+//   * The pushed buffer still belongs to the driver until display_dma_wait()
+//     returns, the same as above.
+//   * It is NOT consumed. A packed stream is already in the order the panel
+//     wants, so nothing is swapped in place and the buffer holds the same
+//     bytes after the push as before it. The pointer is const for that
+//     reason, where the 565 push's cannot be.
+//
+// The buffer must be 4-byte aligned, and n_bytes even: the driver's helper
+// takes a pixel count and doubles it, so the transfer is queued as
+// n_bytes / 2 of its words. include/render_config.h refuses at compile time
+// any geometry whose transfers would not be.
+void display_push_packed_dma(const uint8_t* px, size_t n_bytes);
+
 // Block until every queued transfer has completed. The push task calls this
 // at frame end so display_frame_end()'s endWrite cannot truncate a transfer
 // still in flight.
