@@ -208,6 +208,21 @@
 // One Game Boy frame at that rate (§4). Static-asserted in the bridge against
 // the APU's own AUDIO_SAMPLES, which derives it from the vertical-sync rate.
 #define SPEAKER_SAMPLES_PER_FRAME 548
+// The same figure undivided, in ten-thousandths: 32768 / (4194304 / 70224) =
+// 548.6197 samples a frame. The constant above is that truncated, which is all
+// a core emitting a fixed count per frame can use — but a caller that paces
+// ITSELF off the speaker's DMA queue is choosing its own frame rate when it
+// chooses a sample count, and 548 is 32768/548 = 59.7956 Hz, a full 0.068 Hz
+// above the cadence gnuboy's cycle-derived count produces.
+//
+// That matters wherever a rate is being nulled against "the rate a game runs
+// at": a page paced at the truncated figure would calibrate the panel against
+// a cadence no game has, leaving a residual beat that caps the result at about
+// fifteen seconds between tear crossings however well it converges. A caller
+// that spends the fraction as well matches a game by construction, because
+// both are then the same physical clock divided by the same number — crystal
+// error included.
+#define SPEAKER_SAMPLES_X10000 5486197
 // The most one write may hand over, which is deliberately more than nominal.
 //
 // MiniGB APU emits exactly SPEAKER_SAMPLES_PER_FRAME whatever the frame did,

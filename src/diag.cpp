@@ -261,6 +261,50 @@ static void say_scanning()
 // own buffers, and the diagnostic mode never returns, so nothing frees them.
 static uint16_t* trim_buf[2] = { nullptr, nullptr };
 
+// The fixture's pacer. One frame of silence per pushed frame, blocking on the
+// speaker's DMA queue — the emulator's own pacer, not an interval this loop
+// picks — and spending the fractional sample so the page's cadence is a
+// game's rather than 0.068 Hz above it. Same shape as the porch divider it is
+// calibrating: a whole count most frames, one more on the rest.
+static_assert(SPEAKER_SAMPLES_X10000 / 10000 == SPEAKER_SAMPLES_PER_FRAME,
+              "SPEAKER_SAMPLES_X10000 must be SPEAKER_SAMPLES_PER_FRAME plus "
+              "a fraction");
+
+static size_t trim_pace_samples()
+{
+    static uint32_t acc = 0;
+
+    acc += SPEAKER_SAMPLES_X10000 % 10000;
+    if (acc >= 10000) {
+        acc -= 10000;
+        return SPEAKER_SAMPLES_PER_FRAME + 1;
+    }
+    return SPEAKER_SAMPLES_PER_FRAME;
+}
+
+// The porch the panel is actually running at, so a value the page has changed
+// reaches the hardware. Compared once a pass rather than pushed from each of
+// the four places that can move it — a correction, the D-pad, B, and a save —
+// because a path that forgot to push is exactly the bug this replaces: the
+// page showed a corrected porch the panel had never been told about, so every
+// round of a calibration measured the same beat and the loop could not close.
+static uint8_t applied_fpa = 0xFF;
+static uint8_t applied_ratio = 0xFF;
+
+static void trim_follow()
+{
+    uint8_t fpa = 0;
+    uint8_t ratio = 0;
+
+    diag_trim(&d, &fpa, &ratio);
+    if (fpa == applied_fpa && ratio == applied_ratio) {
+        return;
+    }
+    applied_fpa = fpa;
+    applied_ratio = ratio;
+    display_set_trim(fpa, ratio);
+}
+
 static bool trim_buffers()
 {
     if (trim_buf[0] != nullptr) {
@@ -415,7 +459,6 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
         if (flags & DIAG_EV_SAVE_TRIM) {
             diag_trim(&d, &s->trim_fpa, &s->trim_ratio);
             settings_save(s);
-            display_set_trim(s->trim_fpa, s->trim_ratio);
             Serial.printf("[DIAG] trim saved porch %u + %u/64\n",
                           (unsigned)s->trim_fpa, (unsigned)s->trim_ratio);
         }
@@ -467,6 +510,10 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
             dirty = true;
         }
 
+        // Before the draw and before any frame goes out, so a corrected porch
+        // is on the panel for the frames the next run counts.
+        trim_follow();
+
         // Live data. Only the page showing it pays for the read.
         if (page == DIAG_PAGE_BUTTONS && data.buttons != last_buttons) {
             dirty = true;
@@ -515,8 +562,10 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
             // the emulator's own pacer — the DMA queue — rather than an
             // interval this loop picks, which is the whole point: the beat
             // being nulled is against the audio clock.
-            memset(mono, 128, SPEAKER_SAMPLES_PER_FRAME);
-            speaker_write_frame(mono, SPEAKER_SAMPLES_PER_FRAME);
+            size_t n = trim_pace_samples();
+
+            memset(mono, 128, n);
+            speaker_write_frame(mono, n);
         } else if (diag_tone_on(&d)) {
             // One frame per pass, so the DMA queue paces the loop at about
             // 16.7 ms — near enough the poll interval that button response is

@@ -453,6 +453,33 @@ static void test_the_diagnostics_define_the_mode(void)
         "src/diag.cpp never draws, so guard (h) would pass vacuously");
 }
 
+/*
+ * A value the diagnostic screen changes has to reach the hardware that value
+ * describes. The panel trim is the case that proved it: the page corrected its
+ * own porch and showed the new number, and `display_set_trim()` was called
+ * only at boot and on a save — so for a whole calibration session the panel
+ * ran at the porch it booted with, every round of the count measured the same
+ * beat, and the loop could not converge. It cost a bench session to find and
+ * nothing in the build said a word.
+ *
+ * The fix was structural: one comparison once a pass, rather than a push from
+ * each of the four places that can move the value. This guards the wiring
+ * itself, which is the part no host test can reach — the call is into the
+ * display driver, and the proof it worked is on glass.
+ */
+static void test_the_diagnostics_push_the_trim_to_the_panel(void)
+{
+    TEST_ASSERT_GREATER_THAN_MESSAGE(
+        0, file_count(PROJECT_DIR "/src/diag.cpp", "display_set_trim("),
+        "src/diag.cpp never hands the trim to the display, so a porch the "
+        "page corrects would stay on the page");
+    TEST_ASSERT_GREATER_THAN_MESSAGE(
+        0, file_count(PROJECT_DIR "/src/diag.cpp", "trim_follow()"),
+        "src/diag.cpp does not compare the page's porch against the applied "
+        "one, so the push is back to being something each path has to "
+        "remember");
+}
+
 /* Every RENDER_GEOM branch must state its own output size, because 5/3's
  * width is not 160 x k/16 for any k and the old derived formula would
  * silently give the wrong one. One geometry is left, so this is a guard
@@ -493,6 +520,7 @@ int main(void)
     RUN_TEST(test_no_exit_path_symbol_under_src);
     RUN_TEST(test_the_diagnostics_reference_no_forbidden_layer);
     RUN_TEST(test_the_diagnostics_define_the_mode);
+    RUN_TEST(test_the_diagnostics_push_the_trim_to_the_panel);
     RUN_TEST(test_render_config_states_a_size_for_every_geometry);
     return UNITY_END();
 }
