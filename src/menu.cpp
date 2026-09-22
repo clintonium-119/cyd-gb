@@ -6,7 +6,10 @@
 #include "render_config.h"
 #include "input/combo.h"
 #include "ui/list.h"
+#include "sd_manager.h"
+#include "cart/catalog.h"
 #include <Arduino.h>
+#include <stdlib.h>
 
 // The in-game pause menu: six rows inside the game window, worked with the
 // D-pad. The highlight is the pure list machine in gbcore; everything here is
@@ -170,59 +173,141 @@ static const char* auth_name(const menu_cart_info_t* info)
     }
 }
 
-// Read-only, and B is the only way out. The two values that can outrun the
-// window — the cartridge's raw string and the matched file name — wrap at
-// font 1; the rest are short enough for font 2. Worst case is 178 px of rows
-// against the shortest GAME_H, 216, which leaves the footer its own line; a
-// taller geometry only adds room.
+/* Both media files are 96x96 raw RGB565, the same imaging run the writer's
+ * detail page reads — one file per ROM under /art and /shot. */
+#define CART_ART_W  96
+#define CART_ART_H  96
+#define CART_ART_PX (CART_ART_W * CART_ART_H)
+
+/* Between the two images, and under the image band. */
+#define CART_ART_GAP 8
+
+// The file name out of the stored path: /art, /shot and the catalog are all
+// keyed by it, and it is the only key any of them accepts.
+static const char* rom_basename(const char* path)
+{
+    const char* slash = strrchr(path, '/');
+
+    return slash ? slash + 1 : path;
+}
+
+// Read-only, and B is the only way out. This is the running cartridge's own
+// page — its cover, its gameplay snapshot, its title and its description —
+// and there is no way from here to any other cartridge.
+//
+// The catalog is streamed, never indexed: catalog_index_t is about 19 KB and
+// catalog.h bars it from any translation unit the emulator links at game
+// time, which this one is. catalog_find() and catalog_read_desc() walk the
+// same lines with the same parser for one line buffer apiece.
+//
+// Everything below the title is optional and independently so. A card with no
+// /art, a title with no catalog entry, and a description that failed to read
+// each drop out on their own and give their space back, because media
+// coverage across the library is partial by design.
 static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info)
 {
     char line[128];
+    char desc[CATALOG_DESC_MAX];
+    catalog_reader_t cat;
+    catalog_entry_t entry;
     const int16_t x = (int16_t)(s->game_x + 8);
     const int16_t max_w = GAME_W - 16;
+    const int16_t foot_y = (int16_t)(s->game_y + GAME_H - 18);
+    const int16_t status_y = (int16_t)(foot_y - 10);
     int16_t y = (int16_t)(s->game_y + 8);
+    const char* name;
+    bool have_entry = false;
+    bool have_art = false;
+    uint16_t* px;
 
     tft.fillRect(s->game_x, s->game_y, GAME_W, GAME_H, TFT_BLACK);
     tft.setTextDatum(TL_DATUM);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
 
-    // The tag half. What the cartridge said is a fact about the NFC path and
-    // is reported on its own terms; a build that read no tag says exactly
-    // that, and says nothing about a UID or a protection byte it never saw.
-    if (info && info->valid) {
-        snprintf(line, sizeof(line), "UID %s", info->uid_hex);
-        y = display_draw_wrapped(line, x, y, max_w, 1, 2);
-
-        snprintf(line, sizeof(line), "Tag: %s", info->payload);
-        y = display_draw_wrapped(line, x, y, max_w, 4, 1);
-
-        snprintf(line, sizeof(line), "Type: %s", class_name(info->cls));
-        y = display_draw_wrapped(line, x, y, max_w, 1, 2);
-
-        snprintf(line, sizeof(line), "Protect: %s (AUTH0=0x%02X)",
-                 auth_name(info), info->auth0);
-        y = display_draw_wrapped(line, x, y, max_w, 1, 2);
-    } else {
-        y = display_draw_wrapped("No tag read (bench build)", x, y, max_w, 1, 2);
-    }
-
-    // The ROM half, which is answerable either way: the file that was mapped
-    // and the header it carries are known by the time this page can open, and
-    // a session with no tag is still running something nameable.
     if (info) {
-        snprintf(line, sizeof(line), "File: %s", info->path);
-        y = display_draw_wrapped(line, x, y, max_w, 4, 1);
+        name = rom_basename(info->path);
+        desc[0] = '\0';
 
-        snprintf(line, sizeof(line), "Title: %s", info->title);
-        y = display_draw_wrapped(line, x, y, max_w, 1, 2);
+        if (sd_catalog_reader(&cat)
+            && catalog_find(&cat, name, &entry) == CATALOG_OK) {
+            have_entry = true;
+            if (catalog_read_desc(&cat, entry.offset, desc, sizeof(desc))
+                != CATALOG_OK) {
+                desc[0] = '\0';
+            }
+        }
 
-        snprintf(line, sizeof(line), "Hash: 0x%02X", info->colour_hash);
-        display_draw_wrapped(line, x, y, max_w, 1, 2);
+        // The catalog's title when the card knows this game, the cartridge
+        // header's otherwise — the header is always answerable and is never
+        // the nicer of the two. Two rows because a catalog title runs to 47
+        // characters; display_draw_wrapped returns the rows it actually used,
+        // so a short title costs one and the description gets the other.
+        y = display_draw_wrapped(have_entry ? entry.title : info->title, x, y,
+                                 max_w, 2, 2);
+        y = (int16_t)(y + 2);
+
+        // One buffer, filled twice: this page is drawn once per visit, and
+        // the cover is on the panel before the snapshot is read over it. The
+        // pipeline is paused and the bus is ours, so the 18 KB is transient
+        // against the emulator's own heap rather than a static reservation.
+        // setSwapBytes(true) is the resting state display_bus_acquire()
+        // leaves in force, and the .565 files are little-endian, so there is
+        // no swap to do here.
+        px = (uint16_t*)malloc(CART_ART_PX * sizeof(uint16_t));
+        if (px) {
+            if (sd_media_read(ART_PATH, name, px, CART_ART_PX)) {
+                tft.pushImage(x, y, CART_ART_W, CART_ART_H, px);
+                have_art = true;
+            }
+            if (sd_media_read(SHOT_PATH, name, px, CART_ART_PX)) {
+                tft.pushImage((int16_t)(x + CART_ART_W + CART_ART_GAP), y,
+                              CART_ART_W, CART_ART_H, px);
+                have_art = true;
+            }
+            free(px);
+        }
+        if (have_art) {
+            y = (int16_t)(y + CART_ART_H + CART_ART_GAP);
+        }
+
+        // Which of the three lookups the card answered. Media coverage is
+        // partial across the library, so a sparse page is usually the card's
+        // state and not a fault here — this is the line that tells the two
+        // apart without opening the card on a computer.
+        Serial.printf("[INFO] '%s' catalog=%d art=%d desc=%d\n", name,
+                      (int)have_entry, (int)have_art, (int)(desc[0] != '\0'));
+
+        // Whatever is left between the art and the status line. A taller
+        // geometry spends it on more of the description rather than on gap.
+        if (desc[0]) {
+            int16_t room = (int16_t)(status_y - y - 2);
+            int16_t pitch = (int16_t)(tft.fontHeight(1) + 2);
+            if (room >= pitch) {
+                display_draw_wrapped(desc, x, y, max_w, (uint8_t)(room / pitch),
+                                     1);
+            }
+        } else if (!have_art) {
+            // Nothing but the title would leave the page looking broken
+            // rather than sparse, so name the file that is running instead.
+            display_draw_wrapped(info->path, x, y, max_w, 4, 1);
+        }
     }
 
+    // The one cartridge fact that lives nowhere else. The diagnostic screen's
+    // inspector reads AUTH0 and the access byte, but it never authenticates,
+    // so Ours and Foreign are resolved only on the boot that used the cart —
+    // here. Dim, one row, and below the page's own content: this is a
+    // footnote about the cartridge, not the subject of the page.
     tft.setTextColor(MENU_DIM, TFT_BLACK);
+    if (info && info->valid) {
+        snprintf(line, sizeof(line), "Tag: %s", auth_name(info));
+    } else {
+        snprintf(line, sizeof(line), "No tag read (bench build)");
+    }
+    tft.drawString(line, x, status_y, 1);
+
     tft.setTextDatum(TL_DATUM);
-    tft.drawString("B: back", x, s->game_y + GAME_H - 18, 2);
+    tft.drawString("B: back", x, foot_y, 2);
 }
 
 // ─── Input ──────────────────────────────────────────────────────────────────
