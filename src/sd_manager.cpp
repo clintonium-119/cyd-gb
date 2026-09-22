@@ -215,6 +215,68 @@ bool sd_media_path(const char* dir, const char* rom_filename, char* out,
     return true;
 }
 
+bool sd_media_stream(const char* dir, const char* rom_filename, uint16_t* buf,
+                     size_t row_w, size_t total_rows, size_t band_rows,
+                     sd_media_band_fn fn, void* ctx) {
+    char path[ART_PATH_MAX];
+
+    if (!buf || !fn || !row_w || !total_rows || !band_rows) {
+        return false;
+    }
+    if (!sd_media_path(dir, rom_filename, path, sizeof(path))) {
+        // A missing file is the ordinary case, not worth a line of log per
+        // title the imaging tool has not covered yet.
+        return false;
+    }
+
+    File f = SD.open(path, FILE_READ);
+    if (!f) {
+        Serial.printf("[SD] art open failed: %s\n", path);
+        return false;
+    }
+
+    // The whole file's size is still the contract, checked before a single
+    // band is read: a short file would otherwise be discovered halfway down
+    // the image, with the top of it already on the panel.
+    size_t want = row_w * total_rows * sizeof(uint16_t);
+    if (f.size() != want) {
+        Serial.printf("[SD] art size %u, want %u: %s\n", (unsigned)f.size(),
+                      (unsigned)want, path);
+        f.close();
+        return false;
+    }
+
+    for (size_t row0 = 0; row0 < total_rows; row0 += band_rows) {
+        size_t rows = total_rows - row0;
+        if (rows > band_rows) {
+            rows = band_rows;
+        }
+
+        size_t need = row_w * rows * sizeof(uint16_t);
+        uint8_t* dst = (uint8_t*)buf;
+        size_t got = 0;
+        // The SD library may return a short read; loop until the band is
+        // full or a read stops making progress.
+        while (got < need) {
+            int n = f.read(dst + got, need - got);
+            if (n <= 0) {
+                break;
+            }
+            got += (size_t)n;
+        }
+        if (got != need) {
+            Serial.printf("[SD] art short read %u of %u at row %u: %s\n",
+                          (unsigned)got, (unsigned)need, (unsigned)row0, path);
+            f.close();
+            return false;
+        }
+        fn(ctx, buf, row0, rows);
+    }
+
+    f.close();
+    return true;
+}
+
 bool sd_media_read(const char* dir, const char* rom_filename, uint16_t* out,
                    size_t px_count) {
     char path[ART_PATH_MAX];

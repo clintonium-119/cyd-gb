@@ -182,6 +182,28 @@ static const char* auth_name(const menu_cart_info_t* info)
 /* Between the two images, and under the image band. */
 #define CART_ART_GAP 8
 
+/* Rows per band. 96 x 16 x 2 is 3,072 bytes, against a largest contiguous
+ * block of about 15 KB at game time — the whole 18,432-byte image is refused
+ * outright there, which is why the image arrives in bands at all. */
+#define CART_BAND_ROWS 16
+#define CART_BAND_PX   (CART_ART_W * CART_BAND_ROWS)
+
+// Where one image's bands are going: its left edge, its top, and the panel.
+typedef struct cart_blit_s {
+    int16_t x;
+    int16_t y;
+} cart_blit_t;
+
+// setSwapBytes(true) is the resting state display_bus_acquire() leaves in
+// force and the .565 files are little-endian, so there is no swap to do.
+static void blit_band(void* ctx, const uint16_t* px, size_t row0, size_t rows)
+{
+    const cart_blit_t* at = (const cart_blit_t*)ctx;
+
+    tft.pushImage(at->x, (int16_t)(at->y + row0), CART_ART_W, (int16_t)rows,
+                  (uint16_t*)px);
+}
+
 // The file name out of the stored path: /art, /shot and the catalog are all
 // keyed by it, and it is the only key any of them accepts.
 static const char* rom_basename(const char* path)
@@ -255,17 +277,20 @@ static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info)
         // setSwapBytes(true) is the resting state display_bus_acquire()
         // leaves in force, and the .565 files are little-endian, so there is
         // no swap to do here.
-        px = (uint16_t*)malloc(CART_ART_PX * sizeof(uint16_t));
+        // One band buffer, both images through it in turn. The bands go
+        // straight to the panel as they are read, so nothing here ever holds
+        // a whole 96x96 image — which at game time cannot be allocated.
+        px = (uint16_t*)malloc(CART_BAND_PX * sizeof(uint16_t));
         if (px) {
-            art_ok = sd_media_read(ART_PATH, name, px, CART_ART_PX);
-            if (art_ok) {
-                tft.pushImage(x, y, CART_ART_W, CART_ART_H, px);
-            }
-            shot_ok = sd_media_read(SHOT_PATH, name, px, CART_ART_PX);
-            if (shot_ok) {
-                tft.pushImage((int16_t)(x + CART_ART_W + CART_ART_GAP), y,
-                              CART_ART_W, CART_ART_H, px);
-            }
+            cart_blit_t at = { x, y };
+
+            art_ok = sd_media_stream(ART_PATH, name, px, CART_ART_W,
+                                     CART_ART_H, CART_BAND_ROWS, blit_band,
+                                     &at);
+            at.x = (int16_t)(x + CART_ART_W + CART_ART_GAP);
+            shot_ok = sd_media_stream(SHOT_PATH, name, px, CART_ART_W,
+                                      CART_ART_H, CART_BAND_ROWS, blit_band,
+                                      &at);
             free(px);
         }
         have_art = art_ok || shot_ok;

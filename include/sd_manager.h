@@ -66,6 +66,27 @@ bool sd_media_path(const char* dir, const char* rom_filename, char* out,
 bool sd_media_read(const char* dir, const char* rom_filename, uint16_t* out,
                    size_t px_count);
 
+// One band of a media file, handed to `fn` as it arrives.
+typedef void (*sd_media_band_fn)(void* ctx, const uint16_t* px, size_t row0,
+                                 size_t rows);
+
+// Read one media file a band at a time, calling `fn` with each band as it
+// lands in `buf`. Same file contract as sd_media_read(): the file must be
+// exactly row_w * total_rows * 2 bytes, so a band can never be cut from a
+// file belonging to a different imaging run.
+//
+// This exists because the whole image does not fit. At game time the heap is
+// 100 KB free but its largest contiguous block is about 15 KB, so an 18 KB
+// buffer for a 96x96 cover is refused outright; a few rows at a time is
+// served comfortably. `buf` holds row_w * band_rows pixels and is the
+// caller's — nothing here allocates.
+//
+// False on a missing, mis-sized or short-reading file, and on unusable
+// arguments; `fn` is not called at all in that case.
+bool sd_media_stream(const char* dir, const char* rom_filename, uint16_t* buf,
+                     size_t row_w, size_t total_rows, size_t band_rows,
+                     sd_media_band_fn fn, void* ctx);
+
 bool sd_init();
 
 // Build /roms/gb/<filename> in out. False when the name does not fit out_sz
