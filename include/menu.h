@@ -11,10 +11,12 @@
 // there is one read per power cycle and this is what it left behind.
 //
 // `valid` false means no cartridge was read at all — the bench build — and
-// the page says so rather than showing empty fields. `uid_hex` is up to seven
-// bytes as fourteen hex digits; it lives in RAM for display only and is never
-// persisted anywhere. `cls` and `auth` are the boot table's own enums, not a
-// re-derivation, and `auth0` is the raw configuration byte behind `auth`.
+// the page says so, then goes on to name the ROM that was mapped anyway:
+// what the tag said and what is running are two facts, and only the first of
+// them is missing. `uid_hex` is up to seven bytes as fourteen hex digits; it
+// lives in RAM for display only and is never persisted anywhere. `cls` and
+// `auth` are the boot table's own enums, not a re-derivation, and `auth0` is
+// the raw configuration byte behind `auth`.
 typedef struct menu_cart_info_s {
     bool valid;
     char uid_hex[15];

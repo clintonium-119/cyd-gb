@@ -186,9 +186,10 @@ static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info)
     tft.setTextDatum(TL_DATUM);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
 
-    if (!info || !info->valid) {
-        tft.drawString("No tag read (bench build)", x, y, 2);
-    } else {
+    // The tag half. What the cartridge said is a fact about the NFC path and
+    // is reported on its own terms; a build that read no tag says exactly
+    // that, and says nothing about a UID or a protection byte it never saw.
+    if (info && info->valid) {
         snprintf(line, sizeof(line), "UID %s", info->uid_hex);
         y = display_draw_wrapped(line, x, y, max_w, 1, 2);
 
@@ -201,7 +202,14 @@ static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info)
         snprintf(line, sizeof(line), "Protect: %s (AUTH0=0x%02X)",
                  auth_name(info), info->auth0);
         y = display_draw_wrapped(line, x, y, max_w, 1, 2);
+    } else {
+        y = display_draw_wrapped("No tag read (bench build)", x, y, max_w, 1, 2);
+    }
 
+    // The ROM half, which is answerable either way: the file that was mapped
+    // and the header it carries are known by the time this page can open, and
+    // a session with no tag is still running something nameable.
+    if (info) {
         snprintf(line, sizeof(line), "File: %s", info->path);
         y = display_draw_wrapped(line, x, y, max_w, 4, 1);
 
