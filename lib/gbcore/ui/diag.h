@@ -144,20 +144,20 @@ enum diag_nfc_state_e {
 #define DIAG_TRIM_SPREAD_NUM 3
 #define DIAG_TRIM_SPREAD_DEN 2
 
-/* The fixture's scroll, in output pixels per frame, as the page enters a run.
- * Vertical, because the column-major push makes the seam a vertical line with
- * a vertical displacement across it, and the documented procedure calibrates
- * here — but it is a starting point, not a fixed setting. The D-pad moves both
- * rates during a run, because which pattern and which rate actually make a
- * seam legible on a given panel turned out to be a bench question rather than
- * one this file could answer: the specified pair showed nothing at all on the
- * first board it met.
+/* The fixture's vertical scroll as the page enters a run, in output pixels per
+ * frame. Signed: negative runs the field the other way, and the sign is part
+ * of the setting rather than a detail — the bench found the seam legible
+ * scrolling one way and asked for this value specifically.
  *
- * A rate that equals a whole block height is the one to avoid, in either
- * direction: the field then advances exactly one block a frame and every
- * block takes a fresh shade, so there is no continuity left to see a
- * displacement in. Reachable on purpose, so it can be recognised and left. */
-#define DIAG_TRIM_SCROLL 2
+ * Four, because every pattern here has an 8-pixel feature and half of one is
+ * the operating point. A displacement of a WHOLE feature height loses the
+ * continuity the eye needs: the random field re-randomises every block, and a
+ * periodic field inverts or realigns. Half is the largest step that still
+ * reads as the same picture, translated — which is the thing a seam has to be
+ * a break in. The first version of this page scrolled a whole block a frame
+ * and showed a builder a field with nothing in it.
+ */
+#define DIAG_TRIM_SCROLL (-4)
 
 /* Output pixels per frame the D-pad can reach, either way on either axis. */
 #define DIAG_TRIM_RATE_MAX 8
@@ -184,13 +184,30 @@ enum diag_trim_pat_e {
     DIAG_TRIM_PAT_COUNT,
 };
 
-/* The noise field's block, in output pixels. Eight across for texture; four
- * down so the default scroll displaces it by half a block — enough of a step
- * to read at a seam, with half the rows carrying over so the field can still
- * be tracked between frames. The two properties pull opposite ways and this
- * is the compromise the other patterns let a builder test. */
+/*
+ * What the page enters a run on, which is what the documented procedure
+ * calibrates at. The checkerboard rather than the random field, on the bench's
+ * evidence: it is the one a builder could actually see the seam in, and at the
+ * default rate it is the safer of the two anyway.
+ *
+ * That last part is not obvious and is the reason this is allowed to differ
+ * from DEC-0123. A periodic pattern's hazard is going BLIND — where the
+ * displacement equals a whole period the two sides of a seam line up and a
+ * real seam vanishes — and the checkerboard's period is 16 px, which the
+ * D-pad's ±8 cannot reach. Inside the range the page offers it cannot go
+ * blind at all, while carrying twice the contrast of the random field. The
+ * random field remains for the same rate, and remains the one with no period
+ * at any distance.
+ */
+#define DIAG_TRIM_PAT_DEFAULT DIAG_TRIM_PAT_CHECK
+
+/* Every pattern's feature is 8 output pixels tall, so one default rate is half
+ * of all of them and switching pattern mid-run never lands on a whole-feature
+ * displacement. The noise block is square at 8; a 4-tall block was the first
+ * version's and put the default rate back on the pathological point. */
 #define DIAG_TRIM_BLOCK_W 8
-#define DIAG_TRIM_BLOCK_H 4
+#define DIAG_TRIM_BLOCK_H 8
+#define DIAG_TRIM_FEATURE_H 8
 
 /* The periodic patterns' periods, in output pixels: a checkerboard cell, a
  * stripe band, and the grid's rule spacing. Sized so they read on the panel

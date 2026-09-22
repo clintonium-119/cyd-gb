@@ -47,7 +47,8 @@ Work down the list. Write the result in the blank; a blank you cannot fill is th
     fast and which way the field scrolls (Up/Down vertical, Left/Right sideways, through zero and out the
     other side), **B** cycles the pattern — `noise`, `check`, `stripe`, `grid` — and **A** gives up on the
     run and puts the numbers back. Nothing you do here is stored; it only changes what is on the glass.
-    The page starts on `noise` scrolling up at 2, which is the pair the trim is specified at.
+    The page starts on `check` scrolling down at 4, which is the pair the seam was found legible in
+    on the bench and the one the trim is specified at.
 
     **Do not press Start to escape a run.** Start is the mark, so pressing it to get back to the numbers
     is telling the unit it saw crossings it did not. A run whose marks disagree with each other is thrown
@@ -69,12 +70,16 @@ Work down the list. Write the result in the blank; a blank you cannot fill is th
     **Porch**, both numbers, and the **Counted on** line beside the crossing: `____`.
 
     *Which pattern you count on does not bias the number.* The pattern only decides whether you can see
-    the seam; the count is you pressing Start at something real. So if the seam only shows up on `check`
-    or `grid`, count on that and write it in the blank. The one thing to avoid is a scroll speed at which
-    the pattern you are using goes **blind** — each of the repeating ones has one, because at that speed
-    the two sides of a real seam line up and it vanishes. `stripe` goes blind at 8, which the D-pad can
-    reach; `check` at 16 and `grid` at 32, which it cannot. `noise` has no repeat to line up with and
-    cannot go blind at any speed, which is why it is the default.
+    the seam; the count is you pressing Start at something real. So if the seam shows up better on one of
+    the others, count on that and write it in the blank.
+
+    Two speeds to avoid, whichever pattern you are on. A pattern can go **blind** — at a speed where the
+    picture repeats exactly across one frame of motion, the two sides of a real seam line up and it
+    vanishes. Only `stripe` can do this within the D-pad's range, at 8; `check` needs 16 and `grid` 32,
+    neither of which the knob reaches, and `noise` has no repeat and cannot do it at any speed. And a
+    pattern can **strobe** — at 8, the checkerboard and the stripes swap places every frame and the noise
+    field reshuffles completely, so there is no picture left to see a break in. Four, in either direction,
+    is half a square on all of them: the biggest step that still looks like the same picture moving.
 
     *If it will not settle:* an interval that gets **shorter** on the round after a correction is normal
     once — the unit does not know which way to go until it has tried one — but twice in a row means you are

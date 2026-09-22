@@ -1015,27 +1015,69 @@ static void test_the_noise_field_uses_all_four_shades(void)
     }
 }
 
-static void test_the_default_scroll_both_displaces_and_carries_over(void)
+static void test_the_default_rate_is_half_a_feature_on_every_pattern(void)
 {
-    unsigned moved = changed_permille(DIAG_TRIM_PAT_NOISE, DIAG_TRIM_SCROLL);
+    uint8_t pat;
 
     /*
-     * The two properties a legible fixture needs, and they pull against each
-     * other. A seam is seen as a STEP in the field, so a one-frame
-     * displacement has to change something; but the eye can only judge a step
-     * in a field it can TRACK, so most of the field has to survive the frame.
+     * The property the first version of this page got wrong, and the reason
+     * the rate and the feature heights are chosen together.
      *
-     * The first version of this suite asserted only the first property, with
-     * a floor of a third at every displacement — and the setting that
-     * maximises it is scroll == block height, where the field advances one
-     * whole block a frame and every block takes a fresh shade. That is
-     * maximal by the metric and invisible in the hand: the ancestor this
-     * fixture is lifted from says so in its own comment, "pixels changed is
-     * not the same as seen", and the first board it was shown on read as a
-     * field with nothing in it. Both bounds, or neither is worth asserting.
+     * A seam is seen as a STEP in the field, which needs the field to still
+     * be the same picture either side of it. At a displacement of a WHOLE
+     * feature height that continuity is gone: the random field maps every
+     * block onto an independent block, and a periodic field inverts or
+     * realigns. Half a feature is the largest step that still translates.
+     *
+     * Asserted across every pattern, not just the default, because B changes
+     * pattern mid-run without touching the rate — so a pattern whose feature
+     * were not 8 tall would drop a builder onto the bad point silently.
+     */
+    TEST_ASSERT_EQUAL_INT(DIAG_TRIM_FEATURE_H, DIAG_TRIM_BLOCK_H);
+    TEST_ASSERT_EQUAL_INT(DIAG_TRIM_FEATURE_H, DIAG_TRIM_CHECK_CELL);
+    TEST_ASSERT_EQUAL_INT(DIAG_TRIM_FEATURE_H, DIAG_TRIM_STRIPE_BAND * 2);
+    TEST_ASSERT_EQUAL_INT(0, DIAG_TRIM_GRID_PITCH % DIAG_TRIM_FEATURE_H);
+
+    /* And the default rate is half of it, whichever way it runs. */
+    TEST_ASSERT_EQUAL_INT(DIAG_TRIM_FEATURE_H,
+                          2 * (DIAG_TRIM_SCROLL < 0 ? -DIAG_TRIM_SCROLL
+                                                    : DIAG_TRIM_SCROLL));
+
+    /* No pattern is blind at it. */
+    for (pat = 0; pat < (uint8_t)DIAG_TRIM_PAT_COUNT; pat++) {
+        TEST_ASSERT_TRUE(changed_permille(pat, DIAG_TRIM_FEATURE_H / 2) > 0u);
+    }
+}
+
+static void test_the_noise_field_carries_over_at_the_default_rate(void)
+{
+    unsigned moved = changed_permille(DIAG_TRIM_PAT_NOISE,
+                                      DIAG_TRIM_FEATURE_H / 2);
+
+    /*
+     * The two bounds that pull against each other, on the pattern where the
+     * changed-pixel count really does measure lost continuity. (It does not
+     * on a periodic pattern: a checkerboard shifted half a cell changes half
+     * its pixels and is obviously the same checkerboard, so the upper bound
+     * would be meaningless there.)
+     *
+     * The suite's first version asserted only the lower bound, with a floor
+     * of a third at every displacement — and the setting that maximises it is
+     * a whole-block scroll, which is invisible in the hand. The ancestor this
+     * fixture is lifted from says so in its own comment: "pixels changed is
+     * not the same as seen". Both bounds, or neither is worth asserting.
      */
     TEST_ASSERT_TRUE(moved > 100u);   /* something steps          */
     TEST_ASSERT_TRUE(moved < 500u);   /* most of it carries over  */
+}
+
+static void test_a_whole_feature_displacement_is_the_bad_point(void)
+{
+    /* Pinned so the reason the rate is what it is cannot be lost: at a whole
+     * feature the random field has re-randomised, which is what a builder was
+     * shown the first time and could make nothing of. */
+    TEST_ASSERT_TRUE(changed_permille(DIAG_TRIM_PAT_NOISE,
+                                      DIAG_TRIM_FEATURE_H) > 500u);
 }
 
 static void test_the_noise_field_has_no_period_but_its_own_block(void)
@@ -1056,7 +1098,12 @@ static void test_the_noise_field_has_no_period_but_its_own_block(void)
         if (shift % DIAG_TRIM_BLOCK_H == 0) {
             continue;
         }
-        TEST_ASSERT_TRUE_MESSAGE(moved > 100u,
+        /* Not blind — strictly more than nothing. Deliberately not a
+         * sensitivity floor: a one-pixel step on an eight-pixel block moves
+         * 9 % of the field and that is arithmetic, not a fault. Blindness is
+         * the property that separates this pattern from the periodic ones,
+         * and it is exactly zero. */
+        TEST_ASSERT_TRUE_MESSAGE(moved > 0u,
             "the noise field went blind at a displacement that is not a "
             "whole number of its blocks");
     }
@@ -1135,7 +1182,10 @@ static void test_a_run_starts_on_the_documented_pattern_and_rate(void)
     int8_t vx = 99;
     int8_t vy = 99;
 
-    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_PAT_NOISE, diag_trim_pattern(&d));
+    /* The checkerboard scrolling down at 4, which is the pair the bench found
+     * a seam legible in and the pair the procedure names. */
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_PAT_DEFAULT, diag_trim_pattern(&d));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_PAT_CHECK, diag_trim_pattern(&d));
     diag_trim_rate(&d, &vx, &vy);
     TEST_ASSERT_EQUAL_INT8(0, vx);
     TEST_ASSERT_EQUAL_INT8(DIAG_TRIM_SCROLL, vy);
@@ -1165,40 +1215,47 @@ static void test_the_scroll_runs_through_zero_into_the_other_direction(void)
 {
     int8_t vy = 0;
 
-    /* Which way the field runs is half of what a builder is hunting for. */
+    /* Which way the field runs is half of what a builder is hunting for, and
+     * the default runs one way, so the knob has to cross zero to reach the
+     * other. */
     goto_page(DIAG_PAGE_TRIM);
     sample(COMBO_EVENT_NONE, COMBO_BTN_START, 0);
     sample(COMBO_EVENT_NONE, 0, 0);
-
-    hammer(COMBO_BTN_DOWN, 6);
     diag_trim_rate(&d, NULL, &vy);
-    TEST_ASSERT_EQUAL_INT8(DIAG_TRIM_SCROLL - 6, vy);
-    TEST_ASSERT_TRUE(vy < 0);
+    TEST_ASSERT_EQUAL_INT8(DIAG_TRIM_SCROLL, vy);
 
-    hammer(COMBO_BTN_DOWN, 100);
+    /* Up from the default, through zero, out the far side. */
+    hammer(COMBO_BTN_UP, 6);
     diag_trim_rate(&d, NULL, &vy);
-    TEST_ASSERT_EQUAL_INT8(-DIAG_TRIM_RATE_MAX, vy);
+    TEST_ASSERT_EQUAL_INT8(DIAG_TRIM_SCROLL + 6, vy);
+    TEST_ASSERT_TRUE(vy > 0);
 
     hammer(COMBO_BTN_UP, 100);
     diag_trim_rate(&d, NULL, &vy);
     TEST_ASSERT_EQUAL_INT8(DIAG_TRIM_RATE_MAX, vy);
+
+    hammer(COMBO_BTN_DOWN, 100);
+    diag_trim_rate(&d, NULL, &vy);
+    TEST_ASSERT_EQUAL_INT8(-DIAG_TRIM_RATE_MAX, vy);
 }
 
 static void test_b_cycles_the_pattern_during_a_run_and_wraps(void)
 {
     uint8_t i;
+    uint8_t first = DIAG_TRIM_PAT_DEFAULT;
 
     goto_page(DIAG_PAGE_TRIM);
     sample(COMBO_EVENT_NONE, COMBO_BTN_START, 0);
     sample(COMBO_EVENT_NONE, 0, 0);
 
-    for (i = 1; i < (uint8_t)DIAG_TRIM_PAT_COUNT; i++) {
+    for (i = 1; i <= (uint8_t)DIAG_TRIM_PAT_COUNT; i++) {
         sample(COMBO_EVENT_NONE, COMBO_BTN_B, (uint32_t)(i * 100));
         sample(COMBO_EVENT_NONE, 0, (uint32_t)(i * 100 + 10));
-        TEST_ASSERT_EQUAL_UINT8(i, diag_trim_pattern(&d));
+        TEST_ASSERT_EQUAL_UINT8((first + i) % DIAG_TRIM_PAT_COUNT,
+                                diag_trim_pattern(&d));
     }
-    sample(COMBO_EVENT_NONE, COMBO_BTN_B, 9000);
-    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_PAT_NOISE, diag_trim_pattern(&d));
+    /* All the way round and back to where it started. */
+    TEST_ASSERT_EQUAL_UINT8(first, diag_trim_pattern(&d));
 }
 
 static void test_the_fixture_offset_accumulates_rather_than_multiplying(void)
@@ -1222,7 +1279,8 @@ static void test_the_fixture_offset_accumulates_rather_than_multiplying(void)
     TEST_ASSERT_EQUAL_INT32(10 * DIAG_TRIM_SCROLL, oy);
 
     /* Stop it dead, run ten more frames: the offset must hold, not reset. */
-    hammer(COMBO_BTN_DOWN, DIAG_TRIM_SCROLL);
+    hammer(COMBO_BTN_UP, DIAG_TRIM_SCROLL < 0 ? -DIAG_TRIM_SCROLL
+                                              : DIAG_TRIM_SCROLL);
     for (i = 0; i < 10u; i++) {
         diag_trim_frame(&d);
     }
@@ -1249,7 +1307,8 @@ static void test_the_fixture_a_span_was_counted_on_is_kept_with_it(void)
 
     /* A crossing interval without the fixture it was counted on is not a
      * reading anyone can act on later. */
-    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_PAT_CHECK, d.span_pat);
+    TEST_ASSERT_EQUAL_UINT8((DIAG_TRIM_PAT_DEFAULT + 1)
+                                % DIAG_TRIM_PAT_COUNT, d.span_pat);
     TEST_ASSERT_EQUAL_INT8(DIAG_TRIM_SCROLL + 3, d.span_vy);
 }
 
@@ -1270,7 +1329,8 @@ static void test_the_pattern_and_rate_survive_between_runs(void)
      * builder does; having it reset on every run would make that unbearable. */
     sample(COMBO_EVENT_NONE, COMBO_BTN_START, 1000);
     sample(COMBO_EVENT_NONE, 0, 1010);
-    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_PAT_CHECK, diag_trim_pattern(&d));
+    TEST_ASSERT_EQUAL_UINT8((DIAG_TRIM_PAT_DEFAULT + 1)
+                                % DIAG_TRIM_PAT_COUNT, diag_trim_pattern(&d));
     {
         int8_t vy = 0;
 
@@ -1344,7 +1404,9 @@ int main(void)
     RUN_TEST(test_start_means_nothing_on_any_other_page);
     RUN_TEST(test_the_fixture_is_deterministic_in_its_block_coordinates);
     RUN_TEST(test_the_noise_field_uses_all_four_shades);
-    RUN_TEST(test_the_default_scroll_both_displaces_and_carries_over);
+    RUN_TEST(test_the_default_rate_is_half_a_feature_on_every_pattern);
+    RUN_TEST(test_the_noise_field_carries_over_at_the_default_rate);
+    RUN_TEST(test_a_whole_feature_displacement_is_the_bad_point);
     RUN_TEST(test_the_noise_field_has_no_period_but_its_own_block);
     RUN_TEST(test_every_periodic_pattern_goes_blind_somewhere);
     RUN_TEST(test_the_stripes_go_blind_within_the_dpads_reach);

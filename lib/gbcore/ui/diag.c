@@ -139,12 +139,12 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
     d->trim_dir = +1;
     d->trim_marks = 0;
     d->trim_frames = 0;
-    d->trim_pat = DIAG_TRIM_PAT_NOISE;
+    d->trim_pat = DIAG_TRIM_PAT_DEFAULT;
     d->trim_vx = 0;
     d->trim_vy = DIAG_TRIM_SCROLL;
     d->trim_ox = 0;
     d->trim_oy = 0;
-    d->span_pat = DIAG_TRIM_PAT_NOISE;
+    d->span_pat = DIAG_TRIM_PAT_DEFAULT;
     d->span_vx = 0;
     d->span_vy = 0;
     d->trim_first_frame = 0;
