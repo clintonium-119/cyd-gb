@@ -19,6 +19,7 @@
 
 #include "cart/catalog.h"
 #include "cart/rom_store.h"
+#include "ui/manual.h"
 
 #define ROM_PATH_GB     "/roms/gb"
 #define SAVE_PATH       "/saves"
@@ -86,6 +87,32 @@ typedef void (*sd_media_band_fn)(void* ctx, const uint16_t* px, size_t row0,
 bool sd_media_stream(const char* dir, const char* rom_filename, uint16_t* buf,
                      size_t row_w, size_t total_rows, size_t band_rows,
                      sd_media_band_fn fn, void* ctx);
+
+// ─── Manuals ────────────────────────────────────────────────────────────────
+// One scanned manual per game that has one, 1 bpp pages behind a page table;
+// the format is docs/CATALOG_FORMAT.md § Manuals, and ui/manual.h parses it.
+// Like the art, written only by the imaging tool: a game with no manual has
+// no file, and that is an ordinary case.
+//
+// "/manual" (7) + a 60-character stem + ".1bp" (4) + the NUL is 72, so a
+// manual path fits ART_PATH_MAX too.
+#define MANUAL_PATH     "/manual"
+#define MANUAL_SUFFIX   ".1bp"
+
+// Build /manual/<stem>.1bp in out, by sd_media_path()'s rule: false when the
+// path does not fit out_sz or no such file exists, never a truncated path.
+bool sd_manual_path(const char* rom_filename, char* out, size_t out_sz);
+
+// Open the running game's manual and bind a chunk reader over it, with the
+// file's size in *size for the exact-size check. The file stays open until
+// sd_manual_close() — the reader seeks into it for every band it draws — and
+// opening another closes the previous one first. False when there is no
+// manual or it will not open.
+bool sd_manual_reader(const char* rom_filename, manual_reader_t* out,
+                      uint32_t* size);
+
+// Close the manual sd_manual_reader() opened. Safe to call when none is open.
+void sd_manual_close();
 
 bool sd_init();
 

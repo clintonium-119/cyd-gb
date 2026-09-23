@@ -130,23 +130,24 @@ bool sd_rom_find_legacy(const char* title, char* out_path, size_t out_sz) {
 
 static File catalog_file;
 
-static int catalog_read(void* ctx, uint32_t off, void* dst, size_t cap,
-                        size_t* got) {
-    (void)ctx;
+// The chunk reader behind both the catalog and a manual; ctx is the File.
+static int file_read(void* ctx, uint32_t off, void* dst, size_t cap,
+                     size_t* got) {
+    File& f = *(File*)ctx;
     *got = 0;
-    if (!catalog_file) {
+    if (!f) {
         return -1;
     }
     // Reading at or past the end is end-of-file, not an error: seek() on a
     // FAT file can refuse an offset past the end, and the reader contract
     // spells that case *got == 0.
-    if (off >= (uint32_t)catalog_file.size()) {
+    if (off >= (uint32_t)f.size()) {
         return 0;
     }
-    if (!catalog_file.seek(off)) {
+    if (!f.seek(off)) {
         return -1;
     }
-    int n = catalog_file.read((uint8_t*)dst, cap);
+    int n = f.read((uint8_t*)dst, cap);
     if (n < 0) {
         return -1;
     }
@@ -167,8 +168,8 @@ bool sd_catalog_reader(catalog_reader_t* out) {
             return false;
         }
     }
-    out->ctx = NULL;
-    out->read = catalog_read;
+    out->ctx = &catalog_file;
+    out->read = file_read;
     return true;
 }
 
@@ -181,8 +182,9 @@ bool sd_catalog_reader(catalog_reader_t* out) {
 // once for the index and then seeked into for every description; a cover or a
 // snapshot is read once when a title is opened and never again.
 
-bool sd_media_path(const char* dir, const char* rom_filename, char* out,
-                   size_t out_sz) {
+// <dir>/<stem><suffix>, the rule every per-game file on the card follows.
+static bool stem_path(const char* dir, const char* rom_filename,
+                      const char* suffix, char* out, size_t out_sz) {
     if (!ready || !dir || !rom_filename || !out || !out_sz) {
         return false;
     }
@@ -203,7 +205,7 @@ bool sd_media_path(const char* dir, const char* rom_filename, char* out,
     // same rule sd_rom_path() follows: a truncated path can name a different
     // file that really exists.
     int n = snprintf(out, out_sz, "%s/%.*s%s", dir, (int)stem, rom_filename,
-                     ART_SUFFIX);
+                     suffix);
     if (n < 0 || (size_t)n >= out_sz) {
         out[0] = '\0';
         return false;
@@ -213,6 +215,11 @@ bool sd_media_path(const char* dir, const char* rom_filename, char* out,
         return false;
     }
     return true;
+}
+
+bool sd_media_path(const char* dir, const char* rom_filename, char* out,
+                   size_t out_sz) {
+    return stem_path(dir, rom_filename, ART_SUFFIX, out, out_sz);
 }
 
 bool sd_media_stream(const char* dir, const char* rom_filename, uint16_t* buf,
@@ -323,6 +330,42 @@ bool sd_media_read(const char* dir, const char* rom_filename, uint16_t* out,
         return false;
     }
     return true;
+}
+
+// ─── Manuals ────────────────────────────────────────────────────────────────
+// Held open while the reader is on screen, like the catalog, because every
+// band it draws seeks back into the file; closed when the reader exits, unlike
+// the catalog, because at game time nothing else wants it.
+
+static File manual_file;
+
+bool sd_manual_path(const char* rom_filename, char* out, size_t out_sz) {
+    return stem_path(MANUAL_PATH, rom_filename, MANUAL_SUFFIX, out, out_sz);
+}
+
+bool sd_manual_reader(const char* rom_filename, manual_reader_t* out,
+                      uint32_t* size) {
+    char path[ART_PATH_MAX];
+
+    sd_manual_close();
+    if (!out || !size || !sd_manual_path(rom_filename, path, sizeof(path))) {
+        return false;
+    }
+    manual_file = SD.open(path, FILE_READ);
+    if (!manual_file) {
+        Serial.printf("[SD] manual open failed: %s\n", path);
+        return false;
+    }
+    *size = (uint32_t)manual_file.size();
+    out->ctx = &manual_file;
+    out->read = file_read;
+    return true;
+}
+
+void sd_manual_close() {
+    if (manual_file) {
+        manual_file.close();
+    }
 }
 
 void sd_get_save_path(const char* rp, char* sp, int mx) {

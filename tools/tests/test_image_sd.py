@@ -1,6 +1,7 @@
 """Tests for tools/image_sd.py — the layout, idempotency, pruning and verify."""
 
 import json
+import re
 import shutil
 import struct
 import subprocess
@@ -503,6 +504,24 @@ FIXTURE_MANUAL_PAGES = [
 def test_the_encoder_still_writes_the_c_suites_fixture_byte_for_byte(repo_root):
     fixture = repo_root / "test" / "fixtures" / "manual_two_pages.1bp"
     assert image_sd.encode_manual(FIXTURE_MANUAL_PAGES) == fixture.read_bytes()
+
+def c_define(path, name):
+    """A #define's value as written, quotes and all."""
+    match = re.search(r"^#define\s+" + name + r"\s+(\S+)", path.read_text(), re.M)
+    assert match, f"{path} does not #define {name}"
+    return match.group(1)
+
+
+def test_the_manual_directory_and_suffix_match_the_firmware(repo_root):
+    header = repo_root / "include" / "sd_manager.h"
+    assert c_define(header, "MANUAL_PATH") == f'"/{image_sd.MANUAL_DIR}"'
+    assert c_define(header, "MANUAL_SUFFIX") == f'"{image_sd.MANUAL_SUFFIX}"'
+
+
+def test_the_manual_magic_and_version_match_the_firmware(repo_root):
+    header = repo_root / "lib" / "gbcore" / "ui" / "manual.h"
+    assert c_define(header, "MANUAL_MAGIC") == f'"{image_sd.MANUAL_MAGIC.decode()}"'
+    assert c_define(header, "MANUAL_VERSION") == str(image_sd.MANUAL_VERSION)
 
 # --- manual rendering -----------------------------------------------------
 

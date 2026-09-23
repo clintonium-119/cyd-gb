@@ -48,8 +48,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_GAMES = REPO_ROOT / "games.json"
 
 # The card's managed directories, named as include/sd_manager.h names them:
-# ROM_PATH_GB, ART_PATH, SHOT_PATH, SAVE_PATH and CATALOG_PATH. A rename there
-# should be findable from here. MANUAL_DIR has no firmware name yet.
+# ROM_PATH_GB, ART_PATH, SHOT_PATH, MANUAL_PATH, SAVE_PATH and CATALOG_PATH. A
+# rename there should be findable from here.
 ROM_DIR = "roms/gb"
 ART_DIR = "art"
 SHOT_DIR = "shot"
@@ -72,6 +72,8 @@ ART_BYTES = ART_EDGE * ART_EDGE * 2
 # docs/CATALOG_FORMAT.md § Manuals: /manual/<stem>.1bp, one file per game, an
 # 8-byte header of magic, u16 version and u16 page count, then a u16 width and
 # u16 height per page, then the 1 bpp rasters back to back, little-endian.
+# MANUAL_SUFFIX in include/sd_manager.h; the magic and version are
+# lib/gbcore/ui/manual.h's.
 MANUAL_SUFFIX = ".1bp"
 MANUAL_MAGIC = b"GBMN"
 MANUAL_VERSION = 1
