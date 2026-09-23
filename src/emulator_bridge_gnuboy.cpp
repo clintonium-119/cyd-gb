@@ -69,6 +69,7 @@ static inline size_t gnuboy_audio_samples() { return GB.audio.pos; }
 #include "audio/mix.h"
 #include "gnuboy_hook.h"
 #include <Arduino.h>
+#include <esp_heap_caps.h>
 #include <esp_timer.h>
 #include <string.h>
 
@@ -1631,4 +1632,63 @@ void emu_reset()
 void emu_get_rom_title(char* out, size_t out_sz)
 {
     rom_title(out, out_sz);
+}
+
+// ─── Save states ────────────────────────────────────────────────────────────
+/* The heap around gnuboy's one 4 KB calloc, logged because the menu is open
+ * and the largest free block is the number that decides whether it lands. */
+static void state_log(const char* what, const char* path, int r, int64_t t0)
+{
+    Serial.printf("[STATE] %s %s: %s in %ums, heap %u largest %u\n", what,
+                  path, r == 0 ? "ok" : "fail",
+                  (unsigned)((esp_timer_get_time() - t0) / 1000),
+                  (unsigned)ESP.getFreeHeap(),
+                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+}
+
+bool emu_state_save(const char* path_vfs)
+{
+    int64_t t0 = esp_timer_get_time();
+    int r;
+
+    if (!emu_up || !path_vfs) {
+        return false;
+    }
+    r = gnuboy_save_state(path_vfs);
+    state_log("save", path_vfs, r, t0);
+    return r == 0;
+}
+
+bool emu_state_load(const char* path_vfs)
+{
+    int64_t t0 = esp_timer_get_time();
+    int r;
+
+    if (!emu_up || !path_vfs) {
+        return false;
+    }
+    r = gnuboy_load_state(path_vfs);
+    state_log("load", path_vfs, r, t0);
+    if (r != 0) {
+        /* A missing or unopenable file fails before a byte is read, but a
+         * short read fails part way through the blocks, with some of them
+         * already overwritten. Nothing here can tell those apart, so the
+         * machine is not trusted to be the one the player left. */
+        return false;
+    }
+    /* The state carries no hardware type, and the load does not touch it,
+     * but the bridge forces DMG after every other path that could, so this
+     * one does too. */
+    GB.hwtype = GB_HW_DMG;
+    /* The registers the LUT was built from are the loaded ones now. */
+    palette_refresh(true);
+    /* The splice's running offset belongs to the audio before the load. */
+    ff_carry = 0;
+    /* The loaded cartridge RAM differs from the .sav, so the next trigger
+     * writes it: the load rewinds the battery save along with everything
+     * else, which is what the player confirmed. */
+    if (save_size) {
+        autosave_note_write(&autosave, 0);
+    }
+    return true;
 }

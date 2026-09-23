@@ -66,6 +66,21 @@ void emu_autosave_defer(uint32_t now_ms);
 // low_mv + hyst_mv, so a cell sagging under load does not save repeatedly.
 bool emu_autosave_battery(uint16_t mv, uint16_t low_mv, uint16_t hyst_mv);
 
+// ─── Save states ────────────────────────────────────────────────────────────
+// The whole machine to and from one file, cartridge RAM included, through
+// stdio: `path_vfs` is a VFS path, under the card's mount point. Save writes
+// exactly the file it is given, so a caller that must never leave a
+// half-written state saves to a temp name and renames it on success.
+//
+// Both must be called with the pipeline paused. A load that succeeded marks
+// cartridge RAM dirty, so the loaded save reaches the .sav at the next
+// flush. A load that failed may have overwritten part of the machine before
+// it did; the caller should not resume as though nothing happened.
+//
+// The Peanut-GB core has no save states and returns false from both.
+bool emu_state_save(const char* path_vfs);
+bool emu_state_load(const char* path_vfs);
+
 // ─── Pipeline ───────────────────────────────────────────────────────────────
 // Emulation and display transfer run on different cores so they overlap.
 // The emulator core, the scaler and this module's frame walk stay on the
