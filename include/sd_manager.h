@@ -114,6 +114,24 @@ bool sd_manual_reader(const char* rom_filename, manual_reader_t* out,
 // Close the manual sd_manual_reader() opened. Safe to call when none is open.
 void sd_manual_close();
 
+// ─── Descriptions ───────────────────────────────────────────────────────────
+// One game's full description as plain ASCII text, paragraphs separated by a
+// blank line; the format is docs/CATALOG_FORMAT.md § Descriptions. Written
+// only by the imaging tool; a game with no description has no file, and the
+// catalog's blurb stands in for it.
+//
+// "/desc" (5) + a 60-character stem + ".txt" (4) + the NUL is 70, so a
+// description path fits ART_PATH_MAX too.
+#define DESC_PATH       "/desc"
+#define DESC_SUFFIX     ".txt"
+// 4,096 bytes of text plus the NUL.
+#define DESC_MAX        4097
+
+// Read /desc/<stem>.txt whole into out, NUL-terminated. False when there is
+// no file, when it is out_sz bytes or longer — refused, never truncated, so
+// the caller falls back to the blurb — or on a short read.
+bool sd_desc_read(const char* rom_filename, char* out, size_t out_sz);
+
 bool sd_init();
 
 // Build /roms/gb/<filename> in out. False when the name does not fit out_sz

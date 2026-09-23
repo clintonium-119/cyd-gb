@@ -368,6 +368,57 @@ void sd_manual_close() {
     }
 }
 
+// ─── Descriptions ───────────────────────────────────────────────────────────
+// Read once when a page opens, like the art, so not held open.
+
+bool sd_desc_read(const char* rom_filename, char* out, size_t out_sz) {
+    char path[ART_PATH_MAX];
+
+    if (!out || !out_sz) {
+        return false;
+    }
+    out[0] = '\0';
+    if (!stem_path(DESC_PATH, rom_filename, DESC_SUFFIX, path, sizeof(path))) {
+        // A missing file is the ordinary case: the blurb stands in.
+        return false;
+    }
+
+    File f = SD.open(path, FILE_READ);
+    if (!f) {
+        Serial.printf("[SD] desc open failed: %s\n", path);
+        return false;
+    }
+
+    size_t want = f.size();
+    if (want >= out_sz) {
+        Serial.printf("[SD] desc size %u, max %u: %s\n", (unsigned)want,
+                      (unsigned)(out_sz - 1), path);
+        f.close();
+        return false;
+    }
+
+    // The SD library may return a short read; loop until the text is in or a
+    // read stops making progress.
+    size_t got = 0;
+    while (got < want) {
+        int n = f.read((uint8_t*)out + got, want - got);
+        if (n <= 0) {
+            break;
+        }
+        got += (size_t)n;
+    }
+    f.close();
+
+    if (got != want) {
+        Serial.printf("[SD] desc short read %u of %u: %s\n", (unsigned)got,
+                      (unsigned)want, path);
+        out[0] = '\0';
+        return false;
+    }
+    out[got] = '\0';
+    return true;
+}
+
 void sd_get_save_path(const char* rp, char* sp, int mx) {
     const char* fn=strrchr(rp,'/'); if(!fn)fn=rp; else fn++;
     char base[ROM_STORE_NAME_MAX];
