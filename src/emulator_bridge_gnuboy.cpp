@@ -105,6 +105,7 @@ static bool emu_up = false;
  * it before that. */
 static uint32_t save_size_from_header();
 static uint8_t fskip = 0, fcnt = 0;
+static bool ffwd = false;
 static uint32_t fpsc = 0, fpst = 0, cfps = 0;
 static uint8_t jpad = 0;
 
@@ -1278,11 +1279,38 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     return true;
 }
 
+/*
+ * Mix the run gnuboy has just finished into out, halved for fast-forward, and
+ * return the bytes written. gnuboy reports its samples per channel in
+ * audio.pos counting interleaved int16s, so the run's length is half of it,
+ * clamped to what the speaker takes. Halved, two runs' worth is at most
+ * 2 * (SPEAKER_SAMPLES_MAX / 2), so both fit one mono_buf.
+ */
+static size_t mix_run(uint8_t* out, bool half)
+{
+    size_t n = gnuboy_audio_samples() / 2u;
+
+    if (n > SPEAKER_SAMPLES_MAX) {
+        /* Only a frame that ran long enough to overshoot the speaker's
+         * headroom, which the reset frame's 572 does not. Clamping here
+         * discards audio, so it is the last resort rather than the rule. */
+        n = SPEAKER_SAMPLES_MAX;
+    }
+    if (half) {
+        /* An odd trailing sample is dropped: one in every other run. */
+        mix_mono_half(apu_buf, n, vol_idx, out);
+        return n / 2u;
+    }
+    mix_mono(apu_buf, n, vol_idx, out);
+    return n;
+}
+
 void emu_run_frame()
 {
     bool draw;
-    size_t n_samples;
-    int64_t t;
+    size_t n_samples = 0;
+    int64_t t, t_mix;
+    uint32_t mix_us = 0;
 
     /* The two cores' pad bits happen to agree exactly — right, left, up,
      * down, A, B, select, start from bit 0 up — so the byte goes straight
@@ -1295,9 +1323,24 @@ void emu_run_frame()
     draw = (fskip == 0) || ((fcnt & 1u) == 0u);
 
     t = esp_timer_get_time();
+    if (ffwd) {
+        /* Fast-forward: an undrawn run first, then the frame proper. Each
+         * run's audio is mixed at half rate as soon as it returns, since the
+         * next run starts gnuboy's buffer over, and the two halves go to the
+         * speaker as one frame, so its pacing still holds the loop at the
+         * panel's rate while game time runs at twice it. The frame end and
+         * palette refresh run here too, so a register the skipped run wrote
+         * is not lost. */
+        gnuboy_run(false);
+        frame_end();
+        palette_refresh(false);
+        t_mix = esp_timer_get_time();
+        n_samples = mix_run(mono_buf, true);
+        mix_us = (uint32_t)(esp_timer_get_time() - t_mix);
+    }
     gnuboy_run(draw);
     frame_end();
-    emu_us = (uint32_t)(esp_timer_get_time() - t);
+    emu_us = (uint32_t)(esp_timer_get_time() - t) - mix_us;
 
     /* After the frame, so a register the frame wrote is picked up before the
      * next one is drawn with it. */
@@ -1306,19 +1349,10 @@ void emu_run_frame()
     /* Every frame, drawn or skipped: the sound has to stay continuous, and
      * the write is also what paces emulation — it blocks only while the DMA
      * queue is full, which happens only when the emulator is ahead of real
-     * time. gnuboy reports its samples per channel in audio.pos counting
-     * interleaved int16s, so the frame length is half of it, clamped to what
-     * the speaker takes. */
-    t = esp_timer_get_time();
-    n_samples = gnuboy_audio_samples() / 2u;
-    if (n_samples > SPEAKER_SAMPLES_MAX) {
-        /* Only a frame that ran long enough to overshoot the speaker's
-         * headroom, which the reset frame's 572 does not. Clamping here
-         * discards audio, so it is the last resort rather than the rule. */
-        n_samples = SPEAKER_SAMPLES_MAX;
-    }
-    mix_mono(apu_buf, n_samples, vol_idx, mono_buf);
-    apu_us = (uint32_t)(esp_timer_get_time() - t);
+     * time. */
+    t_mix = esp_timer_get_time();
+    n_samples += mix_run(mono_buf + n_samples, ffwd);
+    apu_us = mix_us + (uint32_t)(esp_timer_get_time() - t_mix);
     speaker_write_frame(mono_buf, n_samples);
 
     fcnt++; fpsc++;
@@ -1335,10 +1369,10 @@ void emu_run_frame()
 #ifndef QUIET_PERF
         Serial.printf("[PERF] emu=%uus scale=%uus push=%uus qstall=%uus "
                       "qovf=%u apu=%uus await=%uus aunder=%u aover=%u "
-                      "fps=%u split=c0 core=gnuboy\n",
+                      "fps=%u split=c0 core=gnuboy ff=%u\n",
                       emu_us, scale_us, push_us, q_stall_us,
                       framequeue_overflows(&fq), apu_us, await_us, aunder,
-                      aover, cfps);
+                      aover, cfps, ffwd ? 1u : 0u);
 #endif
     }
 }
@@ -1507,6 +1541,13 @@ void emu_set_frame_skip(uint8_t s)
 }
 
 uint8_t emu_get_frame_skip() { return fskip; }
+
+void emu_set_fast_forward(bool on)
+{
+    ffwd = on;
+}
+
+bool emu_get_fast_forward() { return ffwd; }
 uint32_t emu_get_fps() { return cfps; }
 
 void emu_reset()

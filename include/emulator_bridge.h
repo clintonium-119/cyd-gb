@@ -18,6 +18,12 @@ uint32_t emu_get_cart_ram_last_write_ms();
 void emu_clear_cart_ram_dirty();
 void emu_set_frame_skip(uint8_t skip);
 uint8_t emu_get_frame_skip();
+// Fast-forward: each emu_run_frame() runs two frames of game time, draws the
+// second and plays both frames' audio at double speed, so the game runs at 2x
+// while the display holds its rate. Runtime only, off at start. The Peanut-GB
+// core stores the flag and ignores it.
+void emu_set_fast_forward(bool on);
+bool emu_get_fast_forward();
 uint32_t emu_get_fps();
 void emu_reset();
 

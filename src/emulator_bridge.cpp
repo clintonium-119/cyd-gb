@@ -103,6 +103,8 @@ static uint8_t* cram = nullptr;
 // not here: this module only reports writes and relays the answers.
 static autosave_state_t autosave;
 static uint8_t fskip = 0, fcnt = 0;
+/* Stored and reported, never acted on: fast-forward is gnuboy-only. */
+static bool ffwd = false;
 static uint32_t fpsc = 0, fpst = 0, cfps = 0;
 static uint8_t jpad = 0;
 
@@ -886,6 +888,13 @@ void emu_set_frame_skip(uint8_t s)
     }
 }
 uint8_t emu_get_frame_skip(){return fskip;}
+
+void emu_set_fast_forward(bool on)
+{
+    ffwd = on;
+}
+
+bool emu_get_fast_forward() { return ffwd; }
 uint32_t emu_get_fps(){return cfps;}
 void emu_reset()
 {
