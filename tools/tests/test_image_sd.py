@@ -491,6 +491,19 @@ def test_a_two_page_file_decodes_back_to_what_was_encoded():
     assert decode_manual(image_sd.encode_manual(pages)) == pages
 
 
+# The two pages behind test/fixtures/manual_two_pages.1bp, which the C reader's
+# suite parses: a 10-pixel-wide page, so its rows carry padding, and an 8-wide
+# one that does not.
+FIXTURE_MANUAL_PAGES = [
+    (10, 3, bytes.fromhex("aa80aa80aa80")),
+    (8, 2, bytes.fromhex("a53c")),
+]
+
+
+def test_the_encoder_still_writes_the_c_suites_fixture_byte_for_byte(repo_root):
+    fixture = repo_root / "test" / "fixtures" / "manual_two_pages.1bp"
+    assert image_sd.encode_manual(FIXTURE_MANUAL_PAGES) == fixture.read_bytes()
+
 # --- manual rendering -----------------------------------------------------
 
 # Three fixture pages, in points: a plain page with a black box; a spread wider
