@@ -8,7 +8,7 @@ title: "Prompt Standards"
 status: in_progress
 owner: ""
 created: '2026-08-27'
-updated: '2026-09-17'
+updated: '2026-09-23'
 reviewed_on: ""
 related_notes: ["[[01_Knowledge/Coding_Standards]]", "[[01_Knowledge/System_Overview]]"]
 tags: [apovault, knowledge, standards]
@@ -47,6 +47,7 @@ them before proposing changes." These are therefore rails, not background.
   kid-accessible tag locking, no per-line `pushImage`. (The old no-I²C-on-IO3 entry is moot — I²C lives
   entirely on CN1 as of wiring PDF rev C.)
   **Source:** `reference/ORIGINAL_ROADMAP.md:710-726` (read 2026-09-01).
+- **Do:** pick a picture-quality or output-equality fixture for what the change could actually break, and state which property of the fixture makes the artefact visible (e.g. "a full-map scroller, so every background line changes every frame"). **Do not:** default to whatever title or reference ROM is already loaded, and do not read a pass on it as coverage — a reference fixture only catches drift in something already known-good, and says nothing about a property it can't express. If no available fixture exhibits the property, that's a finding to report, not a reason to accept the wrong one.
 
 ## `README.md` vs `reference/ORIGINAL_ROADMAP.md` — which wins
 
@@ -88,6 +89,7 @@ calls itself "the settled design." **Source:** `README.md`; `reference/ORIGINAL_
 - **Do not introduce classes, namespaces, `enum class`, `constexpr`, STL containers, smart pointers or
   exceptions without asking.** None appear anywhere in first-party code, and the target has 520 KB of SRAM
   and no PSRAM. **Source:** `src/`, `include/` as read 2026-08-27.
+- **Do:** name each build image with the arm it belongs to as soon as it's built (not later, by `ls -t` order), and record the mapping in the step's outcome — a build script that names from commit + minute-resolution timestamp will collide multiple images of one commit built in the same minute, overwriting all but the last. **Do not** fix this by folding build flags into the name generator; flags often carry values (feature bypasses, secrets) that shouldn't be echoed into a filename.
 
 ## Hot-path constraints
 
@@ -99,6 +101,10 @@ calls itself "the settled design." **Source:** `README.md`; `reference/ORIGINAL_
   **Source:** `reference/ORIGINAL_ROADMAP.md:225-228, 254-258` (read 2026-08-27).
 - **Do not allocate in a frame loop.** Allocation happens once in `emu_init()` via `malloc` with null checks
   (`src/emulator_bridge.cpp:160-166`); `String` and heap churn belong in setup paths only.
+- **Do not** validate a design against a proxy metric alone; when a design is tuned against a countable stand-in for a property a person judges (pixels changed, underrun count, peak frame time), assert the bound that proxy was standing in for too, on the other side. A proxy driven to its extreme is often the point where the real property it stood for is gone — check what that extreme looks like before trusting a one-sided assertion on it.
+- **Do:** treat a tear as a count of write-order pairs — spatially adjacent regions written far apart in time — not as a size to shrink; a monotonic sweep minimizes that count (fewest possible boundaries) while any interleaved, scattered, or tiled write order maximizes it, and a shorter boundary from splitting the write does not compensate for having more of them, since boundary count dominates boundary length. **Do not:** redistribute or reorder a display write to "spread out" a visible artifact — check the pair count analytically before spending a bench window on a candidate order.
+- **Do:** before predicting what fraction of boots will be tear-free, establish the direction a frame write runs relative to the panel's refresh sweep — writing against the sweep crosses the scan exactly once per frame (phase sets only _where_ the seam lands, every boot has one), while writing with the sweep can stay ahead for a whole frame (phase then sets _whether_, which is what makes a fraction meaningful). **Do not** assume the rotation that orients the image also fixes the sweep direction: MY/MX/MV remap the frame onto the panel, while separate ML (0x10) and MH (0x04) bits set the refresh order, so a rotation library exposing only some MADCTL combinations can leave the sweep direction unresolved. Settle it by pushing a pattern of known order at the panel and observing, not by reasoning from the datasheet.
+- **Do:** measure a new code path's flash cost from a build whose flag actually reaches it, not the default build — espressif32 links with section garbage collection, so an uncalled public function is dropped from the image entirely and its "cost" shows as 0 or as noise from an unrelated refactor in the same file. When the calling code doesn't exist yet, read the new symbols' sizes directly from the ELF (`nm -S --size-sort` against a build that does reach them) rather than diffing one symbol across two builds — inlining can move a function's own reported size by an order of magnitude between builds without the total flash budget moving at all.
 
 ## Hardware constants
 
@@ -111,6 +117,10 @@ calls itself "the settled design." **Source:** `README.md`; `reference/ORIGINAL_
 - **Do treat `reference/ORIGINAL_ROADMAP.md` §1.2 pin rows as `proposed` or `confirmed` per the row's own Status column**, and
   do not promote a `proposed` row to settled without the §11 bench test.
   **Source:** `reference/ORIGINAL_ROADMAP.md:58-74` (read 2026-08-27).
+- **Do:** treat the static DRAM segment (`dram0_0_seg`) as nearly full — with the frame path's buffers in place, headroom is about 15 KB. Put any new buffer over a few KB on the heap, allocated once in `emu_init()` with a null check, and record the `.dram0.bss` delta for buffer-shaped changes in the step note. **Do not** read PlatformIO's aggregate "RAM: NN%" line as static headroom — it counts the whole RAM including heap, not the static segment.
+- **Do:** write compile-time guards against the arithmetic quantity a constraint actually binds (e.g. transfer pixel count divisible by four), not against the specific configuration observed failing when the guard was planned. **Do not:** enumerate today's failing combinations by name — an enumerated guard stops guarding silently once the configuration space changes and the enumeration goes stale, because it then simply compiles and passes.
+- **Do:** answer a risk about a third-party library's behaviour (or geometry constants in this repo) by reading the vendored source under `.pio/libdeps/<env>/` before booking bench time — it's the exact version the image links, and the answer is usually a grep away. **Do not:** classify a library-behaviour question as a hardware unknown; that misroutes an answerable question onto the bench, where a wrong guess costs a scarce test window instead of a desk-side grep.
+- **Do not** trust a datasheet register on this panel until a bench effect is seen; treat every ST7789 feature as unproven until measured (this panel implements only a subset). **Do** pick the observable before writing the register, and prefer one with an unmissable, large-magnitude signal over a subjective "looks better" judgment. **Do not** read a null result (no observable effect) as a negative result (feature confirmed useless) — a silent no-op and a real negative look identical from the outside and imply opposite next actions.
 
 ## Theme tokens
 
@@ -136,6 +146,7 @@ rail concerns the palette table:
 - Domain item IDs referenced as kanban items (`TASK-NNNN`, `BUG-NNNN`) are allowed.
 - Enforced by `/apo:lint`'s "Check for vault-artifact citations".
 - **Do:** after writing an acceptance criterion, re-read the step's own preconditions and DO-NOT list against the observable it names, and confirm that observable is reachable from that starting state — for firmware, trace the actual code path rather than the design doc's description of it; an observable printed after an early-exit the step itself induces is not reachable, it is a contradiction. **Do not:** infer a probe point or reachable state from a plan's prose just because the named artifact exists somewhere in the system. Where an observable is genuinely unreachable in this step, move it to the first step that can reach it and record the reason in both places.
+- **Do:** establish a branch's actual contents with `git rev-parse`, `git diff --stat` against its base, or a grep of the file in question, before recommending it as a base or describing what it carries. **Do not:** infer a branch's contents from `Active_Context.md`, a workstream summary, or a phase note — those describe intent and work in flight, and go stale the moment work is stashed, reverted, or abandoned rather than committed.
 
 ## Verification status
 
@@ -146,3 +157,13 @@ speculative.
 - **Do:** derive every number an acceptance criterion asserts — expected values, case counts, pixel or byte budgets — by walking the sequence, counting the list, or doing the arithmetic, and show that working in the criterion (`6 x 26 + 40 = 196 <= 216`, not "fits the window"); where a number genuinely cannot be settled until execute, mark it `(verify)` with the fallback named. **Do not:** write an expected value you have not traced, a count you have not counted, or a budget you have not multiplied out — a criterion with a wrong number reads as settled, so the agent that finds it wrong has to disprove it before it can proceed, instead of just meeting a missing one.
 - **Do not treat a scaffold verb's success or a lint pass as proof of correctness:** re-running a scaffold command against an existing file is not guaranteed to be idempotent (it can append a duplicate block instead of updating in place), and a structural linter that parses only the first well-formed block will report clean even when a stale or duplicate block sits behind it. Verify generated/updated files by reading the whole file, not by trusting the tool's exit status or lint output alone.
 - **Do:** before writing a criterion that adds, subtracts, or compares two or more measurements, read where each one is taken in the code and state the containment relationship in the step — if one is measured inside the call the other wraps, name the derived quantity explicitly (e.g. `core = total − nested_a − nested_b`) rather than leaving readers to infer it. **Do not:** treat fields printed on the same diagnostic line as independent just because they're adjacent in the output and have distinct names — adjacency in a log line says nothing about the call graph, and a well-named field invites exactly that wrong assumption, which can misattribute a slow path's cost to a different subsystem entirely.
+- **Do:** when a step needs a measurement, look first for a form of it counted in units the code itself already emits — frames pushed, samples written, blocks queued — before reaching for seconds or hertz. A count needs no assumed clock rate and no calibration constant, so it can't be biased by a stale anchor value and its own resolution floor (where the rounding first exceeds the target precision) states itself in the same units, with no unit conversion to get wrong. **Do not:** default to a physical-unit measurement (an interval in seconds, a frequency, a calibration constant read from a prior bench measurement) when an equivalent count is available; keep any seconds-or-hertz conversion at the point where a human reads the number, not inside the calculation itself.
+
+## Bench fixture fidelity
+
+- **Do:** decide, for every bench fixture, whether it drives the shipping output path or reimplements it — and when it reimplements it, name in the file what it assumes about that path. **Do not:** trust a fixture's own comment about what it shows: a fixture that reimplements a pipeline stage keeps producing a confident picture after the path's order or contract changes, while a fixture that only swaps content at the top of the real path inherits such changes for free.
+- **Do:** subtract `qstall` from `emu` before comparing two arms whose consumers do different amounts of work — `emu` is measured around the emulator step and includes any time spent waiting on the other core's queue, so a cheaper consumer makes an unrelated producer look faster. Treat the net-of-stall figure as a bound unless both arms carry a matched, real consumer load; read the idle/wait time as the actual spare budget, not anything derived from the frame period.
+
+## Plan note corrections
+
+- **Do:** rewrite a plan section from the settled position when a bench result or decision falsifies it — state what now holds, and name what died only as a brief "not this" list pointing at the decision that killed it. **Do not** append the correction below the falsified text and leave it standing; stacked corrections hide which layer is current and duplicate the history that decision records already keep.
