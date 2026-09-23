@@ -39,7 +39,10 @@
 static catalog_index_t idx;                 // about 19 KB
 static uint16_t art[PICKER_ART_PX];         // 18,432 B — the box art
 static uint16_t shot[PICKER_ART_PX];        // 18,432 B — the gameplay snapshot
-static char desc[CATALOG_DESC_MAX];
+// The title's full description, DESC_MAX on the heap while the writer is up:
+// this translation unit links into every image, and a 4 KB static would come
+// out of DRAM that has about 15 KB to spare. NULL when it was refused.
+static char* desc;
 static picker_t picker;
 static boot_made_t made;
 static picker_layout_t geom;
@@ -99,7 +102,11 @@ enum boot_pick_e writer_open(enum writer_mode_e mode,
         return BOOT_PICK_NONE;
     }
 
-    desc[0] = '\0';
+    desc = (char*)malloc(DESC_MAX);
+    if (!desc) {
+        Serial.printf("[WRITER] no %u B for descriptions\n",
+                      (unsigned)DESC_MAX);
+    }
     tft.fillScreen(TFT_BLACK);
     picker_draw(&picker, &geom, NULL, art, shot,
                 display_canvas(cfg.game_x, cfg.game_y));
@@ -124,14 +131,17 @@ enum boot_pick_e writer_open(enum writer_mode_e mode,
             bool have_shot = sd_media_read(SHOT_PATH, idx.e[ci].filename, shot,
                                            PICKER_ART_PX);
 
-            if (catalog_read_desc(cat, idx.e[ci].offset, desc, sizeof desc) !=
-                CATALOG_OK) {
+            // The full text from /desc, else the catalog's blurb.
+            if (desc && !sd_desc_read(idx.e[ci].filename, desc, DESC_MAX)
+                && catalog_read_desc(cat, idx.e[ci].offset, desc, DESC_MAX) !=
+                       CATALOG_OK) {
                 desc[0] = '\0';
             }
             // How far this page can scroll depends on the description that
             // just arrived, so the span is handed over before the redraw.
             picker_set_scroll_span(
-                &picker, picker_page_lines(&geom, desc[0] ? desc : NULL),
+                &picker,
+                picker_page_lines(&geom, desc && desc[0] ? desc : NULL),
                 geom.band_rows);
 
             if (picker_media_loaded(&picker, ci, have_art, have_shot) ==
@@ -143,7 +153,8 @@ enum boot_pick_e writer_open(enum writer_mode_e mode,
         if (ev == PICKER_EVENT_REDRAW) {
             uint32_t began = micros();
 
-            picker_draw(&picker, &geom, desc[0] ? desc : NULL, art, shot,
+            picker_draw(&picker, &geom, desc && desc[0] ? desc : NULL, art,
+                        shot,
                         display_canvas(cfg.game_x, cfg.game_y));
             drawn_us = micros() - began;
             if (!logged) {
@@ -158,5 +169,7 @@ enum boot_pick_e writer_open(enum writer_mode_e mode,
         delay(WRITER_POLL_MS);
     }
 
+    free(desc);
+    desc = NULL;
     return picker_result(&picker, out);
 }

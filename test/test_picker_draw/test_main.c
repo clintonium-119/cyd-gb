@@ -659,6 +659,38 @@ static void test_three_paragraphs_wrap_with_a_blank_line_between(void)
     TEST_ASSERT_FALSE(picker_desc_line(text, 41, 7, line, sizeof(line)));
 }
 
+static void test_a_full_description_scrolls_the_page_past_the_images(void)
+{
+    static char text[2001];
+    picker_layout_t g;
+    uint8_t pitch = (uint8_t)UI_ROW_PITCH(ui_font_height(UI_FONT_SMALL));
+    uint16_t lines;
+    int16_t over;
+    size_t i;
+
+    /* 2,000 characters in three paragraphs of short words. */
+    for (i = 0; i < 2000; i++) {
+        text[i] = (i % 6 == 5) ? ' ' : 'w';
+    }
+    text[666] = '\n';
+    text[667] = '\n';
+    text[1333] = '\n';
+    text[1334] = '\n';
+    text[2000] = '\0';
+
+    TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(GEOM_24_W, GEOM_24_H, &g));
+    lines = picker_desc_lines(text, g.desc_cols);
+
+    /* The text column, not the stacked images, is now the tall one, so the
+     * page is the band plus however much of the text runs past it. */
+    TEST_ASSERT_GREATER_THAN_INT16(g.page_h, (int16_t)(lines * pitch));
+    over = (int16_t)(lines * pitch - g.band_h);
+    TEST_ASSERT_EQUAL_UINT16(g.band_rows + (over + pitch - 1) / pitch,
+                             picker_page_lines(&g, text));
+    TEST_ASSERT_GREATER_THAN_UINT16(picker_page_lines(&g, NULL),
+                                    picker_page_lines(&g, text));
+}
+
 /* ─── argument safety ─────────────────────────────────────────────────────── */
 
 static void test_draw_paints_nothing_when_it_is_handed_nothing(void)
@@ -706,6 +738,7 @@ int main(void)
     RUN_TEST(test_the_wrap_breaks_at_spaces_and_hard_breaks_long_words);
     RUN_TEST(test_a_newline_ends_the_line_and_a_blank_one_is_empty);
     RUN_TEST(test_three_paragraphs_wrap_with_a_blank_line_between);
+    RUN_TEST(test_a_full_description_scrolls_the_page_past_the_images);
     RUN_TEST(test_draw_paints_nothing_when_it_is_handed_nothing);
     return UNITY_END();
 }
