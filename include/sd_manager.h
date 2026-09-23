@@ -1,7 +1,8 @@
 // =============================================================================
 // sd_manager.h - the only module that touches the SD card
 // =============================================================================
-// Three SD-facing pieces the cartridge boot flow needs, plus save-state I/O.
+// Three SD-facing pieces the cartridge boot flow needs, plus battery-save and
+// save-state I/O.
 //
 // There is deliberately no directory listing here. A tag carries a ROM file
 // name and the match rule is exact, so the boot flow asks for one path and
@@ -185,3 +186,30 @@ bool sd_load_state(const char* rom_path, uint8_t* sram, uint32_t size);
 
 // Save file path helper
 void sd_get_save_path(const char* rom_path, char* save_path, int max_len);
+
+// ─── Save states ────────────────────────────────────────────────────────────
+// One emulator state per game beside its battery save, with the snapshot the
+// menu shows for it: /saves/<stem>.state and /saves/<stem>.thm, <stem> by
+// sd_get_save_path()'s rule. Unlike the .sav, the state is written through
+// stdio by the emulator core, which needs the card's VFS path: the same path
+// under SD_VFS_ROOT, the Arduino SD library's default mount point.
+#define STATE_SUFFIX    ".state"
+#define THUMB_SUFFIX    ".thm"
+#define SD_VFS_ROOT     "/sd"
+// "/sd" (3) + "/saves/" (7) + a 63-character name + ".state" (6) + the NUL,
+// with ".tmp" left to sd_commit_tmp()'s own buffer.
+#define STATE_PATH_MAX  80
+
+// Build /saves/<stem><suffix> in out, under SD_VFS_ROOT when `vfs`. False
+// when it does not fit, never a truncated path. Does not touch the card.
+bool sd_get_state_path(const char* rom_path, const char* suffix, bool vfs,
+                       char* out, size_t out_sz);
+
+// Whether the game has a saved state. False when the card is not mounted.
+bool sd_state_exists(const char* rom_path);
+
+// Rename <path>.tmp over <path>, the last step of every write that must
+// never leave a half-written file in place. `path` is the SD library's form,
+// not the VFS one. False, with <path> gone if it existed, when the rename
+// fails.
+bool sd_commit_tmp(const char* path);

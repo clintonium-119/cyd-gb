@@ -419,13 +419,60 @@ bool sd_desc_read(const char* rom_filename, char* out, size_t out_sz) {
     return true;
 }
 
-void sd_get_save_path(const char* rp, char* sp, int mx) {
+// <prefix>/saves/<base><suffix>, where <base> is the ROM's filename less its
+// extension. Every file kept beside the battery save follows this one rule,
+// so a state can never end up under a different stem from its .sav.
+static bool saves_path(const char* rp, const char* suffix, const char* prefix,
+                       char* out, size_t mx) {
     const char* fn=strrchr(rp,'/'); if(!fn)fn=rp; else fn++;
     char base[ROM_STORE_NAME_MAX];
     strncpy(base, fn, ROM_STORE_NAME_MAX - 1);
     base[ROM_STORE_NAME_MAX - 1] = 0;
     char* dot=strrchr(base,'.'); if(dot)*dot=0;
-    snprintf(sp,mx,"%s/%s.sav",SAVE_PATH,base);
+    int n = snprintf(out, mx, "%s%s/%s%s", prefix, SAVE_PATH, base, suffix);
+    return n >= 0 && (size_t)n < mx;
+}
+
+void sd_get_save_path(const char* rp, char* sp, int mx) {
+    saves_path(rp, ".sav", "", sp, (size_t)mx);
+}
+
+bool sd_get_state_path(const char* rom_path, const char* suffix, bool vfs,
+                       char* out, size_t out_sz) {
+    if (!rom_path || !suffix || !out || !out_sz) {
+        return false;
+    }
+    if (!saves_path(rom_path, suffix, vfs ? SD_VFS_ROOT : "", out, out_sz)) {
+        out[0] = '\0';
+        return false;
+    }
+    return true;
+}
+
+bool sd_state_exists(const char* rom_path) {
+    char p[STATE_PATH_MAX];
+    return ready && sd_get_state_path(rom_path, STATE_SUFFIX, false, p,
+                                      sizeof(p))
+           && SD.exists(p);
+}
+
+// rename() over an existing name is not portable across the FAT layers this
+// could sit on, so the destination is removed first rather than relied on to
+// be replaced.
+bool sd_commit_tmp(const char* path) {
+    char tp[STATE_PATH_MAX + 4];
+    int n = snprintf(tp, sizeof(tp), "%s%s", path, SAVE_TMP_SUFFIX);
+    if (!ready || n < 0 || (size_t)n >= sizeof(tp)) {
+        return false;
+    }
+    if (SD.exists(path)) {
+        SD.remove(path);
+    }
+    if (!SD.rename(tp, path)) {
+        Serial.printf("[SD] rename failed: %s -> %s\n", tp, path);
+        return false;
+    }
+    return true;
 }
 
 // The save is written to a sibling temp file and renamed over the real one,
@@ -473,14 +520,7 @@ bool sd_save_state(const char* rp, const uint8_t* data, uint32_t sz) {
         return false;
     }
 
-    // rename() over an existing name is not portable across the FAT layers
-    // this could sit on, so the destination is removed first rather than
-    // relied on to be replaced.
-    if (SD.exists(sp)) {
-        SD.remove(sp);
-    }
-    if (!SD.rename(tp, sp)) {
-        Serial.printf("[SD] Save rename failed: %s -> %s\n", tp, sp);
+    if (!sd_commit_tmp(sp)) {
         return false;
     }
 
