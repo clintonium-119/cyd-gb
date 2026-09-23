@@ -2,9 +2,10 @@
 
 Matches each curated ROM stem to a gamelist <name> — exactly first, then through
 tools/esde_aliases.json — pulls the scraped metadata, resolves the cover and
-snapshot paths the way ES-DE names its media, truncates the description to the
-catalog's 200-byte cap at a sentence boundary, normalises it to plain ASCII, and
-writes a deterministic games.json.
+snapshot paths the way ES-DE names its media, normalises the description to plain
+ASCII with its paragraph breaks kept, and writes a deterministic games.json. The
+catalog's 200-byte blurb is derived from the description when the catalog is
+written; see gamesdb.catalog_blurb().
 
 Media paths are relative to the media directory named by CYD_MEDIA_DIR, and are
 built from the gamelist entry's <path> rather than from the curated stem: ES-DE
@@ -19,10 +20,16 @@ without --force for that reason.
 Unmatched stems are reported with suggestions, never guessed at: a wrong match
 would put another game's description on a cartridge.
 
+--descriptions is the one refresh the curated file allows: it replaces the
+description of each matched entry whose text is still the blurb the seed would
+derive from ES-DE's, with the full text, and leaves every other entry and field
+alone. An entry whose description differs is reported as hand-edited and kept.
+
 Run from the project root:
 
     python tools/seed_games_json.py --report
     python tools/seed_games_json.py
+    python tools/seed_games_json.py --descriptions
 
 Standard library only.
 """
@@ -38,7 +45,6 @@ import xml.etree.ElementTree as ElementTree
 from pathlib import Path
 
 import gamesdb
-from gamesdb import truncate_description
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TOOLS_DIR = Path(__file__).resolve().parent
@@ -159,6 +165,11 @@ def media_relpath(game, kind, media_dir, extensions=MEDIA_EXTENSIONS):
 def normalise_ascii(text):
     """Fold scraped text towards plain ASCII and collapse its whitespace.
 
+    Each paragraph's whitespace is collapsed to single spaces and the paragraphs
+    are joined by gamesdb.PARAGRAPH_BREAK. Any newline starts a paragraph: ES-DE
+    separates paragraphs with a blank line, and list items with a single
+    newline, and either reads wrongly run together.
+
     Anything with no ASCII equivalent is left in place rather than dropped, so
     the validator fails on it and a human sees exactly what to reword.
     """
@@ -170,7 +181,8 @@ def normalise_ascii(text):
         for character in decomposed
         if not unicodedata.combining(character)
     )
-    return " ".join(stripped.split())
+    paragraphs = (" ".join(line.split()) for line in stripped.split("\n"))
+    return gamesdb.PARAGRAPH_BREAK.join(p for p in paragraphs if p != "")
 
 
 def players_max(text):
@@ -236,6 +248,37 @@ def display_title(stem, game):
     return name
 
 
+def full_description(game):
+    """A gamelist entry's description as games.json holds it: whole, normalised."""
+    return normalise_ascii(game.findtext("desc") or "")
+
+
+def refresh_descriptions(games, matched, stream):
+    """Give each untouched matched entry its full description, in place.
+
+    An entry is untouched when its description is exactly the blurb of the
+    fresh full text — what the seed wrote before descriptions were kept whole.
+    Anything else was curated and is kept, with one line on `stream` naming it.
+    Entries are not reordered and no other field is read or written. Returns
+    the number of descriptions replaced.
+    """
+    fresh = {
+        stem + gamesdb.ROM_SUFFIX: full_description(game)
+        for stem, game in matched.items()
+    }
+    replaced = 0
+    for entry in games:
+        text = fresh.get(entry["filename"])
+        if text is None or entry["description"] == text:
+            continue
+        if entry["description"] == gamesdb.catalog_blurb(text):
+            entry["description"] = text
+            replaced += 1
+            continue
+        print(f"kept as hand-edited: {entry['filename']}", file=stream)
+    return replaced
+
+
 def build_entries(matched, media_dir, unmatched=()):
     """One games.json object per curated stem, in display order.
 
@@ -247,9 +290,7 @@ def build_entries(matched, media_dir, unmatched=()):
         entries[stem] = {
             "filename": stem + gamesdb.ROM_SUFFIX,
             "title": display_title(stem, game),
-            "description": truncate_description(
-                normalise_ascii(game.findtext("desc") or "")
-            ),
+            "description": full_description(game),
             "art": media_relpath(game, ART_KIND, media_dir),
             "shot": media_relpath(game, SHOT_KIND, media_dir),
             "manual": media_relpath(
@@ -317,6 +358,12 @@ def parse_args(argv):
         help="list the unmatched stems with suggestions and write nothing",
     )
     parser.add_argument(
+        "--descriptions",
+        action="store_true",
+        help="replace untouched descriptions in the existing games.json with "
+        "ES-DE's full text, and change nothing else",
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
         help="overwrite an existing games.json",
@@ -359,18 +406,23 @@ def main(argv=None):
         report_unmatched(unmatched, gamelist, sys.stderr)
         return 0
 
-    if unmatched:
-        report_unmatched(unmatched, gamelist, sys.stderr)
-        print(
-            "those stems got a bare entry — filename and title only, no "
-            f"description and no art. Alias what you can in {args.aliases} and "
-            "rerun with --force; write the rest by hand.",
-            file=sys.stderr,
-        )
-
-    entries = build_entries(matched, args.media_dir, unmatched)
-    write_games(entries, args.out, force=args.force)
-    print(f"wrote {len(entries)} entries to {args.out}", file=sys.stderr)
+    if args.descriptions:
+        entries = gamesdb.load_games(args.out)
+        replaced = refresh_descriptions(entries, matched, sys.stderr)
+        write_games(entries, args.out, force=True)
+        print(f"replaced {replaced} descriptions in {args.out}", file=sys.stderr)
+    else:
+        if unmatched:
+            report_unmatched(unmatched, gamelist, sys.stderr)
+            print(
+                "those stems got a bare entry — filename and title only, no "
+                f"description and no art. Alias what you can in {args.aliases} and "
+                "rerun with --force; write the rest by hand.",
+                file=sys.stderr,
+            )
+        entries = build_entries(matched, args.media_dir, unmatched)
+        write_games(entries, args.out, force=args.force)
+        print(f"wrote {len(entries)} entries to {args.out}", file=sys.stderr)
 
     problems, notices = gamesdb.validate(
         entries, rom_dir=args.rom_dir, media_dir=args.media_dir

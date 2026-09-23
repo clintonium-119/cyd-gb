@@ -201,7 +201,10 @@ def test_an_image_in_the_manuals_directory_is_not_a_manual(tmp_path, extension):
         ("Pokémon", "Pokemon"),
         ("Rouge édition", "Rouge edition"),
         ("a b", "a b"),
-        ("a  \n\t b", "a b"),
+        ("a \t b", "a b"),
+        ("a  \n\t b", "a\n\nb"),
+        ("one.\n\ntwo.", "one.\n\ntwo."),
+        ("one. \n\n\n two.  ", "one.\n\ntwo."),
         ("  padded  ", "padded"),
     ],
 )
@@ -215,21 +218,21 @@ def test_normalise_ascii_leaves_what_it_cannot_fold(seed_text="中"):
 
 def test_text_under_the_cap_is_unchanged():
     text = "Fit the falling blocks into complete rows."
-    assert seed.truncate_description(text) == text
+    assert gamesdb.truncate_description(text) == text
 
 
 def test_truncation_cuts_at_the_last_sentence_end_within_the_cap():
     first = "One of the best puzzle games ever made, and the one that sold it. "
     second = "It has four buttons. "
     tail = "x" * 200
-    result = seed.truncate_description(first + second + tail)
+    result = gamesdb.truncate_description(first + second + tail)
     assert result == (first + second).rstrip()
     assert len(result.encode("utf-8")) <= 200
 
 
 def test_truncation_falls_back_to_a_word_boundary():
     text = " ".join(["word"] * 80)
-    result = seed.truncate_description(text)
+    result = gamesdb.truncate_description(text)
     assert len(result.encode("utf-8")) <= 200
     assert result.endswith("word")
     assert text.startswith(result)
@@ -237,12 +240,12 @@ def test_truncation_falls_back_to_a_word_boundary():
 
 def test_truncation_counts_bytes_not_characters():
     text = seed.normalise_ascii("Pokémon " * 60)
-    result = seed.truncate_description(text)
+    result = gamesdb.truncate_description(text)
     assert len(result.encode("utf-8")) <= 200
 
 
 def test_truncation_of_unfoldable_multibyte_text_still_fits_the_cap():
-    result = seed.truncate_description("中" * 200)
+    result = gamesdb.truncate_description("中" * 200)
     assert len(result.encode("utf-8")) <= 200
 
 
@@ -396,3 +399,81 @@ def test_the_seed_never_emits_a_title_over_the_cap(gamelist, tmp_path):
         len(entry["title"].encode("utf-8")) <= gamesdb.CATALOG_TITLE_MAX - 1
         for entry in entries
     )
+
+
+# --- full descriptions ----------------------------------------------------
+
+
+def described(name, path, desc):
+    game = ElementTree.Element("game")
+    ElementTree.SubElement(game, "name").text = name
+    ElementTree.SubElement(game, "path").text = path
+    ElementTree.SubElement(game, "desc").text = desc
+    return game
+
+
+def test_a_two_paragraph_desc_keeps_its_break():
+    game = described("Foo", "./Foo.zip", "First part.\n\n  Second   part. ")
+    assert seed.full_description(game) == "First part.\n\nSecond part."
+
+
+def test_a_full_seed_of_a_long_desc_writes_it_whole(tmp_path):
+    long_text = ("A sentence of the long description. " * 40).rstrip()
+    assert len(long_text) > 1000
+    entries = seed.build_entries({"Foo": described("Foo", "./Foo.zip", long_text)}, tmp_path)
+    assert entries[0]["description"] == long_text
+    assert gamesdb.validate(entries)[0] == []
+
+
+def test_descriptions_refreshes_untouched_entries_only(tmp_path, capsys):
+    long_a = ("Alpha goes on for a while. " * 12).rstrip() + "\n\nThe end."
+    long_b = ("Bravo goes on for a while. " * 12).rstrip()
+    matched = {
+        "Alpha": described("Alpha", "./Alpha.zip", long_a),
+        "Bravo": described("Bravo", "./Bravo.zip", long_b),
+    }
+    gamelist = tmp_path / "gamelist.xml"
+    root = ElementTree.Element("gameList")
+    root.extend(matched.values())
+    ElementTree.ElementTree(root).write(gamelist, encoding="utf-8")
+
+    rom_dir = tmp_path / "roms"
+    rom_dir.mkdir()
+    for stem in ("Alpha", "Bravo", "Zulu"):
+        (rom_dir / f"{stem}.gb").write_bytes(b"")
+
+    # Zulu first, so an order change would show; Bravo was hand-edited; Alpha
+    # still carries the blurb the seed wrote, and is a starter.
+    entries = seed.build_entries(matched, tmp_path, unmatched=["Zulu"])
+    by_name = {entry["filename"]: entry for entry in entries}
+    by_name["Alpha.gb"]["description"] = gamesdb.catalog_blurb(long_a)
+    by_name["Alpha.gb"]["starter"] = True
+    by_name["Alpha.gb"]["title"] = "Alpha, curated"
+    by_name["Bravo.gb"]["description"] = "Written for kids."
+    by_name["Zulu.gb"]["description"] = "Hand-written."
+    before = [by_name["Zulu.gb"], by_name["Alpha.gb"], by_name["Bravo.gb"]]
+    out = tmp_path / "games.json"
+    out.write_text(json.dumps(before, indent=2) + "\n", encoding="utf-8")
+
+    code = seed.main([
+        "--descriptions", "--gamelist", str(gamelist), "--rom-dir", str(rom_dir),
+        "--media-dir", str(tmp_path), "--aliases", str(tmp_path / "none.json"),
+        "--out", str(out),
+    ])
+    assert code == 0
+    after = json.loads(out.read_text(encoding="utf-8"))
+
+    assert [entry["filename"] for entry in after] == ["Zulu.gb", "Alpha.gb", "Bravo.gb"]
+    assert after[1]["description"] == long_a
+    assert after[1]["starter"] is True
+    assert after[1]["title"] == "Alpha, curated"
+    assert after[2]["description"] == "Written for kids."
+    assert after[0]["description"] == "Hand-written."
+    for old, new in zip(before, after):
+        assert {k: v for k, v in old.items() if k != "description"} == {
+            k: v for k, v in new.items() if k != "description"
+        }
+    err = capsys.readouterr().err
+    assert "kept as hand-edited: Bravo.gb" in err
+    assert "Alpha.gb" not in err and "Zulu.gb" not in err
+    assert "replaced 1 descriptions" in err
