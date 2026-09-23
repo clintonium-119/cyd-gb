@@ -90,7 +90,10 @@ typedef struct picker_layout_s {
  */
 int picker_layout(int16_t w, int16_t h, picker_layout_t* out);
 
-/* How many lines `s` wraps to at `cols` characters. 0 for NULL or empty. */
+/*
+ * How many lines `s` wraps to at `cols` characters. A newline is a hard break,
+ * so "\n\n" between paragraphs counts a blank line. 0 for NULL or empty.
+ */
 uint16_t picker_desc_lines(const char* s, uint8_t cols);
 
 /*
@@ -101,8 +104,10 @@ uint16_t picker_desc_lines(const char* s, uint8_t cols);
 uint16_t picker_page_lines(const picker_layout_t* g, const char* desc);
 
 /*
- * The text of one wrapped line, NUL-terminated. Breaks at the last space that
- * fits; a word longer than `cols` is broken at `cols`. False when the line is
+ * The text of one wrapped line, NUL-terminated. A newline is a hard break and
+ * is never copied out, so the blank line between paragraphs comes back empty.
+ * Otherwise breaks at the last space that fits; a word longer than `cols` is
+ * broken at `cols`. False when the line is
  * past the end of the string or the arguments are unusable.
  */
 bool picker_desc_line(const char* s, uint8_t cols, uint16_t line, char* out,

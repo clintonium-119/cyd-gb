@@ -615,6 +615,50 @@ static void test_the_wrap_breaks_at_spaces_and_hard_breaks_long_words(void)
     TEST_ASSERT_FALSE(picker_desc_line(words, 10, 0, NULL, sizeof(line)));
 }
 
+static void test_a_newline_ends_the_line_and_a_blank_one_is_empty(void)
+{
+    char line[PICKER_DESC_LINE_MAX];
+
+    TEST_ASSERT_EQUAL_UINT16(2, picker_desc_lines("ab\ncd", 10));
+    TEST_ASSERT_TRUE(picker_desc_line("ab\ncd", 10, 0, line, sizeof(line)));
+    TEST_ASSERT_EQUAL_STRING("ab", line);
+    TEST_ASSERT_TRUE(picker_desc_line("ab\ncd", 10, 1, line, sizeof(line)));
+    TEST_ASSERT_EQUAL_STRING("cd", line);
+
+    /* The second newline of a paragraph break is a line of its own. */
+    TEST_ASSERT_EQUAL_UINT16(3, picker_desc_lines("ab\n\ncd", 10));
+    TEST_ASSERT_TRUE(picker_desc_line("ab\n\ncd", 10, 1, line, sizeof(line)));
+    TEST_ASSERT_EQUAL_STRING("", line);
+    TEST_ASSERT_TRUE(picker_desc_line("ab\n\ncd", 10, 2, line, sizeof(line)));
+    TEST_ASSERT_EQUAL_STRING("cd", line);
+
+    /* A newline just past a full-width line breaks there, not at the earlier
+     * space the space rule would pick. */
+    TEST_ASSERT_TRUE(
+        picker_desc_line("alpha beta\ngamma", 10, 0, line, sizeof(line)));
+    TEST_ASSERT_EQUAL_STRING("alpha beta", line);
+    TEST_ASSERT_EQUAL_UINT16(2, picker_desc_lines("alpha beta\ngamma", 10));
+}
+
+static void test_three_paragraphs_wrap_with_a_blank_line_between(void)
+{
+    char line[PICKER_DESC_LINE_MAX];
+    const char* text =
+        "The hero sets out from a small town to find the lost crown of the "
+        "kingdom.\n\n"
+        "Along the way four friends join the party, each with a skill of "
+        "their own.\n\n"
+        "Only together can they reach the tower.";
+
+    /* Two lines, blank, two lines, blank, one line. */
+    TEST_ASSERT_EQUAL_UINT16(7, picker_desc_lines(text, 41));
+    TEST_ASSERT_TRUE(picker_desc_line(text, 41, 2, line, sizeof(line)));
+    TEST_ASSERT_EQUAL_STRING("", line);
+    TEST_ASSERT_TRUE(picker_desc_line(text, 41, 6, line, sizeof(line)));
+    TEST_ASSERT_EQUAL_STRING("Only together can they reach the tower.", line);
+    TEST_ASSERT_FALSE(picker_desc_line(text, 41, 7, line, sizeof(line)));
+}
+
 /* ─── argument safety ─────────────────────────────────────────────────────── */
 
 static void test_draw_paints_nothing_when_it_is_handed_nothing(void)
@@ -660,6 +704,8 @@ int main(void)
     RUN_TEST(test_a_full_description_is_visible_without_scrolling);
     RUN_TEST(test_every_wrapped_line_fits_the_column_in_pixels);
     RUN_TEST(test_the_wrap_breaks_at_spaces_and_hard_breaks_long_words);
+    RUN_TEST(test_a_newline_ends_the_line_and_a_blank_one_is_empty);
+    RUN_TEST(test_three_paragraphs_wrap_with_a_blank_line_between);
     RUN_TEST(test_draw_paints_nothing_when_it_is_handed_nothing);
     return UNITY_END();
 }

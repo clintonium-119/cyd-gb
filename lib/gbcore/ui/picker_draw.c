@@ -107,10 +107,13 @@ int picker_layout(int16_t w, int16_t h, picker_layout_t* out)
  * How many characters of `s + at` belong on one line of `cols`, and how many
  * to skip before the next line starts.
  *
- * The break is the last space that fits, so prose does not break mid-word the
- * way a filename may. A word longer than the column is broken at the column,
- * because the alternative is a line that cannot be drawn. The skipped space
- * itself is not drawn.
+ * A newline that fits ends the line there, and is skipped rather than drawn;
+ * a newline at the start of the remainder is an empty line, which is how the
+ * blank line between two paragraphs is drawn. Otherwise the break is the last
+ * space that fits, so prose does not break mid-word the way a filename may. A
+ * word longer than the column is broken at the column, because the
+ * alternative is a line that cannot be drawn. The skipped space itself is not
+ * drawn.
  *
  * Exact because font 1's advance is fixed: `cols` characters measure
  * cols * UI_FONT_SMALL_ADV pixels, which is the width the caller asked for.
@@ -123,6 +126,15 @@ static void wrap_one(const char* s, size_t at, uint8_t cols, size_t* take,
     size_t last_space = 0;
     size_t i;
 
+    /* One past the column, like the space below: a newline right after a
+     * full-width line ends that line rather than an earlier space. */
+    for (i = 0; i <= (size_t)cols && i < left; i++) {
+        if (s[at + i] == '\n') {
+            *take = i;
+            *skip = i + 1;
+            return;
+        }
+    }
     if (left <= (size_t)cols) {
         *take = left;
         *skip = left;
