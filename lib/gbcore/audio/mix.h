@@ -63,6 +63,19 @@ enum mix_result_e {
 int mix_mono(const int16_t* stereo, size_t n_frames, uint8_t vol_index,
              uint8_t* out);
 
+/*
+ * Mix one frame at half the sample count, for fast-forward: frames 2k and
+ * 2k+1 are averaged into output sample k, then scaled, clamped and rounded
+ * exactly as mix_mono() does. Two frames' worth of emulation then fit one
+ * frame's output, playing at double speed and pitch.
+ *
+ * Same arguments as mix_mono(), but out takes n_frames / 2 bytes; an odd
+ * trailing frame is dropped. Returns MIX_OK, or MIX_ERR_ARGS without
+ * writing anything.
+ */
+int mix_mono_half(const int16_t* stereo, size_t n_frames, uint8_t vol_index,
+                  uint8_t* out);
+
 #ifdef __cplusplus
 }
 #endif

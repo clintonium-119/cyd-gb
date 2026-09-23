@@ -259,6 +259,95 @@ static void test_opposite_full_scale_channels_cancel_to_mid_scale(void)
     assert_guards_intact();
 }
 
+/* ─── half-rate mix (fast-forward) ────────────────────────────────────────── */
+
+static void assert_half_writes_exactly(size_t n_frames, size_t expect_out)
+{
+    size_t i;
+    memset(g.out, 0x7E, sizeof(g.out));
+    fill_constant(20000, 20000, n_frames);
+    TEST_ASSERT_EQUAL_INT(MIX_OK,
+        mix_mono_half(stereo, n_frames, MIX_VOL_HIGH, g.out));
+    for (i = 0; i < expect_out; i++) {
+        TEST_ASSERT_NOT_EQUAL(0x7E, g.out[i]);
+    }
+    for (i = expect_out; i < n_frames; i++) {
+        TEST_ASSERT_EQUAL_HEX8(0x7E, g.out[i]);
+    }
+    assert_guards_intact();
+}
+
+static void test_half_writes_half_the_frames_and_drops_an_odd_one(void)
+{
+    assert_half_writes_exactly(8, 4);
+    assert_half_writes_exactly(7, 3);
+    assert_half_writes_exactly(1, 0);
+}
+
+static void test_half_matches_mix_mono_on_a_constant_input(void)
+{
+    static uint8_t full[64];
+    static const int16_t levels[][2] = {
+        { 0, 0 }, { 1, 0 }, { -1, 2 }, { 1234, -567 }, { 20000, 20000 },
+        { -32768, -32768 }, { 32767, 32767 }, { 32767, -32768 },
+    };
+    size_t l;
+    uint8_t v;
+
+    for (l = 0; l < sizeof(levels) / sizeof(levels[0]); l++) {
+        fill_constant(levels[l][0], levels[l][1], 64);
+        for (v = 0; v <= MIX_VOL_HIGH; v++) {
+            TEST_ASSERT_EQUAL_INT(MIX_OK, mix_mono(stereo, 64, v, full));
+            TEST_ASSERT_EQUAL_INT(MIX_OK, mix_mono_half(stereo, 64, v, g.out));
+            TEST_ASSERT_EQUAL_HEX8_ARRAY(full, g.out, 32);
+        }
+    }
+    assert_guards_intact();
+}
+
+static void test_half_averages_each_pair_of_frames(void)
+{
+    stereo[0] = 1000;
+    stereo[1] = 1000;
+    stereo[2] = 3000;
+    stereo[3] = 3000;
+    TEST_ASSERT_EQUAL_INT(MIX_OK, mix_mono_half(stereo, 2, MIX_VOL_HIGH, g.out));
+    TEST_ASSERT_EQUAL_HEX8(reference(2000, 2000, MIX_VOL_HIGH), g.out[0]);
+}
+
+static void test_half_zero_input_is_exactly_mid_scale_at_every_volume(void)
+{
+    size_t i;
+    uint8_t v;
+    for (v = 0; v <= MIX_VOL_HIGH; v++) {
+        TEST_ASSERT_EQUAL_INT(MIX_OK,
+            mix_mono_half(stereo, N_FRAMES, v, g.out));
+        for (i = 0; i < N_FRAMES / 2; i++) {
+            TEST_ASSERT_EQUAL_HEX8(MIX_SILENCE, g.out[i]);
+        }
+    }
+    assert_guards_intact();
+}
+
+static void test_half_bad_arguments_return_err_args_and_write_nothing(void)
+{
+    size_t i;
+
+    fill_constant(20000, 20000, N_FRAMES);
+
+    TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
+        mix_mono_half(NULL, N_FRAMES, MIX_VOL_HIGH, g.out));
+    TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
+        mix_mono_half(stereo, N_FRAMES, MIX_VOL_HIGH, NULL));
+    TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
+        mix_mono_half(stereo, N_FRAMES, MIX_VOL_HIGH + 1, g.out));
+
+    for (i = 0; i < N_FRAMES; i++) {
+        TEST_ASSERT_EQUAL_HEX8(0x7E, g.out[i]);
+    }
+    assert_guards_intact();
+}
+
 /* ─── argument checking ───────────────────────────────────────────────────── */
 
 static void test_bad_arguments_return_err_args_and_write_nothing(void)
@@ -292,5 +381,10 @@ int main(void)
     RUN_TEST(test_left_only_and_right_only_give_the_same_output);
     RUN_TEST(test_opposite_full_scale_channels_cancel_to_mid_scale);
     RUN_TEST(test_bad_arguments_return_err_args_and_write_nothing);
+    RUN_TEST(test_half_writes_half_the_frames_and_drops_an_odd_one);
+    RUN_TEST(test_half_matches_mix_mono_on_a_constant_input);
+    RUN_TEST(test_half_averages_each_pair_of_frames);
+    RUN_TEST(test_half_zero_input_is_exactly_mid_scale_at_every_volume);
+    RUN_TEST(test_half_bad_arguments_return_err_args_and_write_nothing);
     return UNITY_END();
 }
