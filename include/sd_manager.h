@@ -132,6 +132,16 @@ void sd_manual_close();
 // the caller falls back to the blurb — or on a short read.
 bool sd_desc_read(const char* rom_filename, char* out, size_t out_sz);
 
+// ─── Boot ROM ───────────────────────────────────────────────────────────────
+// The DMG boot ROM, copied onto the card by hand: Nintendo's code, so it is
+// never committed or imaged by the tooling. Missing is ordinary — the game
+// just starts without the logo.
+#define BOOT_ROM_PATH   "/bios/dmg_boot.bin"
+
+// Read BOOT_ROM_PATH whole into out. The file must be exactly size bytes;
+// anything else is not a DMG boot ROM. False on missing, mis-sized or short.
+bool sd_boot_rom_read(uint8_t* out, size_t size);
+
 bool sd_init();
 
 // Build /roms/gb/<filename> in out. False when the name does not fit out_sz

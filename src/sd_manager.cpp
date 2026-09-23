@@ -503,3 +503,20 @@ bool sd_load_state(const char* rp, uint8_t* data, uint32_t sz) {
     }
     return r==sz;
 }
+
+bool sd_boot_rom_read(uint8_t* out, size_t size) {
+    File f = SD.open(BOOT_ROM_PATH, FILE_READ);
+    if (!f) {
+        // The ordinary case on a card nobody copied one to.
+        return false;
+    }
+    if (f.size() != size) {
+        Serial.printf("[SD] boot ROM size %u, want %u\n", (unsigned)f.size(),
+                      (unsigned)size);
+        f.close();
+        return false;
+    }
+    size_t got = f.read(out, size);
+    f.close();
+    return got == size;
+}

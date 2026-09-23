@@ -447,6 +447,11 @@ static void load_and_run(const char* name) {
     if (!rom) {
         halt_screen("Map failed", "");
     }
+    // Read on the stack: emu_init() copies it into gnuboy's own buffer.
+    uint8_t boot_rom[DMG_BOOT_ROM_SIZE];
+    if (sd_boot_rom_read(boot_rom, sizeof(boot_rom))) {
+        emu_set_boot_rom(boot_rom);
+    }
     if (!emu_init(rom, rom_len)) {
         halt_screen("Init failed", "");
     }

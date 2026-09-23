@@ -9,6 +9,12 @@
 // pointer to the memory-mapped ROM partition, which must stay valid for the
 // whole session. rom_store's map guarantees that — there is no unmap.
 bool emu_init(const uint8_t* rom_data, uint32_t rom_size);
+// The 256-byte DMG boot ROM, run before the cartridge like a real power-on.
+// Call before emu_init(); the bytes are copied there, so they need only live
+// until it returns. Never called, or called with NULL, starts the cartridge
+// at 0x100 as before. The Peanut-GB core ignores it.
+#define DMG_BOOT_ROM_SIZE 256
+void emu_set_boot_rom(const uint8_t* data);
 void emu_run_frame();
 void emu_set_joypad(uint8_t buttons);
 uint8_t* emu_get_cart_ram(uint32_t* size);

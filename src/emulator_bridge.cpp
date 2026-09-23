@@ -895,6 +895,7 @@ void emu_set_fast_forward(bool on)
 }
 
 bool emu_get_fast_forward() { return ffwd; }
+void emu_set_boot_rom(const uint8_t*) {}
 uint32_t emu_get_fps(){return cfps;}
 void emu_reset()
 {

@@ -92,6 +92,8 @@ static inline size_t gnuboy_audio_samples() { return GB.audio.pos; }
 // mapped ROM is read exactly as the interpreter needs it.
 static const uint8_t* rom = nullptr;
 static uint32_t romlen = 0;
+// The caller's boot ROM bytes, read only inside emu_init(). NULL: none.
+static const uint8_t* boot_rom = nullptr;
 
 // ─── State ──────────────────────────────────────────────────────────────────
 static autosave_state_t autosave;
@@ -1225,6 +1227,13 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
      * bookkeeping call with no copy in it. */
     gnuboy_set_framebuffer(fb);
     gnuboy_set_soundbuffer(apu_buf, sizeof(apu_buf) / sizeof(apu_buf[0]));
+    /* After gnuboy_init(), which rebuilds GB and so drops any boot ROM set
+     * before it, and before the reset, which is what reads GB.bios to pick
+     * PC 0x0000 over 0x0100. A failed load just skips the logo. */
+    if (boot_rom && gnuboy_load_bios(boot_rom, DMG_BOOT_ROM_SIZE) != 0) {
+        Serial.println("[EMU] boot ROM load failed, starting at 0x100");
+    }
+    boot_rom = nullptr; // the caller's buffer need not outlive this call
     gnuboy_reset(true);
     emu_up = true;
 
@@ -1538,6 +1547,8 @@ void emu_set_fast_forward(bool on)
 
 bool emu_get_fast_forward() { return ffwd; }
 uint32_t emu_get_fps() { return cfps; }
+
+void emu_set_boot_rom(const uint8_t* data) { boot_rom = data; }
 
 void emu_reset()
 {
