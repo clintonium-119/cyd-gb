@@ -263,14 +263,13 @@ static uint32_t q_stall_acc = 0;
 static uint32_t draw_us = 0;
 
 // ─── Audio ──────────────────────────────────────────────────────────────────
-// One APU context, one frame of its interleaved stereo output, one frame of
-// mixed 8-bit mono, and the dither state that carries across frames. All
+// One APU context, one frame of its interleaved stereo output and one frame
+// of mixed 8-bit mono. All
 // static, so all internal DRAM and none of it allocated per frame: 2192 B for
 // the stereo frame, 548 B for the mono one, and the context itself.
 static struct minigb_apu_ctx apu;
 static audio_sample_t apu_buf[AUDIO_SAMPLES_TOTAL];
 static uint8_t mono_buf[AUDIO_SAMPLES];
-static mix_state_t mix;
 #ifdef DEV_TONE_AUDIO
 /* Bench A/B for BUG-0011: a known-perfect square replaces the APU's output
  * while everything else — the emulator, the frame pacing, the mixer, the DMA
@@ -690,7 +689,6 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     autosave_init(&autosave, (uint32_t)save_sz);
 
     minigb_apu_audio_init(&apu);
-    mix_init(&mix, 0x2545F491u);
 #ifdef DEV_TONE_AUDIO
     tone_init(&tone_st, TONE_HZ, SPEAKER_SAMPLE_RATE);
     Serial.println("[EMU] DEV_TONE_AUDIO: APU output replaced by a test tone");
@@ -759,7 +757,7 @@ void emu_run_frame() {
      * the pacing under test is the real one. */
     tone_fill(&tone_st, TONE_AMPLITUDE, apu_buf, AUDIO_SAMPLES);
 #endif
-    mix_mono(&mix, apu_buf, AUDIO_SAMPLES, vol_idx, mono_buf);
+    mix_mono(apu_buf, AUDIO_SAMPLES, vol_idx, mono_buf);
     apu_us = (uint32_t)(esp_timer_get_time() - t);
     speaker_write_frame(mono_buf, AUDIO_SAMPLES);
 
@@ -862,7 +860,7 @@ bool emu_autosave_battery(uint16_t mv, uint16_t low_mv, uint16_t hyst_mv)
 
 void emu_set_volume(uint8_t idx)
 {
-    vol_idx = (idx > MIX_VOL_MAX) ? MIX_VOL_MAX : idx;
+    vol_idx = (idx > MIX_VOL_HIGH) ? MIX_VOL_HIGH : idx;
 }
 
 uint8_t emu_get_volume()

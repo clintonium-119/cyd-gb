@@ -31,8 +31,8 @@ void settings_defaults(settings_t* s) {
     // still brighter than wanted. This is BL_MIN + 3*BL_STEP -- derived, so
     // it follows the ladder if those constants move.
     s->brightness = BL_MIN + 3 * BL_STEP;
-    // 5 of 8, not the top: a gain of 64/256, about 12 dB below full scale.
-    s->volume = 5;
+    // Med, not High: halfway in loudness between the quiet and loud steps.
+    s->volume = SETTINGS_VOL_MED;
     s->game_x = GAME_X;
     s->game_y = GAME_Y;
     // The batch-typical null, not the panel's power-on porch. An
@@ -56,10 +56,10 @@ bool settings_load(settings_t* s) {
     if (has) {
         s->frameskip = prefs.getUChar("fskip", s->frameskip);
         s->brightness = prefs.getUChar("bright", s->brightness);
-        // "vol8", not "vol": the old key held a High/Med/Low/Off index that
-        // counted down towards louder, and read as a level it would come out
-        // backwards. Nothing reads "vol" any more.
-        s->volume = prefs.getUChar("vol8", s->volume);
+        // "vol3", not "vol": the old key held a High/Med/Low/Off index that
+        // counted down towards louder, and read with the new encoding it
+        // would come out backwards. Nothing reads "vol" any more.
+        s->volume = prefs.getUChar("vol3", s->volume);
         s->game_x = prefs.getShort("gx", s->game_x);
         s->game_y = prefs.getShort("gy", s->game_y);
         s->trim_fpa = prefs.getUChar("tfpa", s->trim_fpa);
@@ -68,11 +68,11 @@ bool settings_load(settings_t* s) {
     }
     prefs.end();
 
-    // A stored volume past the top level would index past the end of the
+    // A stored volume past High would index past the end of the
     // audio path's lookup table. Clamped on the way in, so that table stays
     // the only place the encoding is known and every reader is safe.
-    if (s->volume > SETTINGS_VOL_MAX) {
-        s->volume = SETTINGS_VOL_MAX;
+    if (s->volume > SETTINGS_VOL_HIGH) {
+        s->volume = SETTINGS_VOL_HIGH;
     }
 
     // The nudge is stored in panel pixels, but GAME_W / GAME_H are compile
@@ -122,7 +122,7 @@ void settings_save(const settings_t* s) {
     prefs.begin("settings", false);
     prefs.putUChar("fskip", s->frameskip);
     prefs.putUChar("bright", s->brightness);
-    prefs.putUChar("vol8", s->volume);
+    prefs.putUChar("vol3", s->volume);
     prefs.putShort("gx", s->game_x);
     prefs.putShort("gy", s->game_y);
     prefs.putUChar("tfpa", s->trim_fpa);

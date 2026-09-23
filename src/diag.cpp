@@ -64,7 +64,6 @@ static diag_checker_t checker;                 // 8,062 B — the scaled block
 // Named for the state rather than the tone, because Arduino.h already
 // declares a tone().
 static tone_state_t tone_st;
-static mix_state_t mixer;
 static int16_t stereo[2 * SPEAKER_SAMPLES_PER_FRAME];  // 2,192 B
 static uint8_t mono[SPEAKER_SAMPLES_PER_FRAME];        //   548 B
 
@@ -459,7 +458,6 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
     // starting the guess over and walking a good porch off its null.
     diag_trim_set_dir(&d, s->trim_dir);
     combo_init(&combo);
-    mix_init(&mixer, (uint32_t)micros());
     tone_init(&tone_st, TONE_HZ, SPEAKER_SAMPLE_RATE);
 
     Serial.printf("[DIAG] enter %s built %s\n", BUILD_FW_VERSION,
@@ -618,8 +616,8 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
             // the same either way.
             tone_fill(&tone_st, TONE_AMPLITUDE, stereo,
                       SPEAKER_SAMPLES_PER_FRAME);
-            mix_mono(&mixer, stereo, SPEAKER_SAMPLES_PER_FRAME,
-                     diag_volume(&d), mono);
+            mix_mono(stereo, SPEAKER_SAMPLES_PER_FRAME, diag_volume(&d),
+                     mono);
             speaker_write_frame(mono, SPEAKER_SAMPLES_PER_FRAME);
         } else {
             delay(DIAG_POLL_MS);

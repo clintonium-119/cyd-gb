@@ -51,7 +51,7 @@ void setUp(void)
     memset(&d, 0, sizeof(d));
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&d, PANEL_W, PANEL_H, WIN24_W, WIN24_H, 40, 12, 40, 12,
-                  5, 0, TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
+                  MIX_VOL_MED, 0, TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
 }
 
 void tearDown(void)
@@ -121,7 +121,7 @@ static void test_init_clamps_a_stored_origin_and_the_default(void)
 {
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&d, PANEL_W, PANEL_H, WIN24_W, WIN24_H, 999, -5, 999, -5,
-                  MIX_VOL_MAX, 0, TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
+                  MIX_VOL_HIGH, 0, TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
     TEST_ASSERT_EQUAL_INT16(WIN24_X_MAX, x_of());
     TEST_ASSERT_EQUAL_INT16(0, y_of());
     TEST_ASSERT_EQUAL_INT16(WIN24_X_MAX, d.default_x);
@@ -133,7 +133,7 @@ static void test_init_clamps_a_stored_volume_and_frameskip(void)
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&d, PANEL_W, PANEL_H, WIN24_W, WIN24_H, 0, 0, 0, 0,
                   200, 200, 200, 200, 200, 200));
-    TEST_ASSERT_EQUAL_UINT8(MIX_VOL_MAX, diag_volume(&d));
+    TEST_ASSERT_EQUAL_UINT8(MIX_VOL_HIGH, diag_volume(&d));
     TEST_ASSERT_EQUAL_UINT8(DIAG_FRAMESKIP_MAX, diag_frameskip(&d));
 }
 
@@ -285,7 +285,7 @@ static void test_the_nudge_clamps_at_the_panel_edges_in_a_260x234_window(void)
 {
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&d, PANEL_W, PANEL_H, WIN26_W, WIN26_H, 30, 3, 30, 3,
-                  5, 0, TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
+                  MIX_VOL_MED, 0, TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
     goto_page(DIAG_PAGE_NUDGE);
 
     hammer(COMBO_BTN_RIGHT, 100);
@@ -396,23 +396,23 @@ static void test_a_toggles_the_tone(void)
     TEST_ASSERT_FALSE(diag_tone_on(&d));
 }
 
-static void test_the_volume_level_steps_without_wrapping(void)
+static void test_the_volume_index_steps_without_wrapping(void)
 {
     goto_page(DIAG_PAGE_AUDIO);
 
-    /* Up from level 5 runs into the loudest and tries to go further. */
+    /* Up from Med runs into the loudest and tries to go further. */
     hammer(COMBO_BTN_UP, 4);
-    TEST_ASSERT_EQUAL_UINT8(MIX_VOL_MAX, diag_volume(&d));
+    TEST_ASSERT_EQUAL_UINT8(MIX_VOL_HIGH, diag_volume(&d));
     sample(COMBO_EVENT_NONE, 0, 1000);
     TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_UP, 1005));
-    TEST_ASSERT_EQUAL_UINT8(MIX_VOL_MAX, diag_volume(&d));
+    TEST_ASSERT_EQUAL_UINT8(MIX_VOL_HIGH, diag_volume(&d));
 
-    /* Down walks 8 -> 7 -> ... -> 0 and then stops. */
+    /* Down walks High -> Med -> Low -> Off and then stops. */
     sample(COMBO_EVENT_NONE, 0, 2000);
     TEST_ASSERT_EQUAL_HEX16(DIAG_EV_TONE | DIAG_EV_REDRAW,
         sample(COMBO_EVENT_NONE, COMBO_BTN_DOWN, 2005));
-    TEST_ASSERT_EQUAL_UINT8(MIX_VOL_MAX - 1, diag_volume(&d));
-    hammer(COMBO_BTN_DOWN, MIX_VOL_MAX - 1);
+    TEST_ASSERT_EQUAL_UINT8(MIX_VOL_MED, diag_volume(&d));
+    hammer(COMBO_BTN_DOWN, 2);
     TEST_ASSERT_EQUAL_UINT8(MIX_VOL_OFF, diag_volume(&d));
     sample(COMBO_EVENT_NONE, 0, 3000);
     TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_DOWN, 3005));
@@ -581,7 +581,7 @@ static void test_init_clamps_a_stored_porch_into_what_the_register_holds(void)
 
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&d, PANEL_W, PANEL_H, WIN24_W, WIN24_H, 0, 0, 0, 0,
-                  5, 0, 0, 200, DEF_FPA, DEF_RATIO));
+                  MIX_VOL_MED, 0, 0, 200, DEF_FPA, DEF_RATIO));
     diag_trim(&d, &fpa, &ratio);
     /* A porch of 0 is a frame the panel cannot scan; 200 sixty-fourths would
      * carry into the whole-line count on the wrong frame. */
@@ -621,7 +621,7 @@ static void test_the_fine_knob_carries_into_the_whole_line_knob(void)
      * property the fixture this page replaces had and is worth keeping. */
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&d, PANEL_W, PANEL_H, WIN24_W, WIN24_H, 0, 0, 0, 0,
-                  5, 0, 11, 60, DEF_FPA, DEF_RATIO));
+                  MIX_VOL_MED, 0, 11, 60, DEF_FPA, DEF_RATIO));
     goto_page(DIAG_PAGE_TRIM);
 
     for (i = 0; i < 2; i++) {
@@ -1529,7 +1529,7 @@ int main(void)
     RUN_TEST(test_arriving_at_the_tag_page_asks_for_one_scan_either_way);
     RUN_TEST(test_a_rescans_on_the_tag_page_and_nowhere_else);
     RUN_TEST(test_a_toggles_the_tone);
-    RUN_TEST(test_the_volume_level_steps_without_wrapping);
+    RUN_TEST(test_the_volume_index_steps_without_wrapping);
     RUN_TEST(test_leaving_the_audio_page_silences_the_tone);
     RUN_TEST(test_the_display_pattern_cycles_three_ways_round);
     RUN_TEST(test_frameskip_steps_within_its_range);

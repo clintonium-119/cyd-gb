@@ -3,49 +3,27 @@
 #include "mix.h"
 
 /*
- * Gain per volume level, as 8.8 fixed point. Entry 0 is unused: level 0 is
- * off and never reaches the multiply. Level 8 is full scale, and each rung
- * below is about 4 dB down from the next.
+ * Gain per volume index, as 8.8 fixed point. Entry 0 is unused: Off never
+ * reaches the multiply.
  *
- * These are a bench-tuned knob, not a derivation. The bottom rung is meant
- * to be far quieter than the old three-step Low (96/256); at 10/256 roughly
- * 3.3 bits of signal remain above the dither, so retune by ear rather than
- * by arithmetic.
+ * Bench-tuned by ear on 2026-09-23, not derived. Low (24/256, about -21 dB)
+ * is the quietest step that still sounded clean on the 8-bit DAC; 16 was
+ * already mush. High (432/256, about +4.5 dB) goes past unity because the
+ * emulator's loudest output measured 37-58% of full scale across Pokemon Red,
+ * Black Castle and Tobu Tobu Girl, so it clips nothing there; a louder game
+ * is caught by the clamp. Med is their geometric mean, halfway in loudness.
  */
-static const uint16_t vol_lut[MIX_VOL_MAX + 1] = {
-    0, 10, 16, 26, 40, 64, 102, 161, 256
-};
+static const uint16_t vol_lut[MIX_VOL_HIGH + 1] = { 0, 24, 102, 432 };
 
-/* Any non-zero constant works; this is the usual xorshift32 seed. */
-#define MIX_SEED_FALLBACK 0x2545F491u
-
-static inline uint32_t xorshift32(uint32_t* state)
-{
-    uint32_t x = *state;
-    x ^= x << 13;
-    x ^= x >> 17;
-    x ^= x << 5;
-    *state = x;
-    return x;
-}
-
-void mix_init(mix_state_t* s, uint32_t seed)
-{
-    if (s == NULL) {
-        return;
-    }
-    s->lfsr = (seed != 0) ? seed : MIX_SEED_FALLBACK;
-}
-
-int mix_mono(mix_state_t* s, const int16_t* stereo, size_t n_frames,
-             uint8_t vol_index, uint8_t* out)
+int mix_mono(const int16_t* stereo, size_t n_frames, uint8_t vol_index,
+             uint8_t* out)
 {
     size_t i;
 
-    if (s == NULL || stereo == NULL || out == NULL) {
+    if (stereo == NULL || out == NULL) {
         return MIX_ERR_ARGS;
     }
-    if (vol_index > MIX_VOL_MAX) {
+    if (vol_index > MIX_VOL_HIGH) {
         return MIX_ERR_ARGS;
     }
 
@@ -62,10 +40,7 @@ int mix_mono(mix_state_t* s, const int16_t* stereo, size_t n_frames,
          * -1 instead of 0, so hard-panned opposites would not cancel. */
         int32_t mono = (left + right) / 2;
         int32_t scaled = (mono * (int32_t)vol_lut[vol_index]) / 256;
-
-        if (mono != 0) {
-            scaled += (int32_t)(xorshift32(&s->lfsr) & 0x1FFu) - 256;
-        }
+        uint32_t biased;
 
         if (scaled > 32767) {
             scaled = 32767;
@@ -73,10 +48,12 @@ int mix_mono(mix_state_t* s, const int16_t* stereo, size_t n_frames,
             scaled = -32768;
         }
 
-        /* Bias into unsigned range first, then truncate: the shift is on a
-         * value known to be in [0, 65535], so nothing is implementation-
-         * defined and the result is already the DAC's mid-scale encoding. */
-        out[i] = (uint8_t)(((uint32_t)(scaled + 32768)) >> 8);
+        /* Bias into unsigned range, add half an output step and truncate:
+         * round to nearest. Everything is in [0, 65663], so nothing is
+         * implementation-defined; only the top of the range rounds past 255,
+         * and it is held there. */
+        biased = ((uint32_t)(scaled + 32768) + 128u) >> 8;
+        out[i] = (uint8_t)(biased > 255u ? 255u : biased);
     }
 
     return MIX_OK;

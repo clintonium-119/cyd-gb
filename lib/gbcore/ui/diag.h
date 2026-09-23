@@ -365,7 +365,7 @@ typedef struct diag_s {
     uint32_t repeat_due_ms;
     uint8_t prev_word;    /* last joypad word, for the A and B edges      */
     bool tone_on;
-    uint8_t volume;       /* MIX_VOL_OFF .. MIX_VOL_MAX                   */
+    uint8_t volume;       /* MIX_VOL_OFF .. MIX_VOL_HIGH                  */
     uint8_t pattern;      /* enum diag_pattern_e                          */
     uint8_t frameskip;
     uint32_t toast_until_ms;
@@ -428,7 +428,7 @@ typedef struct diag_s {
  *   win_w/h      the game window drawn inside it
  *   x, y         the stored origin; clamped into [0, panel - window]
  *   default_x/y  the compile-time origin, clamped the same way
- *   volume       stored volume level, clamped into MIX_VOL_OFF..MIX_VOL_MAX
+ *   volume       stored volume index, clamped into MIX_VOL_OFF..MIX_VOL_HIGH
  *   frameskip    stored frameskip, clamped into 0..DIAG_FRAMESKIP_MAX
  *   trim_fpa     stored front porch in whole lines, clamped into 1..126
  *   trim_ratio   stored 64ths of a line, clamped into 0..63

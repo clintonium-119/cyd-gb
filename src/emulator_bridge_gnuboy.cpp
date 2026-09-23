@@ -324,7 +324,7 @@ static uint32_t q_stall_acc = 0;
 // for MiniGB APU, so this core generates its own samples. Everything after
 // that is the other bridge's path unchanged: gnuboy is asked for interleaved
 // stereo int16, which is exactly what mix_mono() takes, so the volume table,
-// the dither and the mid-scale bias are the same tested code on both cores
+// the rounding and the mid-scale bias are the same tested code on both cores
 // rather than a second conversion written here. The alternative — gnuboy's
 // mono format and a hand-rolled shift and bias — would have had to re-derive
 // the volume encoding and the silence rule that mix_mono already pins.
@@ -353,7 +353,6 @@ static uint32_t q_stall_acc = 0;
 // it to flush through, and the first frame after a reset emits 572.
 static int16_t apu_buf[2 * (SPEAKER_SAMPLES_PER_FRAME + GNUBOY_AUDIO_HEADROOM)];
 static uint8_t mono_buf[SPEAKER_SAMPLES_MAX];
-static mix_state_t mix;
 // Off until main() applies the stored setting, so a unit is never loud before
 // its own volume is read.
 static uint8_t vol_idx = MIX_VOL_OFF;
@@ -944,7 +943,7 @@ static uint8_t demo_prev_pad = 0;
 static uint8_t demo_pat = DEMO_PAT_NOISE;
 
 /* One 4x4 block's shade. Any decent integer hash does; this is the mix from
- * the xorshift family the audio dither already uses, over the block
+ * the xorshift family, over the block
  * coordinates rather than a sequence, so the field is stable in space and
  * scrolls with the offset instead of fizzing. */
 static uint8_t demo_noise(unsigned u, unsigned v)
@@ -1226,8 +1225,6 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     gnuboy_reset(true);
     emu_up = true;
 
-    mix_init(&mix, 0x2545F491u);
-
     save_size = save_size_from_header();
     cram_alloc = (uint32_t)cart.ramsize * 8192u;
     if (!save_size) {
@@ -1320,7 +1317,7 @@ void emu_run_frame()
          * discards audio, so it is the last resort rather than the rule. */
         n_samples = SPEAKER_SAMPLES_MAX;
     }
-    mix_mono(&mix, apu_buf, n_samples, vol_idx, mono_buf);
+    mix_mono(apu_buf, n_samples, vol_idx, mono_buf);
     apu_us = (uint32_t)(esp_timer_get_time() - t);
     speaker_write_frame(mono_buf, n_samples);
 
@@ -1486,7 +1483,7 @@ bool emu_autosave_battery(uint16_t mv, uint16_t low_mv, uint16_t hyst_mv)
 
 void emu_set_volume(uint8_t idx)
 {
-    vol_idx = (idx > MIX_VOL_MAX) ? MIX_VOL_MAX : idx;
+    vol_idx = (idx > MIX_VOL_HIGH) ? MIX_VOL_HIGH : idx;
 }
 
 uint8_t emu_get_volume()

@@ -9,9 +9,8 @@
  * Mixer: interleaved stereo int16 in, unsigned 8-bit mono out.
  *
  * The reference below repeats the production arithmetic on purpose — these
- * cases pin the shape of the result (silence is exact, dither is bounded,
- * the volume levels keep their ratios), not the expression that
- * produces it.
+ * cases pin the shape of the result (silence is exact, rounding is to
+ * nearest, the steps keep their ratios), not the expression that produces it.
  */
 
 #define GUARD 8
@@ -24,9 +23,10 @@ static struct {
 } g;
 
 static int16_t stereo[N_FRAMES * 2];
-static mix_state_t st;
 
-/* Test-side generator, deliberately not the one under test and not libc's. */
+static const uint16_t lut[MIX_VOL_HIGH + 1] = { 0, 24, 102, 432 };
+
+/* Test-side generator, deliberately not libc's. */
 static uint32_t rng_state;
 
 static uint32_t rng_next(void)
@@ -43,7 +43,6 @@ void setUp(void)
     memset(g.post, 0x5C, sizeof(g.post));
     memset(g.out, 0x7E, sizeof(g.out));
     memset(stereo, 0, sizeof(stereo));
-    mix_init(&st, 0x1234ABCDu);
     rng_state = 0xC0FFEEu;
 }
 
@@ -60,21 +59,19 @@ static void assert_guards_intact(void)
     }
 }
 
-/* What the mixer would emit with the dither term removed. */
-static uint8_t undithered(int16_t left, int16_t right, uint8_t vol_index)
+static uint8_t reference(int16_t left, int16_t right, uint8_t vol_index)
 {
-    static const uint16_t lut[MIX_VOL_MAX + 1] = {
-        0, 10, 16, 26, 40, 64, 102, 161, 256
-    };
     int32_t mono = ((int32_t)left + (int32_t)right) / 2;
     int32_t scaled = (mono * (int32_t)lut[vol_index]) / 256;
+    uint32_t biased;
 
     if (scaled > 32767) {
         scaled = 32767;
     } else if (scaled < -32768) {
         scaled = -32768;
     }
-    return (uint8_t)(((uint32_t)(scaled + 32768)) >> 8);
+    biased = ((uint32_t)(scaled + 32768) + 128u) >> 8;
+    return (uint8_t)(biased > 255u ? 255u : biased);
 }
 
 static void fill_constant(int16_t left, int16_t right, size_t n_frames)
@@ -98,12 +95,12 @@ static long long deviation_sum(size_t n_frames)
     return sum;
 }
 
-/* |sum / reference_sum - num / 256| <= 0.02, cross-multiplied. */
+/* |sum / reference_sum - num / den| <= 0.02, cross-multiplied. */
 static void assert_ratio_within_2_percent(long long sum, long long reference_sum,
-                                          long long num)
+                                          long long num, long long den)
 {
-    long long lhs = llabs(sum * 256 - reference_sum * num);
-    long long tolerance = (reference_sum * 256 * 2) / 100;
+    long long lhs = llabs(sum * den - reference_sum * num);
+    long long tolerance = (reference_sum * den * 2) / 100;
     TEST_ASSERT_TRUE_MESSAGE(lhs <= tolerance,
         "volume step is not within 2% of its design ratio");
 }
@@ -115,10 +112,9 @@ static void test_zero_input_is_exactly_mid_scale_at_every_volume(void)
     uint8_t vol;
     size_t i;
 
-    for (vol = MIX_VOL_OFF; vol <= MIX_VOL_MAX; vol++) {
+    for (vol = MIX_VOL_OFF; vol <= MIX_VOL_HIGH; vol++) {
         memset(g.out, 0x7E, sizeof(g.out));
-        TEST_ASSERT_EQUAL_INT(MIX_OK,
-            mix_mono(&st, stereo, N_FRAMES, vol, g.out));
+        TEST_ASSERT_EQUAL_INT(MIX_OK, mix_mono(stereo, N_FRAMES, vol, g.out));
         for (i = 0; i < N_FRAMES; i++) {
             TEST_ASSERT_EQUAL_HEX8(MIX_SILENCE, g.out[i]);
         }
@@ -126,50 +122,47 @@ static void test_zero_input_is_exactly_mid_scale_at_every_volume(void)
     assert_guards_intact();
 }
 
-static void test_off_is_mid_scale_for_a_loud_signal_and_leaves_state_alone(void)
+static void test_off_is_mid_scale_for_a_loud_signal(void)
 {
-    mix_state_t before;
     size_t i;
 
-    fill_constant(32767, -32767, N_FRAMES / 2);
     fill_constant(-32768, 32767, N_FRAMES);
-    before = st;
+    fill_constant(32767, -32767, N_FRAMES / 2);
 
     TEST_ASSERT_EQUAL_INT(MIX_OK,
-        mix_mono(&st, stereo, N_FRAMES, MIX_VOL_OFF, g.out));
-
+        mix_mono(stereo, N_FRAMES, MIX_VOL_OFF, g.out));
     for (i = 0; i < N_FRAMES; i++) {
         TEST_ASSERT_EQUAL_HEX8(MIX_SILENCE, g.out[i]);
     }
-    TEST_ASSERT_EQUAL_HEX32(before.lfsr, st.lfsr);
     assert_guards_intact();
 }
 
 /* ─── clamping ────────────────────────────────────────────────────────────── */
 
-static void test_full_scale_input_clamps_without_wrapping(void)
+static void test_full_scale_input_clamps_at_high_without_wrapping(void)
 {
     size_t i;
 
+    /* High's gain is past unity, so this input is well over the clamp. */
     fill_constant(32767, 32767, N_FRAMES);
     TEST_ASSERT_EQUAL_INT(MIX_OK,
-        mix_mono(&st, stereo, N_FRAMES, MIX_VOL_MAX, g.out));
+        mix_mono(stereo, N_FRAMES, MIX_VOL_HIGH, g.out));
     for (i = 0; i < N_FRAMES; i++) {
-        TEST_ASSERT_GREATER_OR_EQUAL_UINT8(254, g.out[i]);
+        TEST_ASSERT_EQUAL_UINT8(255, g.out[i]);
     }
 
     fill_constant(-32768, -32768, N_FRAMES);
     TEST_ASSERT_EQUAL_INT(MIX_OK,
-        mix_mono(&st, stereo, N_FRAMES, MIX_VOL_MAX, g.out));
+        mix_mono(stereo, N_FRAMES, MIX_VOL_HIGH, g.out));
     for (i = 0; i < N_FRAMES; i++) {
-        TEST_ASSERT_LESS_OR_EQUAL_UINT8(1, g.out[i]);
+        TEST_ASSERT_EQUAL_UINT8(0, g.out[i]);
     }
     assert_guards_intact();
 }
 
-/* ─── dither bound ────────────────────────────────────────────────────────── */
+/* ─── rounding ────────────────────────────────────────────────────────────── */
 
-static void test_dither_never_moves_a_sample_by_more_than_one(void)
+static void test_output_matches_the_reference_at_every_volume(void)
 {
     uint8_t vol;
     size_t i;
@@ -179,87 +172,55 @@ static void test_dither_never_moves_a_sample_by_more_than_one(void)
         stereo[i * 2 + 1] = (int16_t)(rng_next() & 0xFFFFu);
     }
 
-    for (vol = 1; vol <= MIX_VOL_MAX; vol++) {
-        TEST_ASSERT_EQUAL_INT(MIX_OK,
-            mix_mono(&st, stereo, N_FRAMES, vol, g.out));
+    for (vol = MIX_VOL_LOW; vol <= MIX_VOL_HIGH; vol++) {
+        TEST_ASSERT_EQUAL_INT(MIX_OK, mix_mono(stereo, N_FRAMES, vol, g.out));
         for (i = 0; i < N_FRAMES; i++) {
-            int got = (int)g.out[i];
-            int ref = (int)undithered(stereo[i * 2 + 0], stereo[i * 2 + 1], vol);
-            TEST_ASSERT_LESS_OR_EQUAL_INT(1, abs(got - ref));
+            TEST_ASSERT_EQUAL_UINT8(
+                reference(stereo[i * 2 + 0], stereo[i * 2 + 1], vol), g.out[i]);
         }
     }
     assert_guards_intact();
+}
+
+static void test_half_an_output_step_rounds_up_and_less_rounds_down(void)
+{
+    /* At Low, a mono sample of 1344 scales to exactly 126 and 1376 to 129:
+     * one either side of the half-step at 128. */
+    stereo[0] = 1344;
+    stereo[1] = 1344;
+    stereo[2] = 1376;
+    stereo[3] = 1376;
+
+    TEST_ASSERT_EQUAL_INT(MIX_OK, mix_mono(stereo, 2, MIX_VOL_LOW, g.out));
+    TEST_ASSERT_EQUAL_UINT8(128, g.out[0]);
+    TEST_ASSERT_EQUAL_UINT8(129, g.out[1]);
 }
 
 /* ─── volume ratios ───────────────────────────────────────────────────────── */
 
-static void test_volume_levels_keep_the_design_ratios(void)
+static void test_volume_steps_keep_the_design_ratios(void)
 {
-    static const long long lut[MIX_VOL_MAX + 1] = {
-        0, 10, 16, 26, 40, 64, 102, 161, 256
-    };
-    long long top, prev = 0, sum;
-    uint8_t vol;
+    long long low, med, high;
 
+    /* Loud enough that Low still spans many output steps, quiet enough that
+     * High stays inside the clamp. */
     fill_constant(16384, 16384, N_FRAMES);
 
     TEST_ASSERT_EQUAL_INT(MIX_OK,
-        mix_mono(&st, stereo, N_FRAMES, MIX_VOL_MAX, g.out));
-    top = deviation_sum(N_FRAMES);
+        mix_mono(stereo, N_FRAMES, MIX_VOL_LOW, g.out));
+    low = deviation_sum(N_FRAMES);
+    TEST_ASSERT_EQUAL_INT(MIX_OK,
+        mix_mono(stereo, N_FRAMES, MIX_VOL_MED, g.out));
+    med = deviation_sum(N_FRAMES);
+    TEST_ASSERT_EQUAL_INT(MIX_OK,
+        mix_mono(stereo, N_FRAMES, MIX_VOL_HIGH, g.out));
+    high = deviation_sum(N_FRAMES);
 
-    for (vol = 1; vol <= MIX_VOL_MAX; vol++) {
-        TEST_ASSERT_EQUAL_INT(MIX_OK,
-            mix_mono(&st, stereo, N_FRAMES, vol, g.out));
-        sum = deviation_sum(N_FRAMES);
-        TEST_ASSERT_TRUE_MESSAGE(sum > prev,
-            "a louder level did not give a bigger output");
-        assert_ratio_within_2_percent(sum, top, lut[vol]);
-        prev = sum;
-    }
+    TEST_ASSERT_TRUE(high > med);
+    TEST_ASSERT_TRUE(med > low);
+    assert_ratio_within_2_percent(med, high, lut[MIX_VOL_MED], lut[MIX_VOL_HIGH]);
+    assert_ratio_within_2_percent(low, high, lut[MIX_VOL_LOW], lut[MIX_VOL_HIGH]);
     assert_guards_intact();
-}
-
-static void test_full_scale_peak_rises_strictly_with_level(void)
-{
-    int prev = (int)MIX_SILENCE;
-    uint8_t vol;
-    size_t i;
-
-    fill_constant(32767, 32767, N_FRAMES);
-
-    for (vol = 1; vol <= MIX_VOL_MAX; vol++) {
-        int peak = 0;
-        TEST_ASSERT_EQUAL_INT(MIX_OK,
-            mix_mono(&st, stereo, N_FRAMES, vol, g.out));
-        for (i = 0; i < N_FRAMES; i++) {
-            if ((int)g.out[i] > peak) {
-                peak = (int)g.out[i];
-            }
-        }
-        TEST_ASSERT_GREATER_THAN_INT(prev, peak);
-        prev = peak;
-    }
-    assert_guards_intact();
-}
-
-/* The top level is the old three-step High. These bytes were captured from
- * the mixer before the ladder replaced the High/Med/Low table, with the same
- * input and seed, so level 8 has to reproduce them exactly. */
-static void test_top_level_matches_the_old_high(void)
-{
-    static const int16_t in[16] = {
-        12000, -3000, -20000, 500, 7, 9, 32767, 32767,
-        -32768, -1, 1000, -1000, 256, 256, -9000, 4000,
-    };
-    static const uint8_t old_high[8] = {
-        145, 89, 127, 255, 63, 128, 128, 118,
-    };
-    uint8_t out[8];
-    mix_state_t s;
-
-    mix_init(&s, 0x1234ABCDu);
-    TEST_ASSERT_EQUAL_INT(MIX_OK, mix_mono(&s, in, 8, MIX_VOL_MAX, out));
-    TEST_ASSERT_EQUAL_HEX8_ARRAY(old_high, out, 8);
 }
 
 /* ─── mono sum, not a channel pick ────────────────────────────────────────── */
@@ -267,18 +228,14 @@ static void test_top_level_matches_the_old_high(void)
 static void test_left_only_and_right_only_give_the_same_output(void)
 {
     static uint8_t left_out[N_FRAMES];
-    mix_state_t a, b;
-
-    mix_init(&a, 0x5EED5EEDu);
-    mix_init(&b, 0x5EED5EEDu);
 
     fill_constant(12000, 0, N_FRAMES);
     TEST_ASSERT_EQUAL_INT(MIX_OK,
-        mix_mono(&a, stereo, N_FRAMES, MIX_VOL_MAX, left_out));
+        mix_mono(stereo, N_FRAMES, MIX_VOL_HIGH, left_out));
 
     fill_constant(0, 12000, N_FRAMES);
     TEST_ASSERT_EQUAL_INT(MIX_OK,
-        mix_mono(&b, stereo, N_FRAMES, MIX_VOL_MAX, g.out));
+        mix_mono(stereo, N_FRAMES, MIX_VOL_HIGH, g.out));
 
     TEST_ASSERT_EQUAL_HEX8_ARRAY(left_out, g.out, N_FRAMES);
     assert_guards_intact();
@@ -295,59 +252,10 @@ static void test_opposite_full_scale_channels_cancel_to_mid_scale(void)
         stereo[i * 2 + 1] = (i & 1u) ? (int16_t)-32768 : (int16_t)32767;
     }
     TEST_ASSERT_EQUAL_INT(MIX_OK,
-        mix_mono(&st, stereo, N_FRAMES, MIX_VOL_MAX, g.out));
+        mix_mono(stereo, N_FRAMES, MIX_VOL_HIGH, g.out));
     for (i = 0; i < N_FRAMES; i++) {
         TEST_ASSERT_EQUAL_HEX8(MIX_SILENCE, g.out[i]);
     }
-    assert_guards_intact();
-}
-
-/* ─── dither state ────────────────────────────────────────────────────────── */
-
-static void test_equal_seeds_produce_identical_output(void)
-{
-    static uint8_t first[N_FRAMES];
-    mix_state_t a, b;
-
-    for (size_t i = 0; i < N_FRAMES; i++) {
-        stereo[i * 2 + 0] = (int16_t)(rng_next() & 0x3FFFu);
-        stereo[i * 2 + 1] = (int16_t)(rng_next() & 0x3FFFu);
-    }
-
-    mix_init(&a, 0xABCD1234u);
-    mix_init(&b, 0xABCD1234u);
-    TEST_ASSERT_EQUAL_INT(MIX_OK,
-        mix_mono(&a, stereo, N_FRAMES, 5, first));
-    TEST_ASSERT_EQUAL_INT(MIX_OK,
-        mix_mono(&b, stereo, N_FRAMES, 5, g.out));
-
-    TEST_ASSERT_EQUAL_HEX8_ARRAY(first, g.out, N_FRAMES);
-    assert_guards_intact();
-}
-
-static void test_seed_zero_still_dithers(void)
-{
-    mix_state_t zero_seeded;
-    size_t i;
-    int saw_other = 0;
-
-    mix_init(&zero_seeded, 0);
-    TEST_ASSERT_NOT_EQUAL_UINT32(0, zero_seeded.lfsr);
-
-    /* 256 lands exactly on an output-byte boundary, so the sample reads 128
-     * or 129 purely according to the dither term. A generator stuck at zero
-     * would give -256 every time, and every sample would be 128. */
-    fill_constant(256, 256, N_FRAMES);
-    TEST_ASSERT_EQUAL_INT(MIX_OK,
-        mix_mono(&zero_seeded, stereo, N_FRAMES, MIX_VOL_MAX, g.out));
-    for (i = 0; i < N_FRAMES; i++) {
-        TEST_ASSERT_TRUE(g.out[i] == 128 || g.out[i] == 129);
-        if (g.out[i] != 128) {
-            saw_other = 1;
-        }
-    }
-    TEST_ASSERT_TRUE_MESSAGE(saw_other,
-        "every sample was 128 — the dither generator is stuck at zero");
     assert_guards_intact();
 }
 
@@ -360,13 +268,11 @@ static void test_bad_arguments_return_err_args_and_write_nothing(void)
     fill_constant(20000, 20000, N_FRAMES);
 
     TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
-        mix_mono(&st, NULL, N_FRAMES, MIX_VOL_MAX, g.out));
+        mix_mono(NULL, N_FRAMES, MIX_VOL_HIGH, g.out));
     TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
-        mix_mono(&st, stereo, N_FRAMES, MIX_VOL_MAX, NULL));
+        mix_mono(stereo, N_FRAMES, MIX_VOL_HIGH, NULL));
     TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
-        mix_mono(NULL, stereo, N_FRAMES, MIX_VOL_MAX, g.out));
-    TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
-        mix_mono(&st, stereo, N_FRAMES, MIX_VOL_MAX + 1, g.out));
+        mix_mono(stereo, N_FRAMES, MIX_VOL_HIGH + 1, g.out));
 
     for (i = 0; i < N_FRAMES; i++) {
         TEST_ASSERT_EQUAL_HEX8(0x7E, g.out[i]);
@@ -378,16 +284,13 @@ int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_zero_input_is_exactly_mid_scale_at_every_volume);
-    RUN_TEST(test_off_is_mid_scale_for_a_loud_signal_and_leaves_state_alone);
-    RUN_TEST(test_full_scale_input_clamps_without_wrapping);
-    RUN_TEST(test_dither_never_moves_a_sample_by_more_than_one);
-    RUN_TEST(test_volume_levels_keep_the_design_ratios);
-    RUN_TEST(test_full_scale_peak_rises_strictly_with_level);
-    RUN_TEST(test_top_level_matches_the_old_high);
+    RUN_TEST(test_off_is_mid_scale_for_a_loud_signal);
+    RUN_TEST(test_full_scale_input_clamps_at_high_without_wrapping);
+    RUN_TEST(test_output_matches_the_reference_at_every_volume);
+    RUN_TEST(test_half_an_output_step_rounds_up_and_less_rounds_down);
+    RUN_TEST(test_volume_steps_keep_the_design_ratios);
     RUN_TEST(test_left_only_and_right_only_give_the_same_output);
     RUN_TEST(test_opposite_full_scale_channels_cancel_to_mid_scale);
-    RUN_TEST(test_equal_seeds_produce_identical_output);
-    RUN_TEST(test_seed_zero_still_dithers);
     RUN_TEST(test_bad_arguments_return_err_args_and_write_nothing);
     return UNITY_END();
 }

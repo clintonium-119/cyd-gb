@@ -8,20 +8,22 @@
 //      hard, and a channel pick would silence them.
 //   2. scale in the 16-bit domain by vol_lut[vol_index] / 256. Scaling after
 //      truncation would throw away the low bits the quiet steps live in.
-//   3. add uniform dither in [-256, 255] — one output LSB either way — but
-//      only when the summed sample is non-zero, so silence stays exactly
-//      MIX_SILENCE and the always-live amplifier does not flicker 127/129.
-//   4. clamp to int16 range, then take the high byte biased to mid-scale.
+//   3. clamp to int16 range, then round to the nearest high byte, biased to
+//      mid-scale.
 //
-// Two invariants the host suite pins: zero in gives exactly MIX_SILENCE out
-// at every volume index, and a dithered sample is within 1 of the same
-// sample undithered.
+// No dither. The emulator's output sits well off zero, so dither that skipped
+// exact silence still ran all the time, and on the 8-bit DAC it was a hiss at
+// a fixed level whatever the volume. At the quiet step it swamped the music;
+// the bench preferred plain rounding at every step.
+//
+// The invariant the host suite pins: zero in gives exactly MIX_SILENCE out at
+// every volume index.
 //
 // MIX_VOL_OFF is not a hardware mute — none exists on this board — it is
 // MIX_SILENCE written for every sample, which parks the DAC at mid-scale.
 //
-// Pure C, no Arduino/ESP-IDF headers, no allocation: all buffers are
-// caller-owned.
+// Pure C, no Arduino/ESP-IDF headers, no allocation, no state: all buffers
+// are caller-owned.
 
 #include <stdint.h>
 #include <stddef.h>
@@ -31,50 +33,35 @@ extern "C" {
 #endif
 
 /*
- * Volume level. Same encoding settings_t::volume stores — 0 is off, and 1 to
- * MIX_VOL_MAX run from very quiet up to full scale, so a bigger number is
- * louder. The firmware static-asserts that the two lists agree; changing one
- * means changing both.
+ * Volume index. Same encoding settings_t::volume stores — Off, then three
+ * steps, so a bigger number is louder. The firmware static-asserts that the
+ * two lists agree; changing one means changing both.
  */
-#define MIX_VOL_OFF 0
-#define MIX_VOL_MAX 8
+#define MIX_VOL_OFF  0
+#define MIX_VOL_LOW  1
+#define MIX_VOL_MED  2
+#define MIX_VOL_HIGH 3
 
 /* Unsigned mid-scale: silence, and where the DAC parks. */
 #define MIX_SILENCE 128u
 
 enum mix_result_e {
     MIX_OK = 0,
-    MIX_ERR_ARGS = -2, /* NULL buffer, or vol_index past MIX_VOL_MAX */
+    MIX_ERR_ARGS = -2, /* NULL buffer, or vol_index past MIX_VOL_HIGH */
 };
-
-/*
- * Dither generator state. One xorshift32 word; the caller owns it and keeps
- * it across frames so the noise does not restart every 16.7 ms.
- */
-typedef struct mix_state_s {
-    uint32_t lfsr;
-} mix_state_t;
-
-/*
- * Seed the dither generator. A zero seed is replaced by a fixed non-zero
- * constant, because xorshift32 sticks at zero forever.
- */
-void mix_init(mix_state_t* s, uint32_t seed);
 
 /*
  * Mix one frame.
  *
- *   s          dither state, advanced once per non-zero sample; untouched
- *              when vol_index is MIX_VOL_OFF
  *   stereo     2 * n_frames samples, interleaved left then right
  *   n_frames   samples per channel
- *   vol_index  MIX_VOL_OFF .. MIX_VOL_MAX
+ *   vol_index  MIX_VOL_OFF .. MIX_VOL_HIGH
  *   out        n_frames bytes
  *
  * Returns MIX_OK, or MIX_ERR_ARGS without writing anything.
  */
-int mix_mono(mix_state_t* s, const int16_t* stereo, size_t n_frames,
-             uint8_t vol_index, uint8_t* out);
+int mix_mono(const int16_t* stereo, size_t n_frames, uint8_t vol_index,
+             uint8_t* out);
 
 #ifdef __cplusplus
 }

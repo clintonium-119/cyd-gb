@@ -89,11 +89,11 @@ void emu_get_frame_times(uint32_t* emu_us, uint32_t* scale_us,
                          uint32_t* push_us);
 
 // ─── Audio ──────────────────────────────────────────────────────────────────
-// The volume level, in settings_t::volume's own encoding: 0 is off and 1-8
-// run from very quiet up to full scale. Applied from the next frame onward.
+// The volume index, in settings_t::volume's own encoding: Off, Low, Med,
+// High, so a bigger number is louder. Applied from the next frame onward.
 // The bridge starts at off, so a unit is silent until main() applies the
 // stored setting; off is not a hardware mute — none exists — it holds the DAC
-// at mid-scale. A level past the top is clamped rather than rejected.
+// at mid-scale. An index past High is clamped rather than rejected.
 void emu_set_volume(uint8_t idx);
 uint8_t emu_get_volume();
 

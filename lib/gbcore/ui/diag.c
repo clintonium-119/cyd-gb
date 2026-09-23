@@ -115,7 +115,7 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
     d->repeat_due_ms = 0;
     d->prev_word = 0;
     d->tone_on = false;
-    d->volume = combo_step_u8(volume, 0, MIX_VOL_OFF, MIX_VOL_MAX, 1);
+    d->volume = combo_step_u8(volume, 0, MIX_VOL_OFF, MIX_VOL_HIGH, 1);
     d->pattern = DIAG_PATTERN_BARS;
     d->frameskip = combo_step_u8(frameskip, 0, 0, DIAG_FRAMESKIP_MAX, 1);
     d->toast_until_ms = 0;
@@ -192,7 +192,7 @@ static uint16_t nudge_step(diag_t* d, uint8_t dir_bits)
                                                              : 0);
 }
 
-/* A bigger level is louder, matching the stored setting's own encoding, so
+/* A bigger index is louder, matching the stored setting's own encoding, so
  * Up is up on screen as well as in the ear. */
 static uint16_t audio_step(diag_t* d, uint8_t dir_bits)
 {
@@ -207,7 +207,7 @@ static uint16_t audio_step(diag_t* d, uint8_t dir_bits)
         return 0;
     }
 
-    d->volume = combo_step_u8(d->volume, dir, MIX_VOL_OFF, MIX_VOL_MAX, 1);
+    d->volume = combo_step_u8(d->volume, dir, MIX_VOL_OFF, MIX_VOL_HIGH, 1);
 
     return (uint16_t)((d->volume != before) ? (DIAG_EV_TONE | DIAG_EV_REDRAW)
                                             : 0);
@@ -484,8 +484,8 @@ static const char* const trim_pat_names[DIAG_TRIM_PAT_COUNT] = {
     "grid",
 };
 
-/* One block's shade in the noise field. The mix from the xorshift family the
- * audio dither already uses, over the block coordinates rather than a
+/* One block's shade in the noise field. The mix from the xorshift family,
+ * over the block coordinates rather than a
  * sequence, so the field is stable in space and scrolls with the offset
  * instead of fizzing. */
 static uint8_t trim_noise(int32_t u, int32_t v)

@@ -28,11 +28,11 @@
 #define MENU_TOP   40   /* the title band above the first row */
 
 // The fork's row colour, kept so this looks like the rest of the UI. The
-// highlighted row is close to inverted, black on a light bar, because the
-// fork's near-black highlight was hard to find at a glance. Both highlight
-// greys are starting values for the bench, not derived.
+// highlighted row is inverted, bold black on a white bar, because the fork's
+// near-black highlight was hard to find at a glance. The dimmed grey is a
+// bench value, not derived.
 #define MENU_ROW_BG 0x1082
-#define MENU_HL_BG  0xDEFB
+#define MENU_HL_BG  TFT_WHITE
 #define MENU_HL_FG  TFT_BLACK
 #define MENU_HL_DIM 0x6B4D
 #define MENU_TITLE  0xFFE0
@@ -62,6 +62,14 @@ static const char* const ROW_LABELS[MENU_ROWS] = {
 // time the menu opens. Without one the row stays in place, dimmed and inert,
 // so the menu is the same shape for every game.
 static bool manual_available;
+
+// Indexed by the stored volume, which runs Off to High.
+static const char* const VOL_NAMES[SETTINGS_VOL_HIGH + 1] = {
+    "Off",
+    "Low",
+    "Med",
+    "High",
+};
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -97,11 +105,8 @@ static const char* row_value(const settings_t* s, uint8_t row, char* buf,
 {
     switch (row) {
     case ROW_VOLUME:
-        if (s->volume == SETTINGS_VOL_OFF) {
-            return "Off";
-        }
-        snprintf(buf, buf_sz, "%u/8", (unsigned)s->volume);
-        return buf;
+        return VOL_NAMES[s->volume <= SETTINGS_VOL_HIGH ? s->volume
+                                                        : SETTINGS_VOL_HIGH];
     case ROW_BRIGHT:
         snprintf(buf, buf_sz, "%u/8", (unsigned)bright_level(s->brightness));
         return buf;
@@ -129,14 +134,23 @@ static void draw_row(const settings_t* s, uint8_t row, bool highlighted)
         fg = off ? MENU_DIM : TFT_WHITE;
     }
 
+    // Bold is the same glyphs struck twice a pixel apart, so the text is
+    // drawn transparent over the bar the fill already laid down; an opaque
+    // second pass would wipe the first one's edge. A dimmed row stays thin
+    // so it still reads as unavailable.
+    const int16_t bold = (highlighted && !off) ? 1 : 0;
+    const char* label = off ? "Game Manual (Unavailable)" : ROW_LABELS[row];
+    const int16_t text_y = y + MENU_ROW_H / 2;
+
     tft.fillRect(s->game_x + 4, y, GAME_W - 8, MENU_ROW_H - 2, bg);
-    tft.setTextColor(fg, bg);
-    tft.setTextDatum(ML_DATUM);
-    tft.drawString(off ? "Game Manual (Unavailable)" : ROW_LABELS[row],
-                   s->game_x + 8, y + MENU_ROW_H / 2, 2);
-    if (value) {
-        tft.setTextDatum(MR_DATUM);
-        tft.drawString(value, s->game_x + GAME_W - 8, y + MENU_ROW_H / 2, 2);
+    tft.setTextColor(fg);
+    for (int16_t dx = 0; dx <= bold; dx++) {
+        tft.setTextDatum(ML_DATUM);
+        tft.drawString(label, s->game_x + 8 + dx, text_y, 2);
+        if (value) {
+            tft.setTextDatum(MR_DATUM);
+            tft.drawString(value, s->game_x + GAME_W - 8 - dx, text_y, 2);
+        }
     }
 }
 
@@ -381,7 +395,7 @@ static bool adjust(settings_t* s, uint8_t row, int8_t dir)
         // Right is louder, the same direction brightness moves and the
         // Select combo applies outside the menu.
         next = combo_step_u8(s->volume, dir, SETTINGS_VOL_OFF,
-                             SETTINGS_VOL_MAX, 1);
+                             SETTINGS_VOL_HIGH, 1);
         if (next == s->volume) {
             return false;
         }
