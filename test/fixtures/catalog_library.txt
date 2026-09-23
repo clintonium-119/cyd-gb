@@ -47,7 +47,7 @@ Fix My Heart.gb	Fix My Heart		Fix My Heart is a precision platformer with minima
 Fortified Zone.gb	Fortified Zone		A male and a female commando named Masato & Mizuki are sent to the jungle on a mission to destroy an enemy base and everyone in it.
 GB Gallery - 5 Games in One.gb	Game Boy Gallery - 5 Games In One		This game contains five classic Game & Watch games: Ball, Vermin, Flagman, Manhole and Cement Factory.
 Gargoyle's Quest.gb	Gargoyle's Quest		The friendly Ghoul Realm was invaded by aliens know as the Destroyers ages ago. The Destroyers almost captured the Ghoul Realm except a powerful fire came from the sky and destroyed them.
-Gargoyle's Quest II.gb	Gargoyle's Quest II		
+Gargoyle's Quest II.gb	Gargoyle's Quest II		The Ghoul realm is under attack by a mysterious force and aspiring warrior Firebrand sets out to save it.
 Golf.gb	Golf		Golf features two challenging 18 hole courses where players are able to play a round of golf, and allows players to choose a club, adjust stance and control the swing.
 Nemesis II.gb	Gradius : The Interstellar Assault		In the year 6664 Dr. Venom, the director of the Space Science Agency, was exiled to the planet Sard for his involvement in a failed rebellion and illegal scientific activities.
 Great Greed.gb	Great Greed		As Great Greed begins, you are accidentally warped to another dimension by a wizard by the name of 'Microwave'?.
@@ -104,7 +104,7 @@ Spud's Adventure.gb	Spud's Adventure		In Spud's Adventure the player takes the r
 Super Mario Land.gb	Super Mario Land		Once upon a time, there was a peaceful world called Sarasaland. In this world there were 4 kingdoms named Birabuto, Muda, Easton and Chai.
 Super Mario Land 2.gb	Super Mario Land 2 : 6 Golden Coins	starter	Second in the Game Boy's line of Mario games, this one takes the evolutionary steps that Super Mario 3 for the NES took with it's predecessors.
 Super R.C. Pro-Am.gb	Super R.C. Pro-Am		Super R.C. Pro-Am is the Game Boy update to Rare's classic radio controlled car game.
-Swordbird Song.gb	Swordbird Song		
+Swordbird Song.gb	Swordbird Song		Follow the Bird Hero as they enter the lair of the Iron Owls in this Action RPG game for the Gameboy.
 Tecmo Bowl.gb	Tecmo Bowl		The most popular American football game to hit the NES console, Tecmo Bowl pits the player vs.
 Tennis.gb	Tennis		Tennis is, as the name implies, Nintendo's version of the sport. One player vs computer or two players will compete in tennis in a more or less standard suite of rules (scoring, sets etc.).
 Tetris.gb	Tetris	starter	This version of Tetris is one of many conversions of the famous block-stacking game, and was included with the Game Boy upon its release in several territories.
