@@ -58,15 +58,6 @@ static const char* const ROW_LABELS[MENU_ROWS] = {
 // so the menu is the same shape for every game.
 static bool manual_available;
 
-// The stored volume is an index counting down towards louder, so the names
-// read in the order the indices do.
-static const char* const VOL_NAMES[] = {
-    "High",
-    "Med",
-    "Low",
-    "Off",
-};
-
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 // Nothing acts until every button is up: the combo that opened the menu is
@@ -101,8 +92,11 @@ static const char* row_value(const settings_t* s, uint8_t row, char* buf,
 {
     switch (row) {
     case ROW_VOLUME:
-        return VOL_NAMES[s->volume <= SETTINGS_VOL_OFF ? s->volume
-                                                       : SETTINGS_VOL_OFF];
+        if (s->volume == SETTINGS_VOL_OFF) {
+            return "Off";
+        }
+        snprintf(buf, buf_sz, "%u/8", (unsigned)s->volume);
+        return buf;
     case ROW_BRIGHT:
         snprintf(buf, buf_sz, "%u/8", (unsigned)bright_level(s->brightness));
         return buf;
@@ -372,10 +366,10 @@ static bool adjust(settings_t* s, uint8_t row, int8_t dir)
 
     switch (row) {
     case ROW_VOLUME:
-        // Louder is the lower index, so Right counts down — the same
-        // direction the Select combo applies outside the menu.
-        next = combo_step_u8(s->volume, (int8_t)-dir, SETTINGS_VOL_HIGH,
-                             SETTINGS_VOL_OFF, 1);
+        // Right is louder, the same direction brightness moves and the
+        // Select combo applies outside the menu.
+        next = combo_step_u8(s->volume, dir, SETTINGS_VOL_OFF,
+                             SETTINGS_VOL_MAX, 1);
         if (next == s->volume) {
             return false;
         }

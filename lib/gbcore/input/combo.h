@@ -52,8 +52,8 @@ enum combo_result_e {
 
 /*
  * Combo events. VOL_UP means louder and BRIGHT_UP means brighter; how that
- * maps onto a stored value is the caller's business (the volume setting is
- * indexed 0 = high .. 3 = off, so louder decrements it).
+ * maps onto a stored value is the caller's business (the volume setting is a
+ * level, 0 = off .. 8 = full scale, so louder increments it).
  */
 enum combo_event_e {
     COMBO_EVENT_NONE = 0,

@@ -24,10 +24,10 @@
 #include "cart/ntag.h"
 #include <SD.h>
 
-// The stored volume index IS the mixer's index; the two lists are declared in
+// The stored volume level IS the mixer's level; the two lists are declared in
 // different modules and nothing links them but this.
-static_assert(SETTINGS_VOL_HIGH == MIX_VOL_HIGH && SETTINGS_VOL_OFF == MIX_VOL_OFF,
-              "volume index encodings must agree");
+static_assert(SETTINGS_VOL_OFF == MIX_VOL_OFF && SETTINGS_VOL_MAX == MIX_VOL_MAX,
+              "volume level encodings must agree");
 
 static char cur_path[80] = {0};
 static bool menu_req = false;
@@ -217,11 +217,11 @@ static void poll_input(uint32_t now_ms) {
         case COMBO_EVENT_MENU:
             menu_req = true;
             return;
-        case COMBO_EVENT_VOL_UP:      // louder counts the index down towards 0
-            volume = combo_step_u8(volume, -1, SETTINGS_VOL_HIGH, SETTINGS_VOL_OFF, 1);
+        case COMBO_EVENT_VOL_UP:
+            volume = combo_step_u8(volume, +1, SETTINGS_VOL_OFF, SETTINGS_VOL_MAX, 1);
             break;
         case COMBO_EVENT_VOL_DOWN:
-            volume = combo_step_u8(volume, +1, SETTINGS_VOL_HIGH, SETTINGS_VOL_OFF, 1);
+            volume = combo_step_u8(volume, -1, SETTINGS_VOL_OFF, SETTINGS_VOL_MAX, 1);
             break;
         case COMBO_EVENT_BRIGHT_UP:
             brightness = combo_step_u8(brightness, +1, BL_MIN, 255, BL_STEP);

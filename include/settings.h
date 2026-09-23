@@ -32,20 +32,20 @@ struct settings_t {
     int8_t trim_dir;
 };
 
-// volume is an index, not a level: design §4's vol_lut is {high, med, low} and
-// 3 means off: the mixer writes mid-scale and the DAC sits at 128, because no
-// hardware mute exists. Louder therefore counts down towards
-// SETTINGS_VOL_HIGH. The mixer reads the setting with this same meaning, so
-// changing the encoding means changing both.
-#define SETTINGS_VOL_HIGH 0
-#define SETTINGS_VOL_OFF  3
+// volume is a level: 0 is off, and 1 to SETTINGS_VOL_MAX run from very quiet
+// up to full scale, so a bigger number is louder. Off means the mixer writes
+// mid-scale and the DAC sits at 128, because no hardware mute exists. The
+// mixer reads the setting with this same meaning, so changing the encoding
+// means changing both.
+#define SETTINGS_VOL_OFF 0
+#define SETTINGS_VOL_MAX 8
 
 void settings_defaults(settings_t* s);
 
 // Reads NVS over *s, leaving any field the store does not carry at whatever
-// value it already held. Returns false when nothing was stored. A volume index
-// past SETTINGS_VOL_OFF is clamped here rather than at the point of use, so no
-// consumer has to defend against an out-of-range index.
+// value it already held. Returns false when nothing was stored. A volume level
+// past SETTINGS_VOL_MAX is clamped here rather than at the point of use, so no
+// consumer has to defend against an out-of-range level.
 //
 // It does NOT read the palette: that one is per cartridge, and only
 // settings_game_palette_load() knows which. s->palette is left at the

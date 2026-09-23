@@ -1486,7 +1486,7 @@ bool emu_autosave_battery(uint16_t mv, uint16_t low_mv, uint16_t hyst_mv)
 
 void emu_set_volume(uint8_t idx)
 {
-    vol_idx = (idx > MIX_VOL_OFF) ? MIX_VOL_OFF : idx;
+    vol_idx = (idx > MIX_VOL_MAX) ? MIX_VOL_MAX : idx;
 }
 
 uint8_t emu_get_volume()
