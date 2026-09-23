@@ -23,9 +23,10 @@ enum menu_result_e {
     MENU_RESET,
 };
 
-// Seven rows — Resume, Game Manual, Cart Info, Color Palette, Volume,
-// Brightness, Reset — drawn inside the game window, driven by the D-pad, with
-// A to act and B to go back. Game Manual reads "Game Manual (Unavailable)",
+// Eight rows — Resume, Game Manual, Cart Info, Color Palette, Volume,
+// Brightness, Hotkeys, Reset — drawn inside the game window seven at a time
+// and scrolled, driven by the D-pad, with A to act and B to go back. Hotkeys
+// opens a view-only page listing the fixed button combos. Game Manual reads "Game Manual (Unavailable)",
 // dimmed, and does nothing when the running cartridge has no manual on the
 // card.
 //

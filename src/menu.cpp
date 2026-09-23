@@ -13,8 +13,8 @@
 #include <Arduino.h>
 #include <stdlib.h>
 
-// The in-game pause menu: six rows inside the game window, worked with the
-// D-pad. The highlight is the pure list machine in gbcore; everything here is
+// The in-game pause menu: a scrolling list inside the game window, worked
+// with the D-pad. The highlight is the pure list machine in gbcore; everything here is
 // drawing and the four side effects the rows have.
 //
 // One expander read every MENU_POLL_MS. That is longer than the input
@@ -22,8 +22,10 @@
 // the edge detection below needs no filter of its own.
 #define MENU_POLL_MS 16
 
-// 7 x 26 + 40 = 222, inside GAME_H (240).
-#define MENU_ROWS  7
+// More entries than fit, so the list scrolls a window of MENU_VISIBLE of
+// them. 7 x 26 + 40 = 222, inside GAME_H (240).
+#define MENU_ENTRIES 8
+#define MENU_VISIBLE 7
 #define MENU_ROW_H 26
 #define MENU_TOP   40   /* the title band above the first row */
 
@@ -45,16 +47,18 @@ enum menu_row_e {
     ROW_PALETTE,
     ROW_VOLUME,
     ROW_BRIGHT,
+    ROW_HOTKEYS,
     ROW_RESET,
 };
 
-static const char* const ROW_LABELS[MENU_ROWS] = {
+static const char* const ROW_LABELS[MENU_ENTRIES] = {
     "Resume",
     "Game Manual",
     "Cart Info",
     "Color Palette",
     "Volume",
     "Brightness",
+    "Hotkeys",
     "Reset",
 };
 
@@ -119,12 +123,14 @@ static const char* row_value(const settings_t* s, uint8_t row, char* buf,
 
 // ─── Drawing ────────────────────────────────────────────────────────────────
 
-static void draw_row(const settings_t* s, uint8_t row, bool highlighted)
+// first is the list window's top entry: rows are placed relative to it.
+static void draw_row(const settings_t* s, uint16_t first, uint8_t row,
+                     bool highlighted)
 {
     char buf[16];
     const char* value = row_value(s, row, buf, sizeof(buf));
     const bool off = row == ROW_MANUAL && !manual_available;
-    int16_t y = (int16_t)(s->game_y + MENU_TOP + row * MENU_ROW_H);
+    int16_t y = (int16_t)(s->game_y + MENU_TOP + (row - first) * MENU_ROW_H);
     uint16_t bg = highlighted ? MENU_HL_BG : MENU_ROW_BG;
     uint16_t fg;
 
@@ -154,17 +160,57 @@ static void draw_row(const settings_t* s, uint8_t row, bool highlighted)
     }
 }
 
-static void draw_menu(const settings_t* s, uint8_t cursor)
+// The rows in the window only; the title band is left alone, so a scroll
+// redraws without blanking the screen.
+static void draw_rows(const settings_t* s, const list_state_t* ls)
 {
-    uint8_t row;
+    uint16_t row;
 
+    for (row = list_first(ls); row < MENU_ENTRIES && list_visible(ls, row);
+         row++) {
+        draw_row(s, list_first(ls), (uint8_t)row, row == list_cursor(ls));
+    }
+}
+
+static void draw_menu(const settings_t* s, const list_state_t* ls)
+{
     tft.fillRect(s->game_x, s->game_y, GAME_W, GAME_H, TFT_BLACK);
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(MENU_TITLE, TFT_BLACK);
     tft.drawString("PAUSED", s->game_x + GAME_W / 2, s->game_y + 18, 4);
-    for (row = 0; row < MENU_ROWS; row++) {
-        draw_row(s, row, row == cursor);
+    draw_rows(s, ls);
+}
+
+// The fixed combos, for reading only: nothing here is editable and nothing
+// comes from NVS. Every line must match a combo_event_e in input/combo.h —
+// describe nothing that module does not implement.
+static const char* const HOTKEYS[][2] = {
+    { "Select + Start", "Menu" },
+    { "Select + Up/Down", "Volume" },
+    { "Select + Right/Left", "Brightness" },
+    { "Select + A + B", "Fast-forward" },
+};
+
+static void draw_hotkeys(const settings_t* s)
+{
+    const int16_t x = (int16_t)(s->game_x + 8);
+    const int16_t right = (int16_t)(s->game_x + GAME_W - 8);
+    int16_t y = (int16_t)(s->game_y + MENU_TOP + MENU_ROW_H / 2);
+
+    tft.fillRect(s->game_x, s->game_y, GAME_W, GAME_H, TFT_BLACK);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(MENU_TITLE, TFT_BLACK);
+    tft.drawString("HOTKEYS", s->game_x + GAME_W / 2, s->game_y + 18, 4);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    for (size_t i = 0; i < sizeof(HOTKEYS) / sizeof(HOTKEYS[0]); i++) {
+        tft.setTextDatum(ML_DATUM);
+        tft.drawString(HOTKEYS[i][0], x, y, 2);
+        tft.setTextDatum(MR_DATUM);
+        tft.drawString(HOTKEYS[i][1], right, y, 2);
+        y = (int16_t)(y + MENU_ROW_H);
     }
+    tft.setTextDatum(TL_DATUM);
+    tft.drawString("B: Back", x, (int16_t)(s->game_y + GAME_H - 18), 2);
 }
 
 /* Both media files are 96x96 raw RGB565, the same imaging run the writer's
@@ -429,12 +475,13 @@ static bool adjust(settings_t* s, uint8_t row, int8_t dir)
     }
 }
 
-// Hold on the info page until B, then leave with the buttons all up so the
-// menu underneath cannot read the same press again. Up and Down scroll the
-// band a line at a time — at once on the press, then after
+// Hold on a page until B, then leave with the buttons all up so the menu
+// underneath cannot read the same press again. Up and Down scroll the band a
+// line at a time — at once on the press, then after
 // COMBO_REPEAT_DELAY_MS every COMBO_REPEAT_MS while held, the writer's detail
-// page's rule — and do nothing when the description fits.
-static void cart_info_input(cart_band_t* band)
+// page's rule — and do nothing when the description fits or, as on the
+// Hotkeys page, there is no band at all.
+static void page_input(cart_band_t* band)
 {
     uint16_t last = band->lines > band->rows
                         ? (uint16_t)(band->lines - band->rows)
@@ -497,14 +544,15 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
         return MENU_RESUME;
     }
     manual_available = name && sd_manual_path(name, path, sizeof(path));
-    list_init(&ls, MENU_ROWS, MENU_ROWS);
-    draw_menu(s, (uint8_t)list_cursor(&ls));
+    list_init(&ls, MENU_ENTRIES, MENU_VISIBLE);
+    draw_menu(s, &ls);
     wait_release();
 
     for (;;) {
         uint32_t now = millis();
         uint16_t word;
         uint8_t cursor = (uint8_t)list_cursor(&ls);
+        uint16_t first = list_first(&ls);
         bool left;
         bool right;
 
@@ -516,15 +564,20 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
         // instead of adjusting anything.
         if (list_input(&ls, (uint8_t)(word & (COMBO_BTN_UP | COMBO_BTN_DOWN)),
                        now) == LIST_EVENT_MOVED) {
-            draw_row(s, cursor, false);
+            if (list_first(&ls) != first) {
+                draw_rows(s, &ls);
+            } else {
+                draw_row(s, first, cursor, false);
+                draw_row(s, first, (uint8_t)list_cursor(&ls), true);
+            }
             cursor = (uint8_t)list_cursor(&ls);
-            draw_row(s, cursor, true);
+            first = list_first(&ls);
         }
 
         left = (word & GB_BTN_LEFT) && !(prev & GB_BTN_LEFT);
         right = (word & GB_BTN_RIGHT) && !(prev & GB_BTN_RIGHT);
         if ((left || right) && adjust(s, cursor, right ? +1 : -1)) {
-            draw_row(s, cursor, true);
+            draw_row(s, first, cursor, true);
         }
 
         if ((word & GB_BTN_A) && !(prev & GB_BTN_A)) {
@@ -541,16 +594,23 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
                 cart_band_t band;
 
                 draw_cart_info(s, info, &desc, &band);
-                cart_info_input(&band);
+                page_input(&band);
                 free(desc);
-                draw_menu(s, cursor);
+                draw_menu(s, &ls);
+            }
+            if (cursor == ROW_HOTKEYS) {
+                cart_band_t none = {};
+
+                draw_hotkeys(s);
+                page_input(&none);
+                draw_menu(s, &ls);
             }
             if (cursor == ROW_MANUAL && manual_available) {
                 // The reader waits for every button to be up before it
                 // returns, so the B that closed it is not read here; a
                 // manual that would not open leaves the menu as it was.
                 manual_view_open(s, name);
-                draw_menu(s, cursor);
+                draw_menu(s, &ls);
             }
             // A on a value row does nothing: Left and Right are its keys.
             // Nor on an unavailable Game Manual.
