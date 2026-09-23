@@ -21,9 +21,8 @@
 // the edge detection below needs no filter of its own.
 #define MENU_POLL_MS 16
 
-// Seven rows at most, Game Manual being the one that comes and goes:
 // 7 x 26 + 40 = 222, inside GAME_H (240).
-#define MENU_ROWS_MAX 7
+#define MENU_ROWS  7
 #define MENU_ROW_H 26
 #define MENU_TOP   40   /* the title band above the first row */
 
@@ -33,30 +32,30 @@
 #define MENU_TITLE  0xFFE0
 #define MENU_DIM    0x7BEF
 
-// An unprotected cartridge reads 0xFF in its configuration byte. The value
-// belongs to the tag layer, but this page only ever displays it, so the one
-// number is spelled out here rather than reaching into that layer for it.
-#define MENU_AUTH0_OPEN 0xFF
-
 enum menu_row_e {
     ROW_RESUME = 0,
+    ROW_MANUAL,
+    ROW_INFO,
+    ROW_PALETTE,
     ROW_VOLUME,
     ROW_BRIGHT,
-    ROW_PALETTE,
-    ROW_INFO,
-    ROW_MANUAL,
     ROW_RESET,
 };
 
-static const char* const ROW_LABELS[MENU_ROWS_MAX] = {
+static const char* const ROW_LABELS[MENU_ROWS] = {
     "Resume",
+    "Game Manual",
+    "Cart Info",
+    "Color Palette",
     "Volume",
     "Brightness",
-    "Palette",
-    "Cart Info",
-    "Game Manual",
     "Reset",
 };
+
+// Whether the running cartridge has a manual on the card, settled once each
+// time the menu opens. Without one the row stays in place, dimmed and inert,
+// so the menu is the same shape for every game.
+static bool manual_available;
 
 // The stored volume is an index counting down towards louder, so the names
 // read in the order the indices do.
@@ -115,69 +114,35 @@ static const char* row_value(const settings_t* s, uint8_t row, char* buf,
 
 // ─── Drawing ────────────────────────────────────────────────────────────────
 
-// `idx` is where the row sits on screen and `row` which row it is; they part
-// company below Cart Info when there is no Game Manual row.
-static void draw_row(const settings_t* s, uint8_t idx, uint8_t row,
-                     bool highlighted)
+static void draw_row(const settings_t* s, uint8_t row, bool highlighted)
 {
     char buf[16];
     const char* value = row_value(s, row, buf, sizeof(buf));
-    int16_t y = (int16_t)(s->game_y + MENU_TOP + idx * MENU_ROW_H);
+    const bool off = row == ROW_MANUAL && !manual_available;
+    int16_t y = (int16_t)(s->game_y + MENU_TOP + row * MENU_ROW_H);
     uint16_t bg = highlighted ? MENU_HL_BG : MENU_ROW_BG;
 
     tft.fillRect(s->game_x + 4, y, GAME_W - 8, MENU_ROW_H - 2, bg);
-    tft.setTextColor(TFT_WHITE, bg);
+    tft.setTextColor(off ? MENU_DIM : TFT_WHITE, bg);
     tft.setTextDatum(ML_DATUM);
-    tft.drawString(ROW_LABELS[row], s->game_x + 8, y + MENU_ROW_H / 2, 2);
+    tft.drawString(off ? "Game Manual (Unavailable)" : ROW_LABELS[row],
+                   s->game_x + 8, y + MENU_ROW_H / 2, 2);
     if (value) {
         tft.setTextDatum(MR_DATUM);
         tft.drawString(value, s->game_x + GAME_W - 8, y + MENU_ROW_H / 2, 2);
     }
 }
 
-static void draw_menu(const settings_t* s, const uint8_t* rows, uint8_t n,
-                      uint8_t cursor)
+static void draw_menu(const settings_t* s, uint8_t cursor)
 {
-    uint8_t i;
+    uint8_t row;
 
     tft.fillRect(s->game_x, s->game_y, GAME_W, GAME_H, TFT_BLACK);
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(MENU_TITLE, TFT_BLACK);
     tft.drawString("PAUSED", s->game_x + GAME_W / 2, s->game_y + 18, 4);
-    for (i = 0; i < n; i++) {
-        draw_row(s, i, rows[i], i == cursor);
-    }
-}
-
-static const char* class_name(enum boot_class_e cls)
-{
-    switch (cls) {
-    case BOOT_CLASS_MENU:
-        return "Menu cart";
-    case BOOT_CLASS_WILD:
-        return "Wildcard";
-    case BOOT_CLASS_GAME:
-        return "Game cart";
-    default:
-        return "Blank";
-    }
-}
-
-// UNKNOWN means the cartridge was never authenticated against, which happens
-// whenever the outcome did not depend on the answer. A configuration byte
-// that is not the open value still says it is protected, which is all this
-// page claims to know.
-static const char* auth_name(const menu_cart_info_t* info)
-{
-    switch (info->auth) {
-    case BOOT_AUTH_OPEN:
-        return "Open";
-    case BOOT_AUTH_OURS:
-        return "Ours";
-    case BOOT_AUTH_FOREIGN:
-        return "Foreign";
-    default:
-        return info->auth0 == MENU_AUTH0_OPEN ? "Open" : "Protected";
+    for (row = 0; row < MENU_ROWS; row++) {
+        draw_row(s, row, row == cursor);
     }
 }
 
@@ -236,14 +201,12 @@ static const char* rom_basename(const char* path)
 // coverage across the library is partial by design.
 static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info)
 {
-    char line[128];
     char desc[CATALOG_DESC_MAX];
     catalog_reader_t cat;
     catalog_entry_t entry;
     const int16_t x = (int16_t)(s->game_x + 8);
     const int16_t max_w = GAME_W - 16;
     const int16_t foot_y = (int16_t)(s->game_y + GAME_H - 18);
-    const int16_t status_y = (int16_t)(foot_y - 10);
     int16_t y = (int16_t)(s->game_y + 8);
     const char* name;
     bool have_entry = false;
@@ -321,37 +284,22 @@ static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info)
                           ART_PATH, ART_SUFFIX, SHOT_PATH, ART_SUFFIX);
         }
 
-        // Whatever is left between the art and the status line. A taller
+        // Whatever is left between the art and the footer. A taller
         // geometry spends it on more of the description rather than on gap.
         if (desc[0]) {
-            int16_t room = (int16_t)(status_y - y - 2);
+            int16_t room = (int16_t)(foot_y - y - 2);
             int16_t pitch = (int16_t)(tft.fontHeight(1) + 2);
             if (room >= pitch) {
                 display_draw_wrapped(desc, x, y, max_w, (uint8_t)(room / pitch),
                                      1);
             }
-        } else if (!have_art) {
-            // Nothing but the title would leave the page looking broken
-            // rather than sparse, so name the file that is running instead.
-            display_draw_wrapped(info->path, x, y, max_w, 4, 1);
         }
     }
 
-    // The one cartridge fact that lives nowhere else. The diagnostic screen's
-    // inspector reads AUTH0 and the access byte, but it never authenticates,
-    // so Ours and Foreign are resolved only on the boot that used the cart —
-    // here. Dim, one row, and below the page's own content: this is a
-    // footnote about the cartridge, not the subject of the page.
-    tft.setTextColor(MENU_DIM, TFT_BLACK);
-    if (info && info->valid) {
-        snprintf(line, sizeof(line), "Tag: %s", auth_name(info));
-    } else {
-        snprintf(line, sizeof(line), "No tag read (bench build)");
-    }
-    tft.drawString(line, x, status_y, 1);
-
+    // Nothing about the tag or the file: this page is for the player, and
+    // neither means anything to them. The serial log above carries both.
     tft.setTextDatum(TL_DATUM);
-    tft.drawString("B: back", x, foot_y, 2);
+    tft.drawString("B: Back", x, foot_y, 2);
 }
 
 // ─── Input ──────────────────────────────────────────────────────────────────
@@ -423,32 +371,21 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
 {
     list_state_t ls;
     uint16_t prev = 0;
-    uint8_t rows[MENU_ROWS_MAX];
-    uint8_t n = 0;
     char path[ART_PATH_MAX];
     const char* name = info ? rom_basename(info->path) : NULL;
-    bool has_manual;
 
     if (!s) {
         return MENU_RESUME;
     }
-    // Game Manual is there only when this cartridge has one on the card:
-    // absent, not greyed out, when it does not.
-    has_manual = name && sd_manual_path(name, path, sizeof(path));
-    for (uint8_t id = 0; id < MENU_ROWS_MAX; id++) {
-        if (id != ROW_MANUAL || has_manual) {
-            rows[n++] = id;
-        }
-    }
-    list_init(&ls, n, n);
-    draw_menu(s, rows, n, (uint8_t)list_cursor(&ls));
+    manual_available = name && sd_manual_path(name, path, sizeof(path));
+    list_init(&ls, MENU_ROWS, MENU_ROWS);
+    draw_menu(s, (uint8_t)list_cursor(&ls));
     wait_release();
 
     for (;;) {
         uint32_t now = millis();
         uint16_t word;
         uint8_t cursor = (uint8_t)list_cursor(&ls);
-        uint8_t row = rows[cursor];
         bool left;
         bool right;
 
@@ -460,40 +397,40 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
         // instead of adjusting anything.
         if (list_input(&ls, (uint8_t)(word & (COMBO_BTN_UP | COMBO_BTN_DOWN)),
                        now) == LIST_EVENT_MOVED) {
-            draw_row(s, cursor, row, false);
+            draw_row(s, cursor, false);
             cursor = (uint8_t)list_cursor(&ls);
-            row = rows[cursor];
-            draw_row(s, cursor, row, true);
+            draw_row(s, cursor, true);
         }
 
         left = (word & GB_BTN_LEFT) && !(prev & GB_BTN_LEFT);
         right = (word & GB_BTN_RIGHT) && !(prev & GB_BTN_RIGHT);
-        if ((left || right) && adjust(s, row, right ? +1 : -1)) {
-            draw_row(s, cursor, row, true);
+        if ((left || right) && adjust(s, cursor, right ? +1 : -1)) {
+            draw_row(s, cursor, true);
         }
 
         if ((word & GB_BTN_A) && !(prev & GB_BTN_A)) {
-            if (row == ROW_RESUME) {
+            if (cursor == ROW_RESUME) {
                 wait_release();
                 return MENU_RESUME;
             }
-            if (row == ROW_RESET) {
+            if (cursor == ROW_RESET) {
                 wait_release();
                 return MENU_RESET;
             }
-            if (row == ROW_INFO) {
+            if (cursor == ROW_INFO) {
                 draw_cart_info(s, info);
                 wait_for_back();
-                draw_menu(s, rows, n, cursor);
+                draw_menu(s, cursor);
             }
-            if (row == ROW_MANUAL) {
+            if (cursor == ROW_MANUAL && manual_available) {
                 // The reader waits for every button to be up before it
                 // returns, so the B that closed it is not read here; a
                 // manual that would not open leaves the menu as it was.
                 manual_view_open(s, name);
-                draw_menu(s, rows, n, cursor);
+                draw_menu(s, cursor);
             }
             // A on a value row does nothing: Left and Right are its keys.
+            // Nor on an unavailable Game Manual.
         }
         if ((word & GB_BTN_B) && !(prev & GB_BTN_B)) {
             wait_release();

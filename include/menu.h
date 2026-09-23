@@ -10,10 +10,9 @@
 // to the menu by value. The menu never asks the cartridge anything itself:
 // there is one read per power cycle and this is what it left behind.
 //
-// `valid` false means no cartridge was read at all — the bench build — and
-// the page says so, then goes on to name the ROM that was mapped anyway:
-// what the tag said and what is running are two facts, and only the first of
-// them is missing. `uid_hex` is up to seven bytes as fourteen hex digits; it
+// `valid` false means no cartridge was read at all — the bench build. The page
+// shows the player the game and never the tag, so it draws the same either
+// way. `uid_hex` is up to seven bytes as fourteen hex digits; it
 // lives in RAM for display only and is never persisted anywhere. `cls` and
 // `auth` are the boot table's own enums, not a re-derivation, and `auth0` is
 // the raw configuration byte behind `auth`.
@@ -37,10 +36,11 @@ enum menu_result_e {
     MENU_RESET,
 };
 
-// Six rows — Resume, Volume, Brightness, Palette, Cart Info, Reset — or
-// seven, with Game Manual after Cart Info, when the running cartridge has a
-// manual on the card. Drawn inside the game window, driven by the D-pad, with
-// A to act and B to go back.
+// Seven rows — Resume, Game Manual, Cart Info, Color Palette, Volume,
+// Brightness, Reset — drawn inside the game window, driven by the D-pad, with
+// A to act and B to go back. Game Manual reads "Game Manual (Unavailable)",
+// dimmed, and does nothing when the running cartridge has no manual on the
+// card.
 //
 // Calling contract: pause the pipeline and take the display bus first, and
 // give them back afterwards; this draws through the driver directly for as
