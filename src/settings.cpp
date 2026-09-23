@@ -26,11 +26,11 @@ void settings_defaults(settings_t* s) {
     // 16.7 ms budget — so every frame is drawn and one-frame hit flashes show
     // again. The setting stays per unit for a heavier title that needs it.
     s->frameskip = 0;
-    // 6th of the 8 backlight levels, not the top: a fresh unit that boots
-    // at maximum is the one the bench found too bright. This is
-    // BL_MIN + 5*BL_STEP -- derived, so it follows the ladder if those
-    // constants move.
-    s->brightness = BL_MIN + 5 * BL_STEP;
+    // 4th of the 8 backlight levels, 4/8 in the menu: a fresh unit that
+    // boots at maximum is the one the bench found too bright, and 6/8 was
+    // still brighter than wanted. This is BL_MIN + 3*BL_STEP -- derived, so
+    // it follows the ladder if those constants move.
+    s->brightness = BL_MIN + 3 * BL_STEP;
     // 5 of 8, not the top: a gain of 64/256, about 12 dB below full scale.
     s->volume = 5;
     s->game_x = GAME_X;
