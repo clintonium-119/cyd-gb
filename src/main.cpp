@@ -112,16 +112,6 @@ static void read_tag(boot_input_t* b) {
     b->auth = BOOT_AUTH_UNKNOWN;
     tag_payload[0] = '\0';
 
-    // The snapshot's tag-derived half, cleared here for the same reason: the
-    // post-display retry calls this again. Its ROM-derived half belongs to
-    // load_and_run() and must not be touched from here.
-    cart_info.valid = false;
-    cart_info.uid_hex[0] = '\0';
-    cart_info.payload[0] = '\0';
-    cart_info.cls = BOOT_CLASS_BLANK;
-    cart_info.auth0 = 0;
-    cart_info.auth = BOOT_AUTH_UNKNOWN;
-
     uint8_t uid[7] = {0};
     uint8_t uid_len = 0;
     switch (nfc_detect(uid, &uid_len)) {
@@ -137,14 +127,6 @@ static void read_tag(boot_input_t* b) {
             return;
         case NFC_DETECT_ONE:
             break;
-    }
-
-    // Two hex digits per byte, for the Cart Info page to show. uid_hex is
-    // sized for the seven a double-size UID carries, so the last write has
-    // exactly its two digits and the terminator left.
-    for (uint8_t i = 0; i < uid_len && i < sizeof(uid); i++) {
-        snprintf(cart_info.uid_hex + i * 2,
-                 sizeof(cart_info.uid_hex) - i * 2, "%02X", uid[i]);
     }
 
     uint8_t raw[NDEF_BUF_MAX];
@@ -168,12 +150,6 @@ static void read_tag(boot_input_t* b) {
         return;
     }
 
-    // What was read and what it classified as, both straight from above: the
-    // menu shows the class the decision table derived, never one of its own.
-    strncpy(cart_info.payload, tag_payload, sizeof(cart_info.payload) - 1);
-    cart_info.payload[sizeof(cart_info.payload) - 1] = '\0';
-    cart_info.cls = b->cls;
-
     // The configuration read doubles as the part check: a foreign
     // read-protected tag, or something that is not an NTAG215, refuses it,
     // and that shows the unreadable screen rather than a guess.
@@ -184,8 +160,6 @@ static void read_tag(boot_input_t* b) {
     }
     b->auth = (auth0 == NTAG215_AUTH0_OPEN) ? BOOT_AUTH_OPEN : BOOT_AUTH_UNKNOWN;
     b->tag = BOOT_TAG_OK;
-    cart_info.auth0 = auth0;
-    cart_info.auth = b->auth;
     Serial.printf("[BOOT] tag cls=%d rom='%s' auth0=0x%02X\n", (int)b->cls,
                   b->rom, auth0);
 }
@@ -472,14 +446,12 @@ static void load_and_run(const char* name) {
         halt_screen("Init failed", "");
     }
 
-    // The snapshot's ROM-derived half: the path the tag's name matched, and
-    // the two header facts the mapped ROM has just made answerable. Gathered
-    // once, here, because nothing after this point changes any of them.
+    // The menu's snapshot: the path the tag's name matched, and the header
+    // title the mapped ROM has just made answerable. Gathered once, here,
+    // because nothing after this point changes either.
     strncpy(cart_info.path, cur_path, sizeof(cart_info.path) - 1);
     cart_info.path[sizeof(cart_info.path) - 1] = '\0';
     emu_get_rom_title(cart_info.title, sizeof(cart_info.title));
-    cart_info.colour_hash = emu_get_colour_hash();
-    cart_info.valid = (in.tag == BOOT_TAG_OK);
 
     // The palette is the cartridge's, not the device's, so it is resolved
     // here rather than with the rest of the settings in setup(): the title it
@@ -681,9 +653,6 @@ void loop() {
         // Asked for, never volunteered: the password goes to a tag only when
         // the outcome actually depends on the answer.
         in.auth = provision_auth_state();
-        // The resolved state, so the page reports Ours or Foreign rather than
-        // the Unknown the configuration read alone could tell.
-        cart_info.auth = in.auth;
         action = boot_decide(&in);
     }
     Serial.printf("[BOOT] action=%d\n", (int)action);

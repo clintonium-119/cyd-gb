@@ -1530,20 +1530,3 @@ void emu_get_rom_title(char* out, size_t out_sz)
 {
     rom_title(out, out_sz);
 }
-
-uint8_t emu_get_colour_hash()
-{
-    /* The sum of the title field's bytes, which is what the other bridge's
-     * core computes from the same sixteen bytes. Zero before the ROM is
-     * mapped, as the header promises. */
-    uint8_t x = 0;
-    uint16_t i;
-
-    if (!rom || romlen <= 0x143) {
-        return 0;
-    }
-    for (i = 0x134; i <= 0x143; i++) {
-        x = (uint8_t)(x + rom[i]);
-    }
-    return x;
-}

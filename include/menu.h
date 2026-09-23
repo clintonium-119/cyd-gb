@@ -3,29 +3,16 @@
 #include <stdbool.h>
 
 #include "settings.h"
-#include "cart/ndef.h"
 
 // ─── Cartridge snapshot ─────────────────────────────────────────────────────
-// Everything the Cart Info page shows, gathered once during boot and handed
-// to the menu by value. The menu never asks the cartridge anything itself:
-// there is one read per power cycle and this is what it left behind.
-//
-// `valid` false means no cartridge was read at all — the bench build. The page
-// shows the player the game and never the tag, so it draws the same either
-// way. `uid_hex` is up to seven bytes as fourteen hex digits; it
-// lives in RAM for display only and is never persisted anywhere. `cls` and
-// `auth` are the boot table's own enums, not a re-derivation, and `auth0` is
-// the raw configuration byte behind `auth`.
+// What the menu needs to know about the running game, gathered once at boot
+// and handed to it by value: the ROM path, whose file name keys the catalog
+// entry, the cover, the snapshot and the manual; and the cartridge header's
+// title, shown when the catalog has no entry. Nothing about the tag — the
+// menu is for the player, and the tag means nothing to them.
 typedef struct menu_cart_info_s {
-    bool valid;
-    char uid_hex[15];
-    char payload[NDEF_TEXT_MAX + 1];
-    enum boot_class_e cls;
-    uint8_t auth0;
-    enum boot_auth_e auth;
     char path[80];
     char title[17];
-    uint8_t colour_hash;
 } menu_cart_info_t;
 
 // ─── In-game menu ───────────────────────────────────────────────────────────

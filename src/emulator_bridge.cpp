@@ -902,10 +902,3 @@ void emu_get_rom_title(char* out, size_t out_sz)
 {
     rom_title(out, out_sz);
 }
-
-uint8_t emu_get_colour_hash()
-{
-    /* Reads the header through gb->gb_rom_read, so there is nothing to sum
-     * until the emulator has been initialised. */
-    return gb ? gb_colour_hash(gb) : 0;
-}
