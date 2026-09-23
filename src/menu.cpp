@@ -27,9 +27,14 @@
 #define MENU_ROW_H 26
 #define MENU_TOP   40   /* the title band above the first row */
 
-// The fork's two row colours, kept so this looks like the rest of the UI.
-#define MENU_HL_BG  0x2945
+// The fork's row colour, kept so this looks like the rest of the UI. The
+// highlighted row is close to inverted, black on a light bar, because the
+// fork's near-black highlight was hard to find at a glance. Both highlight
+// greys are starting values for the bench, not derived.
 #define MENU_ROW_BG 0x1082
+#define MENU_HL_BG  0xDEFB
+#define MENU_HL_FG  TFT_BLACK
+#define MENU_HL_DIM 0x6B4D
 #define MENU_TITLE  0xFFE0
 #define MENU_DIM    0x7BEF
 
@@ -116,9 +121,16 @@ static void draw_row(const settings_t* s, uint8_t row, bool highlighted)
     const bool off = row == ROW_MANUAL && !manual_available;
     int16_t y = (int16_t)(s->game_y + MENU_TOP + row * MENU_ROW_H);
     uint16_t bg = highlighted ? MENU_HL_BG : MENU_ROW_BG;
+    uint16_t fg;
+
+    if (highlighted) {
+        fg = off ? MENU_HL_DIM : MENU_HL_FG;
+    } else {
+        fg = off ? MENU_DIM : TFT_WHITE;
+    }
 
     tft.fillRect(s->game_x + 4, y, GAME_W - 8, MENU_ROW_H - 2, bg);
-    tft.setTextColor(off ? MENU_DIM : TFT_WHITE, bg);
+    tft.setTextColor(fg, bg);
     tft.setTextDatum(ML_DATUM);
     tft.drawString(off ? "Game Manual (Unavailable)" : ROW_LABELS[row],
                    s->game_x + 8, y + MENU_ROW_H / 2, 2);
