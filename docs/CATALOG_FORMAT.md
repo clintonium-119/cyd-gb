@@ -29,12 +29,13 @@ specified here.
 /art/<stem>.565            box art, 96x96 raw RGB565, little-endian
 /shot/<stem>.565           gameplay snapshot, same format
 /manual/<stem>.1bp         scanned manual, 1 bpp pages behind a page table
+/desc/<stem>.txt           full description, plain ASCII
 /saves/<stem>.sav          battery save, written by the emulator
 /catalog.txt               generated; never hand-edited
 ```
 
-`<stem>` is `<filename>` with the `.gb` extension removed. There is no `/desc/` directory —
-descriptions live in the catalog. `games.json` stays in the repository and is **not** copied to the card.
+`<stem>` is `<filename>` with the `.gb` extension removed. `games.json` stays in the repository and is
+**not** copied to the card.
 
 Library facts as of this writing: 132 ROMs, about 30 MB; cards are 128 MB; each image at 96x96 is
 18,432 bytes, so two per game is about 4.9 MB in total.
@@ -47,7 +48,7 @@ One object per game, in an array. Field order is not significant.
 |---|---|---|
 | `filename` | string | **The key.** Unique across the file. Ends in `.gb`. At most 63 bytes (`ROM_STORE_NAME_MAX - 1`). Appears **verbatim** on protected tags. |
 | `title` | string | Display name. At most 47 bytes (`CATALOG_TITLE_MAX - 1`). Plain ASCII, no tab and no newline. |
-| `description` | string | At most 200 bytes. Plain ASCII, no tab and no newline. May be empty. |
+| `description` | string | The full text. At most 4,096 bytes (`DESC_MAX - 1`). Plain ASCII, no tab, no CR and no other control character. Paragraphs are separated by one blank line (`\n\n`); no other newline, and none leading or trailing. May be empty. |
 | `art` | string | Path to the cover source, relative to the media directory named by `CYD_MEDIA_DIR`; empty when no source exists. |
 | `shot` | string | Path to the gameplay snapshot source, relative to the media directory named by `CYD_MEDIA_DIR`; empty when no source exists. |
 | `manual` | string | Path to the scanned PDF manual source, relative to the media directory named by `CYD_MEDIA_DIR`; empty when no source exists. |
@@ -85,7 +86,10 @@ the presence of a dot.
 - **`flags`** is a comma-separated token list, and may be empty. Only `starter` is understood today.
   **Unknown tokens are ignored by the firmware**, so the generator may add more without a firmware
   change.
-- **`description`** runs to the end of the line and may be empty.
+- **`description`** is a **blurb derived** from `games.json`'s description when the catalog is written,
+  never curated: its whitespace, paragraph breaks included, collapsed to single spaces, then cut to at
+  most 200 bytes (`CATALOG_DESC_MAX - 1`) at the last sentence end, else at a word. It runs to the end of
+  the line and may be empty. The full text is on `/desc`; the blurb stands in where there is no file.
 - **Line length** at most 383 bytes (`CATALOG_LINE_MAX - 1`) including the three tabs but not the
   newline. The caps above put the worst permitted line at 321 bytes.
 - **At most 160 entries** (`CATALOG_MAX`). A longer file is read up to that limit and reported as full.
@@ -193,6 +197,13 @@ A cartridge carries an NDEF Text record whose payload is one of:
   French device carries `fr-CA` and assuming two bytes would turn the filename into `CATetris.gb`.
 - UTF-16 text is refused rather than interpreted, so a misread can never become a filename.
 
+## Descriptions
+
+One file per game with a non-empty description, `/desc/<stem>.txt`, holding exactly that description's
+bytes: plain ASCII, paragraphs separated by a blank line, no trailing newline. A game with an empty
+description has no file. The firmware reads the file whole into a `DESC_MAX` buffer and refuses, rather
+than truncates, a file too big for it, falling back to the catalog's blurb.
+
 ## Caps
 
 Every cap in this document is a named constant in the firmware. The generator must enforce the same
@@ -202,7 +213,8 @@ values.
 |---|---|---|---|
 | `filename` length, with NUL | 64 | `ROM_STORE_NAME_MAX` | `lib/gbcore/cart/rom_store.h` |
 | `title` length, with NUL | 48 | `CATALOG_TITLE_MAX` | `lib/gbcore/cart/catalog.h` |
-| `description` length, with NUL | 201 | `CATALOG_DESC_MAX` | `lib/gbcore/cart/catalog.h` |
+| Catalog blurb length, with NUL | 201 | `CATALOG_DESC_MAX` | `lib/gbcore/cart/catalog.h` |
+| `/desc` file length, with NUL | 4,097 | `DESC_MAX` | `include/sd_manager.h` |
 | Catalog line length, with NUL | 384 | `CATALOG_LINE_MAX` | `lib/gbcore/cart/catalog.h` |
 | Catalog entries | 160 | `CATALOG_MAX` | `lib/gbcore/cart/catalog.h` |
 | `starter` flag bit | `0x01` | `CATALOG_FLAG_STARTER` | `lib/gbcore/cart/catalog.h` |

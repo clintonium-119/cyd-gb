@@ -58,7 +58,8 @@ def sources(tmp_path):
             {
                 "filename": filename,
                 "title": title,
-                "description": f"{title} is a game.",
+                # Alleyway's is empty, so it gets no /desc file.
+                "description": f"{title} is a game." if art else "",
                 "art": art,
                 "shot": shot,
                 "manual": "",
@@ -163,9 +164,10 @@ def test_the_manifest_holds_no_absolute_path_and_no_saves_entry(sources, capsys)
 
     assert str(sources["card"]) not in out
     assert "saves" not in out
-    # 3 ROMs + 2 covers (Alleyway has none) + 1 snapshot (Tetris only) + the
-    # catalog = 7. /saves holds nothing and is not an expected file.
-    assert len(out.strip().splitlines()) == 7
+    # 3 ROMs + 2 covers (Alleyway has none) + 1 snapshot (Tetris only) + 2
+    # descriptions (Alleyway's is empty) + the catalog = 9. /saves holds
+    # nothing and is not an expected file.
+    assert len(out.strip().splitlines()) == 9
     for line in out.strip().splitlines():
         digest, size, path = line.split("  ", 2)
         assert len(digest) == 64
@@ -518,6 +520,12 @@ def test_the_manual_directory_and_suffix_match_the_firmware(repo_root):
     assert c_define(header, "MANUAL_SUFFIX") == f'"{image_sd.MANUAL_SUFFIX}"'
 
 
+def test_the_description_directory_and_suffix_match_the_firmware(repo_root):
+    header = repo_root / "include" / "sd_manager.h"
+    assert c_define(header, "DESC_PATH") == f'"/{image_sd.DESC_DIR}"'
+    assert c_define(header, "DESC_SUFFIX") == f'"{image_sd.DESC_SUFFIX}"'
+
+
 def test_the_manual_magic_and_version_match_the_firmware(repo_root):
     header = repo_root / "lib" / "gbcore" / "ui" / "manual.h"
     assert c_define(header, "MANUAL_MAGIC") == f'"{image_sd.MANUAL_MAGIC.decode()}"'
@@ -707,3 +715,69 @@ def test_a_library_with_a_manual_needs_poppler(manual_sources, monkeypatch, caps
     assert image(manual_sources) == 1
     assert "pdftoppm is not on PATH" in capsys.readouterr().err
     assert not (manual_sources["card"] / "roms").exists()
+
+
+# --- descriptions ---------------------------------------------------------
+
+
+@pytest.fixture
+def desc_sources(sources):
+    """The three entries, Tetris with a two-paragraph description."""
+    entries = sources["entries"]
+    entries[0]["description"] = "Fit the blocks.\n\nClear the rows."
+    sources["games"].write_text(json.dumps(entries, indent=2) + "\n", encoding="utf-8")
+    return sources
+
+
+@ffmpeg_required
+def test_one_run_writes_each_description_exactly_and_none_when_empty(desc_sources):
+    assert image(desc_sources) == 0
+    card = desc_sources["card"]
+
+    assert (card / "desc/Tetris.txt").read_bytes() == b"Fit the blocks.\n\nClear the rows."
+    assert (card / "desc/Dr. Mario.txt").read_bytes() == b"Dr. Mario is a game."
+    assert not (card / "desc/Alleyway.txt").exists()
+
+
+@ffmpeg_required
+def test_a_second_run_leaves_the_descriptions_alone(desc_sources, capsys):
+    assert image(desc_sources) == 0
+    first = capsys.readouterr()
+    assert "2 descriptions written" in first.err
+
+    assert image(desc_sources) == 0
+    second = capsys.readouterr()
+    assert "0 descriptions written" in second.err
+    assert first.out == second.out
+    assert "desc/Tetris.txt" in second.out
+
+
+@ffmpeg_required
+def test_a_stray_description_is_pruned_and_saves_survive(desc_sources, capsys):
+    card = desc_sources["card"]
+    (card / "desc").mkdir()
+    (card / "desc/Bootleg.txt").write_bytes(b"stray")
+    (card / "saves").mkdir()
+    (card / "saves/Tetris.sav").write_bytes(b"x")
+
+    assert image(desc_sources) == 0
+
+    assert not (card / "desc/Bootleg.txt").exists()
+    assert (card / "saves/Tetris.sav").is_file()
+    assert "removed: desc/Bootleg.txt" in capsys.readouterr().err
+
+
+@ffmpeg_required
+def test_check_catches_a_single_corrupted_byte_of_a_description(desc_sources, capsys):
+    assert image(desc_sources) == 0
+    capsys.readouterr()
+
+    path = desc_sources["card"] / "desc/Tetris.txt"
+    data = bytearray(path.read_bytes())
+    data[3] ^= 0x01
+    path.write_bytes(bytes(data))
+
+    assert image(desc_sources, "--check") == 1
+    assert "failed verify: differs from its source: desc/Tetris.txt" in (
+        capsys.readouterr().err
+    )
