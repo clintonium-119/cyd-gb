@@ -13,6 +13,10 @@ import image_sd
 ffmpeg_required = pytest.mark.skipif(
     shutil.which("ffmpeg") is None, reason="ffmpeg converts the art and has no substitute"
 )
+poppler_required = pytest.mark.skipif(
+    shutil.which("pdftoppm") is None or shutil.which("pdfinfo") is None,
+    reason="poppler renders the manuals and has no substitute",
+)
 
 ENTRIES = [
     ("Tetris.gb", "Tetris", True, "covers/Tetris.png", "screenshots/Tetris.png"),
@@ -485,3 +489,189 @@ def test_a_two_page_file_decodes_back_to_what_was_encoded():
     second = image_sd.pack_page(bytes(range(0, 256, 4)), 8, 8, 100)
     pages = [(10, 3, first), (8, 8, second)]
     assert decode_manual(image_sd.encode_manual(pages)) == pages
+
+
+# --- manual rendering -----------------------------------------------------
+
+# Three fixture pages, in points: a plain page with a black box; a spread wider
+# than 2:1 with a black box on each half; and a dark page carrying a light box,
+# which a fixed threshold would flatten to black.
+MANUAL_PAGES = [
+    (300, 400, "1 g 0 0 300 400 re f 0 g 50 50 100 100 re f"),
+    (1000, 300, "1 g 0 0 1000 300 re f 0 g 100 100 100 100 re f 600 100 100 100 re f"),
+    (300, 400, "0.1 g 0 0 300 400 re f 0.3 g 100 150 100 100 re f"),
+]
+
+
+def make_pdf(path, pages):
+    """A minimal PDF of filled rectangles, one content stream per page, no fonts."""
+    count = len(pages)
+    kids = " ".join(f"{3 + 2 * index} 0 R" for index in range(count))
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        f"<< /Type /Pages /Kids [{kids}] /Count {count} >>".encode(),
+    ]
+    for index, (w, h, content) in enumerate(pages):
+        objects.append(
+            f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {w} {h}] "
+            f"/Contents {4 + 2 * index} 0 R >>".encode()
+        )
+        stream = content.encode()
+        objects.append(
+            b"<< /Length %d >>\nstream\n%s\nendstream" % (len(stream), stream)
+        )
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n%s\nendobj\n" % (number, body)
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    for offset in offsets:
+        out += b"%010d 00000 n \n" % offset
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (
+        len(objects) + 1, xref
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(bytes(out))
+
+
+@pytest.fixture
+def manual_sources(sources):
+    """The sources, with a manual for Tetris and none for the other two."""
+    make_pdf(sources["media_dir"] / "manuals/Tetris.pdf", MANUAL_PAGES)
+    for entry in sources["entries"]:
+        if entry["filename"] == "Tetris.gb":
+            entry["manual"] = "manuals/Tetris.pdf"
+    sources["games"].write_text(
+        json.dumps(sources["entries"], indent=2) + "\n", encoding="utf-8"
+    )
+    return sources
+
+
+def transitions(w, raster):
+    """Black-to-white changes along the rows, the structure a threshold keeps."""
+    row_bytes = (w + 7) // 8
+    count = 0
+    for start in range(0, len(raster), row_bytes):
+        bits = int.from_bytes(raster[start:start + row_bytes], "big")
+        row = bin(bits)[2:].zfill(row_bytes * 8)[:w]
+        count += row.count("10")
+    return count
+
+
+@ffmpeg_required
+@poppler_required
+def test_one_run_makes_a_manual_only_for_the_entry_with_one(manual_sources):
+    assert image(manual_sources) == 0
+    card = manual_sources["card"]
+    assert sorted(path.name for path in (card / "manual").iterdir()) == ["Tetris.1bp"]
+
+
+@ffmpeg_required
+@poppler_required
+def test_a_manual_is_exactly_the_size_its_table_implies(manual_sources):
+    assert image(manual_sources) == 0
+    decode_manual((manual_sources["card"] / "manual/Tetris.1bp").read_bytes())
+
+
+@ffmpeg_required
+@poppler_required
+def test_the_wide_page_is_stored_as_two_halves_within_the_box(manual_sources):
+    assert image(manual_sources) == 0
+    pages = decode_manual((manual_sources["card"] / "manual/Tetris.1bp").read_bytes())
+
+    assert [(w, h) for w, h, _ in pages] == [(360, 480), (532, 319), (532, 319), (360, 480)]
+    for w, h, raster in pages:
+        assert w <= 532 and h <= 480
+        assert transitions(w, raster) > 0
+
+
+@ffmpeg_required
+@poppler_required
+def test_the_dark_page_keeps_its_light_box(manual_sources):
+    assert image(manual_sources) == 0
+    pages = decode_manual((manual_sources["card"] / "manual/Tetris.1bp").read_bytes())
+    w, h, raster = pages[3]
+
+    # The box is 100 pt tall, 120 rows at this fit, one light run per row;
+    # a fixed mid-grey threshold would leave it black with no runs at all.
+    assert transitions(w, raster) >= 100
+
+
+@ffmpeg_required
+@poppler_required
+def test_a_second_run_leaves_the_manual_and_the_manifest_alone(manual_sources, capsys):
+    assert image(manual_sources) == 0
+    first = capsys.readouterr()
+    assert "1 manuals written" in first.err
+
+    assert image(manual_sources) == 0
+    second = capsys.readouterr()
+    assert "0 manuals written" in second.err
+    assert second.out == first.out
+    assert "manual/Tetris.1bp" in second.out
+
+
+@ffmpeg_required
+@poppler_required
+def test_a_stray_manual_is_pruned_and_saves_survive(manual_sources, capsys):
+    card = manual_sources["card"]
+    (card / "manual").mkdir()
+    (card / "manual/Bootleg.1bp").write_bytes(b"GBMN")
+    (card / "saves").mkdir()
+    (card / "saves/Tetris.sav").write_bytes(b"x")
+
+    assert image(manual_sources) == 0
+
+    assert not (card / "manual/Bootleg.1bp").exists()
+    assert (card / "saves/Tetris.sav").is_file()
+    assert "removed: manual/Bootleg.1bp" in capsys.readouterr().err
+
+
+@ffmpeg_required
+@poppler_required
+def test_check_catches_a_single_corrupted_byte_of_a_manual(manual_sources, capsys):
+    assert image(manual_sources) == 0
+    capsys.readouterr()
+
+    path = manual_sources["card"] / "manual/Tetris.1bp"
+    data = bytearray(path.read_bytes())
+    data[len(data) // 2] ^= 0x01
+    path.write_bytes(bytes(data))
+
+    assert image(manual_sources, "--check") == 1
+    assert "failed verify: differs from its source: manual/Tetris.1bp" in (
+        capsys.readouterr().err
+    )
+
+
+@ffmpeg_required
+@poppler_required
+def test_rendering_a_manual_leaves_no_temp_file(manual_sources):
+    assert image(manual_sources) == 0
+    assert list(manual_sources["card"].rglob("*.tmp")) == []
+
+
+def test_pixels_with_whitespace_values_survive_the_pgm_header(monkeypatch):
+    # A page whose first pixels are 0x20 and 0x0a, which a whitespace split of
+    # the header would swallow.
+    pgm = b"P5\n3 1\n255\n\x20\x0a\xff"
+    monkeypatch.setattr(
+        image_sd.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, pgm, b""),
+    )
+    assert image_sd.pdftoppm_grey("x.pdf", 1, 3, 1, None) == b"\x20\x0a\xff"
+
+
+def test_a_library_with_a_manual_needs_poppler(manual_sources, monkeypatch, capsys):
+    real_which = shutil.which
+    monkeypatch.setattr(
+        image_sd.shutil,
+        "which",
+        lambda tool: None if tool == "pdftoppm" else real_which(tool) or tool,
+    )
+    assert image(manual_sources) == 1
+    assert "pdftoppm is not on PATH" in capsys.readouterr().err
+    assert not (manual_sources["card"] / "roms").exists()

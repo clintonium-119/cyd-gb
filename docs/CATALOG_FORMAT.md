@@ -28,6 +28,7 @@ specified here.
 /roms/gb/<filename>        the ROM, named exactly as games.json says
 /art/<stem>.565            box art, 96x96 raw RGB565, little-endian
 /shot/<stem>.565           gameplay snapshot, same format
+/manual/<stem>.1bp         scanned manual, 1 bpp pages behind a page table
 /saves/<stem>.sav          battery save, written by the emulator
 /catalog.txt               generated; never hand-edited
 ```
@@ -127,6 +128,37 @@ directories gain and lose games together.
 
 - Either file missing draws the same placeholder. It is never a failure, and one image present with the
   other absent is an ordinary case.
+
+## Manuals
+
+One file per game that has a manual, `/manual/<stem>.1bp`, rendered from the `manual` PDF during
+imaging. A game without one has no file, and the in-game menu offers no manual for it.
+
+Every integer is little-endian. The file is, in order:
+
+| Bytes | Field |
+|---|---|
+| 4 | Magic `GBMN`. |
+| 2 | Version, `1`. |
+| 2 | Page count `n`. |
+| 4 × `n` | Per page, a `u16` width then a `u16` height, in pixels. |
+| Σ `ceil(w / 8) × h` | Every page's raster, back to back, in page order. |
+
+- A raster is `h` rows top to bottom. Each row is `ceil(w / 8)` bytes, pixels **most-significant bit
+  first**; a set bit is black, a clear bit white. The pad bits at the end of a row are zero.
+- A page's offset is `8 + 4n` plus the raster sizes of the pages before it; nothing else is stored.
+- **Exact-size rule:** a file whose size is not exactly `8 + 4n + Σ ceil(w / 8) × h` is refused, the same
+  rule a `.565` file meets. Uncompressed on purpose, so the reader seeks straight to the rows it shows.
+- Every page fits within **532 × 480**, twice the game window in each direction, at its own aspect: a tile
+  of it is one window, and it decimates 2× to an overview of the whole page.
+- A source page wider than **2:1** is a spread, and is stored as two pages — its left half, then its right
+  — each fitted within 532 × 480 on its own aspect.
+- Each page is reduced to one bit at its own Otsu threshold from its grey histogram, a pixel being black
+  when its grey level is at or below it. No fixed threshold is used.
+
+The imaging tool renders each page with poppler's `pdftoppm -gray` directly at its stored size, a half
+by cropping a render at twice that width. The library as imaged on 2026-09-23: 114 manuals, 2,680
+stored pages, 70.7 MB.
 
 ## Tag payload grammar
 
