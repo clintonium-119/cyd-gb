@@ -43,7 +43,7 @@ static const char* const DETAIL_TARGET[] = {
 #define TARGET_CANCEL 2
 #define TARGET_FINISH 3
 
-#define FOOTER_PROMPT "Hold A to confirm    B: back"
+#define FOOTER_PROMPT "Hold A to confirm    B: Back"
 #define ART_MISSING   "no art"
 #define SHOT_MISSING  "no snapshot"
 #define MARK_PREFIX   "* "
