@@ -23,12 +23,18 @@ enum menu_result_e {
     MENU_RESET,
 };
 
-// Eight rows — Resume, Game Manual, Cart Info, Color Palette, Volume,
-// Brightness, Hotkeys, Reset — drawn inside the game window seven at a time
-// and scrolled, driven by the D-pad, with A to act and B to go back. Hotkeys
-// opens a view-only page listing the fixed button combos. Game Manual reads "Game Manual (Unavailable)",
-// dimmed, and does nothing when the running cartridge has no manual on the
-// card.
+// Nine rows — Resume, Save State, Game Manual, Cart Info, Color Palette,
+// Volume, Brightness, Hotkeys, Reset — drawn inside the game window seven at
+// a time and scrolled, driven by the D-pad, with A to act and B to go back.
+// Hotkeys opens a view-only page listing the fixed button combos. Game Manual
+// reads "Game Manual (Unavailable)", dimmed, and does nothing when the
+// running cartridge has no manual on the card; Save State does the same on a
+// core without save states.
+//
+// Save State opens the game's one state: its snapshot, and Save, Load and
+// Back. Load always asks first, and so does a Save that would replace a
+// state. A load that succeeds returns MENU_RESUME at once, with the machine
+// already at the loaded moment and its cartridge RAM marked dirty.
 //
 // Calling contract: pause the pipeline and take the display bus first, and
 // give them back afterwards; this draws through the driver directly for as

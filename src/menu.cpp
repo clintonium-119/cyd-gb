@@ -24,7 +24,7 @@
 
 // More entries than fit, so the list scrolls a window of MENU_VISIBLE of
 // them. 7 x 26 + 40 = 222, inside GAME_H (240).
-#define MENU_ENTRIES 8
+#define MENU_ENTRIES 9
 #define MENU_VISIBLE 7
 #define MENU_ROW_H 26
 #define MENU_TOP   40   /* the title band above the first row */
@@ -42,6 +42,7 @@
 
 enum menu_row_e {
     ROW_RESUME = 0,
+    ROW_STATE,
     ROW_MANUAL,
     ROW_INFO,
     ROW_PALETTE,
@@ -53,6 +54,7 @@ enum menu_row_e {
 
 static const char* const ROW_LABELS[MENU_ENTRIES] = {
     "Resume",
+    "Save State",
     "Game Manual",
     "Cart Info",
     "Color Palette",
@@ -64,7 +66,8 @@ static const char* const ROW_LABELS[MENU_ENTRIES] = {
 
 // Whether the running cartridge has a manual on the card, settled once each
 // time the menu opens. Without one the row stays in place, dimmed and inert,
-// so the menu is the same shape for every game.
+// so the menu is the same shape for every game. Save State follows the same
+// rule for a core that has no save states.
 static bool manual_available;
 
 // Indexed by the stored volume, which runs Off to High.
@@ -123,14 +126,11 @@ static const char* row_value(const settings_t* s, uint8_t row, char* buf,
 
 // ─── Drawing ────────────────────────────────────────────────────────────────
 
-// first is the list window's top entry: rows are placed relative to it.
-static void draw_row(const settings_t* s, uint16_t first, uint8_t row,
-                     bool highlighted)
+// One bar at y: the label left, the value (if any) right. A dimmed bar is
+// unavailable and stays thin even highlighted, so it still reads that way.
+static void draw_bar(const settings_t* s, int16_t y, const char* label,
+                     const char* value, bool highlighted, bool off)
 {
-    char buf[16];
-    const char* value = row_value(s, row, buf, sizeof(buf));
-    const bool off = row == ROW_MANUAL && !manual_available;
-    int16_t y = (int16_t)(s->game_y + MENU_TOP + (row - first) * MENU_ROW_H);
     uint16_t bg = highlighted ? MENU_HL_BG : MENU_ROW_BG;
     uint16_t fg;
 
@@ -142,10 +142,8 @@ static void draw_row(const settings_t* s, uint16_t first, uint8_t row,
 
     // Bold is the same glyphs struck twice a pixel apart, so the text is
     // drawn transparent over the bar the fill already laid down; an opaque
-    // second pass would wipe the first one's edge. A dimmed row stays thin
-    // so it still reads as unavailable.
+    // second pass would wipe the first one's edge.
     const int16_t bold = (highlighted && !off) ? 1 : 0;
-    const char* label = off ? "Game Manual (Unavailable)" : ROW_LABELS[row];
     const int16_t text_y = y + MENU_ROW_H / 2;
 
     tft.fillRect(s->game_x + 4, y, GAME_W - 8, MENU_ROW_H - 2, bg);
@@ -158,6 +156,24 @@ static void draw_row(const settings_t* s, uint16_t first, uint8_t row,
             tft.drawString(value, s->game_x + GAME_W - 8 - dx, text_y, 2);
         }
     }
+}
+
+// first is the list window's top entry: rows are placed relative to it.
+static void draw_row(const settings_t* s, uint16_t first, uint8_t row,
+                     bool highlighted)
+{
+    char buf[16];
+    const char* value = row_value(s, row, buf, sizeof(buf));
+    const bool off = (row == ROW_MANUAL && !manual_available)
+                     || (row == ROW_STATE && !emu_state_available());
+    int16_t y = (int16_t)(s->game_y + MENU_TOP + (row - first) * MENU_ROW_H);
+    const char* label = ROW_LABELS[row];
+
+    if (off) {
+        label = row == ROW_MANUAL ? "Game Manual (Unavailable)"
+                                  : "Save State (Unavailable)";
+    }
+    draw_bar(s, y, label, value, highlighted, off);
 }
 
 // The rows in the window only; the title band is left alone, so a scroll
@@ -228,10 +244,11 @@ static void draw_hotkeys(const settings_t* s)
 #define CART_BAND_ROWS 16
 #define CART_BAND_PX   (CART_ART_W * CART_BAND_ROWS)
 
-// Where one image's bands are going: its left edge, its top, and the panel.
+// Where one image's bands are going: its left edge, its top and its width.
 typedef struct cart_blit_s {
     int16_t x;
     int16_t y;
+    int16_t w;
 } cart_blit_t;
 
 // setSwapBytes(true) is the resting state display_bus_acquire() leaves in
@@ -240,7 +257,7 @@ static void blit_band(void* ctx, const uint16_t* px, size_t row0, size_t rows)
 {
     const cart_blit_t* at = (const cart_blit_t*)ctx;
 
-    tft.pushImage(at->x, (int16_t)(at->y + row0), CART_ART_W, (int16_t)rows,
+    tft.pushImage(at->x, (int16_t)(at->y + row0), at->w, (int16_t)rows,
                   (uint16_t*)px);
 }
 
@@ -364,7 +381,7 @@ static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info,
         // no swap to do here.
         px = (uint16_t*)malloc(CART_BAND_PX * sizeof(uint16_t));
         if (px) {
-            cart_blit_t at = { x, y };
+            cart_blit_t at = { x, y, CART_ART_W };
 
             art_ok = sd_media_stream(ART_PATH, name, px, CART_ART_W,
                                      CART_ART_H, CART_BAND_ROWS, blit_band,
@@ -533,6 +550,208 @@ static void page_input(cart_band_t* band)
     }
 }
 
+// ─── Save State ─────────────────────────────────────────────────────────────
+// One state per game, kept beside its battery save. Because a state carries
+// the cartridge RAM, loading one rewinds the battery save too, so a load
+// always asks first, and so does a save that would replace a state.
+
+// Where the screen's bars start: under the title band and the snapshot.
+#define STATE_BARS_Y (MENU_TOP + EMU_THUMB_H + 12)
+// 80 x 24 x 2 is 3,840 bytes; three bands make the snapshot.
+#define STATE_BAND_ROWS 24
+
+// Up and Down between n bars at STATE_BARS_Y, A to pick one, B to back out.
+// Returns the bar picked, or -1 for B. A dimmed bar can be highlighted but
+// not picked. Starts with every button up, so a press still held from the
+// screen before cannot pick anything here.
+static int choose(const settings_t* s, const char* const* labels,
+                  const bool* off, uint8_t n, uint8_t cursor)
+{
+    const int16_t y0 = (int16_t)(s->game_y + STATE_BARS_Y);
+    uint16_t prev = 0;
+
+    for (uint8_t i = 0; i < n; i++) {
+        draw_bar(s, (int16_t)(y0 + i * MENU_ROW_H), labels[i], NULL,
+                 i == cursor, off && off[i]);
+    }
+    wait_release();
+    for (;;) {
+        uint16_t word;
+        uint16_t press;
+        uint8_t next = cursor;
+
+        button_update();
+        word = button_get_buttons();
+        press = (uint16_t)(word & ~prev);
+        prev = word;
+
+        if ((press & GB_BTN_B) != 0) {
+            wait_release();
+            return -1;
+        }
+        if ((press & GB_BTN_A) != 0 && !(off && off[cursor])) {
+            wait_release();
+            return cursor;
+        }
+        if ((press & COMBO_BTN_UP) != 0 && cursor > 0) {
+            next = (uint8_t)(cursor - 1);
+        } else if ((press & COMBO_BTN_DOWN) != 0 && cursor + 1 < n) {
+            next = (uint8_t)(cursor + 1);
+        }
+        if (next != cursor) {
+            draw_bar(s, (int16_t)(y0 + cursor * MENU_ROW_H), labels[cursor],
+                     NULL, false, off && off[cursor]);
+            draw_bar(s, (int16_t)(y0 + next * MENU_ROW_H), labels[next],
+                     NULL, true, off && off[next]);
+            cursor = next;
+        }
+        delay(MENU_POLL_MS);
+    }
+}
+
+static void draw_title(const settings_t* s, const char* title)
+{
+    tft.fillRect(s->game_x, s->game_y, GAME_W, GAME_H, TFT_BLACK);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(MENU_TITLE, TFT_BLACK);
+    tft.drawString(title, s->game_x + GAME_W / 2, s->game_y + 18, 4);
+}
+
+// The question in the space the snapshot takes, then No and Yes. The cursor
+// starts on No, so nothing is lost to a press that was not meant for this.
+static bool confirm(const settings_t* s, const char* question)
+{
+    static const char* const LABELS[2] = { "No", "Yes" };
+
+    draw_title(s, "SAVE STATE");
+    tft.setTextDatum(TC_DATUM);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    display_draw_wrapped(question, (int16_t)(s->game_x + GAME_W / 2),
+                         (int16_t)(s->game_y + MENU_TOP + 8), GAME_W - 32, 3,
+                         2);
+    return choose(s, LABELS, NULL, 2, 0) == 1;
+}
+
+static void notice(const settings_t* s, const char* msg)
+{
+    cart_band_t none = {};
+
+    draw_title(s, "SAVE STATE");
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.drawString(msg, s->game_x + GAME_W / 2,
+                   s->game_y + MENU_TOP + EMU_THUMB_H / 2, 2);
+    tft.setTextDatum(TL_DATUM);
+    tft.drawString("B: Back", s->game_x + 8, s->game_y + GAME_H - 18, 2);
+    page_input(&none);
+}
+
+// The state goes to a temp file and is renamed into place only once it is
+// whole, so a failed save leaves the previous state as it was. The snapshot
+// follows the state, never the other way round: a snapshot that failed only
+// costs the picture.
+static bool state_save(const char* rom_path)
+{
+    char vfs[STATE_PATH_MAX];
+    char tmp[STATE_PATH_MAX + 4];
+    char path[STATE_PATH_MAX];
+
+    if (!sd_get_state_path(rom_path, STATE_SUFFIX, true, vfs, sizeof(vfs))
+        || !sd_get_state_path(rom_path, STATE_SUFFIX, false, path,
+                              sizeof(path))) {
+        return false;
+    }
+    snprintf(tmp, sizeof(tmp), "%s%s", vfs, SAVE_TMP_SUFFIX);
+    if (!emu_state_save(tmp)) {
+        remove(tmp);
+        return false;
+    }
+    if (!sd_commit_tmp(path)) {
+        return false;
+    }
+    if (sd_get_state_path(rom_path, THUMB_SUFFIX, true, vfs, sizeof(vfs))
+        && !emu_state_thumb_save(vfs)) {
+        Serial.println("[STATE] snapshot not written");
+    }
+    return true;
+}
+
+static bool state_load(const char* rom_path)
+{
+    char vfs[STATE_PATH_MAX];
+
+    return sd_get_state_path(rom_path, STATE_SUFFIX, true, vfs, sizeof(vfs))
+           && emu_state_load(vfs);
+}
+
+// The snapshot centred under the title, or a line saying there is none.
+static void draw_state(const settings_t* s, const char* rom_path, bool have)
+{
+    const int16_t x = (int16_t)(s->game_x + (GAME_W - EMU_THUMB_W) / 2);
+    const int16_t y = (int16_t)(s->game_y + MENU_TOP);
+    bool shown = false;
+
+    draw_title(s, "SAVE STATE");
+    if (have) {
+        uint16_t* px = (uint16_t*)malloc(EMU_THUMB_W * STATE_BAND_ROWS
+                                         * sizeof(uint16_t));
+        cart_blit_t at = { x, y, EMU_THUMB_W };
+
+        if (px) {
+            shown = sd_thumb_stream(rom_path, px, EMU_THUMB_W, EMU_THUMB_H,
+                                    STATE_BAND_ROWS, blit_band, &at);
+            free(px);
+        }
+    }
+    if (!shown) {
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(have ? TFT_WHITE : MENU_DIM, TFT_BLACK);
+        tft.drawString(have ? "No snapshot" : "No saved state",
+                       s->game_x + GAME_W / 2, y + EMU_THUMB_H / 2, 2);
+    }
+}
+
+// Returns true when a state was loaded, which ends the menu: the game is
+// where the state left it and the only thing left to do is play it.
+static bool state_screen(const settings_t* s, const menu_cart_info_t* info)
+{
+    static const char* const LABELS[3] = { "Save", "Load", "Back" };
+    uint8_t cursor = 0;
+
+    if (!info) {
+        return false;
+    }
+    for (;;) {
+        const bool have = sd_state_exists(info->path);
+        const bool off[3] = { false, !have, false };
+        int pick;
+
+        draw_state(s, info->path, have);
+        pick = choose(s, LABELS, off, 3, cursor);
+        if (pick < 0 || pick == 2) {
+            return false;
+        }
+        cursor = (uint8_t)pick;
+        if (pick == 0) {
+            if (have && !confirm(s, "Replace saved state?")) {
+                continue;
+            }
+            if (!state_save(info->path)) {
+                notice(s, "Save failed.");
+            }
+        } else {
+            if (!confirm(s, "Load state? Progress since it was saved will "
+                            "be lost.")) {
+                continue;
+            }
+            if (state_load(info->path)) {
+                return true;
+            }
+            notice(s, "Load failed.");
+        }
+    }
+}
+
 enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
 {
     list_state_t ls;
@@ -589,6 +808,12 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
                 wait_release();
                 return MENU_RESET;
             }
+            if (cursor == ROW_STATE && emu_state_available()) {
+                if (state_screen(s, info)) {
+                    return MENU_RESUME;
+                }
+                draw_menu(s, &ls);
+            }
             if (cursor == ROW_INFO) {
                 char* desc;
                 cart_band_t band;
@@ -613,7 +838,7 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
                 draw_menu(s, &ls);
             }
             // A on a value row does nothing: Left and Right are its keys.
-            // Nor on an unavailable Game Manual.
+            // Nor on an unavailable Game Manual or Save State.
         }
         if ((word & GB_BTN_B) && !(prev & GB_BTN_B)) {
             wait_release();

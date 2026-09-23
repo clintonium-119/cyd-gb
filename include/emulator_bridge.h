@@ -77,7 +77,12 @@ bool emu_autosave_battery(uint16_t mv, uint16_t low_mv, uint16_t hyst_mv);
 // flush. A load that failed may have overwritten part of the machine before
 // it did; the caller should not resume as though nothing happened.
 //
-// The Peanut-GB core has no save states and returns false from both.
+// A save is refused while the boot ROM is still running, because a load
+// always resumes with it unmapped.
+//
+// The Peanut-GB core has no save states: emu_state_available() is false
+// there, and so is everything else below.
+bool emu_state_available();
 bool emu_state_save(const char* path_vfs);
 bool emu_state_load(const char* path_vfs);
 

@@ -24,6 +24,10 @@ static inline uint8_t reg_bgp()  { return R_BGP; }
 static inline uint8_t reg_obp0() { return R_OBP0; }
 static inline uint8_t reg_obp1() { return R_OBP1; }
 
+/* Whether the boot ROM is still mapped over the cartridge, which is the case
+ * until its last instruction writes FF50. */
+static inline bool boot_rom_mapped() { return GB.bios && (R_BIOS & 1) == 0; }
+
 /* Interleaved int16s the sound unit wrote during the frame just run. gnuboy
  * zeroes this at the top of every gnuboy_run(), so it is that frame's count
  * and not a running total. */
@@ -1660,12 +1664,21 @@ static void state_log(const char* what, const char* path, int r, int64_t t0)
                   (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
 }
 
+bool emu_state_available() { return true; }
+
 bool emu_state_save(const char* path_vfs)
 {
     int64_t t0 = esp_timer_get_time();
     int r;
 
     if (!emu_up || !path_vfs) {
+        return false;
+    }
+    /* gnuboy's load unmaps the boot ROM unconditionally, so a state taken
+     * during the logo would resume with the program counter inside a boot
+     * ROM that is no longer there. */
+    if (boot_rom_mapped()) {
+        Serial.println("[STATE] save refused: boot ROM still running");
         return false;
     }
     r = gnuboy_save_state(path_vfs);
