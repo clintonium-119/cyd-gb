@@ -49,6 +49,7 @@ One object per game, in an array. Field order is not significant.
 | `description` | string | At most 200 bytes. Plain ASCII, no tab and no newline. May be empty. |
 | `art` | string | Path to the cover source, relative to the media directory named by `CYD_MEDIA_DIR`; empty when no source exists. |
 | `shot` | string | Path to the gameplay snapshot source, relative to the media directory named by `CYD_MEDIA_DIR`; empty when no source exists. |
+| `manual` | string | Path to the scanned PDF manual source, relative to the media directory named by `CYD_MEDIA_DIR`; empty when no source exists. |
 | `starter` | bool | Offered during first-boot setup. |
 | `developer` | string | For the record; not emitted to the catalog. |
 | `publisher` | string | For the record; not emitted to the catalog. |

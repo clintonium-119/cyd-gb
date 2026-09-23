@@ -50,6 +50,7 @@ GAME_FIELDS = (
     "description",
     "art",
     "shot",
+    "manual",
     "starter",
     "developer",
     "publisher",
@@ -181,7 +182,7 @@ def _check_entry(problems, index, game, seen):
         allow_empty=True
     )
 
-    for field in ("art", "shot"):
+    for field in ("art", "shot", "manual"):
         value = game.get(field)
         if not isinstance(value, str):
             problems.append(
@@ -214,14 +215,14 @@ def _check_line_length(problems, label, game):
 
 
 def _check_sources(problems, label, game, rom_dir, media_dir):
-    """The ROM and the two media sources exist, when their directory was given."""
+    """The ROM and the three media sources exist, when their directory was given."""
     if rom_dir is not None:
         rom = Path(rom_dir) / game["filename"]
         if not rom.is_file():
             problems.append(f"{label}: no ROM at {rom}")
     if media_dir is None:
         return
-    for field in ("art", "shot"):
+    for field in ("art", "shot", "manual"):
         relative = game.get(field)
         if not isinstance(relative, str) or relative == "":
             continue
@@ -236,11 +237,11 @@ def validate(games, rom_dir=None, media_dir=None):
     Returns (problems, notices). Problems are contract violations and each one
     names the entry it came from. Notices are things the caller should know but
     that do not fail the file: a check that was skipped because its directory was
-    not given, and how many entries have no cover or no snapshot source.
+    not given, and how many entries have no cover, snapshot or manual source.
 
     rom_dir holds the ROM files directly — the /roms/gb of the card is built by
     the imaging tool, not expected of the source directory. media_dir is the
-    directory art and shot are relative to.
+    directory art, shot and manual are relative to.
     """
     problems = []
     notices = []
@@ -260,6 +261,7 @@ def validate(games, rom_dir=None, media_dir=None):
     seen = {}
     empty_art = 0
     empty_shot = 0
+    empty_manual = 0
 
     for index, game in enumerate(games):
         if not isinstance(game, dict):
@@ -276,6 +278,8 @@ def validate(games, rom_dir=None, media_dir=None):
             empty_art += 1
         if game.get("shot") == "":
             empty_shot += 1
+        if game.get("manual") == "":
+            empty_manual += 1
 
     if rom_dir is None:
         notices.append(
@@ -283,11 +287,12 @@ def validate(games, rom_dir=None, media_dir=None):
         )
     if media_dir is None:
         notices.append(
-            f"art and shot existence not checked: no media directory given "
+            f"art, shot and manual existence not checked: no media directory given "
             f"(${MEDIA_DIR_ENV})"
         )
     notices.append(f"{empty_art} entries have no cover source")
     notices.append(f"{empty_shot} entries have no snapshot source")
+    notices.append(f"{empty_manual} entries have no manual source")
 
     return problems, notices
 

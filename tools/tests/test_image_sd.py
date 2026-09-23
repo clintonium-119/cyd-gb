@@ -55,6 +55,7 @@ def sources(tmp_path):
                 "description": f"{title} is a game.",
                 "art": art,
                 "shot": shot,
+                "manual": "",
                 "starter": starter,
                 "developer": "Nintendo",
                 "publisher": "Nintendo",

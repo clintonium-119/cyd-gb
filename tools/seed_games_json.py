@@ -49,11 +49,15 @@ DEFAULT_OUT = REPO_ROOT / "games.json"
 # The media subdirectory each games.json field is resolved under.
 ART_KIND = "covers"
 SHOT_KIND = "screenshots"
+MANUAL_KIND = "manuals"
 
 # ES-DE's scraper writes PNG for nearly everything, but not for everything: the
 # screenshots directory of the library this was measured against holds two JPEGs
 # among 641 files. Both are tried, in this order.
 MEDIA_EXTENSIONS = (".png", ".jpg")
+
+# Manuals are scanned PDFs; an image in the manuals directory is not one.
+MANUAL_EXTENSIONS = (".pdf",)
 
 # The catalog's description cap, in bytes.
 DESCRIPTION_LIMIT = gamesdb.CATALOG_DESC_MAX - 1
@@ -137,7 +141,7 @@ def match(stems, gamelist, aliases):
     return matched, unmatched
 
 
-def media_relpath(game, kind, media_dir):
+def media_relpath(game, kind, media_dir, extensions=MEDIA_EXTENSIONS):
     """The media path for one entry, relative to media_dir, or "" when absent.
 
     ES-DE mirrors the ROM's own location: a <path> of
@@ -150,7 +154,7 @@ def media_relpath(game, kind, media_dir):
     if path == "":
         return ""
     base = os.path.splitext(path)[0]
-    for extension in MEDIA_EXTENSIONS:
+    for extension in extensions:
         relative = f"{kind}/{base}{extension}"
         if (Path(media_dir) / relative).is_file():
             return relative
@@ -237,6 +241,7 @@ def bare_entry(stem):
         "description": "",
         "art": "",
         "shot": "",
+        "manual": "",
         "starter": False,
         "developer": "",
         "publisher": "",
@@ -279,6 +284,9 @@ def build_entries(matched, media_dir, unmatched=()):
             ),
             "art": media_relpath(game, ART_KIND, media_dir),
             "shot": media_relpath(game, SHOT_KIND, media_dir),
+            "manual": media_relpath(
+                game, MANUAL_KIND, media_dir, MANUAL_EXTENSIONS
+            ),
             "starter": False,
             "developer": game.findtext("developer") or "",
             "publisher": game.findtext("publisher") or "",

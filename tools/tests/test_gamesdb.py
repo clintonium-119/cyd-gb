@@ -17,6 +17,7 @@ FIXTURE_GAMES = [
         ),
         "art": "",
         "shot": "",
+        "manual": "",
         "starter": True,
         "developer": "",
         "publisher": "",
@@ -33,6 +34,7 @@ FIXTURE_GAMES = [
         ),
         "art": "",
         "shot": "",
+        "manual": "",
         "starter": True,
         "developer": "",
         "publisher": "",
@@ -48,6 +50,7 @@ FIXTURE_GAMES = [
         ),
         "art": "",
         "shot": "",
+        "manual": "",
         "starter": False,
         "developer": "",
         "publisher": "",
@@ -64,6 +67,7 @@ FIXTURE_GAMES = [
         ),
         "art": "",
         "shot": "",
+        "manual": "",
         "starter": False,
         "developer": "",
         "publisher": "",
@@ -80,6 +84,7 @@ FIXTURE_GAMES = [
         ),
         "art": "",
         "shot": "",
+        "manual": "",
         "starter": False,
         "developer": "",
         "publisher": "",
@@ -93,6 +98,7 @@ FIXTURE_GAMES = [
         "description": "",
         "art": "",
         "shot": "",
+        "manual": "",
         "starter": False,
         "developer": "",
         "publisher": "",
@@ -111,6 +117,7 @@ def game(**overrides):
         "description": "Fit the falling blocks into complete rows.",
         "art": "",
         "shot": "",
+        "manual": "",
         "starter": False,
         "developer": "Nintendo",
         "publisher": "Nintendo",
@@ -153,9 +160,22 @@ def test_conforming_library_has_no_problems():
     problems, notices = gamesdb.validate(FIXTURE_GAMES)
     assert problems == []
     assert any("ROM existence not checked" in notice for notice in notices)
-    assert any("art and shot existence not checked" in notice for notice in notices)
+    assert any(
+        "art, shot and manual existence not checked" in notice for notice in notices
+    )
     assert "6 entries have no cover source" in notices
     assert "6 entries have no snapshot source" in notices
+    assert "6 entries have no manual source" in notices
+
+
+def test_notices_count_only_the_entries_with_no_manual():
+    entries = [
+        game(filename="A.gb", manual="manuals/A.pdf"),
+        game(filename="B.gb"),
+        game(filename="C.gb"),
+    ]
+    _, notices = gamesdb.validate(entries)
+    assert "2 entries have no manual source" in notices
 
 
 def test_top_level_object_is_a_problem_not_a_crash():
@@ -172,6 +192,12 @@ def test_missing_field_is_reported_by_name():
     entry = game()
     del entry["genre"]
     assert rejected(entry, "genre is missing")
+
+
+def test_missing_manual_is_reported_by_name():
+    entry = game()
+    del entry["manual"]
+    assert rejected(entry, "manual is missing")
 
 
 def test_problems_name_the_entry():
@@ -263,7 +289,7 @@ def test_starter_must_be_a_bool():
     assert rejected(game(starter="yes"), "starter must be true or false, not str")
 
 
-@pytest.mark.parametrize("field", ["art", "shot"])
+@pytest.mark.parametrize("field", ["art", "shot", "manual"])
 def test_media_paths_must_be_strings(field):
     assert rejected(game(**{field: None}), f"{field} must be a string, not NoneType")
 
@@ -315,6 +341,20 @@ def test_media_existence_is_checked_only_for_a_non_empty_path(tmp_path):
     cover.parent.mkdir()
     cover.write_bytes(b"\x89PNG")
     assert problems_for(game(art="covers/Tetris.png"), media_dir=tmp_path) == []
+
+
+def test_manual_existence_is_checked_only_when_the_directory_is_given(tmp_path):
+    entry = game(manual="manuals/Tetris.pdf")
+    assert problems_for(entry) == []
+
+    assert problems_for(entry, media_dir=tmp_path) == [
+        f"Tetris.gb: no manual source at {tmp_path / 'manuals/Tetris.pdf'}"
+    ]
+
+    manual = tmp_path / "manuals" / "Tetris.pdf"
+    manual.parent.mkdir()
+    manual.write_bytes(b"%PDF")
+    assert problems_for(entry, media_dir=tmp_path) == []
 
 
 # --- emission -------------------------------------------------------------

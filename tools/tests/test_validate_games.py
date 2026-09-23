@@ -14,6 +14,7 @@ CONFORMING = [
         "description": "Fit the falling blocks into complete rows.",
         "art": "",
         "shot": "",
+        "manual": "",
         "starter": True,
         "developer": "Nintendo",
         "publisher": "Nintendo",
@@ -47,8 +48,8 @@ def test_a_conforming_file_exits_zero_with_the_skipped_notices(repo_root, tmp_pa
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "notice: ROM existence not checked" in result.stdout
-    assert "notice: art and shot existence not checked" in result.stdout
-    assert "1 entries, 0 problems, 4 notices" in result.stdout
+    assert "notice: art, shot and manual existence not checked" in result.stdout
+    assert "1 entries, 0 problems, 5 notices" in result.stdout
 
 
 def test_the_committed_games_json_passes_in_repo_only_mode(repo_root):

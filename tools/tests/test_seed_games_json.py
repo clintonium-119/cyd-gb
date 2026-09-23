@@ -163,6 +163,30 @@ def test_media_relpath_of_an_entry_with_no_path_is_empty(tmp_path):
     assert seed.media_relpath(ElementTree.Element("game"), seed.ART_KIND, tmp_path) == ""
 
 
+def test_build_entries_seeds_the_manual_found_under_manuals(tmp_path):
+    manual = tmp_path / "manuals" / "Foo.pdf"
+    manual.parent.mkdir(parents=True)
+    manual.write_bytes(b"%PDF")
+
+    entries = seed.build_entries({"Foo": element("./Foo.zip")}, tmp_path)
+    assert entries[0]["manual"] == "manuals/Foo.pdf"
+
+
+def test_build_entries_seeds_an_empty_manual_when_there_is_none(tmp_path):
+    entries = seed.build_entries({"Foo": element("./Foo.zip")}, tmp_path)
+    assert entries[0]["manual"] == ""
+
+
+@pytest.mark.parametrize("extension", [".png", ".jpg"])
+def test_an_image_in_the_manuals_directory_is_not_a_manual(tmp_path, extension):
+    image = tmp_path / "manuals" / f"Foo{extension}"
+    image.parent.mkdir(parents=True)
+    image.write_bytes(b"\x89PNG")
+
+    entries = seed.build_entries({"Foo": element("./Foo.zip")}, tmp_path)
+    assert entries[0]["manual"] == ""
+
+
 # --- text folding ---------------------------------------------------------
 
 
@@ -255,6 +279,7 @@ def test_build_entries_pulls_the_metadata_and_leaves_curation_alone(gamelist, tm
         "description": "A foo.",
         "art": "",
         "shot": "",
+        "manual": "",
         "starter": False,
         "developer": "Beam Software",
         "publisher": "Interplay",
@@ -326,6 +351,7 @@ def test_a_stem_with_no_gamelist_entry_still_gets_one_bare_entry(gamelist, tmp_p
         "description": "",
         "art": "",
         "shot": "",
+        "manual": "",
         "starter": False,
         "developer": "",
         "publisher": "",
