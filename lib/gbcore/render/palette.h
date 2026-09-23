@@ -31,6 +31,22 @@ extern "C" {
 #define PALETTE_COUNT 20    /* palettes, each a 3-ramp set of 4 shades */
 #define PALETTE_LUT_SIZE 64 /* one entry per possible raw pixel byte   */
 
+/*
+ * One index past the table: not a palette here, but the value that means
+ * "take the cartridge's own", which is what a fresh unit ships with. It is
+ * resolved by the emulator bridge, the only place that has the ROM header,
+ * into a ramp set fed to the *_ramps builders below. Nothing in this module
+ * knows it: palette_name() and the idx-taking builders still reject it as out
+ * of range, which is what keeps the table and the auto choice separate.
+ */
+#define PALETTE_AUTO PALETTE_COUNT
+#define PALETTE_UI_COUNT (PALETTE_COUNT + 1)
+
+/* What Auto resolves to for a cartridge the Game Boy Color's table does not
+   know — the fork's original ramp, and the first entry of the list, so the
+   fallback and the menu's starting point are the same colours. */
+#define PALETTE_FALLBACK 0
+
 /* Display name of a palette, or "?" when idx is out of range. */
 const char* palette_name(uint8_t idx);
 
@@ -67,6 +83,23 @@ void palette_build_lut(uint8_t idx, uint16_t lut[PALETTE_LUT_SIZE]);
  */
 void palette_build_lut_gnuboy(uint8_t idx, uint8_t bgp, uint8_t obp0,
                               uint8_t obp1, uint16_t lut[PALETTE_LUT_SIZE]);
+
+/*
+ * The same two builders over a ramp set the caller supplies, for colours that
+ * are not in this table — the Game Boy Color's per-cartridge palettes, which
+ * cart/cgb_palette.h produces in exactly this shape.
+ *
+ * ramps is [3][4]: row 0 OBJ0, row 1 OBJ1, row 2 BG, four shades light to
+ * dark, native RGB565. The idx-taking builders above are these two with
+ * ramps = the table's entry, so a supplied set and a table one colourise
+ * identically. Writes nothing if either pointer is NULL.
+ */
+void palette_build_lut_ramps(const uint16_t ramps[3][4],
+                             uint16_t lut[PALETTE_LUT_SIZE]);
+
+void palette_build_lut_gnuboy_ramps(const uint16_t ramps[3][4], uint8_t bgp,
+                                    uint8_t obp0, uint8_t obp1,
+                                    uint16_t lut[PALETTE_LUT_SIZE]);
 
 #ifdef __cplusplus
 }

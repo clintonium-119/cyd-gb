@@ -7,6 +7,10 @@
 // Per-unit settings persisted in NVS. Ten hand-built units each need their own
 // game_x / game_y nudge, so these are stored per device, never compiled in.
 struct settings_t {
+    // The palette the RUNNING cartridge uses, not a device-wide preference:
+    // it is loaded from that cartridge's own override and written back to it,
+    // and PALETTE_AUTO — what a unit with no override boots — means "take the
+    // colours the Game Boy Color would have given this cartridge".
     uint8_t palette;
     uint8_t frameskip;
     uint8_t brightness;
@@ -42,9 +46,39 @@ void settings_defaults(settings_t* s);
 // value it already held. Returns false when nothing was stored. A volume index
 // past SETTINGS_VOL_OFF is clamped here rather than at the point of use, so no
 // consumer has to defend against an out-of-range index.
+//
+// It does NOT read the palette: that one is per cartridge, and only
+// settings_game_palette_load() knows which. s->palette is left at the
+// default the caller already put there.
 bool settings_load(settings_t* s);
 
+// Writes every field settings_load() reads — so, again, not the palette.
 void settings_save(const settings_t* s);
+
+// ─── Per-cartridge palette ──────────────────────────────────────────────────
+// A palette the builder picked for one game, keyed by a hash of its title, in
+// the same "settings" namespace as everything else. Absent means the
+// cartridge has not been overridden and its colours come from the Game Boy
+// Color's own table; that is what a fresh unit does for every game.
+//
+// The key is a hash of the printable title, which is what the menu and the
+// Cart Info page already show, so two cartridges the device cannot tell apart
+// on screen share an override. A ROM with no printable title — homebrew that
+// left the field blank — shares one entry with every other such ROM. Both are
+// accepted: a wrong palette on an unlabelled homebrew is a shrug, and the
+// alternative is a key nothing can explain to the person holding the unit.
+
+// False when this cartridge has no override, in which case *out is untouched.
+// A stored index past the palette table is treated as absent rather than
+// clamped: it could only come from a build with a different table, and
+// silently substituting a neighbouring colour scheme would be worse than
+// going back to automatic.
+bool settings_game_palette_load(const char* title, uint8_t* out);
+
+// PALETTE_AUTO removes the override rather than storing it, so choosing Auto
+// in the menu puts the cartridge back under the table — there is no third
+// state to get stuck in.
+void settings_game_palette_save(const char* title, uint8_t palette);
 
 // Coalesced save. A held brightness or volume combo emits an event every
 // 200 ms, and each one would otherwise be an NVS write; instead the adjusted

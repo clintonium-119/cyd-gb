@@ -379,8 +379,11 @@ static bool adjust(settings_t* s, uint8_t row, int8_t dir)
         return true;
 
     case ROW_PALETTE:
-        next = (uint8_t)((s->palette + (dir > 0 ? 1 : PALETTE_COUNT - 1))
-                         % PALETTE_COUNT);
+        // PALETTE_UI_COUNT, not PALETTE_COUNT: Auto is the entry past the end
+        // of the table, and it has to be reachable both ways or a builder who
+        // picks a colour scheme for a cartridge can never put it back.
+        next = (uint8_t)((s->palette + (dir > 0 ? 1 : PALETTE_UI_COUNT - 1))
+                         % PALETTE_UI_COUNT);
         if (next == s->palette) {
             return false;
         }

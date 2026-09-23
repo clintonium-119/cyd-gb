@@ -61,6 +61,7 @@ static inline size_t gnuboy_audio_samples() { return GB.audio.pos; }
 #include "hw_config.h"
 #include "render_config.h"
 #include "render/palette.h"
+#include "cart/cgb_palette.h"
 #include "render/framequeue.h"
 #include "render/scaler.h"
 #include "save/autosave.h"
@@ -126,9 +127,29 @@ static uint8_t jpad = 0;
 // never half of each; the worst a race can do is give one block of one frame
 // of a fade the previous frame's shade.
 static uint16_t lut[PALETTE_LUT_SIZE];
-static uint8_t curpal = 0;
+static uint8_t curpal = PALETTE_AUTO;
+/* The colours the Game Boy Color's table gives this cartridge, looked up once
+ * per ROM because the header cannot change underneath us. Not valid until
+ * emu_init() has run, which is why curpal == PALETTE_AUTO before then still
+ * builds the fallback rather than reading this. */
+static uint16_t auto_ramps[3][4];
+static bool auto_ok = false;
 static uint8_t pal_bgp = 0, pal_obp0 = 0, pal_obp1 = 0;
 static bool pal_valid = false;
+
+/* The one place that knows what PALETTE_AUTO means at LUT-build time: the
+ * cartridge's own ramps when the table knew it, and the shipped default when
+ * it did not. Every other palette is a straight index into the table. */
+static void build_lut(uint8_t bgp, uint8_t obp0, uint8_t obp1)
+{
+    if (curpal != PALETTE_AUTO) {
+        palette_build_lut_gnuboy(curpal, bgp, obp0, obp1, lut);
+    } else if (auto_ok) {
+        palette_build_lut_gnuboy_ramps(auto_ramps, bgp, obp0, obp1, lut);
+    } else {
+        palette_build_lut_gnuboy(PALETTE_FALLBACK, bgp, obp0, obp1, lut);
+    }
+}
 
 static void palette_refresh(bool force)
 {
@@ -139,7 +160,7 @@ static void palette_refresh(bool force)
     if (force || !pal_valid) {
         pal_bgp = pal_obp0 = pal_obp1 = 0xE4;
         pal_valid = true;
-        palette_build_lut_gnuboy(curpal, 0xE4, 0xE4, 0xE4, lut);
+        build_lut(0xE4, 0xE4, 0xE4);
     }
     return;
 #endif
@@ -151,12 +172,14 @@ static void palette_refresh(bool force)
     pal_obp0 = reg_obp0();
     pal_obp1 = reg_obp1();
     pal_valid = true;
-    palette_build_lut_gnuboy(curpal, pal_bgp, pal_obp0, pal_obp1, lut);
+    build_lut(pal_bgp, pal_obp0, pal_obp1);
 }
 
 void emu_set_palette(uint8_t idx)
 {
-    if (idx >= PALETTE_COUNT) {
+    /* PALETTE_AUTO is accepted as well as the table's own indices: it is a
+     * real choice the menu offers, not an out-of-range value. */
+    if (idx > PALETTE_AUTO) {
         return;
     }
     curpal = idx;
@@ -170,6 +193,11 @@ uint8_t emu_get_palette()
 
 const char* emu_get_palette_name(uint8_t idx)
 {
+    /* The gbcore table has no name for Auto and should not: it is a choice
+     * this bridge resolves, not a twenty-first set of colours. */
+    if (idx == PALETTE_AUTO) {
+        return "Auto";
+    }
     return palette_name(idx);
 }
 
@@ -1232,14 +1260,23 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     fcnt = fpsc = cfps = 0;
     fpst = millis();
 
+    /* Before the palette is built, and once per ROM: the header is the only
+     * input and it cannot change while a cartridge is running. */
+    auto_ok = cgb_palette_lookup(rom, romlen, auto_ramps);
+    palette_refresh(true);
+
     rom_title(title, sizeof(title));
 #ifdef TEAR_DEMO
     Serial.println("[DEMO] tear demo: Up/Down vertical, Left/Right "
                    "horizontal, A stop, Select print");
 #endif
-    Serial.printf("[EMU] gnuboy '%s' %uKB push:%s heap:%u\n", title,
+    /* auto: whether the Game Boy Color's table knew this cartridge, which is
+     * the one fact about the palette that cannot be read off the screen —
+     * a cart it does not know looks like any other Classic Green boot. */
+    Serial.printf("[EMU] gnuboy '%s' %uKB push:%s auto:%s heap:%u\n", title,
                   romlen / 1024,
                   PUSH_TRANSPOSED ? "col" : "row",
+                  auto_ok ? "yes" : "no",
                   ESP.getFreeHeap());
     return true;
 }

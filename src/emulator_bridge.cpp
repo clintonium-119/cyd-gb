@@ -3,6 +3,7 @@
 #include "hw_config.h"
 #include "render_config.h"
 #include "render/palette.h"
+#include "cart/cgb_palette.h"
 #include "render/framequeue.h"
 #include "render/scaler.h"
 
@@ -112,15 +113,28 @@ static uint8_t jpad = 0;
 // wire order once at push time (§2.3). A pre-swapped LUT is not an option:
 // avg565 needs each channel contiguous, and a byte swap splits green.
 static uint16_t lut[PALETTE_LUT_SIZE];
-static uint8_t curpal = 0;
+static uint8_t curpal = PALETTE_AUTO;
+/* The colours the Game Boy Color's table gives this cartridge, looked up once
+ * per ROM in emu_init(). Before that the lookup has not run, so PALETTE_AUTO
+ * builds the shipped default instead. */
+static uint16_t auto_ramps[3][4];
+static bool auto_ok = false;
 
 void emu_set_palette(uint8_t idx)
 {
-    if (idx >= PALETTE_COUNT) {
+    /* PALETTE_AUTO is accepted as well as the table's own indices: it is a
+     * real choice the menu offers, not an out-of-range value. */
+    if (idx > PALETTE_AUTO) {
         return;
     }
     curpal = idx;
-    palette_build_lut(curpal, lut);
+    if (curpal != PALETTE_AUTO) {
+        palette_build_lut(curpal, lut);
+    } else if (auto_ok) {
+        palette_build_lut_ramps(auto_ramps, lut);
+    } else {
+        palette_build_lut(PALETTE_FALLBACK, lut);
+    }
 }
 
 uint8_t emu_get_palette()
@@ -130,6 +144,11 @@ uint8_t emu_get_palette()
 
 const char* emu_get_palette_name(uint8_t idx)
 {
+    /* The gbcore table has no name for Auto and should not: it is a choice
+     * this bridge resolves, not a twenty-first set of colours. */
+    if (idx == PALETTE_AUTO) {
+        return "Auto";
+    }
     return palette_name(idx);
 }
 
@@ -687,6 +706,9 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
      * when half its rows lag — measured on the bench 2026-09-18 as the one
      * artefact of plain interlace, on Black Castle. */
     gb->direct.interlace = 1;
+    /* Before the LUT, and once per ROM: the header is the only input and it
+     * cannot change while a cartridge is running. */
+    auto_ok = cgb_palette_lookup(rom, romlen, auto_ramps);
     /* Build the LUT here too: main() may never call emu_set_palette. */
     emu_set_palette(curpal);
     geom = scaler_geom_info(SCALE_GEOM);

@@ -1,5 +1,6 @@
 #include "settings.h"
 #include "render_config.h"
+#include "render/palette.h"
 #include "hw_config.h"
 #include <Preferences.h>
 
@@ -14,7 +15,11 @@ static_assert(BL_MIN + 7 * BL_STEP == 255,
 static_assert(BL_MIN > 0, "a backlight floor of 0 looks like a dead unit");
 
 void settings_defaults(settings_t* s) {
-    s->palette = 0;
+    // Auto: the colours the Game Boy Color's own table gives this cartridge,
+    // and Classic Green for a cartridge it does not know. A palette is per
+    // game, so this is the value every game starts at until the builder picks
+    // one for it in the menu.
+    s->palette = PALETTE_AUTO;
     // 0 (bench, 2026-09-17): with the scaler on core 0 and the fixed 3/2
     // kernel, Black Castle at 80 MHz SPI plays at 60 fps with the audio
     // underrun counter flat — core 1 at 14.8 ms median, 15.6 ms worst, in a
@@ -44,9 +49,12 @@ void settings_defaults(settings_t* s) {
 
 bool settings_load(settings_t* s) {
     prefs.begin("settings", true);
-    bool has = prefs.isKey("pal");
+    // "bright", not "pal": the palette moved out of this record when it became
+    // per cartridge, and this probe still has to mean "has this device ever
+    // been configured". Every key settings_save() writes would answer that
+    // equally well, including on a unit configured before the move.
+    bool has = prefs.isKey("bright");
     if (has) {
-        s->palette = prefs.getUChar("pal", s->palette);
         s->frameskip = prefs.getUChar("fskip", s->frameskip);
         s->brightness = prefs.getUChar("bright", s->brightness);
         s->volume = prefs.getUChar("vol", s->volume);
@@ -110,7 +118,6 @@ bool settings_load(settings_t* s) {
 
 void settings_save(const settings_t* s) {
     prefs.begin("settings", false);
-    prefs.putUChar("pal", s->palette);
     prefs.putUChar("fskip", s->frameskip);
     prefs.putUChar("bright", s->brightness);
     prefs.putUChar("vol", s->volume);
@@ -119,6 +126,57 @@ void settings_save(const settings_t* s) {
     prefs.putUChar("tfpa", s->trim_fpa);
     prefs.putUChar("trat", s->trim_ratio);
     prefs.putChar("tdir", s->trim_dir);
+    prefs.end();
+}
+
+// ─── Per-cartridge palette ──────────────────────────────────────────────────
+// FNV-1a over the printable title. Thirty-two bits because eight would not do:
+// the Game Boy Color's own table needs a fourth-letter tiebreak to tell
+// ninety-four games apart by an eight-bit title sum, and a library of a
+// hundred-odd ROMs would collide the same way. Eight hex digits plus the
+// prefix is nine characters, inside the fifteen an NVS key allows.
+static void game_key(const char* title, char* out, size_t out_sz) {
+    uint32_t h = 2166136261u;
+
+    for (; title && *title; title++) {
+        h = (h ^ (uint8_t)*title) * 16777619u;
+    }
+    snprintf(out, out_sz, "g%08lX", (unsigned long)h);
+}
+
+bool settings_game_palette_load(const char* title, uint8_t* out) {
+    char key[16];
+
+    if (!out) {
+        return false;
+    }
+    game_key(title, key, sizeof(key));
+    prefs.begin("settings", true);
+    bool has = prefs.isKey(key);
+    uint8_t pal = has ? prefs.getUChar(key, PALETTE_AUTO) : PALETTE_AUTO;
+    prefs.end();
+
+    // A stored index the table cannot name is a record from a build with a
+    // different palette list, so it is absent rather than clamped.
+    if (!has || pal >= PALETTE_COUNT) {
+        return false;
+    }
+    *out = pal;
+    return true;
+}
+
+void settings_game_palette_save(const char* title, uint8_t palette) {
+    char key[16];
+
+    game_key(title, key, sizeof(key));
+    prefs.begin("settings", false);
+    if (palette < PALETTE_COUNT) {
+        prefs.putUChar(key, palette);
+    } else {
+        // Auto, or anything out of range: no override, which is the state a
+        // unit that has never been told otherwise is already in.
+        prefs.remove(key);
+    }
     prefs.end();
 }
 

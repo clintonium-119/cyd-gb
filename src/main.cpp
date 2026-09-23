@@ -400,6 +400,10 @@ void run_emu() {
             // persistence this path needs — and is the only NVS write in it.
             enum menu_result_e r = menu_open(&settings, &cart_info);
             settings_save(&settings);
+            // Separately, and keyed by the cartridge: the palette row is the
+            // one thing in the menu that belongs to the game rather than to
+            // the unit. Auto clears the override rather than storing one.
+            settings_game_palette_save(cart_info.title, settings.palette);
             // The menu's Volume row edits the struct without applying it, so
             // the new index reaches the mixer here, on the way back to play.
             emu_set_volume(settings.volume);
@@ -476,6 +480,16 @@ static void load_and_run(const char* name) {
     emu_get_rom_title(cart_info.title, sizeof(cart_info.title));
     cart_info.colour_hash = emu_get_colour_hash();
     cart_info.valid = (in.tag == BOOT_TAG_OK);
+
+    // The palette is the cartridge's, not the device's, so it is resolved
+    // here rather than with the rest of the settings in setup(): the title it
+    // is keyed by does not exist until the ROM is mapped. No override leaves
+    // it at the default settings_defaults() put there, PALETTE_AUTO, and the
+    // bridge has already built that cartridge's own colours in emu_init().
+    if (settings_game_palette_load(cart_info.title, &settings.palette)) {
+        emu_set_palette(settings.palette);
+    }
+    Serial.printf("[INIT] Palette: %s\n", emu_get_palette_name(settings.palette));
 
     // Protection for a tag that carries valid content but lost power between
     // its write and its protect. Here on purpose: the buttons are not polled
@@ -603,7 +617,6 @@ void setup() {
 #else
     display_set_trim(settings.trim_fpa, settings.trim_ratio);
 #endif
-    emu_set_palette(settings.palette);
 #ifdef DEV_FRAMESKIP
     // Bench only: force the frameskip setting for a measurement build.
     settings.frameskip = DEV_FRAMESKIP;
@@ -611,9 +624,11 @@ void setup() {
     emu_set_frame_skip(settings.frameskip);
     emu_set_viewport(settings.game_x, settings.game_y);
     emu_set_volume(settings.volume);
-    Serial.printf("[INIT] Settings (%s): pal=%d fs=%d bl=%d vol=%d gx=%d gy=%d\n",
+    // No palette here: it is the cartridge's, and load_and_run() reports it
+    // once the ROM that decides it has been mapped.
+    Serial.printf("[INIT] Settings (%s): fs=%d bl=%d vol=%d gx=%d gy=%d\n",
                   stored ? "NVS" : "defaults",
-                  settings.palette, settings.frameskip, settings.brightness,
+                  settings.frameskip, settings.brightness,
                   settings.volume, settings.game_x, settings.game_y);
 
 #ifndef DEV_ROM_PATH

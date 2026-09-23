@@ -138,11 +138,12 @@ const char* palette_name(uint8_t idx)
     return palnames[idx];
 }
 
-void palette_build_lut(uint8_t idx, uint16_t lut[PALETTE_LUT_SIZE])
+void palette_build_lut_ramps(const uint16_t ramps[3][4],
+                             uint16_t lut[PALETTE_LUT_SIZE])
 {
     unsigned i;
 
-    if (lut == NULL || idx >= PALETTE_COUNT) {
+    if (lut == NULL || ramps == NULL) {
         return;
     }
     for (i = 0; i < PALETTE_LUT_SIZE; i++) {
@@ -150,8 +151,16 @@ void palette_build_lut(uint8_t idx, uint16_t lut[PALETTE_LUT_SIZE])
         if (p > 2u) {
             p = 2u; /* no real pixel byte reaches here; fold onto BG */
         }
-        lut[i] = pals[idx][p][i & 3u];
+        lut[i] = ramps[p][i & 3u];
     }
+}
+
+void palette_build_lut(uint8_t idx, uint16_t lut[PALETTE_LUT_SIZE])
+{
+    if (idx >= PALETTE_COUNT) {
+        return;
+    }
+    palette_build_lut_ramps(pals[idx], lut);
 }
 
 /* Shade the register selects for raw tile bits c: two bits each, low pair
@@ -161,25 +170,35 @@ static unsigned reg_shade(uint8_t reg, unsigned c)
     return (unsigned)((reg >> (2u * c)) & 3u);
 }
 
-void palette_build_lut_gnuboy(uint8_t idx, uint8_t bgp, uint8_t obp0,
-                              uint8_t obp1, uint16_t lut[PALETTE_LUT_SIZE])
+void palette_build_lut_gnuboy_ramps(const uint16_t ramps[3][4], uint8_t bgp,
+                                    uint8_t obp0, uint8_t obp1,
+                                    uint16_t lut[PALETTE_LUT_SIZE])
 {
     unsigned i;
     unsigned c;
 
-    if (lut == NULL || idx >= PALETTE_COUNT) {
+    if (lut == NULL || ramps == NULL) {
         return;
     }
     /* Everything first, folded onto the background: the groups below then
      * overwrite the indices gnuboy actually emits, and no byte is left
      * pointing at an undefined colour. */
     for (i = 0; i < PALETTE_LUT_SIZE; i++) {
-        lut[i] = pals[idx][2][reg_shade(bgp, i & 3u)];
+        lut[i] = ramps[2][reg_shade(bgp, i & 3u)];
     }
     for (c = 0; c < 4u; c++) {
-        lut[0u + c]  = pals[idx][2][reg_shade(bgp, c)];   /* background */
-        lut[4u + c]  = pals[idx][2][reg_shade(bgp, c)];   /* window     */
-        lut[32u + c] = pals[idx][0][reg_shade(obp0, c)];  /* OBP0       */
-        lut[36u + c] = pals[idx][1][reg_shade(obp1, c)];  /* OBP1       */
+        lut[0u + c]  = ramps[2][reg_shade(bgp, c)];   /* background */
+        lut[4u + c]  = ramps[2][reg_shade(bgp, c)];   /* window     */
+        lut[32u + c] = ramps[0][reg_shade(obp0, c)];  /* OBP0       */
+        lut[36u + c] = ramps[1][reg_shade(obp1, c)];  /* OBP1       */
     }
+}
+
+void palette_build_lut_gnuboy(uint8_t idx, uint8_t bgp, uint8_t obp0,
+                              uint8_t obp1, uint16_t lut[PALETTE_LUT_SIZE])
+{
+    if (idx >= PALETTE_COUNT) {
+        return;
+    }
+    palette_build_lut_gnuboy_ramps(pals[idx], bgp, obp0, obp1, lut);
 }

@@ -426,7 +426,11 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
     strncpy(data.build_time, BUILD_TIME_UTC, sizeof(data.build_time) - 1);
     data.build_time[sizeof(data.build_time) - 1] = '\0';
 
-    data.palette = s->palette;
+    // The checkerboard fixture needs four shades out of the gbcore table, and
+    // Auto's are not in it — they come from the cartridge. The fixture is
+    // about geometry and timing, not about which colours are running, so it
+    // takes the fallback rather than teaching diag_draw the auto path.
+    data.palette = (s->palette == PALETTE_AUTO) ? PALETTE_FALLBACK : s->palette;
     // The divider as the firmware actually used it, so the page reports the
     // placeholder rather than implying a measured ratio.
     data.bat_divider_x100 = (uint16_t)(BAT_DIVIDER * 100.0f);
