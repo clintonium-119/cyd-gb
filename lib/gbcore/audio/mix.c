@@ -1,3 +1,5 @@
+#include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "mix.h"
@@ -76,5 +78,68 @@ int mix_crossfade_in(int16_t* stereo, const int16_t* from, size_t n_frames)
                               / (int32_t)n_frames);
     }
 
+    return MIX_OK;
+}
+
+/* One stereo frame as a 12-bit mono value: small enough that a window's
+ * products sum inside int32 (128 * 2048 * 2048 < 2^31). */
+static int32_t mono12(const int16_t* p)
+{
+    return ((int32_t)p[0] + (int32_t)p[1]) / 32;
+}
+
+int mix_wsola_shift(const int16_t* ref, const int16_t* kept, size_t n_kept,
+                    int32_t d_min, int32_t d_max, int32_t carry,
+                    int32_t* out_d)
+{
+    /* Correlation units per sample of length error. Taken from the host
+     * renders the method was chosen on, not tuned on the bench. */
+    const float carry_weight = 0.002f;
+    int32_t rr = 0;
+    int32_t d;
+    int found = 0;
+    int32_t best_d = 0;
+    float best = 0.0f;
+    size_t i;
+
+    if (ref == NULL || kept == NULL || out_d == NULL) {
+        return MIX_ERR_ARGS;
+    }
+
+    for (i = 0; i < MIX_WSOLA_WINDOW; i++) {
+        int32_t r = mono12(&ref[i * 2]);
+        rr += r * r;
+    }
+
+    for (d = d_min; d <= d_max; d += 2) {
+        int32_t s = (int32_t)MIX_WSOLA_SEAM + d;
+        int32_t ry = 0;
+        int32_t yy = 0;
+        float score;
+
+        if (s < 0 || (size_t)s + MIX_WSOLA_WINDOW > n_kept) {
+            continue;
+        }
+        for (i = 0; i < MIX_WSOLA_WINDOW; i++) {
+            int32_t r = mono12(&ref[i * 2]);
+            int32_t y = mono12(&kept[((size_t)s + i) * 2]);
+            ry += r * y;
+            yy += y * y;
+        }
+        /* The +1 keeps silence from dividing by zero; it scores 0 there, so
+         * the carry penalty alone picks the shift. */
+        score = (float)ry / sqrtf((float)rr * (float)yy + 1.0f)
+                - carry_weight * (float)abs(carry - d);
+        if (!found || score > best) {
+            found = 1;
+            best = score;
+            best_d = d;
+        }
+    }
+
+    if (!found) {
+        return MIX_ERR_ARGS;
+    }
+    *out_d = best_d;
     return MIX_OK;
 }

@@ -261,59 +261,61 @@ static void test_opposite_full_scale_channels_cancel_to_mid_scale(void)
 
 /* ─── fast-forward crossfade ─────────────────────────────────────────────── */
 
-static int16_t from_buf[MIX_XFADE_FRAMES * 2];
+#define XF 64
+
+static int16_t from_buf[XF * 2];
 
 static void test_crossfade_starts_on_from_and_ramps_linearly_to_the_frame(void)
 {
     size_t i;
-    fill_constant(8000, -8000, MIX_XFADE_FRAMES + 4);
-    for (i = 0; i < MIX_XFADE_FRAMES; i++) {
+    fill_constant(8000, -8000, XF + 4);
+    for (i = 0; i < XF; i++) {
         from_buf[i * 2 + 0] = -8000;
         from_buf[i * 2 + 1] = 8000;
     }
     TEST_ASSERT_EQUAL_INT(MIX_OK,
-        mix_crossfade_in(stereo, from_buf, MIX_XFADE_FRAMES));
+        mix_crossfade_in(stereo, from_buf, XF));
 
     TEST_ASSERT_EQUAL_INT16(-8000, stereo[0]);
     TEST_ASSERT_EQUAL_INT16(8000, stereo[1]);
     /* Halfway: the mean of the two, exactly. */
-    TEST_ASSERT_EQUAL_INT16(0, stereo[MIX_XFADE_FRAMES]);
-    TEST_ASSERT_EQUAL_INT16(0, stereo[MIX_XFADE_FRAMES + 1]);
+    TEST_ASSERT_EQUAL_INT16(0, stereo[XF]);
+    TEST_ASSERT_EQUAL_INT16(0, stereo[XF + 1]);
     /* Monotonic towards the frame, one step per stereo frame. */
-    for (i = 1; i < MIX_XFADE_FRAMES; i++) {
+    for (i = 1; i < XF; i++) {
         TEST_ASSERT_TRUE(stereo[i * 2] > stereo[(i - 1) * 2]);
         TEST_ASSERT_TRUE(stereo[i * 2 + 1] < stereo[(i - 1) * 2 + 1]);
     }
     /* Past the fade, untouched. */
-    TEST_ASSERT_EQUAL_INT16(8000, stereo[MIX_XFADE_FRAMES * 2]);
-    TEST_ASSERT_EQUAL_INT16(-8000, stereo[MIX_XFADE_FRAMES * 2 + 1]);
+    TEST_ASSERT_EQUAL_INT16(8000, stereo[XF * 2]);
+    TEST_ASSERT_EQUAL_INT16(-8000, stereo[XF * 2 + 1]);
 }
 
 static void test_crossfade_of_equal_signals_changes_nothing(void)
 {
     size_t i;
-    for (i = 0; i < MIX_XFADE_FRAMES * 2; i++) {
+    for (i = 0; i < XF * 2; i++) {
         stereo[i] = (int16_t)(rng_next() & 0xFFFFu);
         from_buf[i] = stereo[i];
     }
     TEST_ASSERT_EQUAL_INT(MIX_OK,
-        mix_crossfade_in(stereo, from_buf, MIX_XFADE_FRAMES));
-    TEST_ASSERT_EQUAL_INT16_ARRAY(from_buf, stereo, MIX_XFADE_FRAMES * 2);
+        mix_crossfade_in(stereo, from_buf, XF));
+    TEST_ASSERT_EQUAL_INT16_ARRAY(from_buf, stereo, XF * 2);
 }
 
 static void test_crossfade_between_full_scale_extremes_stays_in_range(void)
 {
     size_t i;
-    fill_constant(32767, -32768, MIX_XFADE_FRAMES);
-    for (i = 0; i < MIX_XFADE_FRAMES; i++) {
+    fill_constant(32767, -32768, XF);
+    for (i = 0; i < XF; i++) {
         from_buf[i * 2 + 0] = -32768;
         from_buf[i * 2 + 1] = 32767;
     }
     TEST_ASSERT_EQUAL_INT(MIX_OK,
-        mix_crossfade_in(stereo, from_buf, MIX_XFADE_FRAMES));
+        mix_crossfade_in(stereo, from_buf, XF));
     TEST_ASSERT_EQUAL_INT16(-32768, stereo[0]);
     TEST_ASSERT_EQUAL_INT16(32767, stereo[1]);
-    for (i = 1; i < MIX_XFADE_FRAMES; i++) {
+    for (i = 1; i < XF; i++) {
         TEST_ASSERT_TRUE(stereo[i * 2] > stereo[(i - 1) * 2]);
     }
 }
@@ -330,10 +332,120 @@ static void test_crossfade_rejects_null_and_writes_nothing(void)
 {
     stereo[0] = 1234;
     TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
-        mix_crossfade_in(NULL, from_buf, MIX_XFADE_FRAMES));
+        mix_crossfade_in(NULL, from_buf, XF));
     TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
-        mix_crossfade_in(stereo, NULL, MIX_XFADE_FRAMES));
+        mix_crossfade_in(stereo, NULL, XF));
     TEST_ASSERT_EQUAL_INT16(1234, stereo[0]);
+}
+
+/* ─── fast-forward splice search ─────────────────────────────────────────── */
+
+#define KEPT_N 548
+
+static int16_t kept[KEPT_N * 2];
+
+/* Noise, so a window matches in exactly one place. */
+static void fill_noise(int16_t* buf, size_t n_frames)
+{
+    size_t i;
+    for (i = 0; i < n_frames; i++) {
+        int16_t v = (int16_t)((rng_next() & 0x3FFFu) - 0x2000);
+        buf[i * 2 + 0] = v;
+        buf[i * 2 + 1] = v;
+    }
+}
+
+static const int16_t* at(size_t frame)
+{
+    return &kept[frame * 2];
+}
+
+static void test_wsola_finds_the_window_where_it_sits(void)
+{
+    int32_t d = 999;
+    fill_noise(kept, KEPT_N);
+    TEST_ASSERT_EQUAL_INT(MIX_OK,
+        mix_wsola_shift(at(MIX_WSOLA_SEAM + 40), kept, KEPT_N,
+                        -MIX_WSOLA_SEAM, MIX_WSOLA_SHIFT, 0, &d));
+    TEST_ASSERT_EQUAL_INT32(40, d);
+
+    TEST_ASSERT_EQUAL_INT(MIX_OK,
+        mix_wsola_shift(at(MIX_WSOLA_SEAM - 150), kept, KEPT_N,
+                        -MIX_WSOLA_SEAM, MIX_WSOLA_SHIFT, 0, &d));
+    TEST_ASSERT_EQUAL_INT32(-150, d);
+}
+
+static void test_wsola_stays_inside_the_range_it_is_given(void)
+{
+    int32_t d = 999;
+    fill_noise(kept, KEPT_N);
+    /* The true match, +100, is outside [-20, 20]. */
+    TEST_ASSERT_EQUAL_INT(MIX_OK,
+        mix_wsola_shift(at(MIX_WSOLA_SEAM + 100), kept, KEPT_N, -20, 20, 0,
+                        &d));
+    TEST_ASSERT_TRUE(d >= -20 && d <= 20);
+}
+
+static void test_wsola_skips_shifts_whose_window_runs_off_the_frame(void)
+{
+    int32_t d = 999;
+    const int32_t last = KEPT_N - MIX_WSOLA_WINDOW - MIX_WSOLA_SEAM;
+    fill_noise(kept, KEPT_N);
+    TEST_ASSERT_EQUAL_INT(MIX_OK,
+        mix_wsola_shift(at(MIX_WSOLA_SEAM + last), kept, KEPT_N,
+                        -MIX_WSOLA_SHIFT, MIX_WSOLA_SHIFT, 0, &d));
+    TEST_ASSERT_EQUAL_INT32(last, d);
+}
+
+static void test_wsola_carry_picks_between_equal_matches(void)
+{
+    int32_t d = 999;
+    size_t i;
+    /* A square wave with a 100-frame period matches every 100 frames, so
+     * only the carry can choose, and it picks the match nearest itself. */
+    for (i = 0; i < KEPT_N; i++) {
+        int16_t v = (int16_t)(((i / 50) & 1u) ? 8000 : -8000);
+        kept[i * 2 + 0] = v;
+        kept[i * 2 + 1] = v;
+    }
+    TEST_ASSERT_EQUAL_INT(MIX_OK,
+        mix_wsola_shift(at(MIX_WSOLA_SEAM), kept, KEPT_N, -MIX_WSOLA_SEAM,
+                        MIX_WSOLA_SHIFT, 100, &d));
+    TEST_ASSERT_EQUAL_INT32(100, d);
+    TEST_ASSERT_EQUAL_INT(MIX_OK,
+        mix_wsola_shift(at(MIX_WSOLA_SEAM), kept, KEPT_N, -MIX_WSOLA_SEAM,
+                        MIX_WSOLA_SHIFT, -100, &d));
+    TEST_ASSERT_EQUAL_INT32(-100, d);
+}
+
+static void test_wsola_on_silence_follows_the_carry(void)
+{
+    int32_t d = 999;
+    memset(kept, 0, sizeof(kept));
+    TEST_ASSERT_EQUAL_INT(MIX_OK,
+        mix_wsola_shift(at(0), kept, KEPT_N, -MIX_WSOLA_SEAM,
+                        MIX_WSOLA_SHIFT, 0, &d));
+    TEST_ASSERT_EQUAL_INT32(0, d);
+    TEST_ASSERT_EQUAL_INT(MIX_OK,
+        mix_wsola_shift(at(0), kept, KEPT_N, -MIX_WSOLA_SEAM,
+                        MIX_WSOLA_SHIFT, -60, &d));
+    TEST_ASSERT_EQUAL_INT32(-60, d);
+}
+
+static void test_wsola_rejects_null_and_a_range_that_never_fits(void)
+{
+    int32_t d = 999;
+    fill_noise(kept, KEPT_N);
+    TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
+        mix_wsola_shift(NULL, kept, KEPT_N, -10, 10, 0, &d));
+    TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
+        mix_wsola_shift(at(0), NULL, KEPT_N, -10, 10, 0, &d));
+    TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
+        mix_wsola_shift(at(0), kept, KEPT_N, -10, 10, 0, NULL));
+    /* A frame shorter than seam + window has no shift that fits. */
+    TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
+        mix_wsola_shift(at(0), kept, 21, 0, 0, 0, &d));
+    TEST_ASSERT_EQUAL_INT32(999, d);
 }
 
 /* ─── argument checking ───────────────────────────────────────────────────── */
@@ -374,5 +486,11 @@ int main(void)
     RUN_TEST(test_crossfade_between_full_scale_extremes_stays_in_range);
     RUN_TEST(test_crossfade_of_zero_frames_writes_nothing);
     RUN_TEST(test_crossfade_rejects_null_and_writes_nothing);
+    RUN_TEST(test_wsola_finds_the_window_where_it_sits);
+    RUN_TEST(test_wsola_stays_inside_the_range_it_is_given);
+    RUN_TEST(test_wsola_skips_shifts_whose_window_runs_off_the_frame);
+    RUN_TEST(test_wsola_carry_picks_between_equal_matches);
+    RUN_TEST(test_wsola_on_silence_follows_the_carry);
+    RUN_TEST(test_wsola_rejects_null_and_a_range_that_never_fits);
     return UNITY_END();
 }

@@ -356,8 +356,11 @@ static uint32_t q_stall_acc = 0;
 // it to flush through, and the first frame after a reset emits 572.
 static int16_t apu_buf[2 * (SPEAKER_SAMPLES_PER_FRAME + GNUBOY_AUDIO_HEADROOM)];
 static uint8_t mono_buf[SPEAKER_SAMPLES_MAX];
-// The head of a fast-forward frame's skipped run, for the seam's crossfade.
-static int16_t ff_head[2 * MIX_XFADE_FRAMES];
+// The head of a fast-forward frame's skipped run, up to and across the seam,
+// and the running length error the splice search keeps near zero.
+#define FF_HEAD_FRAMES (MIX_WSOLA_SEAM + MIX_WSOLA_WINDOW)
+static int16_t ff_head[2 * FF_HEAD_FRAMES];
+static int32_t ff_carry = 0;
 // Off until main() applies the stored setting, so a unit is never loud before
 // its own volume is read.
 static uint8_t vol_idx = MIX_VOL_OFF;
@@ -1310,19 +1313,18 @@ void emu_run_frame()
     t = esp_timer_get_time();
     if (ffwd) {
         /* Fast-forward: an undrawn run first, then the frame proper, so game
-         * time runs at twice the panel's rate. The skipped run's audio is
-         * dropped, which keeps the pitch, all but its head: that carries on
-         * from the previous output, and the kept run's audio is faded in
-         * from it below so the seam does not click. Kept here because the
-         * next run starts gnuboy's buffer over. The frame end and palette
-         * refresh run here too, so a register the skipped run wrote is not
-         * lost. */
+         * time runs at twice the panel's rate. The audio keeps its pitch by
+         * dropping time rather than resampling: the skipped run's head,
+         * which carries on from the previous output, is spliced into the
+         * kept run below. Kept here because the next run starts gnuboy's
+         * buffer over. The frame end and palette refresh run here too, so a
+         * register the skipped run wrote is not lost. */
         gnuboy_run(false);
         frame_end();
         palette_refresh(false);
         head_n = gnuboy_audio_samples() / 2u;
-        if (head_n > MIX_XFADE_FRAMES) {
-            head_n = MIX_XFADE_FRAMES;
+        if (head_n > FF_HEAD_FRAMES) {
+            head_n = FF_HEAD_FRAMES;
         }
         memcpy(ff_head, apu_buf, head_n * 2u * sizeof(apu_buf[0]));
     }
@@ -1348,8 +1350,43 @@ void emu_run_frame()
          * discards audio, so it is the last resort rather than the rule. */
         n_samples = SPEAKER_SAMPLES_MAX;
     }
-    mix_crossfade_in(apu_buf, ff_head, head_n < n_samples ? head_n : n_samples);
-    mix_mono(apu_buf, n_samples, vol_idx, mono_buf);
+    if (!ffwd) {
+        mix_mono(apu_buf, n_samples, vol_idx, mono_buf);
+    } else {
+        /* The splice: the skipped run up to the seam, a crossfade into the
+         * kept run at seam + d, and the kept run from there, n - d samples
+         * in all. d is where the two waveforms line up; its floor keeps the
+         * frame inside one speaker write. A frame too short to search — the
+         * LCD is off — falls back to a plain crossfade at the start. */
+        size_t seam = 0;
+        size_t s = 0;
+        size_t w;
+        int32_t d;
+        int32_t d_min = (int32_t)n_samples - (int32_t)SPEAKER_SAMPLES_MAX;
+
+        if (d_min < -MIX_WSOLA_SHIFT) {
+            d_min = -MIX_WSOLA_SHIFT;
+        }
+        if (head_n == FF_HEAD_FRAMES
+            && mix_wsola_shift(&ff_head[2 * MIX_WSOLA_SEAM], apu_buf,
+                               n_samples, d_min, MIX_WSOLA_SHIFT, ff_carry,
+                               &d) == MIX_OK) {
+            seam = MIX_WSOLA_SEAM;
+            s = (size_t)((int32_t)MIX_WSOLA_SEAM + d);
+            ff_carry -= d;
+        }
+        w = head_n - seam;
+        if (w > MIX_WSOLA_WINDOW) {
+            w = MIX_WSOLA_WINDOW;
+        }
+        if (w > n_samples - s) {
+            w = n_samples - s;
+        }
+        mix_crossfade_in(&apu_buf[2 * s], &ff_head[2 * seam], w);
+        mix_mono(ff_head, seam, vol_idx, mono_buf);
+        mix_mono(&apu_buf[2 * s], n_samples - s, vol_idx, &mono_buf[seam]);
+        n_samples = seam + (n_samples - s);
+    }
     apu_us = (uint32_t)(esp_timer_get_time() - t);
     speaker_write_frame(mono_buf, n_samples);
 
@@ -1542,6 +1579,9 @@ uint8_t emu_get_frame_skip() { return fskip; }
 
 void emu_set_fast_forward(bool on)
 {
+    if (on && !ffwd) {
+        ff_carry = 0;
+    }
     ffwd = on;
 }
 

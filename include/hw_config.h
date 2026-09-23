@@ -235,8 +235,10 @@
 //
 // With the surplus delivered instead of dropped, the DAC's own back-pressure
 // paces emulation to 32768 / 548.62 = 59.727 fps, which is a Game Boy's true
-// frame rate. The headroom only has to cover one frame's overshoot.
-#define SPEAKER_SAMPLES_MAX (SPEAKER_SAMPLES_PER_FRAME + 64)
+// frame rate. That needs only one frame's overshoot of headroom; the rest is
+// fast-forward's, whose time-stretch lengthens a frame by up to its splice
+// seam, 200 samples, and shortens others to match.
+#define SPEAKER_SAMPLES_MAX (SPEAKER_SAMPLES_PER_FRAME + 256)
 // DMA queue depth, in frames. Latency is depth x 16.7 ms, about 67 ms here;
 // whether that is audible against on-screen events is §11 bench work, and
 // lowering it is a one-line change.
