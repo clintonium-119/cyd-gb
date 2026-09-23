@@ -2,6 +2,7 @@
 
 import json
 import shutil
+import struct
 import subprocess
 
 import pytest
@@ -380,3 +381,107 @@ def test_plan_lists_only_the_media_that_games_json_names(sources):
         "roms/gb/Dr. Mario.gb",
         "roms/gb/Tetris.gb",
     ]
+
+
+# --- manual page encoder --------------------------------------------------
+
+
+def test_fit_within_fills_the_box_on_the_binding_side():
+    # 532 * 1065 / 1440 = 393.46, so the height rounds down to 393.
+    assert image_sd.fit_within(1440 / 1065) == (532, 393)
+    assert image_sd.fit_within(1.0) == (480, 480)
+    assert image_sd.fit_within(0.5) == (240, 480)
+
+
+def test_a_page_of_exactly_two_to_one_is_not_split():
+    assert image_sd.page_outputs(1000, 500) == [(532, 266, 0.532, None)]
+
+
+def test_a_page_just_wider_than_two_to_one_is_split():
+    outputs = image_sd.page_outputs(1005, 500)
+    assert [half for _, _, _, half in outputs] == [0, 1]
+
+
+def test_a_catrap_spread_splits_into_halves_that_each_fit_the_box():
+    # Catrap's spreads are about 2.7:1.
+    outputs = image_sd.page_outputs(1296, 480)
+    assert len(outputs) == 2
+    for w, h, scale, _ in outputs:
+        assert w <= 532 and h <= 480
+        assert w == 532
+        assert scale == pytest.approx(532 / 648)
+
+
+def histogram_of(counts):
+    histogram = [0] * 256
+    for level, count in counts.items():
+        histogram[level] = count
+    return histogram
+
+
+def test_otsu_puts_the_threshold_between_the_two_modes():
+    t = image_sd.otsu_threshold(histogram_of({30: 400, 220: 600}))
+    assert 30 <= t < 220
+
+
+def test_otsu_keeps_a_light_minority_white_on_a_dark_page():
+    # A dark back cover with a small light logo: the logo must survive.
+    t = image_sd.otsu_threshold(histogram_of({20: 950, 200: 50}))
+    assert 20 <= t < 200
+
+
+def test_otsu_leaves_a_blank_page_white_and_a_black_page_black():
+    assert image_sd.otsu_threshold(histogram_of({255: 1000})) < 255
+    assert image_sd.otsu_threshold(histogram_of({0: 1000})) >= 0
+
+
+def test_a_nine_pixel_row_packs_msb_first_with_zero_padding():
+    # black, white x7, black: 1000 0000 | 1 then seven pad bits.
+    grey = bytes([0, 255, 255, 255, 255, 255, 255, 255, 0])
+    assert image_sd.pack_page(grey, 9, 1, 127) == bytes([0b10000000, 0b10000000])
+
+
+def test_rows_are_padded_independently():
+    # Two 3-pixel rows: 101 and 010, each in its own byte.
+    grey = bytes([0, 255, 0, 255, 0, 255])
+    assert image_sd.pack_page(grey, 3, 2, 127) == bytes([0b10100000, 0b01000000])
+
+
+def test_encode_manual_lays_out_the_header_table_and_rasters():
+    pages = [(9, 2, bytes(4)), (16, 1, b"\xff\x01")]
+    data = image_sd.encode_manual(pages)
+
+    assert data[:4] == b"GBMN"
+    assert data[4:6] == b"\x01\x00"
+    assert data[6:8] == b"\x02\x00"
+    assert data[8:12] == b"\x09\x00\x02\x00"
+    assert data[12:16] == b"\x10\x00\x01\x00"
+    assert data[16:] == bytes(4) + b"\xff\x01"
+    assert len(data) == 8 + 4 * 2 + (2 * 2 + 2 * 1)
+
+
+def test_encode_manual_refuses_a_raster_of_the_wrong_length():
+    with pytest.raises(ValueError):
+        image_sd.encode_manual([(9, 2, bytes(3))])
+
+
+def decode_manual(data):
+    """A reader written from the format alone, to check the writer against."""
+    magic, version, count = struct.unpack_from("<4sHH", data, 0)
+    assert (magic, version) == (b"GBMN", 1)
+    sizes = [struct.unpack_from("<HH", data, 8 + 4 * index) for index in range(count)]
+    offset = 8 + 4 * count
+    pages = []
+    for w, h in sizes:
+        length = (w + 7) // 8 * h
+        pages.append((w, h, data[offset:offset + length]))
+        offset += length
+    assert offset == len(data)
+    return pages
+
+
+def test_a_two_page_file_decodes_back_to_what_was_encoded():
+    first = image_sd.pack_page(bytes([0, 255] * 15), 10, 3, 127)
+    second = image_sd.pack_page(bytes(range(0, 256, 4)), 8, 8, 100)
+    pages = [(10, 3, first), (8, 8, second)]
+    assert decode_manual(image_sd.encode_manual(pages)) == pages
