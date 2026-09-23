@@ -6,6 +6,7 @@
 #include "render_config.h"
 #include "input/combo.h"
 #include "ui/list.h"
+#include "ui/picker_draw.h"
 #include "sd_manager.h"
 #include "manual_view.h"
 #include "cart/catalog.h"
@@ -186,6 +187,37 @@ static const char* rom_basename(const char* path)
     return slash ? slash + 1 : path;
 }
 
+// The description band under the cover: `rows` lines of font 1 starting at
+// wrapped line `first`. Cleared and redrawn alone on a scroll — the cover
+// above streams from the card and is never drawn twice.
+typedef struct cart_band_s {
+    const char* text;
+    int16_t x;
+    int16_t y;
+    int16_t w;
+    int16_t pitch;
+    uint8_t cols;
+    uint16_t rows;
+    uint16_t lines;
+    uint16_t first;
+} cart_band_t;
+
+static void draw_band(const cart_band_t* b)
+{
+    char line[PICKER_DESC_LINE_MAX];
+
+    tft.fillRect(b->x, b->y, b->w, (int16_t)(b->rows * b->pitch), TFT_BLACK);
+    tft.setTextDatum(TL_DATUM);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    for (uint16_t i = 0; i < b->rows; i++) {
+        if (!picker_desc_line(b->text, b->cols, (uint16_t)(b->first + i), line,
+                              sizeof(line))) {
+            break;
+        }
+        tft.drawString(line, b->x, (int16_t)(b->y + i * b->pitch), 1);
+    }
+}
+
 // Read-only, and B is the only way out. This is the running cartridge's own
 // page — its cover, its gameplay snapshot, its title and its description —
 // and there is no way from here to any other cartridge.
@@ -199,9 +231,14 @@ static const char* rom_basename(const char* path)
 // /art, a title with no catalog entry, and a description that failed to read
 // each drop out on their own and give their space back, because media
 // coverage across the library is partial by design.
-static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info)
+//
+// The description is the full text from /desc, else the catalog's blurb, in
+// one DESC_MAX heap buffer that `*desc` hands back for the caller to free —
+// the band draws from it for as long as the page is up. `band` is filled in
+// with rows == 0 when there is nothing to scroll through.
+static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info,
+                           char** desc, cart_band_t* band)
 {
-    char desc[CATALOG_DESC_MAX];
     catalog_reader_t cat;
     catalog_entry_t entry;
     const int16_t x = (int16_t)(s->game_x + 8);
@@ -209,11 +246,15 @@ static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info)
     const int16_t foot_y = (int16_t)(s->game_y + GAME_H - 18);
     int16_t y = (int16_t)(s->game_y + 8);
     const char* name;
+    char* text = NULL;
     bool have_entry = false;
-    bool have_art = false;
+    bool have_full = false;
     bool art_ok = false;
     bool shot_ok = false;
     uint16_t* px;
+
+    memset(band, 0, sizeof(*band));
+    *desc = NULL;
 
     tft.fillRect(s->game_x, s->game_y, GAME_W, GAME_H, TFT_BLACK);
     tft.setTextDatum(TL_DATUM);
@@ -221,14 +262,22 @@ static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info)
 
     if (info) {
         name = rom_basename(info->path);
-        desc[0] = '\0';
 
-        if (sd_catalog_reader(&cat)
-            && catalog_find(&cat, name, &entry) == CATALOG_OK) {
-            have_entry = true;
-            if (catalog_read_desc(&cat, entry.offset, desc, sizeof(desc))
-                != CATALOG_OK) {
-                desc[0] = '\0';
+        have_entry = sd_catalog_reader(&cat)
+                     && catalog_find(&cat, name, &entry) == CATALOG_OK;
+
+        // 4 KB for the whole of the longest description, against a largest
+        // free block of about 15 KB at game time. Refused, the page loses its
+        // description and keeps everything else.
+        text = (char*)malloc(DESC_MAX);
+        if (text) {
+            text[0] = '\0';
+            have_full = sd_desc_read(name, text, DESC_MAX);
+            if (!have_full
+                && (!have_entry
+                    || catalog_read_desc(&cat, entry.offset, text, DESC_MAX)
+                           != CATALOG_OK)) {
+                text[0] = '\0';
             }
         }
 
@@ -241,16 +290,12 @@ static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info)
                                  max_w, 2, 2);
         y = (int16_t)(y + 2);
 
-        // One buffer, filled twice: this page is drawn once per visit, and
-        // the cover is on the panel before the snapshot is read over it. The
-        // pipeline is paused and the bus is ours, so the 18 KB is transient
-        // against the emulator's own heap rather than a static reservation.
-        // setSwapBytes(true) is the resting state display_bus_acquire()
-        // leaves in force, and the .565 files are little-endian, so there is
-        // no swap to do here.
         // One band buffer, both images through it in turn. The bands go
         // straight to the panel as they are read, so nothing here ever holds
         // a whole 96x96 image — which at game time cannot be allocated.
+        // setSwapBytes(true) is the resting state display_bus_acquire()
+        // leaves in force, and the .565 files are little-endian, so there is
+        // no swap to do here.
         px = (uint16_t*)malloc(CART_BAND_PX * sizeof(uint16_t));
         if (px) {
             cart_blit_t at = { x, y };
@@ -264,19 +309,22 @@ static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info)
                                       &at);
             free(px);
         }
-        have_art = art_ok || shot_ok;
-        if (have_art) {
+        if (art_ok || shot_ok) {
             y = (int16_t)(y + CART_ART_H + CART_ART_GAP);
         }
 
         // What the card answered, one field per thing that can independently
         // fail. Media coverage is partial across the library, so a sparse
         // page is usually the card's state and not a fault here — but a
-        // failed allocation looks identical on the panel, which is why buf
-        // is reported separately from the two reads.
-        Serial.printf("[INFO] '%s' catalog=%d desc=%d buf=%d art=%d shot=%d\n",
-                      name, (int)have_entry, (int)(desc[0] != '\0'),
-                      (int)(px != NULL), (int)art_ok, (int)shot_ok);
+        // failed allocation looks identical on the panel, which is why both
+        // buffers are reported separately from the reads. desc=2 is the full
+        // text, 1 the catalog's blurb.
+        Serial.printf("[INFO] '%s' catalog=%d desc=%d dbuf=%d buf=%d art=%d "
+                      "shot=%d\n",
+                      name, (int)have_entry,
+                      have_full ? 2 : (int)(text && text[0] != '\0'),
+                      (int)(text != NULL), (int)(px != NULL), (int)art_ok,
+                      (int)shot_ok);
         if (!art_ok || !shot_ok) {
             // The exact path that came up empty, so the card can be checked
             // against it directly rather than by guessing at the stem rule.
@@ -284,16 +332,25 @@ static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info)
                           ART_PATH, ART_SUFFIX, SHOT_PATH, ART_SUFFIX);
         }
 
-        // Whatever is left between the art and the footer. A taller
-        // geometry spends it on more of the description rather than on gap.
-        if (desc[0]) {
+        // Whatever is left between the art and the footer, as many lines as
+        // fit. A taller geometry spends it on more of the description rather
+        // than on gap.
+        if (text && text[0]) {
             int16_t room = (int16_t)(foot_y - y - 2);
-            int16_t pitch = (int16_t)(tft.fontHeight(1) + 2);
-            if (room >= pitch) {
-                display_draw_wrapped(desc, x, y, max_w, (uint8_t)(room / pitch),
-                                     1);
+
+            band->text = text;
+            band->x = x;
+            band->y = y;
+            band->w = max_w;
+            band->pitch = (int16_t)(tft.fontHeight(1) + 2);
+            band->cols = (uint8_t)(max_w / UI_FONT_SMALL_ADV);
+            band->rows = room > 0 ? (uint16_t)(room / band->pitch) : 0;
+            band->lines = picker_desc_lines(text, band->cols);
+            if (band->rows) {
+                draw_band(band);
             }
         }
+        *desc = text;
     }
 
     // Nothing about the tag or the file: this page is for the player, and
@@ -353,15 +410,57 @@ static bool adjust(settings_t* s, uint8_t row, int8_t dir)
 }
 
 // Hold on the info page until B, then leave with the buttons all up so the
-// menu underneath cannot read the same press again.
-static void wait_for_back()
+// menu underneath cannot read the same press again. Up and Down scroll the
+// band a line at a time — at once on the press, then after
+// COMBO_REPEAT_DELAY_MS every COMBO_REPEAT_MS while held, the writer's detail
+// page's rule — and do nothing when the description fits.
+static void cart_info_input(cart_band_t* band)
 {
+    uint16_t last = band->lines > band->rows
+                        ? (uint16_t)(band->lines - band->rows)
+                        : 0;
+    uint8_t held = 0;
+    uint32_t due = 0;
+
     wait_release();
     for (;;) {
+        uint32_t now = millis();
+        uint16_t word;
+        uint8_t dir;
+        bool step = false;
+
         button_update();
-        if (button_get_buttons() & GB_BTN_B) {
+        word = button_get_buttons();
+        if (word & GB_BTN_B) {
             wait_release();
             return;
+        }
+
+        // Exactly one direction, or nothing: the list's fumble rule.
+        dir = (uint8_t)(word & (COMBO_BTN_UP | COMBO_BTN_DOWN));
+        if (dir != COMBO_BTN_UP && dir != COMBO_BTN_DOWN) {
+            held = 0;
+        } else if (dir != held) {
+            held = dir;
+            due = now + (uint32_t)COMBO_REPEAT_DELAY_MS;
+            step = true;
+        } else if ((int32_t)(now - due) >= 0) {
+            due = now + (uint32_t)COMBO_REPEAT_MS;
+            step = true;
+        }
+
+        if (step && last) {
+            uint16_t first = band->first;
+
+            if (dir == COMBO_BTN_DOWN && first < last) {
+                first++;
+            } else if (dir == COMBO_BTN_UP && first > 0) {
+                first--;
+            }
+            if (first != band->first) {
+                band->first = first;
+                draw_band(band);
+            }
         }
         delay(MENU_POLL_MS);
     }
@@ -418,8 +517,12 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
                 return MENU_RESET;
             }
             if (cursor == ROW_INFO) {
-                draw_cart_info(s, info);
-                wait_for_back();
+                char* desc;
+                cart_band_t band;
+
+                draw_cart_info(s, info, &desc, &band);
+                cart_info_input(&band);
+                free(desc);
                 draw_menu(s, cursor);
             }
             if (cursor == ROW_MANUAL && manual_available) {
