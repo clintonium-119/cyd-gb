@@ -63,18 +63,22 @@ enum mix_result_e {
 int mix_mono(const int16_t* stereo, size_t n_frames, uint8_t vol_index,
              uint8_t* out);
 
+/* Stereo frames a fast-forward seam is crossfaded over: about 2 ms. */
+#define MIX_XFADE_FRAMES 64
+
 /*
- * Mix one frame at half the sample count, for fast-forward: frames 2k and
- * 2k+1 are averaged into output sample k, then scaled, clamped and rounded
- * exactly as mix_mono() does. Two frames' worth of emulation then fit one
- * frame's output, playing at double speed and pitch.
+ * Fade the head of one frame of stereo in from another, in place, for
+ * fast-forward. It plays one emulated frame's samples of every two at their
+ * own rate, so the pitch holds. `from` is the head of the frame that was
+ * dropped, which carries on seamlessly from the previous output, so fading
+ * from it into the kept frame leaves no jump on either side of the join.
  *
- * Same arguments as mix_mono(), but out takes n_frames / 2 bytes; an odd
- * trailing frame is dropped. Returns MIX_OK, or MIX_ERR_ARGS without
- * writing anything.
+ * Frame 0 comes out as `from`, and the weight moves linearly to the frame's
+ * own samples, reached at n_frames. Both buffers hold 2 * n_frames samples,
+ * interleaved. Returns MIX_OK, or MIX_ERR_ARGS for a NULL buffer without
+ * writing anything. n_frames == 0 is a no-op.
  */
-int mix_mono_half(const int16_t* stereo, size_t n_frames, uint8_t vol_index,
-                  uint8_t* out);
+int mix_crossfade_in(int16_t* stereo, const int16_t* from, size_t n_frames);
 
 #ifdef __cplusplus
 }

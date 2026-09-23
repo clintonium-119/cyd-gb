@@ -354,6 +354,8 @@ static uint32_t q_stall_acc = 0;
 // it to flush through, and the first frame after a reset emits 572.
 static int16_t apu_buf[2 * (SPEAKER_SAMPLES_PER_FRAME + GNUBOY_AUDIO_HEADROOM)];
 static uint8_t mono_buf[SPEAKER_SAMPLES_MAX];
+// The head of a fast-forward frame's skipped run, for the seam's crossfade.
+static int16_t ff_head[2 * MIX_XFADE_FRAMES];
 // Off until main() applies the stored setting, so a unit is never loud before
 // its own volume is read.
 static uint8_t vol_idx = MIX_VOL_OFF;
@@ -1279,38 +1281,12 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     return true;
 }
 
-/*
- * Mix the run gnuboy has just finished into out, halved for fast-forward, and
- * return the bytes written. gnuboy reports its samples per channel in
- * audio.pos counting interleaved int16s, so the run's length is half of it,
- * clamped to what the speaker takes. Halved, two runs' worth is at most
- * 2 * (SPEAKER_SAMPLES_MAX / 2), so both fit one mono_buf.
- */
-static size_t mix_run(uint8_t* out, bool half)
-{
-    size_t n = gnuboy_audio_samples() / 2u;
-
-    if (n > SPEAKER_SAMPLES_MAX) {
-        /* Only a frame that ran long enough to overshoot the speaker's
-         * headroom, which the reset frame's 572 does not. Clamping here
-         * discards audio, so it is the last resort rather than the rule. */
-        n = SPEAKER_SAMPLES_MAX;
-    }
-    if (half) {
-        /* An odd trailing sample is dropped: one in every other run. */
-        mix_mono_half(apu_buf, n, vol_idx, out);
-        return n / 2u;
-    }
-    mix_mono(apu_buf, n, vol_idx, out);
-    return n;
-}
-
 void emu_run_frame()
 {
     bool draw;
-    size_t n_samples = 0;
-    int64_t t, t_mix;
-    uint32_t mix_us = 0;
+    size_t n_samples;
+    size_t head_n = 0;
+    int64_t t;
 
     /* The two cores' pad bits happen to agree exactly — right, left, up,
      * down, A, B, select, start from bit 0 up — so the byte goes straight
@@ -1324,23 +1300,26 @@ void emu_run_frame()
 
     t = esp_timer_get_time();
     if (ffwd) {
-        /* Fast-forward: an undrawn run first, then the frame proper. Each
-         * run's audio is mixed at half rate as soon as it returns, since the
-         * next run starts gnuboy's buffer over, and the two halves go to the
-         * speaker as one frame, so its pacing still holds the loop at the
-         * panel's rate while game time runs at twice it. The frame end and
-         * palette refresh run here too, so a register the skipped run wrote
-         * is not lost. */
+        /* Fast-forward: an undrawn run first, then the frame proper, so game
+         * time runs at twice the panel's rate. The skipped run's audio is
+         * dropped, which keeps the pitch, all but its head: that carries on
+         * from the previous output, and the kept run's audio is faded in
+         * from it below so the seam does not click. Kept here because the
+         * next run starts gnuboy's buffer over. The frame end and palette
+         * refresh run here too, so a register the skipped run wrote is not
+         * lost. */
         gnuboy_run(false);
         frame_end();
         palette_refresh(false);
-        t_mix = esp_timer_get_time();
-        n_samples = mix_run(mono_buf, true);
-        mix_us = (uint32_t)(esp_timer_get_time() - t_mix);
+        head_n = gnuboy_audio_samples() / 2u;
+        if (head_n > MIX_XFADE_FRAMES) {
+            head_n = MIX_XFADE_FRAMES;
+        }
+        memcpy(ff_head, apu_buf, head_n * 2u * sizeof(apu_buf[0]));
     }
     gnuboy_run(draw);
     frame_end();
-    emu_us = (uint32_t)(esp_timer_get_time() - t) - mix_us;
+    emu_us = (uint32_t)(esp_timer_get_time() - t);
 
     /* After the frame, so a register the frame wrote is picked up before the
      * next one is drawn with it. */
@@ -1349,10 +1328,20 @@ void emu_run_frame()
     /* Every frame, drawn or skipped: the sound has to stay continuous, and
      * the write is also what paces emulation — it blocks only while the DMA
      * queue is full, which happens only when the emulator is ahead of real
-     * time. */
-    t_mix = esp_timer_get_time();
-    n_samples += mix_run(mono_buf + n_samples, ffwd);
-    apu_us = mix_us + (uint32_t)(esp_timer_get_time() - t_mix);
+     * time. gnuboy reports its samples per channel in audio.pos counting
+     * interleaved int16s, so the frame length is half of it, clamped to what
+     * the speaker takes. */
+    t = esp_timer_get_time();
+    n_samples = gnuboy_audio_samples() / 2u;
+    if (n_samples > SPEAKER_SAMPLES_MAX) {
+        /* Only a frame that ran long enough to overshoot the speaker's
+         * headroom, which the reset frame's 572 does not. Clamping here
+         * discards audio, so it is the last resort rather than the rule. */
+        n_samples = SPEAKER_SAMPLES_MAX;
+    }
+    mix_crossfade_in(apu_buf, ff_head, head_n < n_samples ? head_n : n_samples);
+    mix_mono(apu_buf, n_samples, vol_idx, mono_buf);
+    apu_us = (uint32_t)(esp_timer_get_time() - t);
     speaker_write_frame(mono_buf, n_samples);
 
     fcnt++; fpsc++;

@@ -259,93 +259,81 @@ static void test_opposite_full_scale_channels_cancel_to_mid_scale(void)
     assert_guards_intact();
 }
 
-/* ─── half-rate mix (fast-forward) ────────────────────────────────────────── */
+/* ─── fast-forward crossfade ─────────────────────────────────────────────── */
 
-static void assert_half_writes_exactly(size_t n_frames, size_t expect_out)
+static int16_t from_buf[MIX_XFADE_FRAMES * 2];
+
+static void test_crossfade_starts_on_from_and_ramps_linearly_to_the_frame(void)
 {
     size_t i;
-    memset(g.out, 0x7E, sizeof(g.out));
-    fill_constant(20000, 20000, n_frames);
+    fill_constant(8000, -8000, MIX_XFADE_FRAMES + 4);
+    for (i = 0; i < MIX_XFADE_FRAMES; i++) {
+        from_buf[i * 2 + 0] = -8000;
+        from_buf[i * 2 + 1] = 8000;
+    }
     TEST_ASSERT_EQUAL_INT(MIX_OK,
-        mix_mono_half(stereo, n_frames, MIX_VOL_HIGH, g.out));
-    for (i = 0; i < expect_out; i++) {
-        TEST_ASSERT_NOT_EQUAL(0x7E, g.out[i]);
+        mix_crossfade_in(stereo, from_buf, MIX_XFADE_FRAMES));
+
+    TEST_ASSERT_EQUAL_INT16(-8000, stereo[0]);
+    TEST_ASSERT_EQUAL_INT16(8000, stereo[1]);
+    /* Halfway: the mean of the two, exactly. */
+    TEST_ASSERT_EQUAL_INT16(0, stereo[MIX_XFADE_FRAMES]);
+    TEST_ASSERT_EQUAL_INT16(0, stereo[MIX_XFADE_FRAMES + 1]);
+    /* Monotonic towards the frame, one step per stereo frame. */
+    for (i = 1; i < MIX_XFADE_FRAMES; i++) {
+        TEST_ASSERT_TRUE(stereo[i * 2] > stereo[(i - 1) * 2]);
+        TEST_ASSERT_TRUE(stereo[i * 2 + 1] < stereo[(i - 1) * 2 + 1]);
     }
-    for (i = expect_out; i < n_frames; i++) {
-        TEST_ASSERT_EQUAL_HEX8(0x7E, g.out[i]);
-    }
-    assert_guards_intact();
+    /* Past the fade, untouched. */
+    TEST_ASSERT_EQUAL_INT16(8000, stereo[MIX_XFADE_FRAMES * 2]);
+    TEST_ASSERT_EQUAL_INT16(-8000, stereo[MIX_XFADE_FRAMES * 2 + 1]);
 }
 
-static void test_half_writes_half_the_frames_and_drops_an_odd_one(void)
-{
-    assert_half_writes_exactly(8, 4);
-    assert_half_writes_exactly(7, 3);
-    assert_half_writes_exactly(1, 0);
-}
-
-static void test_half_matches_mix_mono_on_a_constant_input(void)
-{
-    static uint8_t full[64];
-    static const int16_t levels[][2] = {
-        { 0, 0 }, { 1, 0 }, { -1, 2 }, { 1234, -567 }, { 20000, 20000 },
-        { -32768, -32768 }, { 32767, 32767 }, { 32767, -32768 },
-    };
-    size_t l;
-    uint8_t v;
-
-    for (l = 0; l < sizeof(levels) / sizeof(levels[0]); l++) {
-        fill_constant(levels[l][0], levels[l][1], 64);
-        for (v = 0; v <= MIX_VOL_HIGH; v++) {
-            TEST_ASSERT_EQUAL_INT(MIX_OK, mix_mono(stereo, 64, v, full));
-            TEST_ASSERT_EQUAL_INT(MIX_OK, mix_mono_half(stereo, 64, v, g.out));
-            TEST_ASSERT_EQUAL_HEX8_ARRAY(full, g.out, 32);
-        }
-    }
-    assert_guards_intact();
-}
-
-static void test_half_averages_each_pair_of_frames(void)
-{
-    stereo[0] = 1000;
-    stereo[1] = 1000;
-    stereo[2] = 3000;
-    stereo[3] = 3000;
-    TEST_ASSERT_EQUAL_INT(MIX_OK, mix_mono_half(stereo, 2, MIX_VOL_HIGH, g.out));
-    TEST_ASSERT_EQUAL_HEX8(reference(2000, 2000, MIX_VOL_HIGH), g.out[0]);
-}
-
-static void test_half_zero_input_is_exactly_mid_scale_at_every_volume(void)
+static void test_crossfade_of_equal_signals_changes_nothing(void)
 {
     size_t i;
-    uint8_t v;
-    for (v = 0; v <= MIX_VOL_HIGH; v++) {
-        TEST_ASSERT_EQUAL_INT(MIX_OK,
-            mix_mono_half(stereo, N_FRAMES, v, g.out));
-        for (i = 0; i < N_FRAMES / 2; i++) {
-            TEST_ASSERT_EQUAL_HEX8(MIX_SILENCE, g.out[i]);
-        }
+    for (i = 0; i < MIX_XFADE_FRAMES * 2; i++) {
+        stereo[i] = (int16_t)(rng_next() & 0xFFFFu);
+        from_buf[i] = stereo[i];
     }
-    assert_guards_intact();
+    TEST_ASSERT_EQUAL_INT(MIX_OK,
+        mix_crossfade_in(stereo, from_buf, MIX_XFADE_FRAMES));
+    TEST_ASSERT_EQUAL_INT16_ARRAY(from_buf, stereo, MIX_XFADE_FRAMES * 2);
 }
 
-static void test_half_bad_arguments_return_err_args_and_write_nothing(void)
+static void test_crossfade_between_full_scale_extremes_stays_in_range(void)
 {
     size_t i;
-
-    fill_constant(20000, 20000, N_FRAMES);
-
-    TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
-        mix_mono_half(NULL, N_FRAMES, MIX_VOL_HIGH, g.out));
-    TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
-        mix_mono_half(stereo, N_FRAMES, MIX_VOL_HIGH, NULL));
-    TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
-        mix_mono_half(stereo, N_FRAMES, MIX_VOL_HIGH + 1, g.out));
-
-    for (i = 0; i < N_FRAMES; i++) {
-        TEST_ASSERT_EQUAL_HEX8(0x7E, g.out[i]);
+    fill_constant(32767, -32768, MIX_XFADE_FRAMES);
+    for (i = 0; i < MIX_XFADE_FRAMES; i++) {
+        from_buf[i * 2 + 0] = -32768;
+        from_buf[i * 2 + 1] = 32767;
     }
-    assert_guards_intact();
+    TEST_ASSERT_EQUAL_INT(MIX_OK,
+        mix_crossfade_in(stereo, from_buf, MIX_XFADE_FRAMES));
+    TEST_ASSERT_EQUAL_INT16(-32768, stereo[0]);
+    TEST_ASSERT_EQUAL_INT16(32767, stereo[1]);
+    for (i = 1; i < MIX_XFADE_FRAMES; i++) {
+        TEST_ASSERT_TRUE(stereo[i * 2] > stereo[(i - 1) * 2]);
+    }
+}
+
+static void test_crossfade_of_zero_frames_writes_nothing(void)
+{
+    stereo[0] = 1234;
+    from_buf[0] = -1234;
+    TEST_ASSERT_EQUAL_INT(MIX_OK, mix_crossfade_in(stereo, from_buf, 0));
+    TEST_ASSERT_EQUAL_INT16(1234, stereo[0]);
+}
+
+static void test_crossfade_rejects_null_and_writes_nothing(void)
+{
+    stereo[0] = 1234;
+    TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
+        mix_crossfade_in(NULL, from_buf, MIX_XFADE_FRAMES));
+    TEST_ASSERT_EQUAL_INT(MIX_ERR_ARGS,
+        mix_crossfade_in(stereo, NULL, MIX_XFADE_FRAMES));
+    TEST_ASSERT_EQUAL_INT16(1234, stereo[0]);
 }
 
 /* ─── argument checking ───────────────────────────────────────────────────── */
@@ -381,10 +369,10 @@ int main(void)
     RUN_TEST(test_left_only_and_right_only_give_the_same_output);
     RUN_TEST(test_opposite_full_scale_channels_cancel_to_mid_scale);
     RUN_TEST(test_bad_arguments_return_err_args_and_write_nothing);
-    RUN_TEST(test_half_writes_half_the_frames_and_drops_an_odd_one);
-    RUN_TEST(test_half_matches_mix_mono_on_a_constant_input);
-    RUN_TEST(test_half_averages_each_pair_of_frames);
-    RUN_TEST(test_half_zero_input_is_exactly_mid_scale_at_every_volume);
-    RUN_TEST(test_half_bad_arguments_return_err_args_and_write_nothing);
+    RUN_TEST(test_crossfade_starts_on_from_and_ramps_linearly_to_the_frame);
+    RUN_TEST(test_crossfade_of_equal_signals_changes_nothing);
+    RUN_TEST(test_crossfade_between_full_scale_extremes_stays_in_range);
+    RUN_TEST(test_crossfade_of_zero_frames_writes_nothing);
+    RUN_TEST(test_crossfade_rejects_null_and_writes_nothing);
     return UNITY_END();
 }
