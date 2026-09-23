@@ -25,7 +25,8 @@ void emu_clear_cart_ram_dirty();
 void emu_set_frame_skip(uint8_t skip);
 uint8_t emu_get_frame_skip();
 // Fast-forward: each emu_run_frame() runs two frames of game time and draws
-// the second, so the game runs at 2x while the display holds its rate. The
+// the second, so the game runs at up to 2x while the display holds its rate;
+// a scene too heavy for that drops frames back to one run until it fits. The
 // audio keeps its pitch: the two frames are spliced into one frame's worth. Runtime only, off at start. The Peanut-GB
 // core stores the flag and ignores it.
 void emu_set_fast_forward(bool on);

@@ -361,6 +361,17 @@ static uint8_t mono_buf[SPEAKER_SAMPLES_MAX];
 #define FF_HEAD_FRAMES (MIX_WSOLA_SEAM + MIX_WSOLA_WINDOW)
 static int16_t ff_head[2 * FF_HEAD_FRAMES];
 static int32_t ff_carry = 0;
+// Fast-forward runs its second game frame only while the audio is a full
+// queue ahead, which the last speaker write shows by having had to wait: a
+// write into a queue with room returns in about 40 us, a blocked one takes
+// milliseconds. So a scene too heavy for two runs a frame, like Pokemon's
+// text boxes, slows to whatever fits instead of starving the DAC, and the
+// sound stays clean. A single-run frame's audio carries straight on from the
+// previous frame's, so switching adds no seam.
+#define FF_AHEAD_US 1000
+static bool ff_ahead = false;
+// Frames that ran twice, for the [PERF] line: speed is (fps + ff2) / fps.
+static uint32_t ff2c = 0, cff2 = 0;
 // Off until main() applies the stored setting, so a unit is never loud before
 // its own volume is read.
 static uint8_t vol_idx = MIX_VOL_OFF;
@@ -1298,6 +1309,7 @@ void emu_run_frame()
     bool draw;
     size_t n_samples;
     size_t head_n = 0;
+    bool twice = ffwd && ff_ahead;
     int64_t t;
 
     /* The two cores' pad bits happen to agree exactly — right, left, up,
@@ -1311,7 +1323,7 @@ void emu_run_frame()
     draw = (fskip == 0) || ((fcnt & 1u) == 0u);
 
     t = esp_timer_get_time();
-    if (ffwd) {
+    if (twice) {
         /* Fast-forward: an undrawn run first, then the frame proper, so game
          * time runs at twice the panel's rate. The audio keeps its pitch by
          * dropping time rather than resampling: the skipped run's head,
@@ -1350,7 +1362,7 @@ void emu_run_frame()
          * discards audio, so it is the last resort rather than the rule. */
         n_samples = SPEAKER_SAMPLES_MAX;
     }
-    if (!ffwd) {
+    if (!twice) {
         mix_mono(apu_buf, n_samples, vol_idx, mono_buf);
     } else {
         /* The splice: the skipped run up to the seam, a crossfade into the
@@ -1389,12 +1401,23 @@ void emu_run_frame()
     }
     apu_us = (uint32_t)(esp_timer_get_time() - t);
     speaker_write_frame(mono_buf, n_samples);
+    {
+        uint32_t wait_us = 0;
 
+        speaker_get_stats(nullptr, nullptr, &wait_us);
+        ff_ahead = wait_us >= FF_AHEAD_US;
+    }
+
+    if (twice) {
+        ff2c++;
+    }
     fcnt++; fpsc++;
     uint32_t n = millis();
     if (n - fpst >= 1000) {
         cfps = fpsc;
         fpsc = 0;
+        cff2 = ff2c;
+        ff2c = 0;
         fpst = n;
         uint32_t aunder = 0, aover = 0, await_us = 0;
         speaker_get_stats(&aunder, &aover, &await_us);
@@ -1404,10 +1427,10 @@ void emu_run_frame()
 #ifndef QUIET_PERF
         Serial.printf("[PERF] emu=%uus scale=%uus push=%uus qstall=%uus "
                       "qovf=%u apu=%uus await=%uus aunder=%u aover=%u "
-                      "fps=%u split=c0 core=gnuboy ff=%u\n",
+                      "fps=%u split=c0 core=gnuboy ff=%u ff2=%u\n",
                       emu_us, scale_us, push_us, q_stall_us,
                       framequeue_overflows(&fq), apu_us, await_us, aunder,
-                      aover, cfps, ffwd ? 1u : 0u);
+                      aover, cfps, ffwd ? 1u : 0u, cff2);
 #endif
     }
 }
