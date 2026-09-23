@@ -362,13 +362,14 @@ static uint8_t mono_buf[SPEAKER_SAMPLES_MAX];
 static int16_t ff_head[2 * FF_HEAD_FRAMES];
 static int32_t ff_carry = 0;
 // Fast-forward runs its second game frame only while the audio is a full
-// queue ahead, which the last speaker write shows by having had to wait: a
-// write into a queue with room returns in about 40 us, a blocked one takes
-// milliseconds. So a scene too heavy for two runs a frame, like Pokemon's
+// queue ahead, which the last speaker write shows by having had to wait at
+// all: a write into a queue with room returns in about 40 us, so anything
+// past 200 us blocked, and a full queue holds about 67 ms, far more than a
+// late frame costs. A 1 ms bar ran light scenes at 1.7x on the bench. So a scene too heavy for two runs a frame, like Pokemon's
 // text boxes, slows to whatever fits instead of starving the DAC, and the
 // sound stays clean. A single-run frame's audio carries straight on from the
 // previous frame's, so switching adds no seam.
-#define FF_AHEAD_US 1000
+#define FF_AHEAD_US 200
 static bool ff_ahead = false;
 // Frames that ran twice, for the [PERF] line: speed is (fps + ff2) / fps.
 static uint32_t ff2c = 0, cff2 = 0;
