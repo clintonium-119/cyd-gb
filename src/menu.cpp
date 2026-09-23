@@ -7,6 +7,7 @@
 #include "input/combo.h"
 #include "ui/list.h"
 #include "sd_manager.h"
+#include "manual_view.h"
 #include "cart/catalog.h"
 #include <Arduino.h>
 #include <stdlib.h>
@@ -20,8 +21,9 @@
 // the edge detection below needs no filter of its own.
 #define MENU_POLL_MS 16
 
-// 6 x 26 + 40 = 196, inside GAME_H at every geometry — 216, 234, 240.
-#define MENU_ROWS  6
+// Seven rows at most, Game Manual being the one that comes and goes:
+// 7 x 26 + 40 = 222, inside GAME_H (240).
+#define MENU_ROWS_MAX 7
 #define MENU_ROW_H 26
 #define MENU_TOP   40   /* the title band above the first row */
 
@@ -42,15 +44,17 @@ enum menu_row_e {
     ROW_BRIGHT,
     ROW_PALETTE,
     ROW_INFO,
+    ROW_MANUAL,
     ROW_RESET,
 };
 
-static const char* const ROW_LABELS[MENU_ROWS] = {
+static const char* const ROW_LABELS[MENU_ROWS_MAX] = {
     "Resume",
     "Volume",
     "Brightness",
     "Palette",
     "Cart Info",
+    "Game Manual",
     "Reset",
 };
 
@@ -111,11 +115,14 @@ static const char* row_value(const settings_t* s, uint8_t row, char* buf,
 
 // ─── Drawing ────────────────────────────────────────────────────────────────
 
-static void draw_row(const settings_t* s, uint8_t row, bool highlighted)
+// `idx` is where the row sits on screen and `row` which row it is; they part
+// company below Cart Info when there is no Game Manual row.
+static void draw_row(const settings_t* s, uint8_t idx, uint8_t row,
+                     bool highlighted)
 {
     char buf[16];
     const char* value = row_value(s, row, buf, sizeof(buf));
-    int16_t y = (int16_t)(s->game_y + MENU_TOP + row * MENU_ROW_H);
+    int16_t y = (int16_t)(s->game_y + MENU_TOP + idx * MENU_ROW_H);
     uint16_t bg = highlighted ? MENU_HL_BG : MENU_ROW_BG;
 
     tft.fillRect(s->game_x + 4, y, GAME_W - 8, MENU_ROW_H - 2, bg);
@@ -128,16 +135,17 @@ static void draw_row(const settings_t* s, uint8_t row, bool highlighted)
     }
 }
 
-static void draw_menu(const settings_t* s, uint8_t cursor)
+static void draw_menu(const settings_t* s, const uint8_t* rows, uint8_t n,
+                      uint8_t cursor)
 {
-    uint8_t row;
+    uint8_t i;
 
     tft.fillRect(s->game_x, s->game_y, GAME_W, GAME_H, TFT_BLACK);
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(MENU_TITLE, TFT_BLACK);
     tft.drawString("PAUSED", s->game_x + GAME_W / 2, s->game_y + 18, 4);
-    for (row = 0; row < MENU_ROWS; row++) {
-        draw_row(s, row, row == cursor);
+    for (i = 0; i < n; i++) {
+        draw_row(s, i, rows[i], i == cursor);
     }
 }
 
@@ -415,18 +423,32 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
 {
     list_state_t ls;
     uint16_t prev = 0;
+    uint8_t rows[MENU_ROWS_MAX];
+    uint8_t n = 0;
+    char path[ART_PATH_MAX];
+    const char* name = info ? rom_basename(info->path) : NULL;
+    bool has_manual;
 
     if (!s) {
         return MENU_RESUME;
     }
-    list_init(&ls, MENU_ROWS, MENU_ROWS);
-    draw_menu(s, (uint8_t)list_cursor(&ls));
+    // Game Manual is there only when this cartridge has one on the card:
+    // absent, not greyed out, when it does not.
+    has_manual = name && sd_manual_path(name, path, sizeof(path));
+    for (uint8_t id = 0; id < MENU_ROWS_MAX; id++) {
+        if (id != ROW_MANUAL || has_manual) {
+            rows[n++] = id;
+        }
+    }
+    list_init(&ls, n, n);
+    draw_menu(s, rows, n, (uint8_t)list_cursor(&ls));
     wait_release();
 
     for (;;) {
         uint32_t now = millis();
         uint16_t word;
         uint8_t cursor = (uint8_t)list_cursor(&ls);
+        uint8_t row = rows[cursor];
         bool left;
         bool right;
 
@@ -438,30 +460,38 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
         // instead of adjusting anything.
         if (list_input(&ls, (uint8_t)(word & (COMBO_BTN_UP | COMBO_BTN_DOWN)),
                        now) == LIST_EVENT_MOVED) {
-            draw_row(s, cursor, false);
+            draw_row(s, cursor, row, false);
             cursor = (uint8_t)list_cursor(&ls);
-            draw_row(s, cursor, true);
+            row = rows[cursor];
+            draw_row(s, cursor, row, true);
         }
 
         left = (word & GB_BTN_LEFT) && !(prev & GB_BTN_LEFT);
         right = (word & GB_BTN_RIGHT) && !(prev & GB_BTN_RIGHT);
-        if ((left || right) && adjust(s, cursor, right ? +1 : -1)) {
-            draw_row(s, cursor, true);
+        if ((left || right) && adjust(s, row, right ? +1 : -1)) {
+            draw_row(s, cursor, row, true);
         }
 
         if ((word & GB_BTN_A) && !(prev & GB_BTN_A)) {
-            if (cursor == ROW_RESUME) {
+            if (row == ROW_RESUME) {
                 wait_release();
                 return MENU_RESUME;
             }
-            if (cursor == ROW_RESET) {
+            if (row == ROW_RESET) {
                 wait_release();
                 return MENU_RESET;
             }
-            if (cursor == ROW_INFO) {
+            if (row == ROW_INFO) {
                 draw_cart_info(s, info);
                 wait_for_back();
-                draw_menu(s, cursor);
+                draw_menu(s, rows, n, cursor);
+            }
+            if (row == ROW_MANUAL) {
+                // The reader waits for every button to be up before it
+                // returns, so the B that closed it is not read here; a
+                // manual that would not open leaves the menu as it was.
+                manual_view_open(s, name);
+                draw_menu(s, rows, n, cursor);
             }
             // A on a value row does nothing: Left and Right are its keys.
         }

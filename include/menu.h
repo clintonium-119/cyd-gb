@@ -37,9 +37,10 @@ enum menu_result_e {
     MENU_RESET,
 };
 
-// Six rows — Resume, Volume, Brightness, Palette, Cart Info, Reset — drawn
-// inside the game window, driven by the D-pad, with A to act and B to go
-// back.
+// Six rows — Resume, Volume, Brightness, Palette, Cart Info, Reset — or
+// seven, with Game Manual after Cart Info, when the running cartridge has a
+// manual on the card. Drawn inside the game window, driven by the D-pad, with
+// A to act and B to go back.
 //
 // Calling contract: pause the pipeline and take the display bus first, and
 // give them back afterwards; this draws through the driver directly for as
