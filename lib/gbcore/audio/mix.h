@@ -79,8 +79,9 @@ int mix_mono(const int16_t* stereo, size_t n_frames, uint8_t vol_index,
 
 /*
  * Search for the shift. ref is the dropped frame's MIX_WSOLA_WINDOW stereo
- * frames at the seam, kept the kept frame's n_kept. Every even d in
- * [d_min, d_max] whose window fits inside kept is scored by normalised
+ * frames at the seam, kept the kept frame's n_kept. The range is clamped to
+ * +/-MIX_WSOLA_SHIFT, and every d from d_min in steps of 2 whose window fits
+ * inside kept is scored by normalised
  * correlation of the mono mix, less a small penalty on |carry - d|: carry is
  * the caller's running sum of -d, so the penalty is what keeps the output's
  * total length on real time. Ties go to the first, most negative, d.

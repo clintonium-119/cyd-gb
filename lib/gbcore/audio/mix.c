@@ -93,11 +93,19 @@ int mix_wsola_shift(const int16_t* ref, const int16_t* kept, size_t n_kept,
                     int32_t* out_d)
 {
     /* Correlation units per sample of length error. Taken from the host
-     * renders the method was chosen on, not tuned on the bench. */
+     * renders the method was chosen on, not tuned on the bench: 0.0002 let
+     * the running length wander by about 200 ms, 0.002 holds it to 10. */
     const float carry_weight = 0.002f;
+    /* Both signals go to mono once, not once per shift: the search visits
+     * about 200 shifts, and recomputing the windows each time cost 2.7 ms
+     * a frame on the device. On the stack: 1.4 KB. */
+    int16_t rm[MIX_WSOLA_WINDOW];
+    int16_t km[MIX_WSOLA_SEAM + MIX_WSOLA_SHIFT + MIX_WSOLA_WINDOW];
     int32_t rr = 0;
-    int32_t d;
-    int found = 0;
+    int32_t yy = 0;
+    int32_t s_lo;
+    int32_t s_hi;
+    int32_t s;
     int32_t best_d = 0;
     float best = 0.0f;
     size_t i;
@@ -105,41 +113,63 @@ int mix_wsola_shift(const int16_t* ref, const int16_t* kept, size_t n_kept,
     if (ref == NULL || kept == NULL || out_d == NULL) {
         return MIX_ERR_ARGS;
     }
-
-    for (i = 0; i < MIX_WSOLA_WINDOW; i++) {
-        int32_t r = mono12(&ref[i * 2]);
-        rr += r * r;
+    if (d_min < -MIX_WSOLA_SHIFT) {
+        d_min = -MIX_WSOLA_SHIFT;
+    }
+    if (d_max > MIX_WSOLA_SHIFT) {
+        d_max = MIX_WSOLA_SHIFT;
     }
 
-    for (d = d_min; d <= d_max; d += 2) {
-        int32_t s = (int32_t)MIX_WSOLA_SEAM + d;
+    /* The shifts whose window fits, stepping by 2 from d_min: the first s
+     * at or past 0 on d_min's parity, the last whose window ends by n_kept. */
+    s_lo = (int32_t)MIX_WSOLA_SEAM + d_min;
+    if (s_lo < 0) {
+        s_lo += ((-s_lo + 1) / 2) * 2;
+    }
+    s_hi = (int32_t)MIX_WSOLA_SEAM + d_max;
+    if ((int64_t)s_hi + MIX_WSOLA_WINDOW > (int64_t)n_kept) {
+        s_hi = (int32_t)n_kept - MIX_WSOLA_WINDOW;
+    }
+    if (s_hi < s_lo) {
+        return MIX_ERR_ARGS;
+    }
+
+    for (i = 0; i < MIX_WSOLA_WINDOW; i++) {
+        rm[i] = (int16_t)mono12(&ref[i * 2]);
+        rr += (int32_t)rm[i] * rm[i];
+    }
+    for (i = 0; i < (size_t)(s_hi - s_lo) + MIX_WSOLA_WINDOW; i++) {
+        km[i] = (int16_t)mono12(&kept[((size_t)s_lo + i) * 2]);
+    }
+    for (i = 0; i < MIX_WSOLA_WINDOW; i++) {
+        yy += (int32_t)km[i] * km[i];
+    }
+
+    for (s = s_lo; s <= s_hi; s += 2) {
+        const int16_t* y = &km[s - s_lo];
+        int32_t d = s - (int32_t)MIX_WSOLA_SEAM;
         int32_t ry = 0;
-        int32_t yy = 0;
         float score;
 
-        if (s < 0 || (size_t)s + MIX_WSOLA_WINDOW > n_kept) {
-            continue;
-        }
         for (i = 0; i < MIX_WSOLA_WINDOW; i++) {
-            int32_t r = mono12(&ref[i * 2]);
-            int32_t y = mono12(&kept[((size_t)s + i) * 2]);
-            ry += r * y;
-            yy += y * y;
+            ry += (int32_t)rm[i] * y[i];
         }
         /* The +1 keeps silence from dividing by zero; it scores 0 there, so
          * the carry penalty alone picks the shift. */
         score = (float)ry / sqrtf((float)rr * (float)yy + 1.0f)
                 - carry_weight * (float)abs(carry - d);
-        if (!found || score > best) {
-            found = 1;
+        if (s == s_lo || score > best) {
             best = score;
             best_d = d;
         }
+        /* Slide the window's energy on by two frames. */
+        if (s + 2 <= s_hi) {
+            yy += (int32_t)y[MIX_WSOLA_WINDOW] * y[MIX_WSOLA_WINDOW]
+                  + (int32_t)y[MIX_WSOLA_WINDOW + 1] * y[MIX_WSOLA_WINDOW + 1]
+                  - (int32_t)y[0] * y[0] - (int32_t)y[1] * y[1];
+        }
     }
 
-    if (!found) {
-        return MIX_ERR_ARGS;
-    }
     *out_d = best_d;
     return MIX_OK;
 }
