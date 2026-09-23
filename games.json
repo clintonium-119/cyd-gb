@@ -2,7 +2,7 @@
   {
     "filename": "Adventure Island.gb",
     "title": "Adventure Island",
-    "description": "\"Adventure Island II\" follows Master Higgins on his quest to rescue his kidnapped girlfriend from alien invaders.",
+    "description": "\"Adventure Island II\" follows Master Higgins on his quest to rescue his kidnapped girlfriend from alien invaders. The classic jump-and-run gameplay remains intact: Higgins must avoid obstacles, defeat enemies, and continuously collect food to keep his hunger bar from depleting. A single hit spells his end - unless he has power-ups like weapons or a skateboard. A major addition is the introduction of dinosaur mounts, granting special abilities such as flying or shooting fireballs. Before each level, players can strategically select their collected power-ups. Higgins journeys through eight diverse worlds with alternate paths and faces a boss at the end of each area.",
     "art": "covers/01) All but the Best/Adventure Island.png",
     "shot": "screenshots/01) All but the Best/Adventure Island.png",
     "manual": "manuals/01) All but the Best/Adventure Island.pdf",
@@ -16,7 +16,7 @@
   {
     "filename": "Adventure Island II.gb",
     "title": "Adventure Island II: Aliens in Paradise",
-    "description": "Jeannie Jungle has been captured by aliens! She's stranded somewhere on one of eight islands and you, as the somewhat heroic Master Higgins, must find her.",
+    "description": "Jeannie Jungle has been captured by aliens!\n\nShe's stranded somewhere on one of eight islands and you, as the somewhat heroic Master Higgins, must find her. But be careful - each island is guarded by an enormous creature that's very hungry!\n\nExplore 8 levels\n\nCollect items such as: Axes, Skateboards, and boomerangs\n\nEnlist the help of the local dinosaurs\n\nSave your girlfriend from the menacing aliens\n\nFortunately, you have a little help. There are five kinds of friendly dinosaurs waiting to give you a lift. They're stuck in eggs that you'll need to crack open! Hidden eggs are scattered all over the islands. By finding and breaking them open, you might get a bonus, or even a secret way to the next island! Just don't eat the eggplant...\n\nSo hop on one of your dinosaur pals, and ride your way to Jeannie's rescue!",
     "art": "covers/01) All but the Best/Adventure Island II - Aliens in Paradise.png",
     "shot": "screenshots/01) All but the Best/Adventure Island II - Aliens in Paradise.png",
     "manual": "manuals/01) All but the Best/Adventure Island II - Aliens in Paradise.pdf",
@@ -30,7 +30,7 @@
   {
     "filename": "Adventures of Lolo.gb",
     "title": "Adventures Of Lolo",
-    "description": "This is Gentryland area. It is an amusement park that is fun for everyone. Today Lolo and Lala, accompanied by their child Lulu, have come to Gentryland. But none of the attractions are working.",
+    "description": "This is Gentryland area. It is an amusement park that is fun for everyone. Today Lolo and Lala, accompanied by their child Lulu, have come to Gentryland. But none of the attractions are working. It seems that King Egger, an incarnation of evil, has occupied (captured) Gentryland. Under this situation, Gentry-Parade will not be played, which everyone want to see most. Can Lolo and Lala defeat hateful King Egger? Can Gentry-Parade be played?",
     "art": "covers/Adventures of Lolo (SGB Enhanced).png",
     "shot": "screenshots/Adventures of Lolo (SGB Enhanced).png",
     "manual": "manuals/Adventures of Lolo (SGB Enhanced).pdf",
@@ -44,7 +44,7 @@
   {
     "filename": "Alfred Chicken.gb",
     "title": "Alfred Chicken",
-    "description": "Alfred the chicken must rescue his friends and his bird (pardon the pun) Floella from the Meka Chickens.",
+    "description": "Alfred the chicken must rescue his friends and his bird (pardon the pun) Floella from the Meka Chickens. The result is a platform game across differently-themed levels, which are finished by either climbing to the top of the level or killing a boss. Bonus games and secret rooms have been included, and progression sometimes requires solving positional puzzles.\n\nAlfred cannot fly, but he can use ramps to jump up and hit enemies with his bionic beak - this kills them, but any other contact will hurt Alfred. Watch out for spiked snails though. Other enemies include whales armed with guns, and stray bombs.",
     "art": "covers/01) All but the Best/Alfred Chicken.png",
     "shot": "screenshots/01) All but the Best/Alfred Chicken.png",
     "manual": "manuals/01) All but the Best/Alfred Chicken.pdf",
@@ -58,7 +58,7 @@
   {
     "filename": "A-mazing Tater.gb",
     "title": "Amazing Tater",
-    "description": "This puzzle-game is the successor to Kwirk. The player has to guide a small potato to the exit of each level, which is made difficult by a number of obstacles.",
+    "description": "This puzzle-game is the successor to Kwirk. The player has to guide a small potato to the exit of each level, which is made difficult by a number of obstacles. Crates have to be pushed out of the way or into holes to make them traversable. Difficulty is increased by the fact that there are crates and holes of several different shapes and sizes and many levels contain different types of spinning doors.\n\nThe game features four different modes of play: Beginners Mode in which the basics are explained and the player receives hints on how to solve each level; Practice Mode that lets the player choose the size of the levels which are then randomly picked; Puzzle Mode in which the player has to complete 40 levels and receives a score depending on the time it took him to complete a level; and finally Action Mode, which is basically a story mode containing two stories. The game also features a password system and four different difficulty levels.",
     "art": "covers/01) All but the Best/A-mazing Tater.png",
     "shot": "screenshots/01) All but the Best/A-mazing Tater.png",
     "manual": "manuals/01) All but the Best/A-mazing Tater.pdf",
@@ -72,7 +72,7 @@
   {
     "filename": "Atomic Punk.gb",
     "title": "Atomic Punk",
-    "description": "Dynablaster lets you battle through classic Bomberman action in single-player or take on new twists in Game A, where you explore zones from a world map in any order.",
+    "description": "Dynablaster lets you battle through classic Bomberman action in single-player or take on new twists in Game A, where you explore zones from a world map in any order. The faster you clear a level and the more blocks you destroy, the more gold you earn to spend on power-ups like extra lives or extended blast ranges. Before entering each new area, you choose which of these panels to bring along. In multiplayer mode, you face off in classic Bomberman fashion - either in Panel Mode, where players start weak and gather upgrades, or in Powerful Mode, where you launch into the chaos with full firepower. Strategy, timing, and nerves of steel will decide whether you dominate or go out in a glorious blast.",
     "art": "covers/Atomic Punk.png",
     "shot": "screenshots/Atomic Punk.png",
     "manual": "manuals/Atomic Punk.pdf",
@@ -86,7 +86,7 @@
   {
     "filename": "Avenging Spirit.gb",
     "title": "Avenging Spirit",
-    "description": "In Avenging Spirit the protagonist is a spirit out for revenge. He has been murdered by a group of gangsters and his girlfriend has taken hostage by them.",
+    "description": "In Avenging Spirit the protagonist is a spirit out for revenge. He has been murdered by a group of gangsters and his girlfriend has taken hostage by them. Her father uses his brand new machine to call the man's spirit back from the dead, telling him that they are holding his daughter ransom unless he turns over his research of ghost energy.\n\nIn side-scrolling fashion, the game features six different stages - the city, the rooftops, a factory, the city sewers and two levels dealing with the mobsters base of operation. The player is able to possess enemies, 20 in all, and use any skills or weapons they have, to complete the level. The player's health is represented by ghost energy and it is drained when he is not inside a host. The story leads to two different endings.",
     "art": "covers/Avenging Spirit.png",
     "shot": "screenshots/Avenging Spirit.png",
     "manual": "manuals/Avenging Spirit.pdf",
@@ -100,7 +100,7 @@
   {
     "filename": "Balloon Kid.gb",
     "title": "Balloon Kid",
-    "description": "Balloon Kid is a unique side-scrolling platform game. You control a little girl who's brother has floated away on a big bunch of balloons.",
+    "description": "Balloon Kid is a unique side-scrolling platform game. You control a little girl who's brother has floated away on a big bunch of balloons. It's up to you to chase after him through 8 treacherous levels. Instead of the usual jumping from platform to platform, you have a pair of balloons that allow you to float through the level. You must control your height carefully by tapping the 'A' button. Meanwhile, the screen is always scrolling to the left, and you have to keep up.\n\nIn addition to the single player adventure, there is a 2-player mode that allows you to compete against a friend via the Game Boy link cable. In this mode you try to get your opponent to maneuver their balloon kid into the various level hazards.",
     "art": "covers/Balloon Kid.png",
     "shot": "screenshots/Balloon Kid.png",
     "manual": "manuals/Balloon Kid.pdf",
@@ -114,7 +114,7 @@
   {
     "filename": "Bases Loaded.gb",
     "title": "Bases Loaded",
-    "description": "The East and the West square off for nine innings of hard hitting baseball in Bases Loaded for the Nintendo Game Boy.",
+    "description": "The East and the West square off for nine innings of hard hitting baseball in Bases Loaded for the Nintendo Game Boy. Experience the action as pitchers battle it out against a lineup of heavy hitters using fast, slow, curving and special pitches. Each player brings their own unique stats and abilities to the game as you work your way through progressively more challenging teams.\n\nThis portable version of Bases Loaded is loosely based on the title for the original NES. In this scaled down version Major League teams are replaced with two teams representing the East and West Coast Divisions. With two Game Boy units and a Video Link cable players can go head to head - although each player will also need their own game cartridge. Single players can enjoy a quick pickup game by selecting an unofficial game of 1 to 9 innings. An official game will allow a victorious team to move on to consecutive matches against progressively more challenging teams, a feature that substitutes for the traditional 'Season Mode' of most baseball titles. But you'll have to do this in a single sitting as no battery save option was included.\n\nPlay in USA or Japan mode for a subtle change in the gameplay or learn how to best utilize the strengths of the East and West teams. Pitchers are rated 1 to 5 and batters get a rating for both running speed and hitting ability.",
     "art": "covers/01) All but the Best/Bases Loaded for Game Boy.png",
     "shot": "screenshots/01) All but the Best/Bases Loaded for Game Boy.png",
     "manual": "manuals/01) All but the Best/Bases Loaded for Game Boy.pdf",
@@ -142,7 +142,7 @@
   {
     "filename": "Batman.gb",
     "title": "Batman : The Video Game",
-    "description": "He's totally new. Totally tough. And he'll stop at nothing to make sure justice prevails!",
+    "description": "He's totally new. Totally tough. And he'll stop at nothing to make sure justice prevails!\n\nFrom the dark streets of GOTHAM CITY to the deepest corners of the criminal underground comes the CAPED CRUSADER as you've never seen him before.\n\nIncredibly strong. Armed to the teeth. And ready to put his life on the line for the sake of all, on a search-and-destroy mission to end THE JOKER'S reign of terror. He leaps, he flies, he dodges enemy fire and delivers it right back ... with a vengeance.\n\nThis is no kid stuff. This is as real as video gaming gets. If you liked what you saw in the movie, you're gonna love what you see here. Because this time around, BATMAN is all business, and he won't let anything ... anything ... stand in his way.",
     "art": "covers/Batman - The Video Game.png",
     "shot": "screenshots/Batman - The Video Game.png",
     "manual": "manuals/Batman - The Video Game.pdf",
@@ -156,7 +156,7 @@
   {
     "filename": "Battle Arena Toshinden.gb",
     "title": "Battle Arena Toshinden",
-    "description": "In Battle Arena Toshinden eight world renown weapon fighters have been invited to a mysterious tournament.",
+    "description": "In Battle Arena Toshinden eight world renown weapon fighters have been invited to a mysterious tournament. It is one of the first one-on-one beat-em-ups to feature the ability to sidestep a full 360 degrees around the opponent allowing one to strike from any angle. Aside from the 3D movement, Toshinden's game play can be considered similar to Street Fighter, but in 3d and with a little less depth to the moves.\n\nTwo versions of Toshinden were released; for the Sony PlayStation and later a lesser known version for DOS PC's. However the PC version is not a straight port of the PlayStation version and plays and looks notably different despite sharing the same characters, attacks and controls.\n\nThe U.S and E.U PlayStation versions of Toshinden feature redone voices in English and redone music using different instruments.\n\nThe lyrics on Sofia's stage music in the Japanese version, which were actually in English, were removed in the process, likely due to their suggestive nature.\n\nSofia's and Ellis' voices in the English translation are also notably adjusted, for presumably the same reason; while the other characters English voices generally match the tones of the original Japanese voice actors, Sofia is far less suggestive sounding, while Ellis sounds notably older.\n\nThe later DOS version of Toshinden however, uses the same audio as the Japanese PlayStation version in all regions, albeit recorded at a considerably lower quality than they were on PlayStation.",
     "art": "covers/Battle Arena Toshinden (SGB Enhanced).png",
     "shot": "screenshots/Battle Arena Toshinden (SGB Enhanced).png",
     "manual": "manuals/Battle Arena Toshinden (SGB Enhanced).pdf",
@@ -170,7 +170,7 @@
   {
     "filename": "Battletoads.gb",
     "title": "Battletoads",
-    "description": "The Dark Queen has attacked and kidnapped (toadnapped?) your best buddy. To make matters worse, she nabbed the best looking girl around! So, what will you do? Cry? Whimper? Hide? Call the Starcops?",
+    "description": "The Dark Queen has attacked and kidnapped (toadnapped?) your best buddy. To make matters worse, she nabbed the best looking girl around! So, what will you do? Cry? Whimper? Hide? Call the Starcops? NO! Cause you're a Battletoad! Battletoads don't cry, hide or call for help! And they certainly don't whimper! They get MAD then they get EVEN! So grab your blaster, hop on the Toadster and go get 'em!\n\nYou will control a battletoad through 13 levels (five of which are missing from the Game Boy port). Some are side-scrolling beat-em-ups, other are vertical drops down a shaft, fighting as you go, others have you riding a rocket or surfboard, shooting or avoiding enemies. At the end of each area, there is a boss. In some areas, about half-way through, you may have a mini-boss.",
     "art": "covers/Battletoads.png",
     "shot": "screenshots/Battletoads.png",
     "manual": "manuals/Battletoads.pdf",
@@ -184,7 +184,7 @@
   {
     "filename": "Bionic Commando.gb",
     "title": "Bionic Commando",
-    "description": "You play a soldier with a bionic arm that extends and contracts. Your arm allows you to grab on to fixed objects to swing around and climb up levels -- no jumping allowed!",
+    "description": "You play a soldier with a bionic arm that extends and contracts. Your arm allows you to grab on to fixed objects to swing around and climb up levels -- no jumping allowed! The arm also grabs opponents and pull them towards you.\n\nYour mission is to infiltrate the enemy fortress, find your missing comrade, \"Super Joe\", and take out the evil leader, \"Generalissimo Kilt\", of the invading force that has been attacking your people for the last 2 years.\n\nAfter most levels the Bionic Commando will recieve items. Often these items are required to successfully complete other levels. Additionally, each level will require a different colored communicator in order to make sense of message traffic",
     "art": "covers/Bionic Commando.png",
     "shot": "screenshots/Bionic Commando.png",
     "manual": "manuals/Bionic Commando.pdf",
@@ -198,7 +198,7 @@
   {
     "filename": "Black Castle.gb",
     "title": "Black Castle",
-    "description": "The times were dark and the kingdom was threatened by a black warlock. His evil magic brought disease and destruction to the land, but none of the king's knights found the courage to fight him.",
+    "description": "The times were dark and the kingdom was threatened by a black warlock. His evil magic brought disease and destruction to the land, but none of the king's knights found the courage to fight him. One day a young knight appeared. He set out for the warlock's black castle to free the kingdom from his tyranny.\n\nFight your way through four exciting levels, find secret passages, hidden items and defeat the black warlock.",
     "art": "covers/04) Unlicensed Homebrew/Black Castle GB (World) (Aftermarket) (Homebrew).png",
     "shot": "screenshots/04) Unlicensed Homebrew/Black Castle GB (World) (Aftermarket) (Homebrew).png",
     "manual": "",
@@ -212,7 +212,7 @@
   {
     "filename": "Blades of Steel Hockey.gb",
     "title": "Blades of Steel",
-    "description": "Based on the arcade game, Blades Of Steel is a hockey arcade action game (gameplay doesn't require the need to worry about statistics or provide the ability to customize teams.) Two players can play",
+    "description": "Based on the arcade game, Blades Of Steel is a hockey arcade action game (gameplay doesn't require the need to worry about statistics or provide the ability to customize teams.) Two players can play against each other, or one player against the computer. In one player mode there are single game and tournament mode options. From time to time a fight may break out, which will provide a close up view of the two players. The player has control during the miniature fight game sequence, with the loser having to spend time in the penalty box. The referee will break up fights that go on too long, and calls a few penalties such as icing. Several short clips of digitized voices are also featured.",
     "art": "covers/01) All but the Best/Blades of Steel.png",
     "shot": "screenshots/01) All but the Best/Blades of Steel.png",
     "manual": "manuals/01) All but the Best/Blades of Steel.pdf",
@@ -226,7 +226,7 @@
   {
     "filename": "Blaster Master Boy.gb",
     "title": "Blaster Master Boy",
-    "description": "Radioactive energy is destroying every living thing on Earth. Only Jason can stop it. And this time, he can't use his super-equipped car. He's gotta do it alone.",
+    "description": "Radioactive energy is destroying every living thing on Earth. Only Jason can stop it. And this time, he can't use his super-equipped car. He's gotta do it alone. Armed with blistering lanterns, mega-power hyper-bombs and skull-rattling super-bombs, Jason must blaze a dizzying path deep down beneath the surface of the planet to seek out the Mutant Bosses - then destroy them! Can you help Jason fight his way to the center of the Earth? He's running out of light. He's running out of time. And only you can make sure Jason blasts his enemies - before they blast him.",
     "art": "covers/Blaster Master Boy.png",
     "shot": "screenshots/Blaster Master Boy.png",
     "manual": "manuals/Blaster Master Boy.pdf",
@@ -240,7 +240,7 @@
   {
     "filename": "Bomberman GB.gb",
     "title": "Bomberman GB",
-    "description": "Bomberman is searching the depths of the earth in hopes of finding the Legendary Treasure.",
+    "description": "Bomberman is searching the depths of the earth in hopes of finding the Legendary Treasure. In the Story Mode, guide him through 48 levels of puzzle-solving action, collecting power-up items and defeating monsters along the way. The Battle Mode is the old favorite, where one to four players battle it out on six different maps.",
     "art": "covers/Bomberman GB (SGB Enhanced).png",
     "shot": "screenshots/Bomberman GB (SGB Enhanced).jpg",
     "manual": "manuals/Bomberman GB (SGB Enhanced).pdf",
@@ -254,7 +254,7 @@
   {
     "filename": "Bonk's Adventure.gb",
     "title": "Bonk's Adventure",
-    "description": "Bonk yourself out in this head-buttin', head-splittin' adventure. As Bonk the Caveman, use your head against Kongo Zilla, Tractorhead and the wackiest array of prehistoric foes ever seen.",
+    "description": "Bonk yourself out in this head-buttin', head-splittin' adventure. As Bonk the Caveman, use your head against Kongo Zilla, Tractorhead and the wackiest array of prehistoric foes ever seen. Be sure to eat your meat-and-vegetables as you power-up to battle Evil King Drool himself. It's a real headbanger!",
     "art": "covers/Bonk's Adventure.png",
     "shot": "screenshots/Bonk's Adventure.png",
     "manual": "manuals/Bonk's Adventure.pdf",
@@ -268,7 +268,7 @@
   {
     "filename": "Bonk's Revenge.gb",
     "title": "Bonk's Revenge",
-    "description": "Bonk is back! Last year's video smash is bashing his way through a totally awesome new adventure! Help that radical cave dude save the Dinosaur Kingdom from the heinous King Drool III.",
+    "description": "Bonk is back! Last year's video smash is bashing his way through a totally awesome new adventure! Help that radical cave dude save the Dinosaur Kingdom from the heinous King Drool III. Bigger, badder bosses. More powerful power-ups. More excellent hidden secrets. And more worlds of pre-hysterical action that'll have you cracking up while you're out cracking heads. Blast back to the Bonk Age, mankind's coolest era, and Bonk yourself out!",
     "art": "covers/Bonk's Revenge (SGB Enhanced).png",
     "shot": "screenshots/Bonk's Revenge (SGB Enhanced).png",
     "manual": "manuals/Bonk's Revenge (SGB Enhanced).pdf",
@@ -282,7 +282,7 @@
   {
     "filename": "Boomer's Adventure.gb",
     "title": "Boomer's Adventure in ASMIK World",
-    "description": "Boomer must traverse the 8-story Tower of Zoozoon to defeat the dark lord Zoozoon himself.",
+    "description": "Boomer must traverse the 8-story Tower of Zoozoon to defeat the dark lord Zoozoon himself. By digging, trapping enemies, and finding useful items such as keys and roller skates, he can regain control of ASMIK World from the clutches of the evil Zoozoon.",
     "art": "covers/Boomer's Adventure in ASMIK World.png",
     "shot": "screenshots/Boomer's Adventure in ASMIK World.png",
     "manual": "manuals/Boomer's Adventure in ASMIK World.pdf",
@@ -296,7 +296,7 @@
   {
     "filename": "Bubble Ghost.gb",
     "title": "Bubble Ghost",
-    "description": "Bubble Ghost needs to blow a bubble out of his creator's castle. Your task is to guide him so as to direct the bubble through the gaps in each room.",
+    "description": "Bubble Ghost needs to blow a bubble out of his creator's castle. Your task is to guide him so as to direct the bubble through the gaps in each room. The bubble's direction is affected by which part of the ghost hits it.\n\nCandles, fans, and other obstacles serve to make little Bubble Ghost's task harder. Bubble Ghost is invincible, but the bubble is prone to bursting if it hits anything at pace. You have five bubbles before the game is over.",
     "art": "covers/Bubble Ghost.png",
     "shot": "screenshots/Bubble Ghost.png",
     "manual": "manuals/Bubble Ghost.pdf",
@@ -310,7 +310,7 @@
   {
     "filename": "BurgerTime Deluxe.gb",
     "title": "BurgerTime Deluxe",
-    "description": "BurgerTime Deluxe is a new version of the classic arcade game from 1982, developed for the casual market.",
+    "description": "BurgerTime Deluxe is a new version of the classic arcade game from 1982, developed for the casual market. As in the original, the player controls a cooking chef that must climb stairs to reach platforms and walk over food pieces, to make them fall and create a complete hamburgers on plates at the bottom of the screen. The cook must avoid touching the roaming enemies, anthropomorphic condiments and fried eggs that kill the main character. The foes can be destroyed with power-ups, or squashed by the falling burger pieces.\n\nThere are power-ups and bonus items scattered throughout the levels. The ketchup bottle kills all the enemies on the level, the salt shaker stops their movement for a few seconds, the ice cube makes the chef invulnerable for a few moments and freezes the adversaries, the burning cocktail also makes the cook invulnerable for a short time and burns the approaching foes, the bubble lifts the character directly to an upper level and the energy drink makes the chef temporally faster. Potato chips, ice-cream cones, cups of coffee and tea give bonus points, while French fries give extra lives. A Bonus mini-game appears between levels after collecting the letters that form the name of an ingredient, where the player has to find pairs of food items by uncovering several cooking pots, guide the chef through a maze and complete other similar challenges.\n\nThere are two modes in the computer version: in Story Mode, a plot is developed through cutscenes between levels, where two chefs called Peter Pepper and Sally Salt must help their uncle to save the family's burger diner from Vinny Vinegar, the owner of a competing hot dog franchise. Quick Mode is closer to the arcade original, where the levels are randomly generated and the game ends when all the lives are spent. The iPhone version has only the Story Mode, with 60 levels and a smaller view area.",
     "art": "covers/BurgerTime Deluxe.png",
     "shot": "screenshots/BurgerTime Deluxe.png",
     "manual": "manuals/BurgerTime Deluxe.pdf",
@@ -324,7 +324,7 @@
   {
     "filename": "Buster Bros.gb",
     "title": "Buster Bros.",
-    "description": "Pang is a platform game which consists of 50 levels in total. It can be played with one or two players on the same screen, and the other player can join anytime within the game.",
+    "description": "Pang is a platform game which consists of 50 levels in total. It can be played with one or two players on the same screen, and the other player can join anytime within the game.\n\nYour goal is to destroy the balloons which bounce around the playfield. To accomplish this, you can shoot hooks which travel upwards, and blow up any balloon they touch. Depending on their size, they either split on two smaller ones, or evaporate if they're at their minimum size. Apart from balloons, some levels also have barriers that have to be destroyed with your hooks, since they often block your access to balloons. There are also some barriers which cannot ever be destroyed. Your character has the ability to climb ladders, but cannot jump.\n\nYou can also pick up power-ups such as: the ability to fire two shots at once, the hook that attaches to the ceiling and waits 'til something bumps into it, a gun which has a high rate of fire but cannot destroy barriers. Beside extra weapons, you can also pick certain things like clock (halting time for a small period), dynamite (reducing all balls to minimum size, thus making you able to reach more points), life, and such.",
     "art": "covers/01) All but the Best/Pang.png",
     "shot": "screenshots/01) All but the Best/Pang.png",
     "manual": "manuals/01) All but the Best/Pang.pdf",
@@ -338,7 +338,7 @@
   {
     "filename": "Castlevania - Adventure.gb",
     "title": "Castlevania : The Adventure",
-    "description": "A challenge you can't walk away from! After getting his wings clipped in Castlevania and Simon's Quest, the death defying Count has risen again.",
+    "description": "A challenge you can't walk away from!\n\nAfter getting his wings clipped in Castlevania and Simon's Quest, the death defying Count has risen again.\n\nDesiring revenge even more than blood, he'll descend upon your Game Boy, with fangs glistening by the light of the silvery full moon.\n\nTo survive his maze of torture chambers and vampire crypts, you must unlock the castle's secrets by locating hearts, crystals and crosses. You must also possess the strength to master the Mystic Whip, which wards off unearthly evils like the She Worm.\n\nSo risk your neck and accept Drac's challenge. Because if you fail to destroy him now, he will rule the night forever.",
     "art": "covers/Castlevania - The Adventure.png",
     "shot": "screenshots/Castlevania - The Adventure.png",
     "manual": "manuals/Castlevania - The Adventure.pdf",
@@ -352,7 +352,7 @@
   {
     "filename": "Castlevania II - Revenge.gb",
     "title": "Castlevania II : Belmont's Revenge",
-    "description": "The curse of the Belmont family has struck again in the second Castlevania adventure for the Game Boy. This game takes place 15 years after the first monochrome adventure.",
+    "description": "The curse of the Belmont family has struck again in the second Castlevania adventure for the Game Boy. This game takes place 15 years after the first monochrome adventure. Christopher's son has disappeared, and 4 mysterious castles have risen out of the fog. He must travel to each castle and conquer the demons he finds there in order to rescue his son. Perhaps Dracula is not as dead as we thought.",
     "art": "covers/Castlevania II - Belmont's Revenge.png",
     "shot": "screenshots/Castlevania II - Belmont's Revenge.png",
     "manual": "manuals/Castlevania II - Belmont's Revenge.pdf",
@@ -366,7 +366,7 @@
   {
     "filename": "Castlevania Legends.gb",
     "title": "Castlevania Legends",
-    "description": "Take a journey to the very beginning, when Dracula first rose up to terrorize the good people of Transylvania.",
+    "description": "Take a journey to the very beginning, when Dracula first rose up to terrorize the good people of Transylvania. None dared challenge him, and the people of the country lived in fear and terror - until a young girl rose up and decided to take matters into her own hands. That young girl was Sonia Belmont, the first in the line of the legendary Belmont clan.\n\nWhile Castlevania Legends plays similar to the earlier Castlevania titles (the protagonist is only armed with a whip and needs to fight her way through five stages plus a hidden stage), there are also some unique features. While it is impossible to roam the stages freely, quite often the player can choose to go one way or another and in doing so skip some areas or find valuable items, collecting all of which will unlock the best ending. Sonia also possesses special power called Burning mode: once in a level (and once per life) she can boost her speed and attack power and become invincible for a short period of time.",
     "art": "covers/Castlevania Legends (SGB Enhanced).png",
     "shot": "screenshots/Castlevania Legends (SGB Enhanced).png",
     "manual": "manuals/Castlevania Legends (SGB Enhanced).pdf",
@@ -380,7 +380,7 @@
   {
     "filename": "Catrap.gb",
     "title": "Catrap",
-    "description": "Banished to a mysterious underground labyrinth of complex mazes, two explorers are faced with one chance to reverse the curse: solve all 100 puzzles set out in mazes before them. But watch it!",
+    "description": "Banished to a mysterious underground labyrinth of complex mazes, two explorers are faced with one chance to reverse the curse: solve all 100 puzzles set out in mazes before them.\n\nBut watch it! Every maze has monsters patrolling the depths of the labyrinth. Help Catgirl and Catboy push around huge blocks to bridge a path to yet another maze, or topple a block a few stories over the pursuing monsters. If you make a mistake, simply use the rewind function and travel back in time to correct it. With 100 mazes in this labyrinth, it will be quite a challenge to get out of the curse's reach!\n\nCatrap is more than just a game of mindbending intrigue and action. Be the architect of the underground labyrinth and make your own games of intricate puzzles.\n\nWhether you choose to be a maze builder or a maze solver, we know you can help Catboy and Catgirl land on their feet.\n\nCatrap (known as Pitman in Japan) is a puzzle game in which the player maneuvers the player, an anthropomorphic cat, to navigate a room while clearing obstacles and kicking monsters and ghosts off the screen. Once the player has knocked all of the enemies off the screen, he advances to the next level. Advancement can prove difficult for the player as increasingly intricate obstacles are presented to overcome all of the monsters and ghosts. Arguably, the easiest route to solve the problem is through trial and error. A player may try one combination of maneuvers by moving the obstacle in one direction, then he may find himself trapped. The player can hit the 'A'-button to reverse his movements and try again in a different way until he finds the solution that enables him to access all of the baddies to knock them off the screen. Trial and error seems to make up a large portion of the game. Players can also create their own mazes. The game is credited with having originated the time-rewind mechanic.",
     "art": "covers/Catrap.png",
     "shot": "screenshots/Catrap.png",
     "manual": "manuals/Catrap.pdf",
@@ -394,7 +394,7 @@
   {
     "filename": "Contra - The Alien Wars.gb",
     "title": "Contra : The Alien Wars",
-    "description": "Welcome to 2636 the year the notorious Red Falcon gets even-with an unprecedented alien onslaught orchestrated to push the Contra forces to their ultimate reaches.",
+    "description": "Welcome to 2636 the year the notorious Red Falcon gets even-with an unprecedented alien onslaught orchestrated to push the Contra forces to their ultimate reaches.\n\nPlunge through a molten massacre on a high speed voyage to the guts of the archenemy alien. Check out the side and top perspectives that engulf you in a 3-D sensation. Pick off solar slimedogs while you scale over walls swing from girders and ropes whatever it takes to defeat Red Falcon's allies. Sweat through five gut-splitting stages including the Streets of the Neo City and the Mucho Grande Badlands.\n\nThe intensity is so real that the explosions will nearly knock you off your feet. And the Boss Enemies are so gigantic, your screen can hardly hold them. You'll need to wrap both hands around artillery powerful enough to make today's weapons look like squirt guns. Tbe Contra legacy is alive and dangerous.",
     "art": "covers/Contra - The Alien Wars (SGB Enhanced).png",
     "shot": "screenshots/Contra - The Alien Wars (SGB Enhanced).png",
     "manual": "manuals/Contra - The Alien Wars (SGB Enhanced).pdf",
@@ -408,7 +408,7 @@
   {
     "filename": "Dangan.gb",
     "title": "Dangan",
-    "description": "For decades the Dangan Empire and the Houdan Confederation have been at war.",
+    "description": "For decades the Dangan Empire and the Houdan Confederation have been at war. As the front line sees most of the action, small remote outposts like the one found on the planet Eshus are often undermanned and overlooked. The Eshus outpost has in fact only got an old pre-war spacecraft, one inexperienced pilot, and a spirited technician stationed there. The two are going about their daily business when a screen suddenly flashes the message \"Red alert! The Houdan Confederation is attacking!\" The incoming data states that dreadnoughts have come out of hyperspace near the moon of Eshus. The odds are stacked against them but surrendering the outpost would give the enemy a backdoor into the Dangan systems. There's no helping it, the Houdan Confederation must be stopped! Although not brimming with confidence, they ready the spacecraft. Tally the technician offers her support as the pilot takes off.",
     "art": "covers/04) Unlicensed Homebrew/Dangan.png",
     "shot": "screenshots/04) Unlicensed Homebrew/Dangan.png",
     "manual": "",
@@ -422,7 +422,7 @@
   {
     "filename": "Dexterity.gb",
     "title": "Dexterity",
-    "description": "Dexterity is a puzzle game with a 7x8 grid, each one filled with a tile or another item. The goal is to flip over all tiles within a time limit.",
+    "description": "Dexterity is a puzzle game with a 7x8 grid, each one filled with a tile or another item. The goal is to flip over all tiles within a time limit. This has to be triggered manually by pressing a button, but if there is another flipped tile on the field, all other tiles between the player's position and the other tile will flip, too. Some grids are filled with stationary blocks, moveable blocks (either pushing them normally or send them flying with a strong kick) and holes.\n\nThere are also monsters which need to be avoided. All five of them have different behaviour patterns and have the ability to reverse already flipped tiles; some of them can even push blocks or destroy tiles. The monsters can be killed by using blocks against them: pushing them over the borders of the playfield or a hole will kill them. Alternatively they also can be trapped. Killed monsters slowly respawn at pre-defined spawn points; this takes place over several phases. In the \"egg\" phase, it can be picked up to kill another enemy with it. Another possible weapon are stunned enemies which stood on a multi-flipped row.\n\nWhen pushing blocks into a corner, they will disappear and transform into power ups, e.g. bonus points, extra time or a temporary stun of all enemies. A life is lost when an enemy is touched or the time runs out. When that happens, all flipped tiles stay flipped.",
     "art": "covers/Dexterity.png",
     "shot": "screenshots/Dexterity.png",
     "manual": "manuals/Dexterity.pdf",
@@ -436,7 +436,7 @@
   {
     "filename": "Darkwing Duck.gb",
     "title": "Disney's Darkwing Duck",
-    "description": "Darkwing Duck is a 2D 3rd person platform game featuring this Disney super-hero, friend of Lauchpad McQuack (the Duck Tales character who worked as a pilot for Scrooge McDuck).",
+    "description": "Darkwing Duck is a 2D 3rd person platform game featuring this Disney super-hero, friend of Lauchpad McQuack (the Duck Tales character who worked as a pilot for Scrooge McDuck).\n\nAs a decent super-hero, his role is to save the city from his enemies.\n\nGraphics are cartoonish, like other Disney licenses developed by Capcom, but darker.\n\nGameplay is similar to Mega Man and Duck Tales, in the same jump and run style. Controls are easy to handle.",
     "art": "covers/01) All but the Best/Darkwing Duck.png",
     "shot": "screenshots/01) All but the Best/Darkwing Duck.png",
     "manual": "manuals/01) All but the Best/Darkwing Duck.pdf",
@@ -450,7 +450,7 @@
   {
     "filename": "DuckTales.gb",
     "title": "Disney's DuckTales",
-    "description": "While in the basement of Uncle Scrooge's mansion, Huey, Dewey and Louie discover an old piece of paper.",
+    "description": "While in the basement of Uncle Scrooge's mansion, Huey, Dewey and Louie discover an old piece of paper. When they show it to Uncle Scrooge, he recognizes it as part of his great, great Uncle Fergus McDuck's legendary treasure map! With the remaining parts of the map hidden around the world, it's up to Uncle Scrooge to find them and discover Fergus McDuck's secret treasure!",
     "art": "covers/DuckTales.png",
     "shot": "screenshots/DuckTales.png",
     "manual": "manuals/DuckTales.pdf",
@@ -464,7 +464,7 @@
   {
     "filename": "DuckTales 2.gb",
     "title": "Disney's DuckTales 2",
-    "description": "While in the basement of Uncle Scrooge's mansion, Huey, Dewey and Louie discover an old piece of paper.",
+    "description": "While in the basement of Uncle Scrooge's mansion, Huey, Dewey and Louie discover an old piece of paper. When they show it to Uncle Scrooge, he recognizes it as part of his great, great Uncle Fergus McDuck's legendary treasure map! With the remaining parts of the map hidden around the world, it's up to Uncle Scrooge to find them and discover Fergus McDuck's secret treasure!\n\nDuck Tales 2 is the sequel to the NES and Game Boy game, Duck Tales. Based on the Disney cartoon of the same name, players control Uncle Scrooge as he searches the globe for massive amounts of wealth while trying to discover hidden pieces of the map.\n\nScrooge's main method of attack is his cane - by jumping in the air and holding the B Button, the cane turns into a pogo stick, allowing players to jump onto most enemies' heads and cross dangerous terrain like spikes with ease. By pushing up against a wall or an object, Scrooge will whack his cane like a golf club, either sending the object flying or occasionally revealing secret items. New to Duck Tales 2 is the ability to push and pull certain objects with the cane after hitting them.\n\nFamiliar faces such as Huey, Dewey and Louie, Webby, Mrs. Beakley, and Launchpad McQuack all turn up to lend a hand. Scrooge will even bump into the crazy inventor, Gyro Gearloose, who will improve Scrooge's cane so that he can access even more secret areas.",
     "art": "covers/DuckTales 2.png",
     "shot": "screenshots/DuckTales 2.png",
     "manual": "",
@@ -478,7 +478,7 @@
   {
     "filename": "Donkey Kong.gb",
     "title": "Donkey Kong",
-    "description": "Donkey Kong's adventures continue with new tricks and traps for Mario! Donkey Kong returns to Game Boy! This famous ape has kidnapped Pauline and climbed to the top of a perilous skyscraper.",
+    "description": "Donkey Kong's adventures continue with new tricks and traps for Mario!\n\nDonkey Kong returns to Game Boy! This famous ape has kidnapped Pauline and climbed to the top of a perilous skyscraper. Challenged by many perils and unending puzzles, Mario must reach his arch rival. As he makes his way Mario will need to gather disappearing keys to unlock doors of hidden rooms. Donkey Kong devises evil tricks to confuse and trap him. Our heroic plumber has his hands full this time!\n\n- Classic arcade fun with 10 stages and 100 advanced puzzles\n\n- Thrilling new adventure elements for added excitement\n\n- 4 megabyte game contains a battery back-up",
     "art": "covers/Donkey Kong (SGB Enhanced).png",
     "shot": "screenshots/Donkey Kong (SGB Enhanced).png",
     "manual": "manuals/Donkey Kong (SGB Enhanced).pdf",
@@ -492,7 +492,7 @@
   {
     "filename": "Donkey Kong Land.gb",
     "title": "Donkey Kong Land",
-    "description": "In a modifiication of Donkey Kong Country, Donkey Kong teams up with his buddy Diddy for new adventures and gorilla antics.",
+    "description": "In a modifiication of Donkey Kong Country, Donkey Kong teams up with his buddy Diddy for new adventures and gorilla antics. Facing high-flying pigs, killer bees, and reptilian Kremlings, the simian duo swings back into action on the Game Boy.\n\nThe two Kongs each have similar abilities when compared to the SNES game.\n\nThis game isn't exactly a remake of DKC; for instance, there are new levels and enemies, and Candy Kong does not save your game: instead you must collect all four Kong letters.",
     "art": "covers/Donkey Kong Land (SGB Enhanced).png",
     "shot": "screenshots/Donkey Kong Land (SGB Enhanced).png",
     "manual": "manuals/Donkey Kong Land (SGB Enhanced).pdf",
@@ -506,7 +506,7 @@
   {
     "filename": "Donkey Kong Land 2.gb",
     "title": "Donkey Kong Land 2",
-    "description": "In Donkey Kong Land 2, Donkey Kong has been captured by the evil Kaptain K. Rool, leaving it up to Diddy and Dixie Kong to save the day in this side-scrolling adventure.",
+    "description": "In Donkey Kong Land 2, Donkey Kong has been captured by the evil Kaptain K. Rool, leaving it up to Diddy and Dixie Kong to save the day in this side-scrolling adventure. Fortunately, they will have plenty of help along the way from their friends.\n\nLike the original Donkey Kong Land, all the graphics in this game are pre-rendered three dimensional models. The gameplay is also similar, with platform jumping and banana collecting remaining a core part of the game experience.",
     "art": "covers/Donkey Kong Land 2 (SGB Enhanced).png",
     "shot": "screenshots/Donkey Kong Land 2 (SGB Enhanced).png",
     "manual": "manuals/Donkey Kong Land 2 (SGB Enhanced).pdf",
@@ -520,7 +520,7 @@
   {
     "filename": "Donkey Kong Land III.gb",
     "title": "Donkey Kong Land III",
-    "description": "DK and Diddy Kong have left in search of The Lost World after hearing of a contest to find it on the radio. This leaves Dixie stuck with minding her baby cousin Kiddy Kong.",
+    "description": "DK and Diddy Kong have left in search of The Lost World after hearing of a contest to find it on the radio. This leaves Dixie stuck with minding her baby cousin Kiddy Kong. Frustrated at this, she decides to take Kiddy with her and find The Lost World before everyone else!\n\nThe level archetypes are the same as in Donkey Kong Country 3, which takes place in the \"Northern Kremisphere\". While the levels have the same environments and the Donkey Kong Country 3 bosses return, the worlds and stage layouts are all unique.",
     "art": "covers/Donkey Kong Land III (SGB Enhanced).png",
     "shot": "screenshots/Donkey Kong Land III (SGB Enhanced).png",
     "manual": "manuals/Donkey Kong Land III (SGB Enhanced).pdf",
@@ -534,7 +534,7 @@
   {
     "filename": "Double Dragon.gb",
     "title": "Double Dragon",
-    "description": "Set in a post-apocalyptic New York, Double Dragon is the story of Billy and Jimmy Lee, twin brothers trained in the fighting style of Sou-Setsu-Ken.",
+    "description": "Set in a post-apocalyptic New York, Double Dragon is the story of Billy and Jimmy Lee, twin brothers trained in the fighting style of Sou-Setsu-Ken. Together, they manage a small martial arts training school, teaching their students in self-defense. One day, Billy's girlfriend, Marian, is kidnapped off the street by the \"Black Warriors\", a savage street gang led by a man named Willy. The Black Warriors demand the Lee brothers disclose their martial arts secrets in exchange for Marian's freedom. The Lee brothers set out on a rescue mission to crush the Black Warriors and save Marian.\n\nUsing whatever techniques they have at their disposal, from the basic punches and kicks to the invulnerable elbow strike, as well any weapon that comes into their hands, the Lee brothers must pursue the gang through the city slum, industrial area and the forest before reaching their hideout to confront the big boss, Willy.\n\nThe NES version of this game also has an additional VS. fighting mode for one or two players. Players choose from a field of six different characters (Billy and 5 of the enemy characters) and enter into a one-on-one fighting match. Players have to punch, kick, jumpkick, and even use a weapon against their opponents until someone's health bar is fully drained. The winner is the last one standing.",
     "art": "covers/01) All but the Best/Double Dragon.png",
     "shot": "screenshots/01) All but the Best/Double Dragon.png",
     "manual": "manuals/01) All but the Best/Double Dragon.pdf",
@@ -548,7 +548,7 @@
   {
     "filename": "Double Dragon II.gb",
     "title": "Double Dragon II",
-    "description": "The lovely Marian was rescued from the clutches of the Black Warriors gang by Billy & Jimmy Lee in the first Double Dragon game, but now the gang has killed her in retaliation of their early defeat.",
+    "description": "The lovely Marian was rescued from the clutches of the Black Warriors gang by Billy & Jimmy Lee in the first Double Dragon game, but now the gang has killed her in retaliation of their early defeat. The Dragons must now embark on a mission to avenge her death and defeat the Black Warriors for the second and final time.\n\nThe original arcade version of \"Double Dragon II\" was essentially an improved version of the first game. In addition to offering renewed audio and visuals, as well as new traps, moves and enemy characters, \"Double Dragon II\" discarded the conventional punch and kick buttons in favor of a direction-oriented attacking system similar to the original Technos beat-em-up Renegade.\n\nThe NES version offered new stages, new moves and illustrated cut-scenes, as well as a new final boss and a new ending. Unlike the first NES game, it offered 2-Player Co-Op gameplay with the option to turn off the friendly fire.\n\nThe Game Boy version of \"Double Dragon II\" is an English localization of a \"Kunio-kun\" game (the Japanese franchise which inspired \"Renegade\" and \"River City Ransom\" and has nothing to do with the arcade and NES versions.",
     "art": "covers/Double Dragon II.png",
     "shot": "screenshots/Double Dragon II.png",
     "manual": "manuals/Double Dragon II.pdf",
@@ -562,7 +562,7 @@
   {
     "filename": "Dr. Mario.gb",
     "title": "Dr. Mario",
-    "description": "In this Tetris-style game, you play as Dr. Mario, who must drop differently coloured pills onto viruses to remove them from the bottle.",
+    "description": "In this Tetris-style game, you play as Dr. Mario, who must drop differently coloured pills onto viruses to remove them from the bottle. Each pill is split into two, with each side being of one of three different colours, red, blue or yellow. Align three pills of the same colour to a virus of the corresponding colour (or any combination of pills and viruses totaling four or more) and it will be removed from the bottle, along with the aligned pills. The level is cleared when there are no viruses left, and the game is over when the pills reach the top and Dr. Mario can't drop any more pills.\n\nIncluded in the game is the normal mode, a time trial, and a two player battle mode to see who can remove the most viruses.",
     "art": "covers/Dr. Mario.png",
     "shot": "screenshots/Dr. Mario.png",
     "manual": "manuals/Dr. Mario.pdf",
@@ -576,7 +576,7 @@
   {
     "filename": "Felix the Cat.gb",
     "title": "Felix the Cat",
-    "description": "Felix The Cat is a platformer based on the famous cartoon character. The Professor has kidnapped Kitty, Felix girlfriend, trying to exchange her for Felix' magic bag.",
+    "description": "Felix The Cat is a platformer based on the famous cartoon character.\n\nThe Professor has kidnapped Kitty, Felix girlfriend, trying to exchange her for Felix' magic bag. Naturally, Felix is not going to let himself be blackmailed, and instead sets out to free Kitty.\n\nThere are four different types of levels.\n\nTypical platforming levels in which Felix has to make his way to the exit while jumping about obstacles and chasms, killing enemies using different weapons.\n\nSwimming levels in which Felix rides a float or on the back of a dolphin.\n\nLevels that take place entirely under water.\n\nFlying levels that put Felix in control of different flying devices, such as a plane, a hot-air balloon or an umbrella.\n\nThroughout all levels, Felix can collect cat symbols to improve his weapons. After collecting a certain number of cat symbols, milk bottles or hearts will appear. Hearts improve Felix' current weapon. What types of weapon Felix can use, depends on what type of level he is in. There are lots of different weapons ranging from a boxing glove to motorcycles to tanks to spaceships. All weapons that are better than the standard weapon have an energy bar that diminishes over time and can be refilled by collecting milk bottles. Getting hit by an enemy decreases the level of Felix' current weapon. If he gets hit while carrying the standard weapon, he loses a life.\n\nThe Game Boy version plays virtually identically to the NES version, but features less levels.",
     "art": "covers/01) All but the Best/Felix the Cat.png",
     "shot": "screenshots/01) All but the Best/Felix the Cat.png",
     "manual": "manuals/01) All but the Best/Felix the Cat.pdf",
@@ -590,7 +590,7 @@
   {
     "filename": "Final Fantasy Adventure.gb",
     "title": "Final Fantasy Adventure",
-    "description": "In the Empire of Glaive, a gladiator-slave is forced to fight evil monsters controlled by the Dark Lord.",
+    "description": "In the Empire of Glaive, a gladiator-slave is forced to fight evil monsters controlled by the Dark Lord. But when his best friend is mortally wounded, he learns of a secret pendant which will give him great power. As the hero, you must battle your way out of the Dark Knight's castle and search through a dangerous world for the girl who has the pendant. But you discover she has been captured by the Dark Knight's men. To free her, you must find the legendary sword and fight off the Dark Knight's beasts and overlords through deserts, snowfields, lakes, forests, and caves. Are you ready for the adventure of your life?",
     "art": "covers/Final Fantasy Adventure.png",
     "shot": "screenshots/Final Fantasy Adventure.png",
     "manual": "manuals/Final Fantasy Adventure.pdf",
@@ -604,7 +604,7 @@
   {
     "filename": "Final Fantasy Legend II.gb",
     "title": "Final Fantasy Legend II",
-    "description": "The second in the Final Fantasy Legend series increases the amount of detail over the original in gameplay and graphics. The major changes are in the character classes and party members.",
+    "description": "The second in the Final Fantasy Legend series increases the amount of detail over the original in gameplay and graphics.\n\nThe major changes are in the character classes and party members. Similar to FFL, starting a game of Legends II allows you to choose your main character from Humans, Monsters, Mutants and a new class: Robots. From here, you build your party of 4 from the same character classes. During gameplay special side-characters will join you in battle to help defeat certain enemies.\n\nThe other improvement is in strategy. In FFL you gain experience points after each battle, increasing strength, etc. In FFLII, you gain different points and abilities depending on how you defeated the enemy. If you win by using a sword, your strength increases. If you use magic, your mana increases. This adds a more strategic approach to defeating enemies.",
     "art": "covers/Final Fantasy Legend II.png",
     "shot": "screenshots/Final Fantasy Legend II.png",
     "manual": "manuals/Final Fantasy Legend II.pdf",
@@ -618,7 +618,7 @@
   {
     "filename": "Final Fantasy Legend III.gb",
     "title": "Final Fantasy Legend III",
-    "description": "The final (no joke) Final Fantasy Legend title to grace the Game Boy, FFLIII tells the story of a great flood which destroys cities in the past, present and future.",
+    "description": "The final (no joke) Final Fantasy Legend title to grace the Game Boy, FFLIII tells the story of a great flood which destroys cities in the past, present and future.\n\nAs you control a party of 4, with a choice of human and mutant classes, and travel back and forth through time collecting pieces of the great ship Talon so as to defeat the enemy that has flooded the lands.\n\nThe inclusion of a time travel storyline means that whatever you do in one time frame can have an affect on what happens in another time. Other major changes compared to the original 2 in the series are the ability to mutate your characters further and a change to the upgrade system.\n\nItems picked up after battle can be attached to your mutants or humans to turn them into monsters or robots, increasing your parties power and abilities.\n\nAnd although the original system of obtaning experience points after every battle has been removed, its replacement allows you to choose which magic stone each character can use, so they learn that specific magic type and never lose it.",
     "art": "covers/Final Fantasy Legend III.png",
     "shot": "screenshots/Final Fantasy Legend III.png",
     "manual": "manuals/Final Fantasy Legend III.pdf",
@@ -632,7 +632,7 @@
   {
     "filename": "Fix My Heart.gb",
     "title": "Fix My Heart",
-    "description": "Fix My Heart is a precision platformer with minimalistic graphics and a strong emphasis on speedrunning. Run through a perilous cave as you try to fix your mechanical heart.",
+    "description": "Fix My Heart is a precision platformer with minimalistic graphics and a strong emphasis on speedrunning. Run through a perilous cave as you try to fix your mechanical heart. The game offers challenging levels that will push your platforming abilities to the limit, leaving no room for errors. Are you up for the challenge? With seven unique endings to unlock, you must decide your fate and confront the cave's deadly obstacles. For those seeking an even harder experience, the Remix mode introduces five new gameplay mechanics that will put your skills to the test.",
     "art": "covers/04) Unlicensed Homebrew/Fix My Heart.png",
     "shot": "screenshots/04) Unlicensed Homebrew/Fix My Heart.png",
     "manual": "",
@@ -646,7 +646,7 @@
   {
     "filename": "Fortified Zone.gb",
     "title": "Fortified Zone",
-    "description": "A male and a female commando named Masato & Mizuki are sent to the jungle on a mission to destroy an enemy base and everyone in it.",
+    "description": "A male and a female commando named Masato & Mizuki are sent to the jungle on a mission to destroy an enemy base and everyone in it. Stealth is required, since brute force will only lead into their capture.\n\nYou are able to switch between the two characters at any time, something rarely seen in video games even today, twelve years after its release.",
     "art": "covers/Fortified Zone.png",
     "shot": "screenshots/Fortified Zone.png",
     "manual": "manuals/Fortified Zone.pdf",
@@ -660,7 +660,7 @@
   {
     "filename": "GB Gallery - 5 Games in One.gb",
     "title": "Game Boy Gallery - 5 Games In One",
-    "description": "This game contains five classic Game & Watch games: Ball, Vermin, Flagman, Manhole and Cement Factory.",
+    "description": "This game contains five classic Game & Watch games: Ball, Vermin, Flagman, Manhole and Cement Factory. Ball puts you in the place of a circus juggler, in Vermin you are pest controller trying to keep moles under control. Flagman is a game in which you must repeat the number sequences the flagman shows, in Manhole you must prevent pedestrians from falling down after the manhole covers have been removed. Finally in Cement Factory you must move cement from the top to the bottom of the factory without the tanks of cement overloading.",
     "art": "covers/01) All but the Best/Game Boy Gallery - 5 Games in One (SGB Enhanced).png",
     "shot": "screenshots/01) All but the Best/Game Boy Gallery - 5 Games in One (SGB Enhanced).png",
     "manual": "manuals/01) All but the Best/Game Boy Gallery - 5 Games in One (SGB Enhanced).pdf",
@@ -674,7 +674,7 @@
   {
     "filename": "Gargoyle's Quest.gb",
     "title": "Gargoyle's Quest",
-    "description": "The friendly Ghoul Realm was invaded by aliens know as the Destroyers ages ago. The Destroyers almost captured the Ghoul Realm except a powerful fire came from the sky and destroyed them.",
+    "description": "The friendly Ghoul Realm was invaded by aliens know as the Destroyers ages ago. The Destroyers almost captured the Ghoul Realm except a powerful fire came from the sky and destroyed them. The Realm is threatened again and the secret of the fire must be recovered.\n\nYou play Firebrand, a gargoyle who has powerful claws that allow him to cling to walls and other surfaces on a verticle plane. Firebrand can also hover and fly for awhile with his wings. Destroy the enemy characters with your firery breath. The game also contains an adventure type story that is unfolded by interacting with characters from an over-head perspective.",
     "art": "covers/Gargoyle's Quest.png",
     "shot": "screenshots/Gargoyle's Quest.png",
     "manual": "manuals/Gargoyle's Quest.pdf",
@@ -702,7 +702,7 @@
   {
     "filename": "Golf.gb",
     "title": "Golf",
-    "description": "Golf features two challenging 18 hole courses where players are able to play a round of golf, and allows players to choose a club, adjust stance and control the swing.",
+    "description": "Golf features two challenging 18 hole courses where players are able to play a round of golf, and allows players to choose a club, adjust stance and control the swing. The game features three alternating views; an overhead long-range view of the entire hole, an overhead medium-range view from the ball's current location, and an overhead close-range view of the green. Gameplay modes include 1 player, or 2 player play with a link cable.",
     "art": "covers/01) All but the Best/Golf.png",
     "shot": "screenshots/01) All but the Best/Golf.png",
     "manual": "manuals/01) All but the Best/Golf.pdf",
@@ -716,7 +716,7 @@
   {
     "filename": "Nemesis II.gb",
     "title": "Gradius : The Interstellar Assault",
-    "description": "In the year 6664 Dr. Venom, the director of the Space Science Agency, was exiled to the planet Sard for his involvement in a failed rebellion and illegal scientific activities.",
+    "description": "In the year 6664 Dr. Venom, the director of the Space Science Agency, was exiled to the planet Sard for his involvement in a failed rebellion and illegal scientific activities. One year later, he joined forces with the Bacterion invaders, escaped Sard, and took control of the space surrounding the planet Gradius. In 6666, the local government sends Colonel James Burton on the newest hyperspace fighter known as Metalion. The goal is clear: stop Dr. Venom and the Bacterion army before they conquer the planet.\n\nNemesis 2 (Gradius 2 in Japan) is a side-scrolling shoot-em-up. The gameplay is for the most part similar to that of Gradius. The player-controlled ship can alternate between three main weapons: Missile, Double, and Laser. Extra weapons such as various types of lasers, napalm missiles, reflex ring, and back beam can be collected as power-ups and equipped. In addition, special power-ups can be acquired, their effects ranging from slowing down enemies to turning the Metalion into an invincible drill-like machine for a brief amount of time. Boss battles are followed by optional mini-stages, which grant the player new weapons if completed successfully.",
     "art": "covers/01) All but the Best/Nemesis II - The Return of the Hero.png",
     "shot": "screenshots/01) All but the Best/Nemesis II - The Return of the Hero.png",
     "manual": "manuals/01) All but the Best/Nemesis II - The Return of the Hero.pdf",
@@ -730,7 +730,7 @@
   {
     "filename": "Great Greed.gb",
     "title": "Great Greed",
-    "description": "As Great Greed begins, you are accidentally warped to another dimension by a wizard by the name of 'Microwave'?.",
+    "description": "As Great Greed begins, you are accidentally warped to another dimension by a wizard by the name of 'Microwave'?. With no immediate way back, you help the people fight off the scourge named 'Bio-Haz' who is consuming this dimension with evil and destruction.\n\nThis new dimension you find yourself in is not terribly unlike the one you came from, with the exception that everyone is named after foods or food-related items and most of the monsters appear to be mutated vegetables and the like.\n\nThis RPG breaks from the normal formula in a few respects. The battle system does not use any menus, switching all commands to simple button pushes. A being attack, B for dodge, Start will run and the D-Pad is shortcuts to certain spells. The combat is also live, in the sense that if you take too long to complete your turn, your opponent will attack again.\n\nUsing a battery-backed save system, the game will automatically auto-save after every successful battle.",
     "art": "covers/Great Greed.png",
     "shot": "screenshots/Great Greed.png",
     "manual": "manuals/Great Greed.pdf",
@@ -744,7 +744,7 @@
   {
     "filename": "Harvest Moon GB.gb",
     "title": "Harvest Moon GB",
-    "description": "Harvest Moon is a farming simulation where you must build and maintain a farm during the course of a year, while taking care of your budget and yourself.",
+    "description": "Harvest Moon is a farming simulation where you must build and maintain a farm during the course of a year, while taking care of your budget and yourself.\n\nYou have the ability to buy, sell and take care of farm animals, crops and any other supplies that you may have. You can trade with many of the town's people, and fellow farmers. If you link up a friend's Game Boy, you can trade items between players as well.\n\nThe local stores supply plenty of items to help you in your quest, at a cost, of course. And if you have the time, you can go about the town in search of a little fun away from work.\n\nFrom an overhead perspective, you can explore your farming area, the local town and the Harvest Sprite tunnels, full of strange and wonderful creatures that can help or destroy your quest. There are four seasons (Summer, Autumn, Winter, Spring) and each brings with it new challenges such as keeping arm animals warm during the colder seasons, and supplying water to the crops during the warmer periods.\n\nThe GBC version includes all new characters and background sprites in full color, but is also backwards compatible with the original Game Boy version.",
     "art": "covers/Harvest Moon GB (SGB Enhanced).png",
     "shot": "screenshots/Harvest Moon GB (SGB Enhanced).png",
     "manual": "manuals/Harvest Moon GB (SGB Enhanced).pdf",
@@ -758,7 +758,7 @@
   {
     "filename": "Hyper Lode Runner.gb",
     "title": "Hyper Lode Runner",
-    "description": "Hyper Lode Runner plays similar to Lode Runner. You must run around on brick platforms gathering all the gold, while avoiding enemies, known as Mad Monks, who follow your every move.",
+    "description": "Hyper Lode Runner plays similar to Lode Runner. You must run around on brick platforms gathering all the gold, while avoiding enemies, known as Mad Monks, who follow your every move. You can zap blocks to create temporary holes to trap enemies or to escape through to platforms below. To make levels more interesting there are ladders and vertical ropes to climb, but the enemies can use these too.\n\nThere are 50 levels to play, and there is also an editor and a VS mode.",
     "art": "covers/Hyper Lode Runner.png",
     "shot": "screenshots/Hyper Lode Runner.png",
     "manual": "manuals/Hyper Lode Runner.pdf",
@@ -772,7 +772,7 @@
   {
     "filename": "Jetpak DX.gb",
     "title": "Jetpak DX",
-    "description": "Lost, stranded on a strange planet. Light years away from home. You scramble your way home, planet hopping.",
+    "description": "Lost, stranded on a strange planet. Light years away from home. You scramble your way home, planet hopping. Burning the fuel you collect in the spaceships you build, just to get that bit closer to home.",
     "art": "covers/04) Unlicensed Homebrew/jetpakdx.png",
     "shot": "screenshots/04) Unlicensed Homebrew/jetpakdx.png",
     "manual": "",
@@ -800,7 +800,7 @@
   {
     "filename": "Kid Dracula.gb",
     "title": "Kid Dracula",
-    "description": "Kid Dracula is a side-scroller and a parody of the Castlevania series. The difference is you play as a young vampire rather than a vampire killer.",
+    "description": "Kid Dracula is a side-scroller and a parody of the Castlevania series. The difference is you play as a young vampire rather than a vampire killer.\n\nGameplay consists of very standard jump and shoot platform action. As you progress through the 8 levels, you gain the ability to perform spells, like turning into a bat. You will also receive guidance from your pal, the Grim Reaper.",
     "art": "covers/Kid Dracula.png",
     "shot": "screenshots/Kid Dracula.png",
     "manual": "manuals/Kid Dracula.pdf",
@@ -814,7 +814,7 @@
   {
     "filename": "Kid Icarus.gb",
     "title": "Kid Icarus : Of Myths and Monsters",
-    "description": "An evil force is threatening to invade the Angel Land. Palutena, the ruler-goddess, sends a warrior named Pit on a quest to prepare for the upcoming attack.",
+    "description": "An evil force is threatening to invade the Angel Land. Palutena, the ruler-goddess, sends a warrior named Pit on a quest to prepare for the upcoming attack. Pit must find three ancient treasures and face down the evil force.\n\nKid Icarus: Of Mythis and Monsters is the Game Boy version of one of Nintendo's classic side scrolling platform/adventure games. Throughout the levels Pit will collect hearts, upgrade his strength, collect treasures, and learn to fly.",
     "art": "covers/Kid Icarus - Of Myths and Monsters.png",
     "shot": "screenshots/Kid Icarus - Of Myths and Monsters.png",
     "manual": "manuals/Kid Icarus - Of Myths and Monsters.pdf",
@@ -828,7 +828,7 @@
   {
     "filename": "Kirby's Block Ball.gb",
     "title": "Kirby's Block Ball",
-    "description": "Kirby takes on a new challenge, blockball.",
+    "description": "Kirby takes on a new challenge, blockball. The playing field contains a variety of blocks, and using Kirby's rolling technique, you must set him into motion (with paddles situated around the field of play, similar to pinball) to clear the blocks from the field. Each level contains more and more blocks to clear, and after a few rounds you take on boss characters in a one-on-one round to see if you can clear more blocks.",
     "art": "covers/Kirby's Block Ball (SGB Enhanced).png",
     "shot": "screenshots/Kirby's Block Ball (SGB Enhanced).png",
     "manual": "manuals/Kirby's Block Ball (SGB Enhanced).pdf",
@@ -842,7 +842,7 @@
   {
     "filename": "Kirby's Dream Land.gb",
     "title": "Kirby's Dream Land",
-    "description": "Dedede, King of Dream Land, is a penguin-like creature who is too gluttonous for his own good.",
+    "description": "Dedede, King of Dream Land, is a penguin-like creature who is too gluttonous for his own good. Gathering food for his midnight feast, he got carried away and ended up taking all the food from the inhabitants of his country. One of them, a pink little guy named Kirby, decides to travel all the way to King Dedede's palace and retrieve the lost food by any means.\n\nKirby's Dream Land is a side-scrolling platform action game, and the first in the Kirby series. Although the protagonist appears to be a weak little marshmallow, he is actually quite powerful: he has the ability to suck up his enemies like a vacuum, and then shoot them out at other enemies. Kirby can also swallow air and inflate himself, which allows him to fly. There are four levels in the game; no save feature is available.",
     "art": "covers/Kirby's Dream Land.png",
     "shot": "screenshots/Kirby's Dream Land.png",
     "manual": "manuals/Kirby's Dream Land.pdf",
@@ -856,7 +856,7 @@
   {
     "filename": "Kirby's Dream Land 2.gb",
     "title": "Kirby's Dream Land 2",
-    "description": "The lovable Kirby returns to the Game Boy! This time the bridges connecting the rainbow bridges have disappeared and King Dedede is to blame as always...or is he?",
+    "description": "The lovable Kirby returns to the Game Boy! This time the bridges connecting the rainbow bridges have disappeared and King Dedede is to blame as always...or is he? The evil Dark Matter has him under his control and plans to turn Dream Land into a dark world. Kirby's goal is get the fabled rainbow sword and defeat him!\n\nGameplay consists of a platform game. Kirby is like no other platform character of its time because he can fly with no power-ups, and he can swallow enemies and get their powers. In addition to that, Kirby can now team up with his friends: Rick the hamster, Kine the fish, and Coo the owl. Each team-up has it's advantages and disadvantages, but Kirby can still swallow enemies, making more different powers available depending on the power/friend combination.",
     "art": "covers/Kirby's Dream Land 2 (SGB Enhanced).png",
     "shot": "screenshots/Kirby's Dream Land 2 (SGB Enhanced).png",
     "manual": "manuals/Kirby's Dream Land 2 (SGB Enhanced).pdf",
@@ -870,7 +870,7 @@
   {
     "filename": "Kirby's Pinball Land.gb",
     "title": "Kirby's Pinball Land",
-    "description": "Kirby's Pinball Land is a game of pinball based on the Kirby series of games, with Kirby as the ball.",
+    "description": "Kirby's Pinball Land is a game of pinball based on the Kirby series of games, with Kirby as the ball. In the game you have to help Kirby defeat King Dedede and the three bosses who each guard one of the Pinball Lands.\n\nThe game is divided into three tables or Pinball Lands, each consisting of four screens, three ordinary screens, and a boss screen If you fall off the bottom of the lowest one, you lose a life, unless you press A at the right moment to activate the springboard, which becomes harder each time. Each screen has a variety of things to do. The middle screen will give access to some sort of bonus game, where you must try to get as many points as you can, and can add to your bonus and bonus multiplier. The bonus is added to your score when you lose a life, as in ordinary pinball.\n\nThe aim is to defeat each boss. To get to the boss you must perform a task on the top ordinary screen. The bosses themselves must be defeated by firing Kirby at them, but they will try to stop you, sometimes by temporarily de-activating one or both of the flippers. If you defeat the boss on each table, you face Kind Dedede himself.",
     "art": "covers/Kirby's Pinball Land.png",
     "shot": "screenshots/Kirby's Pinball Land.png",
     "manual": "manuals/Kirby's Pinball Land.pdf",
@@ -884,7 +884,7 @@
   {
     "filename": "Kung-Fu Master.gb",
     "title": "Kung-Fu Master",
-    "description": "Loosely based on a movie, Kung-Fu Master is a side scrolling action game for one or two players, who alternate turns. Mr.",
+    "description": "Loosely based on a movie, Kung-Fu Master is a side scrolling action game for one or two players, who alternate turns.\n\nMr. X has captured the pickpocket Sylvia and it is up to Thomas, a kung-fu master who owns a restaurant, to get her back. She is located on the top floor of Mr. X's castle and Thomas will need to fight his way to the top. Of course, this won't be easy as each floor has many opponents to get past and a floor boss at the end of each level.\n\nThomas is able to move left and right, jump, duck, and punch and kick. Enemy projectiles such as knives can be kicked in the air to rebound them towards the enemy. On the top floor resides Mr. X himself.",
     "art": "covers/Kung-Fu Master.png",
     "shot": "screenshots/Kung-Fu Master.png",
     "manual": "",
@@ -898,7 +898,7 @@
   {
     "filename": "Kwirk.gb",
     "title": "Kwirk : He's A-maze-ing!",
-    "description": "Kwirk is a puzzle-game, in which you have to help a tomato reach the exit of numerous levels. The path to the exit is blocked by boxes, holes and spinning doors.",
+    "description": "Kwirk is a puzzle-game, in which you have to help a tomato reach the exit of numerous levels. The path to the exit is blocked by boxes, holes and spinning doors. Boxes can be pushed aside or into holes to make them traversable and there are different types of spinning doors. In some levels, it is also possible (and necessary) to control several different characters to help the main character get to the exit. As the game progresses, levels get larger and more complicated.",
     "art": "covers/Kwirk - He's A-maze-ing!.png",
     "shot": "screenshots/Kwirk - He's A-maze-ing!.png",
     "manual": "manuals/Kwirk - He's A-maze-ing!.pdf",
@@ -912,7 +912,7 @@
   {
     "filename": "Lock n' Chase.gb",
     "title": "Lock n' Chase",
-    "description": "There's money to be had, and it's waiting to be nabbed. Be an ace in Lock'N Chase. This classic arcade game invites you to play as a thief who's trying to score big by collecting his weight in gold.",
+    "description": "There's money to be had, and it's waiting to be nabbed. Be an ace in Lock'N Chase.\n\nThis classic arcade game invites you to play as a thief who's trying to score big by collecting his weight in gold. Duck in and out of alleys while scooping up coins along the way. Maybe you'll get lucky and find some extra treasure. But being on the wrong side of the law is never easy, as the police are hot on your tail. If you think they're coming too close, try using a sliding door or power-up items to block their chase.\n\nThink you can make a clean getaway? Test your skills in Lock'N Chase.",
     "art": "covers/01) All but the Best/Lock n' Chase ~ Lock 'n' Chase.png",
     "shot": "screenshots/01) All but the Best/Lock n' Chase ~ Lock 'n' Chase.png",
     "manual": "manuals/01) All but the Best/Lock n' Chase ~ Lock 'n' Chase.pdf",
@@ -926,7 +926,7 @@
   {
     "filename": "Looney Tunes.gb",
     "title": "Looney Tunes",
-    "description": "This side-scrolling game allows the player to control different Looney Tunes characters and their different abilities to advance through the levels, seven in all.",
+    "description": "This side-scrolling game allows the player to control different Looney Tunes characters and their different abilities to advance through the levels, seven in all. The player can use Daffy Duck (throwing a frisbee to defeat enemies with Mario-style gameplay), Tweety Bird (elude Sylvester throughout the level), Porky Pig (control a bi-plane to shoot down enemies), Taz (really only a bonus game in which he has to collect as many steaks as possible in 60 seconds), Speedy Gonzalez (elude ghosts and ghouls in a haunted mansion), Roadrunner (of course running from his arch enemy, Wile E. Coyote) and finally Bugs Bunny (gameplay similar to Daffy).",
     "art": "covers/Looney Tunes.png",
     "shot": "screenshots/Looney Tunes.png",
     "manual": "manuals/Looney Tunes.pdf",
@@ -940,7 +940,7 @@
   {
     "filename": "Marble Madness.gb",
     "title": "Marble Madness",
-    "description": "The idea of this arcade game is deceptively simple: Guide a marble down a path without hitting any obstacles or straying off the course.",
+    "description": "The idea of this arcade game is deceptively simple: Guide a marble down a path without hitting any obstacles or straying off the course. The game is viewed from an isometric perspective, which makes it harder to stay focused on the direction the ball is to follow. There are tight corridors to follow and enemies to avoid. There is a 2-player mode in which players must race to the finish; otherwise you're racing against the clock.",
     "art": "covers/01) All but the Best/Marble Madness.png",
     "shot": "screenshots/01) All but the Best/Marble Madness.png",
     "manual": "manuals/01) All but the Best/Marble Madness.pdf",
@@ -954,7 +954,7 @@
   {
     "filename": "Mario's Picross.gb",
     "title": "Mario's Picross",
-    "description": "Nonograms are number puzzles where logic is used to find the solution. Clues are provided along the sides of the playfield grid, telling the player how many squares to fill in each row and column.",
+    "description": "Nonograms are number puzzles where logic is used to find the solution. Clues are provided along the sides of the playfield grid, telling the player how many squares to fill in each row and column. With logic the player can figure out exactly which squares of the grid to fill. The thinking process is similar to solving Sudoku puzzles.\n\nMario's Picross (from PICture CROSSword) is Nintendo's take on Nonograms. In this game, Mario takes on the role of an archaeologist who chisels away the squares in each playfield. The result is a small picture. There are 256 different puzzles to solve, divided into four courses with increasing difficulty level.",
     "art": "covers/01) All but the Best/Mario's Picross (SGB Enhanced).png",
     "shot": "screenshots/01) All but the Best/Mario's Picross (SGB Enhanced).png",
     "manual": "manuals/01) All but the Best/Mario's Picross (SGB Enhanced).pdf",
@@ -968,7 +968,7 @@
   {
     "filename": "Maru's Mission.gb",
     "title": "Maru's Mission",
-    "description": "One day while Maru and Cori are taking a walk in Central Park, a strange thing happens. Out of nowhere this weird looking guy shows up and waylays the unsuspecting couple.",
+    "description": "One day while Maru and Cori are taking a walk in Central Park, a strange thing happens. Out of nowhere this weird looking guy shows up and waylays the unsuspecting couple. Before Maru can respond, the weird looking guy and Cori vanish without a trace, leaving Maru behind wondering what in the world just happened.\n\nMaru's Mission is a side scrolling action game. Traveling throughout the world from such locations as the USA and Romania, you fight mythological monsters such as Isis and Dracula.\n\nMaru can shoot sparks in rapid succession and can also get access to a variety of powerful different weapons. Maru can collect hearts to replenish his health and jump to avoid obstacles or dodge enemies. Levels are usually finished by defeating a level boss which sometimes earns a new weapon.",
     "art": "covers/Maru's Mission.png",
     "shot": "screenshots/Maru's Mission.png",
     "manual": "manuals/Maru's Mission.pdf",
@@ -982,7 +982,7 @@
   {
     "filename": "Mega Man II.gb",
     "title": "Mega Man II",
-    "description": "Dr. Wily has broken into the Chronos Institute and stolen a machine called Time Skimmer. According to Dr. Light's calculations, he has used the machine to travel roughly 37,426 years into the future.",
+    "description": "Dr. Wily has broken into the Chronos Institute and stolen a machine called Time Skimmer. According to Dr. Light's calculations, he has used the machine to travel roughly 37,426 years into the future. This can mean nothing good and so Mega Man, along with his dog Rush, sets out to find out more about Dr. Wily's plans.\n\nMega Man II follows the same formula as its predecessors, meaning the player has to complete a number of side-scrolling, platforming levels that are guarded by different bosses. Mega Man can only shoot left or right, but defeating a boss rewards him with a new weapon. Sometimes he will also find upgrades for Rush, which enable him to use Rush as a trampoline, a submarine or a jet.\n\nWhile Mega Man II is not a conversion, the first four stages look and play very similar to some levels of Mega Man 2 for the NES. Likewise, levels five to eight resemble some levels of Mega Man 3. The bosses of the first eight stages are also old familiars from Mega Man 2 and 3.",
     "art": "covers/Mega Man II.png",
     "shot": "screenshots/Mega Man II.png",
     "manual": "manuals/Mega Man II.pdf",
@@ -996,7 +996,7 @@
   {
     "filename": "Mega Man III.gb",
     "title": "Mega Man III",
-    "description": "Mega Man 3 is a traditional side-scrolling platformer: you jump from brick to brick while avoiding pits and shooting robots.",
+    "description": "Mega Man 3 is a traditional side-scrolling platformer: you jump from brick to brick while avoiding pits and shooting robots. It's quite similar, in all respects, to other Mega Man games; however, this is the first time that you get a sidekick. It's also the first time you're allowed to slide instead of merely walking.\n\nRush is your dog who helps out by offering other modes of transportation when you need it. He starts out with the 'Rush Coil' ability to launch you to the top of the screen like a springboard; later he acquires the 'Rush Jet' ability to turn into a guided, floating platform to carry you wherever you need to go; and he also gets the 'Rush Marine' ability which is a submarine that works just like the jet except underwater and with the added ability to hop around out of the water (you can actually jump while on the jet but the jet continues to hover beneath you whereas you stay inside the submarine). All of these abilities function just like boss weapons.\n\nWhen you defeat the boss at the end of a level you gain his power - or at least a similar power. You may pause the game at any time and switch to any single power you have. It supplants your regular Arm Cannon with a limited - but superior - ability. The weapon ammo is displayed next to your energy meter. There are eight of these, corresponding to the eight main levels, even though there are twenty-one levels in the entire game.\n\nEnemies will often supply you with both energy and ammo refills. You can also collect Energy Tanks which can only be used once but will entirely restore your health. You start the game with three lives. Other features include Surprise Boxes lying around for you to find. There are infinite continues and a password feature to resume play at the beginning of any level.",
     "art": "covers/Mega Man III.png",
     "shot": "screenshots/Mega Man III.png",
     "manual": "manuals/Mega Man III.pdf",
@@ -1010,7 +1010,7 @@
   {
     "filename": "Mega Man IV.gb",
     "title": "Mega Man IV",
-    "description": "In the year 20XX... Dr. Wily has broken into the local Robot Museum and has stolen the bodies of his previously destroyed Robot Masters, and now has brought them back for revenge against Mega Man!",
+    "description": "In the year 20XX...\n\nDr. Wily has broken into the local Robot Museum and has stolen the bodies of his previously destroyed Robot Masters, and now has brought them back for revenge against Mega Man! What's worse, Wily plans on using a massive laser cannon from outer space to blast Earth to dust!\n\nMega Man must team up with his friends to stop Dr. Wily before Earth is destroyed!\n\nMega Man IV contains elements of Mega Man 4 and 5 (NES) and is a Game Boy exclusive.",
     "art": "covers/Mega Man IV.png",
     "shot": "screenshots/Mega Man IV.png",
     "manual": "manuals/Mega Man IV.pdf",
@@ -1024,7 +1024,7 @@
   {
     "filename": "Mercenary Force.gb",
     "title": "Mercenary Force",
-    "description": "Mercenary Force is an unconventional shoot'em up set in Japan's Edo period and inspired by Japanese history and mythology.",
+    "description": "Mercenary Force is an unconventional shoot'em up set in Japan's Edo period and inspired by Japanese history and mythology. When Japan is invaded by the minions of a dark lord, the shogun sets out to hire the best warriors in the land to combat the enemy.\n\nPlayers start with 5000 yen and must begin by hiring their mercenaries. The team has four slots and can be recruited from five different character types (servant, ninja, monk, samurai and mystic) in any combination (including more than one of any character). The characters differ in hiring price, starting health, weapons (amount of projectiles, speed and direction), and their special attack.\n\nThe game consists of six levels, seen from an angled top-down/side-view perspective, with the screen scrolling automatically to the right. The mercenaries must shoot hordes of enemies to get to the next level, including several bosses. The mercenaries can change their formation between four different options: a vertical line, a diamond shape, a square shape and a horizontal arrowhead formation. It is also possible to switch the character in the lead position, leading to a large variety of tactical options. The hit points of each team member are counted individually, so if one is killed the remaining ones can fight on. Besides their standard weapon, each character also has a special suicide attack, triggered by pressing both buttons at the same time. These are usually highly devastating attacks, but the monk's power actually allows the group to skip ahead through a large part of the level.\n\nKilled enemies drop coins of 10 yen in value that disappear after a short while if not picked up. The money reserve is used in a matter of ways: between stages, new recruits can be hired to replace fallen fighters. There are also various buildings in the levels that allow the spending of money. Cafes offer various items that restore or increase health and, in some levels, can change the character class of the team leader. There is a fortune-reading at a temple which makes it possible to recruit a hidden character, and the possibility to resurrect fallen comrades at a daibutsu. Only temples don't cost money and offer healing for free.",
     "art": "covers/Mercenary Force.png",
     "shot": "screenshots/Mercenary Force.png",
     "manual": "manuals/Mercenary Force.pdf",
@@ -1038,7 +1038,7 @@
   {
     "filename": "Metroid II.gb",
     "title": "Metroid II : Return of Samus",
-    "description": "This is the sequel to the very popular Metroid for the NES. In Metroid 2, you control Samus Aran in her quest to rid the planet SR388 of the Metroid parasites.",
+    "description": "This is the sequel to the very popular Metroid for the NES. In Metroid 2, you control Samus Aran in her quest to rid the planet SR388 of the Metroid parasites. After killing the space pirate Mother Brain in the original Metroid, Samus must take on this adventure to prevent the Metroids from multiplying throughout the galaxy. Samus soon finds out that the Metroids have mutated, making them much more difficult to defeat.",
     "art": "covers/Metroid II - Return of Samus.png",
     "shot": "screenshots/Metroid II - Return of Samus.png",
     "manual": "manuals/Metroid II - Return of Samus.pdf",
@@ -1052,7 +1052,7 @@
   {
     "filename": "Mole Mania.gb",
     "title": "Mole Mania",
-    "description": "Muddy Mole's wife and seven kids have been kidnapped by the evil farmer, Jinbei! It's up to you to help Muddy solve the many puzzles of Jinbei Land.",
+    "description": "Muddy Mole's wife and seven kids have been kidnapped by the evil farmer, Jinbei! It's up to you to help Muddy solve the many puzzles of Jinbei Land. Snatch all of Jinbei's cabbages in every level, and if you get stuck, dig underground and create your own secret underground paths. A word of warning, however - Jinbei has got his best goons guarding your family, so you'd better watch out!\n\nMole Mania plays from an overhead perspective. Although in each room you have to destroy all the foes to progress, the game is much more puzzle-oriented than it is towards action. It is quite common in later levels to get yourself 'stuck', which can be fixed by leaving and returning to the screen to reset the puzzle. One of the game's clever 'hooks' is that players can dig underground in each stage to find a completely different map than they do above ground, which can be used to get through otherwise impassable terrain.\n\nThe game also features a two player mode, where one player is Muddy, and the other is Jinbei. Muddy must swipe as many cabbages as possible, and Jinbei must stop him. At the end of the round, players swap roles, and then the player who got the most cabbages wins.",
     "art": "covers/Mole Mania (SGB Enhanced).png",
     "shot": "screenshots/Mole Mania (SGB Enhanced).png",
     "manual": "manuals/Mole Mania (SGB Enhanced).pdf",
@@ -1066,7 +1066,7 @@
   {
     "filename": "Monster Max.gb",
     "title": "Monster Max",
-    "description": "A powerful human called Krond conquers the Monster Planet, bans all music and declares himself king. Max, a monster rock musician decides to fight back.",
+    "description": "A powerful human called Krond conquers the Monster Planet, bans all music and declares himself king. Max, a monster rock musician decides to fight back. In order to defeat the evil monarch, he enlists in the training course at the Mega Hero Academy.\n\nMonster Max is a surreal isometric adventure by the same duo that created the 8-bit classic Head Over Heels. Not surprisingly it is very similar to that game in terms of control and general design, and almost identical graphically. The character moves on a bizarre landscape, where he has to collect and use objects (with either the A or B button) to accomplish mission objectives. The game starts on a training academy that serves as the mission hub. Each mission has as an entrance with a terminal and a door. By touching the terminal with the character, the mission objective and reward is displayed on the screen. The missions available can be played in any order, but Max has to pay a fee to access other levels with more advanced missions. On the top left of the screen there is a counter for the lucky stars collected. Lucky stars allow the character to touch dangerous objects once without suffering damage. Besides that are several hearts representing the number of lives. On the top right is the inventory display, showing the two objects assigned to the buttons. Hitting START while on a mission brings up a map, while pressing SELECT displays a menu with options and the password at the bottom of the screen.\n\nThe game is far larger than previous isometric adventures like Knight Lore, with over 600 more detailed locations (the double of Head Over Heels). There is a password system to save progress.",
     "art": "covers/01) All but the Best/Monster Max.png",
     "shot": "screenshots/01) All but the Best/Monster Max.png",
     "manual": "",
@@ -1080,7 +1080,7 @@
   {
     "filename": "Motocross Maniacs.gb",
     "title": "Motocross Maniacs",
-    "description": "Motocross Maniacs is a side-scrolling racing game with extremely perilous courses. You maneuver your rider through many jumps, loops, and mud hazards to achieve a record time.",
+    "description": "Motocross Maniacs is a side-scrolling racing game with extremely perilous courses. You maneuver your rider through many jumps, loops, and mud hazards to achieve a record time. To assist you there are several power ups that give you more time to race, more nitro boosts, and more top speed.\n\nThe main game is a solo affair. You attempt to complete the course before time runs out. You can also race one-on-one against the computer or against a friend via the link cable.",
     "art": "covers/Motocross Maniacs.png",
     "shot": "screenshots/Motocross Maniacs.png",
     "manual": "manuals/Motocross Maniacs.pdf",
@@ -1094,7 +1094,7 @@
   {
     "filename": "Mr. Do!.gb",
     "title": "Mr. Do!",
-    "description": "You control Mr. Do has he tries to harvest all of the cherries on the screen. However, there are numerous bad guys out to get him! Mr.",
+    "description": "You control Mr. Do has he tries to harvest all of the cherries on the screen. However, there are numerous bad guys out to get him! Mr. Do can defend himself from the badguys in two ways: first he can push the apples located throughout the playfield on top of the enemies and crush them. Secondly, Mr. Do is armed with a power ball. This can be thrown to destroy an enemy. Mr. Do has only one power ball, though, so he will need to wait for it to return to him before it can be used again. From time to time an alpha monster will appear on the screen bearing one of the letters in EXTRA. If you use the power ball to destroy an alpha monster you earn that letter; when you've earned the complete word EXTRA you receive an extra life. When you successfully collect all of the cherries, you will move on to the next, more difficult level.\n\nThe mobile version of the game includes the original arcade version, as well as an enhanced mode with new levels, power-ups and graphics.",
     "art": "covers/Mr. Do!.png",
     "shot": "screenshots/Mr. Do!.png",
     "manual": "",
@@ -1108,7 +1108,7 @@
   {
     "filename": "Ms. Pac-Man.gb",
     "title": "Ms. Pac-Man",
-    "description": "In 1981, a sequel to Pac-Man was introduced in the form of his girlfriend, Ms. Pac-Man.",
+    "description": "In 1981, a sequel to Pac-Man was introduced in the form of his girlfriend, Ms. Pac-Man. This sequel continued on the \"eat the dots/avoid the ghosts\" gameplay of the original game, but added new features to keep the title fresh.\n\nLike her boyfriend, Ms. Pac-Man attempts to clear four various and challenging mazes filled with dots and ever-moving bouncing fruit while avoiding Inky, Blinky, Pinky and Sue, each with their own personalities and tactics. One touch from any of these ghosts means a loss of life for Ms. Pac-Man.\n\nMs. Pac-Man can turn the tables on her pursuers by eating one of the four Energizers located within the maze. During this time, the ghosts turn blue, and Ms. Pac-Man can eat them for bonus points (ranging from 200, 400, 800 and 1600, progressively). The Energizer power only lasts for a limited amount of time, as the ghost's eyes float back to their center box, and regenerate to chase after Ms. Pac-Man again.\n\nSurvive a few rounds of gameplay, and the player will be treated to humorous intermissions showing the growing romantic relationship between Pac-Man and Ms. Pac-Man, leading all the way up to the arrival of \"Junior\".",
     "art": "covers/01) All but the Best/Ms. Pac-Man.png",
     "shot": "screenshots/01) All but the Best/Ms. Pac-Man.png",
     "manual": "manuals/01) All but the Best/Ms. Pac-Man.pdf",
@@ -1122,7 +1122,7 @@
   {
     "filename": "Mystical Ninja.gb",
     "title": "Mystical Ninja Starring Goemon",
-    "description": "Oh no! The evil Skull King and his army of evil pirates are plotting to take over Ancient Japan! Only Goemon, Ebisumaru, Sasuke and Yae stand in their way.",
+    "description": "Oh no! The evil Skull King and his army of evil pirates are plotting to take over Ancient Japan! Only Goemon, Ebisumaru, Sasuke and Yae stand in their way. Fight your way through Gadget Castle, The Black Ship Skull, The Demon Cave and Skeleton Island as you make your way to face off against the Skull King himself.\n\nMystical Ninja Starring Goemon is an overhead action game with light RPG elements, similar to Link's Awakening. Players explore towns, dungeons, castles and more, searching for treasure chests and attacking enemies. There are also shops and inns where you can purchase items or rest to recover your strength.\n\nAt the end of each level, there is a boss waiting for you. However, to defeat them, you must compete in a mini-game called 'The Surprise Match'. These mini-games usually feature button-mashing of some kind or a variation on a memory match game.",
     "art": "covers/Mystical Ninja Starring Goemon (SGB Enhanced).png",
     "shot": "screenshots/Mystical Ninja Starring Goemon (SGB Enhanced).png",
     "manual": "manuals/Mystical Ninja Starring Goemon (SGB Enhanced).pdf",
@@ -1136,7 +1136,7 @@
   {
     "filename": "Nail'n Scale.gb",
     "title": "Nail 'N Scale",
-    "description": "Nail'N Scale is a mixture of Jump'n Run and puzzle game. The player character can jump and throw nails at his enemies.",
+    "description": "Nail'N Scale is a mixture of Jump'n Run and puzzle game. The player character can jump and throw nails at his enemies. Apart from killing enemies, nails can also serve as platform when they are thrown into blocks. Some blocks can be destroyed when you throw a nail into them and jump on the nail, whereas other blocks cannot even be penetrated by the nails. As the game progresses, levels get more and more complicated and new types of nails,such as explosive nails that remove particularly resilient blocks, become available.",
     "art": "covers/01) All but the Best/Nail'n Scale.png",
     "shot": "screenshots/01) All but the Best/Nail'n Scale.png",
     "manual": "manuals/01) All but the Best/Nail'n Scale.pdf",
@@ -1150,7 +1150,7 @@
   {
     "filename": "NBA Jam - TE.gb",
     "title": "NBA Jam Tournament Edition",
-    "description": "NBA JAM Tournament Edition brings you more senses-shattering slam dunking excitement than ever!",
+    "description": "NBA JAM Tournament Edition brings you more senses-shattering slam dunking excitement than ever! More than twice as many NBA TE superstars, more than double the secret characters, Hot Spots, Super Jam Power-Ups and -OH MY- nine all-new rim-rattling slam dunks plus all the original jams!",
     "art": "covers/01) All but the Best/NBA Jam - Tournament Edition.png",
     "shot": "screenshots/01) All but the Best/NBA Jam - Tournament Edition.png",
     "manual": "manuals/01) All but the Best/NBA Jam - Tournament Edition.pdf",
@@ -1164,7 +1164,7 @@
   {
     "filename": "Nemesis.gb",
     "title": "Nemesis",
-    "description": "Nemesis is the first entry in the long-running Gradius series on the Game Boy. Its side-scrolling shoot'em up gameplay follows the series template closely.",
+    "description": "Nemesis is the first entry in the long-running Gradius series on the Game Boy. Its side-scrolling shoot'em up gameplay follows the series template closely. Players control the Vic Viper through five levels, most based on levels in earlier entries, for a kind of 'greatest hits' of the series. There is a cave level (as in level 1 of the original Gradius), the mandatory Moai stage, a Gigeresque organic level, a graveyard (similar to bonus stages in the MSX and PC Engine version of the original Gradius) and a high-tech base. Besides the classic core ship in the first level, all boss enemies are entirely new.\n\nThe cycling Gradius power-up system is reused here: collected power ups advance the power meter which can be activated at any time to gain the highlighted item. The line-up includes the classic selection of speedups, missiles, dual shots, lasers, option satellites and forcefields.\n\nThe game allows players to start in any of the five levels and even to set the number of lives to a maximum of 99.",
     "art": "covers/01) All but the Best/Nemesis.png",
     "shot": "screenshots/01) All but the Best/Nemesis.png",
     "manual": "manuals/01) All but the Best/Nemesis.pdf",
@@ -1178,7 +1178,7 @@
   {
     "filename": "Ninja Taro.gb",
     "title": "Ninja Taro",
-    "description": "High Adventure in the Far East! It's the era of feudal war in Japan. One Shogun struggles to unite the provinces, but he needs help.",
+    "description": "High Adventure in the Far East!\n\nIt's the era of feudal war in Japan. One Shogun struggles to unite the provinces, but he needs help.\n\nHis villainous arch-rival is rumored to be dead, but a merciless legion of anarchy continues to plague the countryside. If he is dead, then who could be leading the evil forces which prevent Japan from attaining peace and order?\n\nThis chaos must be stopped!\n\nFrom the ranks of the Phantom sect to the Shogun's aid comes Ninja Taro. With the cunning of a thief, the skill of a master, and a legendary sword, he must venture forth to tame the minions of evil, and unravel the riddle that will unite the empire!",
     "art": "covers/Ninja Taro.png",
     "shot": "screenshots/Ninja Taro.png",
     "manual": "manuals/Ninja Taro.pdf",
@@ -1192,7 +1192,7 @@
   {
     "filename": "Nintendo World Cup.gb",
     "title": "Nintendo World Cup",
-    "description": "Soccer game that takes up to 4 players with the adapter and allows you to choose between many different ground surfaces, such as ice, grass and stone, which add to the replayability.",
+    "description": "Soccer game that takes up to 4 players with the adapter and allows you to choose between many different ground surfaces, such as ice, grass and stone, which add to the replayability.\n\nIn singleplayer you play the world cup as one of the top soccer countries of that time, and you meet opponents in a fixed order. Cameroon in the first match and the final is against West Germany. In an old-school fashion you lose when you play a draw, there's no extra time whatsoever.\n\nYou always control only one character, chosen before the match starts, and control your teammates with simple orders, like pass, tackle, and shoot. The game is totally lawless, so feel free to make elbow tackles without a wink from the referee - perfect for the setting of a multiplayer game.",
     "art": "covers/01) All but the Best/Nintendo World Cup.png",
     "shot": "screenshots/01) All but the Best/Nintendo World Cup.png",
     "manual": "manuals/01) All but the Best/Nintendo World Cup.pdf",
@@ -1206,7 +1206,7 @@
   {
     "filename": "Operation C.gb",
     "title": "Operation C",
-    "description": "Operation C is a Game Boy sequel to the popular NES titles Contra and Super C and is, essentially, a side-scrolling shooter.",
+    "description": "Operation C is a Game Boy sequel to the popular NES titles Contra and Super C and is, essentially, a side-scrolling shooter. You play a Rambo-esque character that goes around shooting everything in sight, collecting weapon upgrades and bonuses.\n\nThe game introduces the character of Black Viper to the series' oft-jumbled continuity. Black Viper would later return in the Nintendo DS title, Contra 4, as the primary villain.\n\nThe game features only five levels, two of which are played from an overhead perspective similar to Super C. Operation C is also notable in featuring the upgradable Spread Gun (from three to five shots) and introducing the Hunter Gun.\n\nThere is also the occasional platform element such as jumping puzzles, moving platforms etc., and the mandatory end-level boss.",
     "art": "covers/Operation C.png",
     "shot": "screenshots/Operation C.png",
     "manual": "manuals/Operation C.pdf",
@@ -1220,7 +1220,7 @@
   {
     "filename": "Parodius.gb",
     "title": "Parodius",
-    "description": "This is mostly the parody of Gradius (Nemesis on some systems), with some flavor from other shoot-em-ups, like Twinbee. The series is available on numerous platforms.",
+    "description": "This is mostly the parody of Gradius (Nemesis on some systems), with some flavor from other shoot-em-ups, like Twinbee. The series is available on numerous platforms.\n\nThe game is a right-to-left scrolling shoot-em-up. You can choose from 4 different flying creatures, with different weapons. You must finish 7 stages, each having a boss at the end. You may start at either one, but must complete every level to advance to the final stage.",
     "art": "covers/Parodius.png",
     "shot": "screenshots/Parodius.png",
     "manual": "manuals/Parodius.pdf",
@@ -1234,7 +1234,7 @@
   {
     "filename": "Pokemon - Yellow Version.gb",
     "title": "Pokemon - Yellow Version",
-    "description": "In Pokemon Yellow, you've finally received your Pokemon trainer's licence, and the journey to become the world's greatest Pokemon trainer begins!",
+    "description": "In Pokemon Yellow, you've finally received your Pokemon trainer's licence, and the journey to become the world's greatest Pokemon trainer begins! Pikachu accompanies you into the vast world of monsters to hunt, train and evolve. Develop the ultimate Pokemon strategy to defeat the eight bosses and become the greatest Pokemon Master of all time!",
     "art": "covers/Pokemon - Yellow Version - Special Pikachu Edition (GBC,SGB Enhanced).png",
     "shot": "screenshots/Pokemon - Yellow Version - Special Pikachu Edition (GBC,SGB Enhanced).png",
     "manual": "",
@@ -1248,7 +1248,7 @@
   {
     "filename": "Pokemon - Blue Version.gb",
     "title": "Pokemon Blue Version",
-    "description": "After venturing alone into tall grass, a voice warns the player to stop, which is revealed to be Professor Oak, a famous Pokemon researcher.",
+    "description": "After venturing alone into tall grass, a voice warns the player to stop, which is revealed to be Professor Oak, a famous Pokemon researcher. Professor Oak explains to the player that wild Pokemon may be living there, and encountering them alone can be very dangerous. He takes the player to his laboratory where the player meets Oak's grandson, a rival aspiring Pokemon Trainer. The player and the rival are both instructed to select a starter Pokemon for their travels out of Bulbasaur, Squirtle, and Charmander. Oak's Grandson will always choose the Pokemon which is stronger against the player's starting Pokemon. He will then challenge the player to a Pokemon battle with their newly obtained Pokemon, and will continue to battle the player at certain points throughout the games.",
     "art": "covers/Pokemon - Blue Version (SGB Enhanced).png",
     "shot": "screenshots/Pokemon - Blue Version (SGB Enhanced).png",
     "manual": "manuals/Pokemon - Blue Version (SGB Enhanced).pdf",
@@ -1262,7 +1262,7 @@
   {
     "filename": "Pokemon - Red Version.gb",
     "title": "Pokemon Red Version",
-    "description": "You begin your journey in Pallet Town as a young boy.",
+    "description": "You begin your journey in Pallet Town as a young boy. After a dangerous brush with wild Pokemon, Professor Oak teaches you how to capture Pokemon, and then sends you on your way as a fledgling Trainer. During your journey through Kanto, you must capture Pokemon to record their information in your Pokedex, as well as become a better Trainer by competing in Gyms scattered throughout the region. Once you've proven your mettle as a Pokemon Trainer, it's time to take on the Elite Four, a crack group of Trainers that will put all of your learned skills to the test.",
     "art": "covers/Pokemon - Red Version (SGB Enhanced).png",
     "shot": "screenshots/Pokemon - Red Version (SGB Enhanced).png",
     "manual": "manuals/Pokemon - Red Version (SGB Enhanced).pdf",
@@ -1276,7 +1276,7 @@
   {
     "filename": "Pop'n TwinBee.gb",
     "title": "Pop'n Twinbee",
-    "description": "Another top-down shooter in the Twinbee \"cute'em up\" franchise.",
+    "description": "Another top-down shooter in the Twinbee \"cute'em up\" franchise.\n\nHeroes Light and Pastel decide to go out and help a young maiden bring sense back to her scientist father, who apparently has bumped his head and transformed into a evil mastermind that seeks world domination.\n\nAs the other games in the series Pop'n Twinbee is a vertically-scrolling arcade shooter in which you and a friend get behind the controls of Twinbee and Winbee, the cutest starfighters ever created, and try to clear stage after stage of enemies with your weapons. Being a console original instead of a port, Pop'n features a number of additions to the gameplay mechanics, including an energy bar, eight difficulty levels and a handicap feature when playing with a friend (which makes most enemies target one fighter instead of the other).\n\nThe upgrade system remains consistent with the series's: you shoot colored bells which give different power-ups when collected, including multiple shots, \"options\" and shield energy. Also when correctly powered-up both fighters can join and perform powerful team-up moves.",
     "art": "covers/Pop'n TwinBee.png",
     "shot": "screenshots/Pop'n TwinBee.png",
     "manual": "",
@@ -1290,7 +1290,7 @@
   {
     "filename": "Prince of Persia.gb",
     "title": "Prince of Persia",
-    "description": "While the Sultan of Persia is fighting a war in a foreign country, his Grand Vizier Jaffar orchestrates a coup d'etat. His way to the throne lies through the Sultan's lovely daughter.",
+    "description": "While the Sultan of Persia is fighting a war in a foreign country, his Grand Vizier Jaffar orchestrates a coup d'etat. His way to the throne lies through the Sultan's lovely daughter. Jaffar kidnaps her and threatens to kill her if she refuses to marry him. Meanwhile, the man the Princess loves is thrown into the dungeon. He has only one hour to escape from his prison, defeat the guards on his way, and stop Jaffar before the terrible marriage takes place.\n\nPrince of Persia is a 2D platformer that is commonly regarded as a progenitor of the cinematic platform genre. Rather than following the more common jump-and-run mechanics, it focuses on careful advancement through fairly complex levels, emphasizing the protagonist's vulnerability and survival aspect. Rotoscoping technique is used to give more realism to the animation of the characters' movements.\n\nThe protagonist must avoid deadly traps, solve some simple jumping and environmental puzzles (such as stepping on pressure plates to raise portcullis), and engage in sword fights with the guards. The player character has an infinite amount of lives, but has to restart at the beginning of a level each time he dies, and must complete the game within an hour. The hero starts with three units of health, which can be replenished with small health potions or permanently increased with large jars.\n\nThe Game Boy Color and SNES versions of the game feature additional levels and new enemies. The Genesis version has a new intro, an altered set of graphics and four new levels.",
     "art": "covers/01) All but the Best/Prince of Persia.png",
     "shot": "screenshots/01) All but the Best/Prince of Persia.png",
     "manual": "manuals/01) All but the Best/Prince of Persia.pdf",
@@ -1304,7 +1304,7 @@
   {
     "filename": "R-Type.gb",
     "title": "R-Type",
-    "description": "R-Type is a side scrolling shoot 'em up best known for its extremely tough and strategic gameplay. You control the R-9 spaceship as it launches a last-ditch effort to repel the evil Bydo empire.",
+    "description": "R-Type is a side scrolling shoot 'em up best known for its extremely tough and strategic gameplay. You control the R-9 spaceship as it launches a last-ditch effort to repel the evil Bydo empire.\n\nThe R-9 comes equipped as standard with a small gun which can only take down the smallest of enemies without firing several shots. By holding down the fire button, it can be loaded up so as to release a large burst of energy, eliminating all but the strongest enemies in its path. From time to time, pods will come flying in your direction. Upon being shot, they release an upgrade. The first one will invariably be the one called \"The Force\", which is a weapons pod that clings either to the front or the back of your ship, absorbing any enemy bullets or acting as a bumper with which you can fly head-on into them. You can also use it as an offensive weapon by firing it and pulling it back in. Mastering the Force is vital to surviving in R-Type, since it must be used both as protection against bullet clusters, as a remote controlled cannon, and in order to clear the screen from obstacles. Other upgrades give you target-seeking missiles or a bigger main gun. Different gun types, differentiated by their colour, serve different purposes. The blue one sends laser beams bouncing across the screen (good for tunnels), the red one fires straight ahead, and the yellow one follows any walls it may encounter (good for artillery emplacements).\n\nThe stages of R-Type are made in an organic style, certainly inspired by H. R. Giger's artwork for the Alien movies. When it came out, it was considered trend-setting since it broke off from the stereotypical sci-fi mould of other shoot'em'ups. In part, the levels themselves are your enemy, which is exemplified by the fourth, where spider-like creatures weave webs that cover the screen and block your path, or levels with intricate tunnel systems. Still, the levels are best handled with a combination of strategy and reflexes, without the memorisation that is required of R-Type's contemporary rival, Gradius.",
     "art": "covers/R-Type.png",
     "shot": "screenshots/R-Type.png",
     "manual": "manuals/R-Type.pdf",
@@ -1318,7 +1318,7 @@
   {
     "filename": "R-Type II.gb",
     "title": "R-Type II",
-    "description": "The second R-Type brings more of the same shoot-em up action. Gameplay is identical to the previous R-Type, except you now have two new weapons.",
+    "description": "The second R-Type brings more of the same shoot-em up action.\n\nGameplay is identical to the previous R-Type, except you now have two new weapons.\n\nThere are six levels, with themes similar to the previous game. Notable parts include an underwater battle in level 2, and a giant Bydo fleet in level 3.\n\nThe Game Boy version of R-Type 2 is missing 1 level and both of the new weapons from the original arcade game.",
     "art": "covers/01) All but the Best/R-Type II.png",
     "shot": "screenshots/01) All but the Best/R-Type II.png",
     "manual": "",
@@ -1332,7 +1332,7 @@
   {
     "filename": "Ring Rage.gb",
     "title": "Ring Rage",
-    "description": "Ring Rage is a standard wrestling game, just without the glitz and glamour of licensed games. There are six wrestlers total, but only five are playable: 1. Gunboat Rody, a former Navy sailor 2.",
+    "description": "Ring Rage is a standard wrestling game, just without the glitz and glamour of licensed games. There are six wrestlers total, but only five are playable:\n\n1. Gunboat Rody, a former Navy sailor\n\n2. Spike, a giant of a man from the means streets of New York\n\n3. Yasha, a masked Japanese wrestler\n\n4. Shadam, a Middle Eastern grappler\n\n5. KO Joe, a former boxer now trying his hand at professional wrestling.\n\nKiller Cane, an unknown wrestler from Canada is faced in the championship bout of the tournament, but he is not a playable character.\n\nThere are only three modes, 1P v. CPU, 1P v. 2P (which is achieved through a cable link and an extra cartridge) and a tournament which you compete to go for the TWF (Taito Wrestling Federation) championship.",
     "art": "covers/Ring Rage.png",
     "shot": "screenshots/Ring Rage.png",
     "manual": "manuals/Ring Rage.pdf",
@@ -1346,7 +1346,7 @@
   {
     "filename": "Rolan's Curse.gb",
     "title": "Rolan's Curse",
-    "description": "Once the people of Rolan was terrorized by the evil ruler King Barius before he was imprisoned in a castle deep within the forest.",
+    "description": "Once the people of Rolan was terrorized by the evil ruler King Barius before he was imprisoned in a castle deep within the forest. When the king many years later was released he immediately unleashed legions of regenerating monsters on the citizens of the land. Now a hero (or two if you play it in multiplayer) is needed to defeat him and his minions.\n\nThe game is an action based RPG played with an isometric perspective. As you battle your way through enemy territory you have two weapons, the sword that you start the game with and a Fire Wand that throws fireballs. You will also find some items to use, i.e. a magic axe that can be used to clear blocked passages, chamelon's ring that makes you part of the terrain and shield to help in defense.",
     "art": "covers/Rolan's Curse.png",
     "shot": "screenshots/Rolan's Curse.png",
     "manual": "manuals/Rolan's Curse.pdf",
@@ -1360,7 +1360,7 @@
   {
     "filename": "Rolan's Curse II.gb",
     "title": "Rolan's Curse 2",
-    "description": "King Barius is back for revenge! From the flaming depths of evil, he returns, bringing forth legions of monsters more vicious than anything the world has ever known!",
+    "description": "King Barius is back for revenge! From the flaming depths of evil, he returns, bringing forth legions of monsters more vicious than anything the world has ever known!\n\nGather your wits and grab your sword! Team up with a band of worthy companions to search for treasure and magic. Then prepare yourself for a savage battle against the dreaded monarch of evil!\n\n- Control up to 4 characters.\n\n- Battery back-up feature lets you save your game anytime.\n\n- Amazing Auto-Map feature will keep you from getting lost.\n\n- Collect the fabled Fairy Wings and teleport anywhere in the game!!",
     "art": "covers/Rolan's Curse II.png",
     "shot": "screenshots/Rolan's Curse II.png",
     "manual": "",
@@ -1374,7 +1374,7 @@
   {
     "filename": "Snow Bros. Jr..gb",
     "title": "Snow Bros.",
-    "description": "The gameplay of Snow Bros. is similar to Bubble Bobble, released in 1986. The game supports up to two players, with each player taking the part of one of two snowmen Nick and Tom.",
+    "description": "The gameplay of Snow Bros. is similar to Bubble Bobble, released in 1986. The game supports up to two players, with each player taking the part of one of two snowmen Nick and Tom. Each player can throw snow at the enemies. The player must throw snow at each enemy until it is completely covered, when it turns into a snowball. An enemy partially covered in snow cannot move until it shakes it off.",
     "art": "covers/01) All but the Best/Snow Bros. Jr..png",
     "shot": "screenshots/01) All but the Best/Snow Bros. Jr..png",
     "manual": "",
@@ -1388,7 +1388,7 @@
   {
     "filename": "SolarStriker.gb",
     "title": "SolarStriker",
-    "description": "You are in control of the ultra high-performance fighter ship, the SolarStriker. It is your mission to attack and destroy the main Reticulon base.",
+    "description": "You are in control of the ultra high-performance fighter ship, the SolarStriker. It is your mission to attack and destroy the main Reticulon base. There are six vertical scrolling stages that you must progress through in order to destroy Reticulon. Each stage is under control of a boss which must be destroyed to clear the area. One of the first shooters for GameBoy.",
     "art": "covers/01) All but the Best/SolarStriker.png",
     "shot": "screenshots/01) All but the Best/SolarStriker.png",
     "manual": "manuals/01) All but the Best/SolarStriker.pdf",
@@ -1402,7 +1402,7 @@
   {
     "filename": "Solomon's Club.gb",
     "title": "Solomon's Club",
-    "description": "Solomon's Club is a sequel to Solomon's Key, which has similar gameplay combining platform gaming with puzzle elements. There are five levels, each with ten rooms.",
+    "description": "Solomon's Club is a sequel to Solomon's Key, which has similar gameplay combining platform gaming with puzzle elements. There are five levels, each with ten rooms. In each room you must retrieve the key and go to the exit.\n\nYou can create or remove blocks to your left and right, or while crouching lower-left and lower right. You can use these blocks as platform to climb onto, or use them to block enemies or fire balls. You can also break blocks by jumping from below them, like doing a headbutt. There are several enemies, such as fire breathing dragons, shooting gargoyles and ghosts.\n\nCollect bells to release fairies from the exit as bonus points, and collect coins for money to spend in shops. Some rooms have a shop where you can buy items, such as fire balls or hammers.",
     "art": "covers/Solomon's Club.png",
     "shot": "screenshots/Solomon's Club.png",
     "manual": "manuals/Solomon's Club.pdf",
@@ -1416,7 +1416,7 @@
   {
     "filename": "Spanky's Quest.gb",
     "title": "Spanky's Quest",
-    "description": "Spanky's Quest is a game about a monkey who decides to go on a picnic.",
+    "description": "Spanky's Quest is a game about a monkey who decides to go on a picnic. While on his way through the forest he see's a witch in the sky and out of nowhere bricks begin to make a tower around the area Spanky is in. The witch challenges Spanky to come to the final tower and she will free him but before she flies away she turns the fruits in his knapsack into living fruit monsters. Unknowingly, she drops a magic ball which agrees to help Spanky out on his quest.\n\nThe object of the game is to get through all six of the towers which consist of 10 levels as well as a boss battle. In order to proceed to the next level, you must acquire the amount of keys the locked door requires. Keys are found lying around until a monster picks them up in which case you must use your ball on them to get it. The ball has for different attacks: baseball, soccer ball, volleyball and basketball. In order to attain a stronger ball, the ball must be bounced on Spankey's head. Spanky also gets different hats which give him a specific power until he loses it or the level ends.",
     "art": "covers/01) All but the Best/Spanky's Quest.png",
     "shot": "screenshots/01) All but the Best/Spanky's Quest.png",
     "manual": "manuals/01) All but the Best/Spanky's Quest.pdf",
@@ -1430,7 +1430,7 @@
   {
     "filename": "Spud's Adventure.gb",
     "title": "Spud's Adventure",
-    "description": "In Spud's Adventure the player takes the role of a potato who is tasked with rescuing the king's kidnapped daughter. To do so, he has to climb a tower consisting of many floors.",
+    "description": "In Spud's Adventure the player takes the role of a potato who is tasked with rescuing the king's kidnapped daughter. To do so, he has to climb a tower consisting of many floors. There are two types of gameplay encountered during the game: Finding the exit in a maze-like stage while shooting enemies (touching them takes away life energy and eventually leads to death) or a Soko-Ban variant. Here the player has to push blocks into certain marked positions, but they cant be pulled. In those stages the level can be reset without penalty.\n\nShooting enemies awards experience points which eventually leads to a health upgrade.\n\nThe protagonist also encounters various friendly sprites who can be talked to and give hints.",
     "art": "covers/Spud's Adventure.png",
     "shot": "screenshots/Spud's Adventure.png",
     "manual": "manuals/Spud's Adventure.pdf",
@@ -1444,7 +1444,7 @@
   {
     "filename": "Super Mario Land.gb",
     "title": "Super Mario Land",
-    "description": "Once upon a time, there was a peaceful world called Sarasaland. In this world there were 4 kingdoms named Birabuto, Muda, Easton and Chai.",
+    "description": "Once upon a time, there was a peaceful world called Sarasaland. In this world there were 4 kingdoms named Birabuto, Muda, Easton and Chai. One day, the skies of Sarasaland were suddenly covered by a huge black cloud. From a crack in this cloud, the unknown space monster Tatanga emerged to try to conquer Sarasaland. Tatanga hypnotized the people of all the kingdoms so that he could control them in any way he liked. In this way he took over Sarasaland. Now, he wants to marry Princess Daisy of Sarasaland and make her his queen. Mario came to know of these events, and he has started on a journey to the Chai Kingdom where Princess Daisy is held captive, in order to restore peace to Sarasaland. Can Mario defeat Tatanga, release people from his interstellar hypnosis, and rescue Princess Daisy? It's all up to you and Mario's skill. Go for it Mario!",
     "art": "covers/Super Mario Land.png",
     "shot": "screenshots/Super Mario Land.png",
     "manual": "manuals/Super Mario Land.pdf",
@@ -1458,7 +1458,7 @@
   {
     "filename": "Super Mario Land 2.gb",
     "title": "Super Mario Land 2 : 6 Golden Coins",
-    "description": "Second in the Game Boy's line of Mario games, this one takes the evolutionary steps that Super Mario 3 for the NES took with it's predecessors.",
+    "description": "Second in the Game Boy's line of Mario games, this one takes the evolutionary steps that Super Mario 3 for the NES took with it's predecessors. New graphics, power-ups, challenges, and a completely original storyline. A bad version of Mario, Wario, takes over Mario's castle and locks him out using 6 golden coins. Mario must search for said coins all over Mario Land to take back his castle and go one-on-one with Wario himself.",
     "art": "covers/Super Mario Land 2 - 6 Golden Coins.png",
     "shot": "screenshots/Super Mario Land 2 - 6 Golden Coins.png",
     "manual": "manuals/Super Mario Land 2 - 6 Golden Coins.pdf",
@@ -1472,7 +1472,7 @@
   {
     "filename": "Super R.C. Pro-Am.gb",
     "title": "Super R.C. Pro-Am",
-    "description": "Super R.C. Pro-Am is the Game Boy update to Rare's classic radio controlled car game.",
+    "description": "Super R.C. Pro-Am is the Game Boy update to Rare's classic radio controlled car game. 4 computer or human racers attempt to get around the track as fast as possible while avoiding hazards like oil slicks and traffic cones. There are also weapons that you can use to disable the other cars temporarily.\n\nThe goal of the game is to collect the letter icons found on the tracks that spell \"NINTENDO.\" Collecting the letters allows you to move up to faster cars and eventually win the championship.",
     "art": "covers/Super R.C. Pro-Am.png",
     "shot": "screenshots/Super R.C. Pro-Am.png",
     "manual": "manuals/Super R.C. Pro-Am.pdf",
@@ -1500,7 +1500,7 @@
   {
     "filename": "Tecmo Bowl.gb",
     "title": "Tecmo Bowl",
-    "description": "The most popular American football game to hit the NES console, Tecmo Bowl pits the player vs.",
+    "description": "The most popular American football game to hit the NES console, Tecmo Bowl pits the player vs. the computer in 11 game single-elimination playoff action, or you can go head-to-head with a human opponent in action or coach mode. There are 12 teams of real NFL players (circa 1988) to choose from, but don't look for official NFL team logos or mascots like Bears or Dolphins--Tecmo Bowl has the NFLPA but not the NFL license.\n\nThe play perspective is top-down and the screen scrolls horizontally. Player graphics are large and colorful, which is made possible by limiting the number of players to nine per team. Animated cut-scenes are shown following touchdowns and at half-time, and crowds are shown filling the endzone seats.\n\nThere are four plays to choose from on offense--usually two runs and two passes. The player takes control of the quarterback before the snap and then either hands off to the running back or works through his receiver progression from the top to the bottom of the screen. Defense consists of trying to guess which offensive play the opponent will select and then taking control of one of the defensive players before the snap. A very simple power meter system is used for kicking field goals, extra points, and punts.\n\nThere are no game or season stats and there is no way to save your season, but there is a password feature allowing you to resume tournament play where you left off.",
     "art": "covers/01) All but the Best/Tecmo Bowl.png",
     "shot": "screenshots/01) All but the Best/Tecmo Bowl.png",
     "manual": "manuals/01) All but the Best/Tecmo Bowl.pdf",
@@ -1514,7 +1514,7 @@
   {
     "filename": "Tennis.gb",
     "title": "Tennis",
-    "description": "Tennis is, as the name implies, Nintendo's version of the sport. One player vs computer or two players will compete in tennis in a more or less standard suite of rules (scoring, sets etc.).",
+    "description": "Tennis is, as the name implies, Nintendo's version of the sport. One player vs computer or two players will compete in tennis in a more or less standard suite of rules (scoring, sets etc.).\n\nPlayers are controlled by the movement buttons, but while button A indicates a low hit, button B indicates a high one. You have the choice of four levels of computer AI, or two player via Game Boy link cable. The usual assortment of shots are available, including forehand and backhand, lobs and volleys when up close to the net.",
     "art": "covers/01) All but the Best/Tennis.png",
     "shot": "screenshots/01) All but the Best/Tennis.png",
     "manual": "manuals/01) All but the Best/Tennis.pdf",
@@ -1528,7 +1528,7 @@
   {
     "filename": "Tetris.gb",
     "title": "Tetris",
-    "description": "This version of Tetris is one of many conversions of the famous block-stacking game, and was included with the Game Boy upon its release in several territories.",
+    "description": "This version of Tetris is one of many conversions of the famous block-stacking game, and was included with the Game Boy upon its release in several territories. The goal is to place pieces made up of four tiles in a ten-by-twenty well, organizing them into complete rows, which then disappear. As rows are cleared, the pace of the game increases and the background changes, and the game ends if the stack reaches the top of the well.\n\nThe game is very similar to Nintendo's own NES version of the game, featuring the same \"Type A\" endless and \"Type B\" set-clear modes. The game also features a 2-player versus mode that can be played with two Game Boys, two copies of Tetris, and a Game Boy link cable. Clearing lines in this mode will cause the other player's stack to rise, with the goal being to make the other player lose.",
     "art": "covers/Tetris.png",
     "shot": "screenshots/Tetris.png",
     "manual": "manuals/Tetris.pdf",
@@ -1542,7 +1542,7 @@
   {
     "filename": "Tetris 2.gb",
     "title": "Tetris 2",
-    "description": "Unlike the original Tetris, Tetris 2 has you clearing the field of blocks in a different way.",
+    "description": "Unlike the original Tetris, Tetris 2 has you clearing the field of blocks in a different way. Each play field starts with different colored dots (in this case black, gray and white), with one of each color flashing.\n\nThe blocks are made up of the same three colors, and by matching blocks of the same color over the top or to the side of the dot will clear the dot and those blocks from the screen. If you clear a flashing dot, all the corresponding dots of the same color will be cleared.\n\nTo complete the round just clear the dots, not the blocks themselves.",
     "art": "covers/Tetris 2 (SGB Enhanced).png",
     "shot": "screenshots/Tetris 2 (SGB Enhanced).png",
     "manual": "manuals/Tetris 2 (SGB Enhanced).pdf",
@@ -1556,7 +1556,7 @@
   {
     "filename": "Tetris Attack.gb",
     "title": "Tetris Attack",
-    "description": "All is not well on Yoshi's Island! The devious king Bowser has cast a spell on the island's inhabitants, turning them into his mindless slaves.",
+    "description": "All is not well on Yoshi's Island! The devious king Bowser has cast a spell on the island's inhabitants, turning them into his mindless slaves. Only Yoshi has escaped its effects, and so he must set off to free his friends, and to defeat Bowser and break the spell.\n\nTetris Attack is a fact-paced action puzzler featuring the colorful cast of characters from Yoshi's Island. A stack of blocks continually rises from the bottom of the screen, and the player controls a cursor which can swap any two blocks horizontally. Make a row or column of three or more and they'll clear, potentially creating combos from new blocks falling to take their place. Combos will send large garbage blocks to your opponent, which must be eliminated by clearing a piece that is touching it, turning it into normal blocks.\n\nThe game offers a story mode against the computer, as well as a 2-player versus mode, an endless mode, a timed mode where a certain number of blocks must be cleared, and a puzzle mode where a set arrangement of blocks must be cleared in a specific number of moves. The game is based on the Japan-only title Panel de Pon.",
     "art": "covers/Tetris Attack (SGB Enhanced).png",
     "shot": "screenshots/Tetris Attack (SGB Enhanced).png",
     "manual": "manuals/Tetris Attack (SGB Enhanced).pdf",
@@ -1570,7 +1570,7 @@
   {
     "filename": "Tetris Blast.gb",
     "title": "Tetris Blast",
-    "description": "In this version of Tetris, the basic 'clear the line of puzzle blocks' element is still here, but with an added twist: inside the many block shapes are bombs.",
+    "description": "In this version of Tetris, the basic 'clear the line of puzzle blocks' element is still here, but with an added twist: inside the many block shapes are bombs. By linking the bombs while clearing the play field as usual (creating a line of blocks), more of the field is cleared as the bombs explode.\n\nThe usual gameplay modes are included, i.e. challenge, clear as many lines as possible, time trial, clear as many lines as possible before time runs out and 2 player battle.",
     "art": "covers/01) All but the Best/Tetris Blast (SGB Enhanced).png",
     "shot": "screenshots/01) All but the Best/Tetris Blast (SGB Enhanced).png",
     "manual": "manuals/01) All but the Best/Tetris Blast (SGB Enhanced).pdf",
@@ -1584,7 +1584,7 @@
   {
     "filename": "Tetris Plus.gb",
     "title": "Tetris Plus",
-    "description": "This is yet another updated version of Tetris which was released for PlayStation, Saturn, and Game Boy. This version features Classic mode, Puzzle mode, Versus mode, and Edit mode.",
+    "description": "This is yet another updated version of Tetris which was released for PlayStation, Saturn, and Game Boy. This version features Classic mode, Puzzle mode, Versus mode, and Edit mode. In Puzzle mode, you must save the professor who climbs his way to the top. In order to do that, you must clear the blocks away and bring him to the bottom. Versus mode brings you head to head with another player. Edit mode allows you to create and save your own custom levels.",
     "art": "covers/01) All but the Best/Tetris Plus (SGB Enhanced).png",
     "shot": "screenshots/01) All but the Best/Tetris Plus (SGB Enhanced).png",
     "manual": "manuals/01) All but the Best/Tetris Plus (SGB Enhanced).pdf",
@@ -1598,7 +1598,7 @@
   {
     "filename": "Amazing Spider-Man.gb",
     "title": "The Amazing Spider-Man",
-    "description": "Mary Jane has been kidnapped! One of Spider-Man's enemies has discovered his true identity, Peter Parker. Unfortunately for Spidey, exactly who has kidnapped Mary Jane is a mystery.",
+    "description": "Mary Jane has been kidnapped! One of Spider-Man's enemies has discovered his true identity, Peter Parker. Unfortunately for Spidey, exactly who has kidnapped Mary Jane is a mystery. So, you must guide Spider-Man through 5 levels to find where she is hidden.\n\nThis 1990 release is a side-scrolling action game. Spider-Man can use his web making abilities to either hang from the ceiling or shoot webs out like bullets, but most of his attacks are punches or kicks. Also included are two vertical-scrolling building climbing segments.",
     "art": "covers/01) All but the Best/Amazing Spider-Man, The.png",
     "shot": "screenshots/01) All but the Best/Amazing Spider-Man, The.png",
     "manual": "manuals/01) All but the Best/Amazing Spider-Man, The.pdf",
@@ -1612,7 +1612,7 @@
   {
     "filename": "Final Fantasy Legend.gb",
     "title": "The Final Fantasy Legend",
-    "description": "The first 'Final Fantasy' title on the Game Boy, Legend allows you to choose from 8 different characters, from the usual human male or female to zombie, wererat, redbull (not the drink), clipper or",
+    "description": "The first 'Final Fantasy' title on the Game Boy, Legend allows you to choose from 8 different characters, from the usual human male or female to zombie, wererat, redbull (not the drink), clipper or mutant male or female. No matter which you choose, the goal stays the same: Increase your experience points and abilities by defeating many varied enemies through-out the land.\n\nMuch like the FF series of old (and new), you can choose members to join your party and the quest that lies ahead (either warriors, mutants or creatures). Every character has a limit to the amount of moves available during every battle and experience points are gained after each fight, increasing stamina, power, etc.",
     "art": "covers/Final Fantasy Legend, The.png",
     "shot": "screenshots/Final Fantasy Legend, The.png",
     "manual": "manuals/Final Fantasy Legend, The.pdf",
@@ -1626,7 +1626,7 @@
   {
     "filename": "King of Fighters '95.gb",
     "title": "The King of Fighters '95",
-    "description": "The first sequel in the King of Fighters series picks up a year after the end of the first tournament.",
+    "description": "The first sequel in the King of Fighters series picks up a year after the end of the first tournament. Once again, fighters from all over the world receive a mysterious invitation to a team-based fighting tournament. And just like last year, it appears that the notorious criminal Rugal Bernstein is behind it, apparently returning from the dead to raise havok once again...\n\nThe King of Fighters '95 introduces Kyo Kusanagi's rival Iori Yagami, and firmly places Kyo as the main character for the rest of the series. The gameplay of The King of Fighters '95 is essentially unchanged from the previous title, though it does introduce the \"team edit\" concept which would remain as a standard feature of the series. Using the \"team edit\" feature, it is possible to create a totally customized team using any of the available fighters, or use one of the default teams if you wish.",
     "art": "covers/King of Fighters '95, The (SGB Enhanced).png",
     "shot": "screenshots/King of Fighters '95, The (SGB Enhanced).png",
     "manual": "",
@@ -1640,7 +1640,7 @@
   {
     "filename": "Zelda - Link's Awakening.gb",
     "title": "The Legend of Zelda : Link's Awakening",
-    "description": "After being attacked at sea, Link's ship sinks, and he finds himself stranded on Koholint Island. He awakens to see a beautiful woman looking down at him.",
+    "description": "After being attacked at sea, Link's ship sinks, and he finds himself stranded on Koholint Island. He awakens to see a beautiful woman looking down at him. He soon learns the island has a giant egg on top of a mountain that the Wind Fish inhabits deep inside. Link is told to \"awaken the wind fish and all will be answered,\" so Link sets out on another quest.",
     "art": "covers/Legend of Zelda, The - Link's Awakening.png",
     "shot": "screenshots/Legend of Zelda, The - Link's Awakening.png",
     "manual": "manuals/Legend of Zelda, The - Link's Awakening.pdf",
@@ -1654,7 +1654,7 @@
   {
     "filename": "Lion King.gb",
     "title": "The Lion King",
-    "description": "Young Simba just can't wait to be king.",
+    "description": "Young Simba just can't wait to be king. His father is the current King of the Savannah and the young prince is able to frolic the lands at will; jumping on and around other subjects of this animal kingdom. When Simba's father, King Mufasa, is killed and his evil brother Scar takes over the kingdom, Simba is banished from the lands of his birthright and has to grow up fast, honing his skills, for the day of his return.\n\nThe Lion King, based on the famous Disney movie, is a platform game where you control Simba - initially as a young cub, and later as an adult lion. The plot of the game follows the plot of the movie. Each of the levels represents a part of the movie.\n\nAs young Simba, you can fight various beasts, such as lizards, by jumping on them. You can also roar to scare some creatures into submission, though every time you roar, you have to wait for your \"roar meter\" to charge.\n\nAs an adult lion, you can still roar and jump, but now you fight enemies by slashing at them with your claws (if you're skillful enough, you can also grab them and toss them off the screen).\n\nThe game features no in-game save function, and it needs to be replayed from the beginning every time.",
     "art": "covers/01) All but the Best/Lion King, The.png",
     "shot": "screenshots/01) All but the Best/Lion King, The.png",
     "manual": "manuals/01) All but the Best/Lion King, The.pdf",
@@ -1668,7 +1668,7 @@
   {
     "filename": "New Chessmaster.gb",
     "title": "The New Chessmaster",
-    "description": "Say goodbye to lost pieces and slow opponents. THE NEW CHESSMASTER lets you play in one of 16 different skill levels from Newcomer to Grandmaster.",
+    "description": "Say goodbye to lost pieces and slow opponents. THE NEW CHESSMASTER lets you play in one of 16 different skill levels from Newcomer to Grandmaster. A Teaching mode allows you to examine all possible moves more easily, letting you play out then reverse any scenario. You can pause your game anytime and return later without having to set up the board all over again. Play against the computer or a human adversary in the most inclusive chess package ever. Whether you're looking for a chess companion, a well-suited opponent, or a friendly instructor, THE NEW CHESSMASTER is the perfect solution.",
     "art": "covers/01) All but the Best/New Chessmaster, The.png",
     "shot": "screenshots/01) All but the Best/New Chessmaster, The.png",
     "manual": "manuals/01) All but the Best/New Chessmaster, The.pdf",
@@ -1682,7 +1682,7 @@
   {
     "filename": "Sword of Hope.gb",
     "title": "The Sword of Hope",
-    "description": "A dragon has gained control over the king of Riccar, manipulating him into removing the Sword of Hope from a painting, releasing its curse.",
+    "description": "A dragon has gained control over the king of Riccar, manipulating him into removing the Sword of Hope from a painting, releasing its curse. Summoning the dark power mammon the dragon turned the people of Riccar into trees. When Prince Theo is born, the king tries to murder him, but Theo is saved by the brave knight Pascal who flees with him into a forest where three magicians live who conceal the king's castle underground to prevent the evil from spreading. After living in the forest for 15 years, Prince Theo is finally strong enough to try and stop the dragon, using the Sword of Hope one of the magicians had retrieved.\n\nSword of Hope combines Adventure and RPG elements. The prince can select commands such as \"look\", \"open\", \"magic\", \"use\" etc. to interact with the game world, talk to NPCs or solve puzzles. When he encounters an enemy, the game switches to a turn based battle mode in which enemies have to be fought in typical console style RPG battles.",
     "art": "covers/01) All but the Best/Sword of Hope, The.png",
     "shot": "screenshots/01) All but the Best/Sword of Hope, The.png",
     "manual": "manuals/01) All but the Best/Sword of Hope, The.pdf",
@@ -1696,7 +1696,7 @@
   {
     "filename": "Sword of Hope II.gb",
     "title": "The Sword of Hope II",
-    "description": "The Sword of Hope II follows the story of Prince Theo, who, together with the young survivor Mute and other allies, sets out to confront evil.",
+    "description": "The Sword of Hope II follows the story of Prince Theo, who, together with the young survivor Mute and other allies, sets out to confront evil. Five hundred years ago, King Winder sealed the demon Zakdos in a casket, but when a thief breaks it open, Zakdos escapes, annihilates nearly all of wizard Colin's clan, and steals the Sword of Hope, once used to seal away a dragon. Your mission is to stop Zakdos and reclaim the sword before the dragon awakens. Unlike its predecessor, you now command a party of up to three characters. The world is explored from a first-person perspective by selecting directional arrows and using commands such as \"look,\" \"open,\" or \"hit\" to interact with the environment, talk to NPCs, or solve puzzles. Battles are turn-based - you can attack, use items or magic, or attempt to escape.",
     "art": "covers/01) All but the Best/Sword of Hope II, The.png",
     "shot": "screenshots/01) All but the Best/Sword of Hope II, The.png",
     "manual": "manuals/01) All but the Best/Sword of Hope II, The.pdf",
@@ -1710,7 +1710,7 @@
   {
     "filename": "TMNT - Fall Of Foot Clan.gb",
     "title": "TMNT - Fall Of Foot Clan",
-    "description": "The Turtles' first Game Boy game is a fairly simple platforming-style game, where Leonardo, Michaelangelo, Raphael, and Donatello must battle against Krang and Shredder and save their friend April",
+    "description": "The Turtles' first Game Boy game is a fairly simple platforming-style game, where Leonardo, Michaelangelo, Raphael, and Donatello must battle against Krang and Shredder and save their friend April O'Neil in the process.",
     "art": "covers/Teenage Mutant Hero Turtles - Fall of the Foot Clan.png",
     "shot": "screenshots/Teenage Mutant Hero Turtles - Fall of the Foot Clan.png",
     "manual": "manuals/Teenage Mutant Hero Turtles - Fall of the Foot Clan.pdf",
@@ -1724,7 +1724,7 @@
   {
     "filename": "TMNT II - Back from Sewers.gb",
     "title": "TMNT II - Back from Sewers",
-    "description": "Teenage Mutant Ninja Turtles II: Back from the Sewers is the second Teenage Mutant Ninja Turtles for the Game Boy. It is a sequel to Fall of the Foot Clan. This time, Splinter was captured by Krang.",
+    "description": "Teenage Mutant Ninja Turtles II: Back from the Sewers is the second Teenage Mutant Ninja Turtles for the Game Boy. It is a sequel to Fall of the Foot Clan.\n\nThis time, Splinter was captured by Krang. Leonardo, Michelangelo, Raphael and Donatello go in search of their master until arriving at Krang and Shredder.",
     "art": "covers/01) All but the Best/Teenage Mutant Ninja Turtles II - Back from the Sewers.png",
     "shot": "screenshots/01) All but the Best/Teenage Mutant Ninja Turtles II - Back from the Sewers.png",
     "manual": "manuals/01) All but the Best/Teenage Mutant Ninja Turtles II - Back from the Sewers.pdf",
@@ -1738,7 +1738,7 @@
   {
     "filename": "TMNT III - Radical Rescue.gb",
     "title": "TMNT III - Radical Rescue",
-    "description": "The player begins the game by taking control of Michaelangelo, who must rescue the other turtles, along with Splinter and April O'Neil, who have been kidnapped by Shredder.[2] Unlike other games",
+    "description": "The player begins the game by taking control of Michaelangelo, who must rescue the other turtles, along with Splinter and April O'Neil, who have been kidnapped by Shredder.[2] Unlike other games based on the franchise, this is a scrolling action-adventure game reminiscent of the Metroid and the later Castlevania: Symphony of the Night. Each turtle has a different ability which is necessary to finish the game. Michaelangelo can hover using his nunchakus as a helicopter, Leonardo can drill the floor by spinning with his katana, Raphael can hide himself inside his shell to enter passages that are otherwise too small to enter, and Donatello can stick to and climb walls.\n\nThe bosses are Scratch, Dirtbag, a Triceraton, Scale Tale, and Shredder (in this game known as Cyber-Shredder).",
     "art": "covers/01) All but the Best/Teenage Mutant Ninja Turtles III - Radical Rescue.png",
     "shot": "screenshots/01) All but the Best/Teenage Mutant Ninja Turtles III - Radical Rescue.png",
     "manual": "manuals/01) All but the Best/Teenage Mutant Ninja Turtles III - Radical Rescue.pdf",
@@ -1752,7 +1752,7 @@
   {
     "filename": "Tobu Tobu Girl.gb",
     "title": "Tobu Tobu Girl",
-    "description": "Your cat is floating into the atmosphere and you are the only one who can save it.",
+    "description": "Your cat is floating into the atmosphere and you are the only one who can save it. Jump, dash, and flap your arms to maneuver around perilous obstacles racing against the clock to retrieve your pet friend before it is too late! Tobu Tobu Girl is a fun and challenging arcade platformer developed by Tangram Games featuring an original soundtrack by potato-tan.",
     "art": "",
     "shot": "screenshots/04) Unlicensed Homebrew/Tobu Tobu Girl (World) (Aftermarket) (Homebrew).png",
     "manual": "",
@@ -1766,7 +1766,7 @@
   {
     "filename": "Trax.gb",
     "title": "Trax",
-    "description": "Trax is a side scrolling shoot'em up game that put you in command of a tiny tank in some classic action levels.",
+    "description": "Trax is a side scrolling shoot'em up game that put you in command of a tiny tank in some classic action levels. Pitting your tankmanship against a villainous tank master who is creating machine of destruction that has taken over the land.\n\nYou can fire from multiple angles but due to the control limitations of the Game Boy, your vehicle can only turn his turret clockwise.\n\nThere are a few power ups which increase your weapons like explosive cannonballs, multi-direction shots or anti-armor shells.\n\nThe game also features some boss fights as you progress through the game's several different environments, forest, desert, cave, city, and tank factory.",
     "art": "covers/Trax.png",
     "shot": "screenshots/Trax.png",
     "manual": "manuals/Trax.pdf",
@@ -1780,7 +1780,7 @@
   {
     "filename": "Trip World.gb",
     "title": "Trip World",
-    "description": "Thanks to the Maita Flower, Trip World is at peace. It is being protected by an old Shabubu, a member of a race of bunny-like beings. The flower grows on the holy mountain known as Mount Dubious.",
+    "description": "Thanks to the Maita Flower, Trip World is at peace. It is being protected by an old Shabubu, a member of a race of bunny-like beings. The flower grows on the holy mountain known as Mount Dubious. However, one day the old Shabubu is attacked and the Maita Flower is stolen. Trip World becomes disarranged and its inhabitants don't stop quarreling with each other. But there is one hope in the form of the old Shabubu's grandson, Yacopu (also spelled Yakopoo).\n\nThe player controls Yacopu through five stages in this side-scrolling platformer. The young Shabubu's trademark ability is to shapeshift into different forms. In his normal form, he is able to walk and jump as well as to kick enemies, Yacopu's primary way of attacking. Unlike in many other platformers, many of the enemies don't harm you on contact and push your character around instead. However, certain foes might attack you after you damaged them, while others do so from the beginning.\n\nAt almost any time, the player can change to the flying or fish form. Flying Yacopu is able to reach places he wouldn't otherwise be able to, while the fishy hero is best suited for underwater areas. You also come across power-ups that temporarily give your character new powers, such as stunning enemies with seeds, bouncing around as a ball, or attacking with an extended tail. Beneath the mountain, settings in the game include a jungle, the ocean, and a castle. In each stages, you have to defeat a boss at the end. Eventually, you will encounter the one who stole the Maita Flower. The flower must be retrieved in order to save peace in Trip World.",
     "art": "covers/Trip World.png",
     "shot": "screenshots/Trip World.png",
     "manual": "manuals/Trip World.pdf",
@@ -1794,7 +1794,7 @@
   {
     "filename": "Wario Blast.gb",
     "title": "Wario Blast : Featuring Bomberman!",
-    "description": "OH, NO! Wario has stumbled upon the secret gateway into Bomberland! Now the greedy warmonger wants to claim the land, its inhabitants, and treasures as his own.",
+    "description": "OH, NO! Wario has stumbled upon the secret gateway into Bomberland! Now the greedy warmonger wants to claim the land, its inhabitants, and treasures as his own. Entering the underground labyrinth, he meets the resistance of the Madbombers - explosives experts who have some TNT tricks and surprises to toss at Wario. The battle heats up as Wario and Bomberman each try to outwit the other, level by level in a dynamite duel!",
     "art": "covers/Wario Blast featuring Bomberman! (SGB Enhanced).png",
     "shot": "screenshots/Wario Blast featuring Bomberman! (SGB Enhanced).png",
     "manual": "manuals/Wario Blast featuring Bomberman! (SGB Enhanced).pdf",
@@ -1808,7 +1808,7 @@
   {
     "filename": "Wario Land.gb",
     "title": "Wario Land : Super Mario Land 3",
-    "description": "Wario, Mario's greedy rival from Super Mario Land 2: 6 Golden Coins, is more determined than ever to get a castle after being booted out of Mario's.",
+    "description": "Wario, Mario's greedy rival from Super Mario Land 2: 6 Golden Coins, is more determined than ever to get a castle after being booted out of Mario's. He has heard that the pirates of Kitchen Island have a golden Statue of Princess Toadstool that's worth a king's ransom! Wario figures that if he swipes the Princess' statue for himself, as well as all the other loot the pirates have hoarded, he'll have more than enough cash for a castle that's even bigger and better than Mario's!",
     "art": "covers/Wario Land - Super Mario Land 3.png",
     "shot": "screenshots/Wario Land - Super Mario Land 3.png",
     "manual": "manuals/Wario Land - Super Mario Land 3.pdf",
@@ -1822,7 +1822,7 @@
   {
     "filename": "Wario Land II.gb",
     "title": "Wario Land II",
-    "description": "Seeking revenge on Wario after he stole their treasure in Wario Land: Super Mario Land 3, special agents from the Black Sugar Gang of Kitchen Island sneak into Wario's newly built castle, steal back",
+    "description": "Seeking revenge on Wario after he stole their treasure in Wario Land: Super Mario Land 3, special agents from the Black Sugar Gang of Kitchen Island sneak into Wario's newly built castle, steal back the treasure, and leave the castle and the surrounding area a mess. As Wario, you must clean the place up and take back what you now call your own.\n\nIn a change from the original Wario Land, Wario is now immortal, to a certain point. Instead of dying when hit by an enemy, Wario loses the coins he collected along his travels in each level. And he can also turn into other Warios. For example, if he is hit by a bee, Wario puffs up into a giant ball of air, and floats up to the top of the level. Only when hit by a sharp object will he return to normal. There are other types, like Fire Wario and Zombie Wario, and each can have its advantages, like getting to other areas otherwise unreachable, or they can halt your progress.",
     "art": "covers/Wario Land II (SGB Enhanced).png",
     "shot": "screenshots/Wario Land II (SGB Enhanced).png",
     "manual": "manuals/Wario Land II (SGB Enhanced).pdf",
@@ -1836,7 +1836,7 @@
   {
     "filename": "Zen - Intergalactic Ninja.gb",
     "title": "Zen : Intergalactic Ninja",
-    "description": "LORD CONTAMINOUS MUST BE STOPPED BEFORE EARTH IS TRASHED! Zen's the name. Intergalactic-for-hire, fulfilling his destiny by taking on the toughest environmental problems in the cosmos.",
+    "description": "LORD CONTAMINOUS MUST BE STOPPED BEFORE EARTH IS TRASHED! Zen's the name. Intergalactic-for-hire, fulfilling his destiny by taking on the toughest environmental problems in the cosmos. Today this master of martial arts and mediation faces his ultimate cause. Planet Earth is teetering on the brink of total destruction. It was a nice place until Lord Contaminous came to life in an illegal toxic waste dump he's bent on turning the entire planet into a contaminated carnival of horrors, He's enlisted the help of his crud-loving cronies Oil Stick, Smogger, and Garbageman. Zen needs your help to conquer each pollution-powered creature and ultimately take on Lord Contaminous it Earth is ever to be restored to ecological harmony.",
     "art": "covers/Zen - Intergalactic Ninja.png",
     "shot": "screenshots/Zen - Intergalactic Ninja.png",
     "manual": "",
