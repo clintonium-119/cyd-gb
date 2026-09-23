@@ -4,6 +4,7 @@
 
 #define DPAD_MASK (COMBO_BTN_UP | COMBO_BTN_DOWN | COMBO_BTN_LEFT | COMBO_BTN_RIGHT)
 #define MENU_MASK (COMBO_BTN_START | COMBO_BTN_SELECT)
+#define FF_MASK (COMBO_BTN_SELECT | COMBO_BTN_A | COMBO_BTN_B)
 
 /*
  * The direction the caller is holding, checked in a fixed order so a sloppy
@@ -45,6 +46,7 @@ int combo_init(combo_state_t* s)
     s->repeat_due_ms = 0;
     s->active_dir = 0;
     s->menu_latch = 0;
+    s->ff_latch = 0;
     return COMBO_OK;
 }
 
@@ -85,6 +87,20 @@ static uint8_t combo_menu(combo_state_t* s)
     }
     s->menu_latch = 1;
     return (uint8_t)COMBO_EVENT_MENU;
+}
+
+/* Select + A + B, one-shot, latched exactly like the menu combo. */
+static uint8_t combo_fast_forward(combo_state_t* s)
+{
+    if ((s->stable_word & FF_MASK) != FF_MASK) {
+        s->ff_latch = 0;
+        return (uint8_t)COMBO_EVENT_NONE;
+    }
+    if (s->ff_latch) {
+        return (uint8_t)COMBO_EVENT_NONE;
+    }
+    s->ff_latch = 1;
+    return (uint8_t)COMBO_EVENT_FAST_FORWARD;
 }
 
 /*
@@ -133,11 +149,15 @@ int combo_update(combo_state_t* s, uint16_t raw_word, uint32_t now_ms,
     combo_debounce(s, raw_word, now_ms);
 
     /*
-     * Menu first, and it returns before the adjustment machine runs at all.
-     * That is what gives it priority: the adjustment edge or due repeat is
-     * still there on the next call, since the debounced word has not moved.
+     * Menu first, then fast-forward, then adjustment, each skipped once an
+     * earlier one fires. That is what gives the order priority: the losing
+     * edge or due repeat is still there on the next call, since the
+     * debounced word has not moved.
      */
     event = combo_menu(s);
+    if (event == (uint8_t)COMBO_EVENT_NONE) {
+        event = combo_fast_forward(s);
+    }
     if (event == (uint8_t)COMBO_EVENT_NONE) {
         event = combo_adjust(s, now_ms);
     }
@@ -159,6 +179,9 @@ uint8_t combo_joypad(const combo_state_t* s)
     }
     if (s->menu_latch) {
         word = (uint16_t)(word & ~(uint16_t)MENU_MASK);
+    }
+    if (s->ff_latch) {
+        word = (uint16_t)(word & ~(uint16_t)FF_MASK);
     }
     return (uint8_t)(word & 0xFFu);
 }

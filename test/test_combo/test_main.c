@@ -27,6 +27,7 @@
 #define W_VOL_DN ((uint16_t)(COMBO_BTN_SELECT | COMBO_BTN_DOWN))
 #define W_BRT_UP ((uint16_t)(COMBO_BTN_SELECT | COMBO_BTN_RIGHT))
 #define W_BRT_DN ((uint16_t)(COMBO_BTN_SELECT | COMBO_BTN_LEFT))
+#define W_FF     ((uint16_t)(COMBO_BTN_SELECT | COMBO_BTN_A | COMBO_BTN_B))
 
 /* Volume is indexed 0 = high .. 3 = off; brightness steps by 32 off a floor
  * of 32 so a shell-mounted unit can never look dead. */
@@ -95,6 +96,7 @@ static void test_init_yields_clean_state(void)
     s.repeat_due_ms = 0xFFFFFFFFu;
     s.active_dir = 0xFFu;
     s.menu_latch = 0xFFu;
+    s.ff_latch = 0xFFu;
     TEST_ASSERT_EQUAL_INT(COMBO_OK, combo_init(&s));
     TEST_ASSERT_EQUAL_HEX16(0, s.stable_word);
     TEST_ASSERT_EQUAL_HEX16(0, s.raw_word);
@@ -102,6 +104,7 @@ static void test_init_yields_clean_state(void)
     TEST_ASSERT_EQUAL_UINT32(0, s.repeat_due_ms);
     TEST_ASSERT_EQUAL_UINT8(0, s.active_dir);
     TEST_ASSERT_EQUAL_UINT8(0, s.menu_latch);
+    TEST_ASSERT_EQUAL_UINT8(0, s.ff_latch);
     TEST_ASSERT_EQUAL_HEX8(0, combo_joypad(&s));
 }
 
@@ -235,6 +238,107 @@ static void test_bare_start_and_bare_select_bind_nothing(void)
     TEST_ASSERT_EQUAL_INT(COMBO_OK, combo_init(&s));
     run_timeline(&s, seq, sizeof(seq) / sizeof(seq[0]));
     TEST_ASSERT_EQUAL_size_t(0, event_count);
+}
+
+/* ─── fast-forward combo ──────────────────────────────────────────────────── */
+
+static void test_fast_forward_fires_once_when_the_third_button_lands(void)
+{
+    static const sample_t seq[] = {
+        { COMBO_BTN_SELECT, 0 },
+        { COMBO_BTN_SELECT, 8 },
+        { (uint16_t)(COMBO_BTN_SELECT | COMBO_BTN_A), 100 },
+        { (uint16_t)(COMBO_BTN_SELECT | COMBO_BTN_A), 108 },
+        { W_FF, 200 },
+        { W_FF, 208 },      /* commits -> FAST_FORWARD         */
+        { W_FF, 216 },
+        { W_FF, 208 + COMBO_REPEAT_DELAY_MS + COMBO_REPEAT_MS },
+        { W_FF, 5000 },     /* well past any repeat interval   */
+    };
+    combo_state_t s;
+    TEST_ASSERT_EQUAL_INT(COMBO_OK, combo_init(&s));
+    run_timeline(&s, seq, sizeof(seq) / sizeof(seq[0]));
+    TEST_ASSERT_EQUAL_size_t(1, event_count);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)COMBO_EVENT_FAST_FORWARD, events[0]);
+}
+
+static void test_fast_forward_fires_in_any_press_order(void)
+{
+    static const sample_t seq[] = {
+        { COMBO_BTN_B, 0 },
+        { COMBO_BTN_B, 8 },
+        { (uint16_t)(COMBO_BTN_B | COMBO_BTN_A), 100 },
+        { (uint16_t)(COMBO_BTN_B | COMBO_BTN_A), 108 },
+        { W_FF, 200 },
+        { W_FF, 208 },
+    };
+    combo_state_t s;
+    TEST_ASSERT_EQUAL_INT(COMBO_OK, combo_init(&s));
+    run_timeline(&s, seq, sizeof(seq) / sizeof(seq[0]));
+    TEST_ASSERT_EQUAL_size_t(1, event_count);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)COMBO_EVENT_FAST_FORWARD, events[0]);
+}
+
+static void test_fast_forward_rearms_after_release(void)
+{
+    static const sample_t seq[] = {
+        { W_FF, 0 },
+        { W_FF, 8 },        /* FAST_FORWARD                    */
+        { COMBO_BTN_SELECT, 100 },
+        { COMBO_BTN_SELECT, 108 }, /* A + B up, latch off      */
+        { W_FF, 200 },
+        { W_FF, 208 },      /* FAST_FORWARD again              */
+    };
+    combo_state_t s;
+    TEST_ASSERT_EQUAL_INT(COMBO_OK, combo_init(&s));
+    run_timeline(&s, seq, sizeof(seq) / sizeof(seq[0]));
+    TEST_ASSERT_EQUAL_size_t(2, event_count);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)COMBO_EVENT_FAST_FORWARD, events[0]);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)COMBO_EVENT_FAST_FORWARD, events[1]);
+}
+
+static void test_partial_fast_forward_chords_bind_nothing(void)
+{
+    static const sample_t seq[] = {
+        { (uint16_t)(COMBO_BTN_SELECT | COMBO_BTN_A), 0 },
+        { (uint16_t)(COMBO_BTN_SELECT | COMBO_BTN_A), 8 },
+        { (uint16_t)(COMBO_BTN_SELECT | COMBO_BTN_A), 1000 },
+        { (uint16_t)(COMBO_BTN_A | COMBO_BTN_B), 1100 },
+        { (uint16_t)(COMBO_BTN_A | COMBO_BTN_B), 1108 },
+        { (uint16_t)(COMBO_BTN_A | COMBO_BTN_B), 2000 },
+        { (uint16_t)(COMBO_BTN_SELECT | COMBO_BTN_B), 2100 },
+        { (uint16_t)(COMBO_BTN_SELECT | COMBO_BTN_B), 2108 },
+    };
+    combo_state_t s;
+    TEST_ASSERT_EQUAL_INT(COMBO_OK, combo_init(&s));
+    run_timeline(&s, seq, sizeof(seq) / sizeof(seq[0]));
+    TEST_ASSERT_EQUAL_size_t(0, event_count);
+}
+
+static void test_menu_wins_over_fast_forward_on_the_same_call(void)
+{
+    combo_state_t s;
+    uint16_t all = (uint16_t)(W_MENU | W_FF);
+    TEST_ASSERT_EQUAL_INT(COMBO_OK, combo_init(&s));
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)COMBO_EVENT_MENU, settle(&s, all, 0));
+    /* Deferred, not starved. */
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)COMBO_EVENT_FAST_FORWARD,
+                            feed(&s, all, 16));
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)COMBO_EVENT_NONE, feed(&s, all, 24));
+}
+
+static void test_joypad_masks_a_b_and_select_while_fast_forward_is_latched(void)
+{
+    combo_state_t s;
+    TEST_ASSERT_EQUAL_INT(COMBO_OK, combo_init(&s));
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)COMBO_EVENT_FAST_FORWARD,
+                            settle(&s, (uint16_t)(W_FF | COMBO_BTN_UP), 0));
+    /* D-pad is masked by Select as ever; A, B and Select by the latch. */
+    TEST_ASSERT_EQUAL_HEX8(0, combo_joypad(&s));
+
+    /* Releasing B clears the latch, so A and Select reach the game again. */
+    settle(&s, (uint16_t)(COMBO_BTN_SELECT | COMBO_BTN_A), 100);
+    TEST_ASSERT_EQUAL_HEX8(COMBO_BTN_SELECT | COMBO_BTN_A, combo_joypad(&s));
 }
 
 /* ─── adjustment combos ───────────────────────────────────────────────────── */
@@ -466,6 +570,13 @@ int main(void)
     RUN_TEST(test_menu_fires_once_on_edge_and_stays_silent_while_held);
     RUN_TEST(test_menu_rearms_after_the_pair_releases);
     RUN_TEST(test_bare_start_and_bare_select_bind_nothing);
+
+    RUN_TEST(test_fast_forward_fires_once_when_the_third_button_lands);
+    RUN_TEST(test_fast_forward_fires_in_any_press_order);
+    RUN_TEST(test_fast_forward_rearms_after_release);
+    RUN_TEST(test_partial_fast_forward_chords_bind_nothing);
+    RUN_TEST(test_menu_wins_over_fast_forward_on_the_same_call);
+    RUN_TEST(test_joypad_masks_a_b_and_select_while_fast_forward_is_latched);
 
     RUN_TEST(test_select_up_steps_volume_up);
     RUN_TEST(test_select_down_steps_volume_down);

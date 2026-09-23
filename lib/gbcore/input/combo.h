@@ -62,6 +62,7 @@ enum combo_event_e {
     COMBO_EVENT_VOL_DOWN,     /* Select + Down                       */
     COMBO_EVENT_BRIGHT_UP,    /* Select + Right                      */
     COMBO_EVENT_BRIGHT_DOWN,  /* Select + Left                       */
+    COMBO_EVENT_FAST_FORWARD, /* Select + A + B, one-shot per press  */
 };
 
 typedef struct combo_state_s {
@@ -71,6 +72,7 @@ typedef struct combo_state_s {
     uint32_t repeat_due_ms;      /* when the held combo's next event is due   */
     uint8_t active_dir;          /* held adjustment direction bit, 0 = none   */
     uint8_t menu_latch;          /* menu fired; held until the pair releases  */
+    uint8_t ff_latch;            /* fast-forward fired; held until release    */
 } combo_state_t;
 
 /* Zero the state machine. Returns COMBO_OK or COMBO_ERR_ARGS. */
@@ -79,9 +81,9 @@ int combo_init(combo_state_t* s);
 /*
  * Feed one raw button-word sample taken at now_ms and read back the detected
  * event (enum combo_event_e) through out_event. Events come only from the
- * debounced word, and at most one is reported per call: the menu combo wins
- * when it lands on the same call as an adjustment event, and the adjustment
- * event is then reported on the following call.
+ * debounced word, and at most one is reported per call, in the order menu,
+ * fast-forward, adjustment: a combo that loses a call is reported on the
+ * following one.
  *
  * Returns COMBO_OK, or COMBO_ERR_ARGS with *out_event untouched.
  */
@@ -91,8 +93,9 @@ int combo_update(combo_state_t* s, uint16_t raw_word, uint32_t now_ms,
 /*
  * The debounced word to hand the emulator: the D-pad is masked out while
  * Select is held, so adjusting volume or brightness does not walk the
- * character around, and Start + Select are masked while the menu combo is
- * latched. Returns 0 for a NULL state.
+ * character around, Start + Select are masked while the menu combo is
+ * latched, and A + B + Select while the fast-forward combo is latched.
+ * Returns 0 for a NULL state.
  */
 uint8_t combo_joypad(const combo_state_t* s);
 
