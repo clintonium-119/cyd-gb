@@ -22,6 +22,12 @@
 #define MANUAL_BAND_ROWS 16
 #define MANUAL_MAX_STRIDE ((2 * GAME_W + 7) / 8)
 
+// The overview's footer strip, sized and placed like Cart Info's so the
+// navigation hints read the same on both. A page drawn the full window tall
+// loses its bottom 18 rows under it; most pages are shorter at half size and
+// clear it.
+#define MANUAL_FOOT_H 18
+
 // Black ink on white paper, not the emulator palette. Both values read the
 // same in either byte order, so the resting setSwapBytes(true) is moot.
 #define MANUAL_INK   0x0000
@@ -103,7 +109,8 @@ static bool draw_tile(const view_t* v, const manual_nav_t* nav)
     return true;
 }
 
-// The whole page at half size, centred, with its number in the corner.
+// The whole page at half size, centred, over a footer of hints and the
+// page number.
 // Two page rows in, one screen row out: no page-sized buffer anywhere.
 static bool draw_overview(const view_t* v, const manual_nav_t* nav)
 {
@@ -138,13 +145,13 @@ static bool draw_overview(const view_t* v, const manual_nav_t* nav)
 
     snprintf(label, sizeof(label), "%u/%u", (unsigned)(nav->page + 1),
              (unsigned)v->count);
-    const int16_t lw = (int16_t)(tft.textWidth(label, 1) + 6);
-    const int16_t lx = (int16_t)(v->s->game_x + GAME_W - lw);
-    const int16_t ly = (int16_t)(v->s->game_y + GAME_H - 12);
-    tft.fillRect(lx, ly, lw, 12, TFT_BLACK);
+    const int16_t fy = (int16_t)(v->s->game_y + GAME_H - MANUAL_FOOT_H);
+    tft.fillRect(v->s->game_x, fy, GAME_W, MANUAL_FOOT_H, TFT_BLACK);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.setTextDatum(MC_DATUM);
-    tft.drawString(label, lx + lw / 2, ly + 6, 1);
+    tft.setTextDatum(TL_DATUM);
+    tft.drawString("A: Zoom  B: Back", v->s->game_x + 8, fy, 2);
+    tft.setTextDatum(TR_DATUM);
+    tft.drawString(label, v->s->game_x + GAME_W - 8, fy, 2);
     return true;
 }
 

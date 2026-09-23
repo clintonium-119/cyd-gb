@@ -169,7 +169,7 @@ void manual_nav_init(manual_nav_t* nav, uint16_t count)
     nav->page = 0;
     nav->tx = 0;
     nav->ty = 0;
-    nav->overview = false;
+    nav->overview = true;
     nav->prev_buttons = 0xFF;
     nav->held_dir = 0;
     nav->repeat_due_ms = 0;

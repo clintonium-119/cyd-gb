@@ -4,9 +4,10 @@
 #include "settings.h"
 
 // ─── Manual reader ──────────────────────────────────────────────────────────
-// The running cartridge's scanned manual, drawn inside the game window a
-// window-sized tile at a time: the D-pad walks the tiles and turns pages off
-// their edges, A toggles a whole-page overview, B leaves. It reads only the
+// The running cartridge's scanned manual, drawn inside the game window. It
+// opens on a whole-page overview, where Left and Right turn pages; A zooms
+// into it a window-sized tile at a time, the D-pad walks the tiles and turns
+// pages off their edges, A zooms back out, and B leaves. It reads only the
 // manual it is handed the filename of — there is no route from here to any
 // other game's.
 //

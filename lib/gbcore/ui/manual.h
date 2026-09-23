@@ -128,9 +128,10 @@ void manual_tile_origin(const manual_page_t* page, uint16_t win_w,
                         uint16_t* x0, uint16_t* y0);
 
 /*
- * Start at the first tile of the first page, reading. Every button counts as
- * already held, so the A that opened the reader does nothing until it has
- * been released and pressed again.
+ * Start on the first page's overview, so the whole page is seen before any
+ * of it is zoomed into; A then reads it from the first tile. Every button
+ * counts as already held, so the A that opened the reader does nothing until
+ * it has been released and pressed again.
  */
 void manual_nav_init(manual_nav_t* nav, uint16_t count);
 

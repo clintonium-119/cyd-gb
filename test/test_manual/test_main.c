@@ -345,12 +345,15 @@ static const manual_page_t NAV_PAGES[4] = {
     { 500, 200, 0 },
 };
 
-/* A machine on page 0, tile 0, with the buttons that opened it released. */
+/* A machine reading page 0 at tile 0: opened, the buttons that opened it
+ * released, and zoomed in from the overview it starts on. */
 static manual_nav_t fresh(void)
 {
     manual_nav_t nav;
 
     manual_nav_init(&nav, 4);
+    manual_nav_input(&nav, NAV_PAGES, WIN_W, WIN_H, B_NONE, 0);
+    manual_nav_input(&nav, NAV_PAGES, WIN_W, WIN_H, B_A, 0);
     manual_nav_input(&nav, NAV_PAGES, WIN_W, WIN_H, B_NONE, 0);
     return nav;
 }
@@ -563,6 +566,15 @@ static void test_b_exits_from_the_overview(void)
     TEST_ASSERT_EQUAL_UINT8(MANUAL_EVENT_EXIT, tap(&nav, B_B));
 }
 
+static void test_the_reader_opens_on_the_first_pages_overview(void)
+{
+    manual_nav_t nav;
+
+    manual_nav_init(&nav, 4);
+    TEST_ASSERT_TRUE(nav.overview);
+    assert_at(&nav, 0, 0, 0);
+}
+
 static void test_an_a_held_at_init_waits_for_release_and_a_new_press(void)
 {
     manual_nav_t nav;
@@ -570,10 +582,11 @@ static void test_an_a_held_at_init_waits_for_release_and_a_new_press(void)
     manual_nav_init(&nav, 4);
     TEST_ASSERT_EQUAL_UINT8(MANUAL_EVENT_NONE, in(&nav, B_A, 0));
     TEST_ASSERT_EQUAL_UINT8(MANUAL_EVENT_NONE, in(&nav, B_A, 50));
-    TEST_ASSERT_FALSE(nav.overview);
+    TEST_ASSERT_TRUE(nav.overview);
     TEST_ASSERT_EQUAL_UINT8(MANUAL_EVENT_NONE, in(&nav, B_NONE, 60));
     TEST_ASSERT_EQUAL_UINT8(MANUAL_EVENT_REDRAW, in(&nav, B_A, 70));
-    TEST_ASSERT_TRUE(nav.overview);
+    TEST_ASSERT_FALSE(nav.overview);
+    assert_at(&nav, 0, 0, 0);
 }
 
 /* ─── row operations ──────────────────────────────────────────────────────── */
@@ -665,6 +678,7 @@ int main(void)
     RUN_TEST(test_a_held_right_in_the_overview_repeats_at_the_combo_cadence);
     RUN_TEST(test_b_exits_from_reading);
     RUN_TEST(test_b_exits_from_the_overview);
+    RUN_TEST(test_the_reader_opens_on_the_first_pages_overview);
     RUN_TEST(test_an_a_held_at_init_waits_for_release_and_a_new_press);
     RUN_TEST(test_expand_row_starts_at_an_unaligned_bit);
     RUN_TEST(test_decimate_blackens_a_cell_with_any_black_pixel);
