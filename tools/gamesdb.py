@@ -29,6 +29,17 @@ CATALOG_DESC_MAX = 201
 CATALOG_LINE_MAX = 384
 CATALOG_MAX = 160
 
+# include/sd_manager.h — the /desc file's text plus the NUL. games.json's
+# description is the full text, written whole to /desc/<stem>.txt; the catalog
+# line carries catalog_blurb() of it, capped by CATALOG_DESC_MAX.
+DESC_MAX = 4097
+
+# Sentence ends truncate_description() is willing to cut after.
+SENTENCE_ENDS = ".!?"
+
+# A description's paragraphs are separated by exactly this.
+PARAGRAPH_BREAK = "\n\n"
+
 # The only flag token the firmware understands; unknown tokens are ignored
 # there, so the generator may add more without a firmware change.
 FLAG_STARTER = "starter"
@@ -66,6 +77,7 @@ HEADER_SOURCES = {
     "CATALOG_DESC_MAX": "lib/gbcore/cart/catalog.h",
     "CATALOG_LINE_MAX": "lib/gbcore/cart/catalog.h",
     "CATALOG_MAX": "lib/gbcore/cart/catalog.h",
+    "DESC_MAX": "include/sd_manager.h",
 }
 
 
@@ -75,7 +87,7 @@ def byte_len(text):
 
 
 def read_header_caps(repo_root):
-    """The five caps as the firmware headers declare them, for the drift guard."""
+    """The caps as the firmware headers declare them, for the drift guard."""
     caps = {}
     for name, relative in HEADER_SOURCES.items():
         source = Path(repo_root) / relative
@@ -114,8 +126,12 @@ def _label(index, game):
     return f"entry {index}"
 
 
-def _check_string(problems, label, field, value, cap, allow_empty):
-    """The checks every emitted string shares. True when the value is usable."""
+def _check_string(problems, label, field, value, cap, allow_empty, paragraphs=False):
+    """The checks every emitted string shares. True when the value is usable.
+
+    With paragraphs, newlines are allowed as PARAGRAPH_BREAK between two
+    non-empty paragraphs and nowhere else, and no other control character is.
+    """
     if not isinstance(value, str):
         problems.append(f"{label}: {field} must be a string, not {type(value).__name__}")
         return False
@@ -130,8 +146,22 @@ def _check_string(problems, label, field, value, cap, allow_empty):
         problems.append(f"{label}: {field} is not plain ASCII")
     if "\t" in value:
         problems.append(f"{label}: {field} contains a tab")
-    if "\n" in value:
-        problems.append(f"{label}: {field} contains a newline")
+    if not paragraphs:
+        if "\n" in value:
+            problems.append(f"{label}: {field} contains a newline")
+        return True
+    if "\n" in value and any(
+        part == "" or "\n" in part for part in value.split(PARAGRAPH_BREAK)
+    ):
+        problems.append(
+            f"{label}: {field} contains a newline that is not a paragraph break"
+        )
+    if any(
+        (ord(character) < 0x20 or ord(character) == 0x7F)
+        and character not in "\t\n"
+        for character in value
+    ):
+        problems.append(f"{label}: {field} contains a control character")
     return True
 
 
@@ -178,8 +208,8 @@ def _check_entry(problems, index, game, seen):
         allow_empty=False
     )
     description_ok = _check_string(
-        problems, label, "description", game.get("description"), CATALOG_DESC_MAX - 1,
-        allow_empty=True
+        problems, label, "description", game.get("description"), DESC_MAX - 1,
+        allow_empty=True, paragraphs=True
     )
 
     for field in ("art", "shot", "manual"):
@@ -305,6 +335,42 @@ def catalog_flags(game):
     return ",".join(tokens)
 
 
+def truncate_description(text, limit=CATALOG_DESC_MAX - 1):
+    """Cut text to at most `limit` BYTES, at a sentence end, else at a word.
+
+    Bytes and not characters, because the cap the firmware enforces is a byte
+    count. Never mid-word: a blurb that stops mid-word reads as a bug.
+    """
+    if len(text.encode("utf-8")) <= limit:
+        return text
+
+    head = text.encode("utf-8")[:limit].decode("utf-8", "ignore")
+
+    cut = -1
+    for index, character in enumerate(head):
+        if character not in SENTENCE_ENDS:
+            continue
+        following = text[index + 1] if index + 1 < len(text) else ""
+        if following in ("", " "):
+            cut = index
+    if cut >= 0:
+        return head[: cut + 1].rstrip()
+
+    space = head.rfind(" ")
+    if space > 0:
+        return head[:space].rstrip()
+    return head.rstrip()
+
+
+def catalog_blurb(text):
+    """The catalog's fourth field: the description flattened to one line and cut.
+
+    Derived every time the catalog is written, never curated, so it cannot drift
+    from the full text on /desc.
+    """
+    return truncate_description(" ".join(text.split()))
+
+
 def catalog_line(game):
     """One /catalog.txt line, without its newline."""
     return "\t".join(
@@ -312,7 +378,7 @@ def catalog_line(game):
             game["filename"],
             game["title"],
             catalog_flags(game),
-            game["description"],
+            catalog_blurb(game["description"]),
         )
     )
 
@@ -398,7 +464,12 @@ def round_trip(games):
 
     for game, entry in zip(games, parsed):
         for field in ("filename", "title", "starter", "description"):
-            want = bool(game.get(field)) if field == "starter" else game[field]
+            if field == "starter":
+                want = bool(game.get(field))
+            elif field == "description":
+                want = catalog_blurb(game[field])
+            else:
+                want = game[field]
             if entry[field] != want:
                 mismatches.append(
                     f"{game['filename']}: {field} became {entry[field]!r}, "

@@ -38,6 +38,7 @@ import xml.etree.ElementTree as ElementTree
 from pathlib import Path
 
 import gamesdb
+from gamesdb import truncate_description
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TOOLS_DIR = Path(__file__).resolve().parent
@@ -59,9 +60,6 @@ MEDIA_EXTENSIONS = (".png", ".jpg")
 # Manuals are scanned PDFs; an image in the manuals directory is not one.
 MANUAL_EXTENSIONS = (".pdf",)
 
-# The catalog's description cap, in bytes.
-DESCRIPTION_LIMIT = gamesdb.CATALOG_DESC_MAX - 1
-
 # Characters the scraped descriptions carry that have a plain-ASCII equivalent.
 # Accents are handled by decomposition instead; see normalise_ascii().
 ASCII_REPLACEMENTS = {
@@ -80,9 +78,6 @@ ASCII_REPLACEMENTS = {
     "…": "...",
     " ": " ",
 }
-
-# Sentence ends truncate_description() is willing to cut after.
-SENTENCE_ENDS = ".!?"
 
 # How close a gamelist <name> has to be for --report to suggest it. Most of the
 # curated stems that need an alias are shortenings, and difflib scores a pure
@@ -176,33 +171,6 @@ def normalise_ascii(text):
         if not unicodedata.combining(character)
     )
     return " ".join(stripped.split())
-
-
-def truncate_description(text, limit=DESCRIPTION_LIMIT):
-    """Cut text to at most `limit` BYTES, at a sentence end, else at a word.
-
-    Bytes and not characters, because the cap the firmware enforces is a byte
-    count. Never mid-word: a blurb that stops mid-word reads as a bug.
-    """
-    if len(text.encode("utf-8")) <= limit:
-        return text
-
-    head = text.encode("utf-8")[:limit].decode("utf-8", "ignore")
-
-    cut = -1
-    for index, character in enumerate(head):
-        if character not in SENTENCE_ENDS:
-            continue
-        following = text[index + 1] if index + 1 < len(text) else ""
-        if following in ("", " "):
-            cut = index
-    if cut >= 0:
-        return head[: cut + 1].rstrip()
-
-    space = head.rfind(" ")
-    if space > 0:
-        return head[:space].rstrip()
-    return head.rstrip()
 
 
 def players_max(text):

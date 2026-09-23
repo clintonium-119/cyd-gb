@@ -150,6 +150,7 @@ def test_constants_mirror_the_firmware_headers(repo_root):
         "CATALOG_DESC_MAX": gamesdb.CATALOG_DESC_MAX,
         "CATALOG_LINE_MAX": gamesdb.CATALOG_LINE_MAX,
         "CATALOG_MAX": gamesdb.CATALOG_MAX,
+        "DESC_MAX": gamesdb.DESC_MAX,
     }
 
 
@@ -248,11 +249,56 @@ def test_title_at_the_cap_is_accepted_and_one_over_is_rejected():
 
 
 def test_description_at_the_cap_and_empty_are_accepted():
-    assert problems_for(game(description="d" * 200)) == []
+    assert problems_for(game(description="d" * 4096)) == []
     assert problems_for(game(description="")) == []
     assert rejected(
-        game(description="d" * 201), "description is 201 bytes, the cap is 200"
+        game(description="d" * 4097), "description is 4097 bytes, the cap is 4096"
     )
+
+
+def test_a_paragraph_break_is_the_only_newline_a_description_may_carry():
+    assert problems_for(game(description="one.\n\ntwo.")) == []
+    assert problems_for(game(description="one.\n\ntwo.\n\nthree.")) == []
+    for text in ("one.\ntwo.", "one.\n\n\ntwo.", "\n\none.", "one.\n\n"):
+        assert rejected(game(description=text), "not a paragraph break"), text
+
+
+@pytest.mark.parametrize(
+    ("character", "message"),
+    [("\t", "contains a tab"), ("\r", "control character"), ("\x07", "control character")],
+)
+def test_a_description_refuses_other_control_characters(character, message):
+    assert rejected(game(description=f"one.{character}\n\ntwo."), message)
+
+
+# --- the catalog blurb ----------------------------------------------------
+
+
+def test_the_blurb_of_two_paragraphs_is_one_line():
+    blurb = gamesdb.catalog_blurb("One.\n\nTwo.")
+    assert blurb == "One. Two."
+
+
+def test_the_blurb_of_a_long_text_ends_at_the_last_sentence_within_the_cap():
+    sentence = "This is a sentence of forty bytes long. "
+    assert len(sentence) == 40
+    text = (sentence * 15).rstrip()
+    assert len(text) > 590
+    blurb = gamesdb.catalog_blurb(text)
+    assert blurb == (sentence * 5).rstrip()
+    assert gamesdb.byte_len(blurb) <= gamesdb.CATALOG_DESC_MAX - 1
+
+
+def test_the_catalog_line_carries_the_blurb_and_parses_back_to_it():
+    text = ("First paragraph sentence. " * 10).rstrip() + "\n\n" + "Second."
+    entry = game(description=text)
+    assert problems_for(entry) == []
+    line = gamesdb.catalog_line(entry)
+    assert "\n" not in line
+    parsed = gamesdb.parse_catalog_line(line)
+    assert parsed["description"] == gamesdb.catalog_blurb(text)
+    assert parsed["description"] != text
+    assert gamesdb.round_trip([entry]) == []
 
 
 @pytest.mark.parametrize("field", ["title", "description"])
@@ -309,11 +355,16 @@ def test_more_entries_than_the_catalog_holds_is_rejected():
     assert "161 entries, but the catalog holds at most 160" in problems
 
 
-def test_emitted_line_over_the_cap_is_rejected():
-    # 4 + 1 + 1 + 1 + 0 + 1 + 376 = 384 bytes, one over what the reader holds.
-    entry = game(filename="A.gb", title="T", description="d" * 376)
-    assert gamesdb.byte_len(gamesdb.catalog_line(entry)) == 384
-    assert rejected(entry, "its catalog line is 384 bytes, the cap is 383")
+def test_the_longest_emittable_line_fits_the_readers_buffer():
+    # The catalog carries the blurb, not the description, so every field at its
+    # cap makes 63 + 1 + 47 + 1 + 7 + 1 + 200 = 320 bytes, under the 383 the
+    # reader holds; the line check stays as a guard on the emitter.
+    words = " ".join(["word"] * 800)
+    entry = game(
+        filename="f" * 60 + ".gb", title="t" * 47, starter=True, description=words
+    )
+    assert gamesdb.byte_len(gamesdb.catalog_line(entry)) <= 320
+    assert problems_for(entry) == []
 
 
 def test_rom_existence_is_checked_when_the_directory_is_given(tmp_path):
