@@ -357,6 +357,8 @@ static void test_the_menu_references_no_writer_or_tag_symbol(void)
     static const char* const paths[] = {
         PROJECT_DIR "/src/menu.cpp",
         PROJECT_DIR "/include/menu.h",
+        PROJECT_DIR "/src/manual_view.cpp",
+        PROJECT_DIR "/include/manual_view.h",
     };
     char msg[512];
 
