@@ -208,6 +208,13 @@ bool sd_get_state_path(const char* rom_path, const char* suffix, bool vfs,
 // Whether the game has a saved state. False when the card is not mounted.
 bool sd_state_exists(const char* rom_path);
 
+// Stream the state's snapshot a band at a time, by sd_media_stream()'s
+// contract: the file must be exactly row_w * total_rows * 2 bytes. False when
+// there is none, which is the case until the first save.
+bool sd_thumb_stream(const char* rom_path, uint16_t* buf, size_t row_w,
+                     size_t total_rows, size_t band_rows,
+                     sd_media_band_fn fn, void* ctx);
+
 // Rename <path>.tmp over <path>, the last step of every write that must
 // never leave a half-written file in place. `path` is the SD library's form,
 // not the VFS one. False, with <path> gone if it existed, when the rename

@@ -222,20 +222,10 @@ bool sd_media_path(const char* dir, const char* rom_filename, char* out,
     return stem_path(dir, rom_filename, ART_SUFFIX, out, out_sz);
 }
 
-bool sd_media_stream(const char* dir, const char* rom_filename, uint16_t* buf,
-                     size_t row_w, size_t total_rows, size_t band_rows,
-                     sd_media_band_fn fn, void* ctx) {
-    char path[ART_PATH_MAX];
-
-    if (!buf || !fn || !row_w || !total_rows || !band_rows) {
-        return false;
-    }
-    if (!sd_media_path(dir, rom_filename, path, sizeof(path))) {
-        // A missing file is the ordinary case, not worth a line of log per
-        // title the imaging tool has not covered yet.
-        return false;
-    }
-
+// The body of both streams below: the path is already resolved and exists.
+static bool stream_path(const char* path, uint16_t* buf, size_t row_w,
+                        size_t total_rows, size_t band_rows,
+                        sd_media_band_fn fn, void* ctx) {
     File f = SD.open(path, FILE_READ);
     if (!f) {
         Serial.printf("[SD] art open failed: %s\n", path);
@@ -282,6 +272,36 @@ bool sd_media_stream(const char* dir, const char* rom_filename, uint16_t* buf,
 
     f.close();
     return true;
+}
+
+bool sd_media_stream(const char* dir, const char* rom_filename, uint16_t* buf,
+                     size_t row_w, size_t total_rows, size_t band_rows,
+                     sd_media_band_fn fn, void* ctx) {
+    char path[ART_PATH_MAX];
+
+    if (!buf || !fn || !row_w || !total_rows || !band_rows) {
+        return false;
+    }
+    if (!sd_media_path(dir, rom_filename, path, sizeof(path))) {
+        // A missing file is the ordinary case, not worth a line of log per
+        // title the imaging tool has not covered yet.
+        return false;
+    }
+    return stream_path(path, buf, row_w, total_rows, band_rows, fn, ctx);
+}
+
+bool sd_thumb_stream(const char* rom_path, uint16_t* buf, size_t row_w,
+                     size_t total_rows, size_t band_rows,
+                     sd_media_band_fn fn, void* ctx) {
+    char path[STATE_PATH_MAX];
+
+    if (!ready || !buf || !fn || !row_w || !total_rows || !band_rows
+        || !sd_get_state_path(rom_path, THUMB_SUFFIX, false, path,
+                              sizeof(path))
+        || !SD.exists(path)) {
+        return false;
+    }
+    return stream_path(path, buf, row_w, total_rows, band_rows, fn, ctx);
 }
 
 bool sd_media_read(const char* dir, const char* rom_filename, uint16_t* out,

@@ -900,6 +900,7 @@ void emu_set_boot_rom(const uint8_t*) {}
 // Save states are the gnuboy core's alone: struct gb_s is not serialised.
 bool emu_state_save(const char*) { return false; }
 bool emu_state_load(const char*) { return false; }
+bool emu_state_thumb_save(const char*) { return false; }
 uint32_t emu_get_fps(){return cfps;}
 void emu_reset()
 {
