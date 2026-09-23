@@ -137,13 +137,19 @@ void settings_save(const settings_t* s) {
 // ninety-four games apart by an eight-bit title sum, and a library of a
 // hundred-odd ROMs would collide the same way. Eight hex digits plus the
 // prefix is nine characters, inside the fifteen an NVS key allows.
+//
+// The prefix is "p", not the original "g": the palette table changed shape
+// from 20 entries to 14, and an index stored against the old one would name a
+// different palette in the new one. Moving the key puts every cartridge with
+// an old override back on Auto. The old "g" keys are left where they are;
+// nothing reads them.
 static void game_key(const char* title, char* out, size_t out_sz) {
     uint32_t h = 2166136261u;
 
     for (; title && *title; title++) {
         h = (h ^ (uint8_t)*title) * 16777619u;
     }
-    snprintf(out, out_sz, "g%08lX", (unsigned long)h);
+    snprintf(out, out_sz, "p%08lX", (unsigned long)h);
 }
 
 bool settings_game_palette_load(const char* title, uint8_t* out) {
@@ -214,7 +220,7 @@ void settings_flush(uint32_t now_ms, bool force) {
 // ─── Cartridge boot records ─────────────────────────────────────────────────
 // Same "settings" namespace as the per-unit values above, deliberately: a
 // factory reset clears the device with one nvs_flash_erase whatever the
-// layout, and keeping one namespace leaves settings_load's isKey("pal") probe
+// layout, and keeping one namespace leaves settings_load's isKey("bright") probe
 // meaningful as the "has this device ever been configured" test.
 
 bool settings_pending_load(boot_selection_t* out) {
