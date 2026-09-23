@@ -15,10 +15,11 @@
 // Values are NATIVE RGB565, never pre-swapped: the blend happens first, and
 // the display driver's setSwapBytes(true) handles wire order at push time.
 //
-// Ramp index p follows those pixel bits — 0 = OBJ0, 1 = OBJ1, 2 = BG. Each
-// palette's BG ramp is the fork's original four colours verbatim; the two OBJ
-// ramps are same-hue-family derivations of it, generated once by
-// scripts/gen_palettes.py and committed as literals.
+// Ramp index p follows those pixel bits — 0 = OBJ0, 1 = OBJ1, 2 = BG. The
+// first two palettes have a chosen BG ramp and same-hue-family OBJ ramps
+// derived from it; the rest are the Game Boy Color boot ROM's button-combo
+// palettes with Nintendo's own three ramps. scripts/gen_palettes.py generates
+// them all once, and they are committed as literals.
 //
 // Pure C, no Arduino/ESP-IDF headers, no allocation: the LUT is caller-owned.
 
@@ -28,7 +29,7 @@
 extern "C" {
 #endif
 
-#define PALETTE_COUNT 20    /* palettes, each a 3-ramp set of 4 shades */
+#define PALETTE_COUNT 14    /* palettes, each a 3-ramp set of 4 shades */
 #define PALETTE_LUT_SIZE 64 /* one entry per possible raw pixel byte   */
 
 /*
@@ -43,7 +44,7 @@ extern "C" {
 #define PALETTE_UI_COUNT (PALETTE_COUNT + 1)
 
 /* What Auto resolves to for a cartridge the Game Boy Color's table does not
-   know — the fork's original ramp, and the first entry of the list, so the
+   know — the muted DMG green, and the first entry of the list, so the
    fallback and the menu's starting point are the same colours. */
 #define PALETTE_FALLBACK 0
 

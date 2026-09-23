@@ -16,7 +16,7 @@ static_assert(BL_MIN > 0, "a backlight floor of 0 looks like a dead unit");
 
 void settings_defaults(settings_t* s) {
     // Auto: the colours the Game Boy Color's own table gives this cartridge,
-    // and Classic Green for a cartridge it does not know. A palette is per
+    // and the muted DMG green for a cartridge it does not know. A palette is per
     // game, so this is the value every game starts at until the builder picks
     // one for it in the menu.
     s->palette = PALETTE_AUTO;

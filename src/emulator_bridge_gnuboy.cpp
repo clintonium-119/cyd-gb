@@ -1272,7 +1272,7 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
 #endif
     /* auto: whether the Game Boy Color's table knew this cartridge, which is
      * the one fact about the palette that cannot be read off the screen —
-     * a cart it does not know looks like any other Classic Green boot. */
+     * a cart it does not know looks like any other DMG Green boot. */
     Serial.printf("[EMU] gnuboy '%s' %uKB push:%s auto:%s heap:%u\n", title,
                   romlen / 1024,
                   PUSH_TRANSPOSED ? "col" : "row",

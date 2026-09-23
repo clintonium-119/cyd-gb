@@ -32,10 +32,10 @@
  */
 #define GOLDEN_FRAME_COUNT 60u
 
-#define GOLDEN_5_3_NEAREST   0x83CB60D3C84CEC38ULL
-#define GOLDEN_5_3_BLEND     0x5E331E79E1250913ULL
+#define GOLDEN_5_3_NEAREST   0x3581CC78334307FAULL
+#define GOLDEN_5_3_BLEND     0x86BB57B59F29EB3FULL
 
-#define GOLDEN_PALETTE 0 /* "Classic Green" */
+#define GOLDEN_PALETTE 0 /* "DMG Green" */
 
 #define ROM_PATH "test/roms/dmg-acid2.gb"
 #define ROM_MAX (1024 * 1024)
