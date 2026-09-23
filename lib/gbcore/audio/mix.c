@@ -3,17 +3,18 @@
 #include "mix.h"
 
 /*
- * Design §4's table, as 8.8 fixed point. Med at 176/256 (0.69) is what spaces
- * the three steps evenly by ear. Low was 128/256 and the bench wanted it
- * quieter; at 96/256 (0.375) roughly 6.6 bits of signal remain, so the step
- * still clears the dither floor rather than collapsing into it -- 64/256
- * would leave exactly 6 and make the dither proportionally twice as loud.
+ * Gain per volume level, as 8.8 fixed point. Entry 0 is unused: level 0 is
+ * off and never reaches the multiply. Level 8 is full scale, and each rung
+ * below is about 4 dB down from the next.
  *
- * Note this does not address the distortion heard at the low step: that is
- * not clipping (at 0.375 the scaled value is bounded well inside the clamp)
- * and lowering the table only makes it quieter, not absent.
+ * These are a bench-tuned knob, not a derivation. The bottom rung is meant
+ * to be far quieter than the old three-step Low (96/256); at 10/256 roughly
+ * 3.3 bits of signal remain above the dither, so retune by ear rather than
+ * by arithmetic.
  */
-static const uint16_t vol_lut[3] = { 256, 176, 96 };
+static const uint16_t vol_lut[MIX_VOL_MAX + 1] = {
+    0, 10, 16, 26, 40, 64, 102, 161, 256
+};
 
 /* Any non-zero constant works; this is the usual xorshift32 seed. */
 #define MIX_SEED_FALLBACK 0x2545F491u
@@ -44,7 +45,7 @@ int mix_mono(mix_state_t* s, const int16_t* stereo, size_t n_frames,
     if (s == NULL || stereo == NULL || out == NULL) {
         return MIX_ERR_ARGS;
     }
-    if (vol_index > MIX_VOL_OFF) {
+    if (vol_index > MIX_VOL_MAX) {
         return MIX_ERR_ARGS;
     }
 

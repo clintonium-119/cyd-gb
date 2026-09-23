@@ -31,22 +31,20 @@ extern "C" {
 #endif
 
 /*
- * Volume index. Same encoding settings_t::volume stores — an index into the
- * {high, med, low} table, with the step past the end meaning off, so louder
- * counts down towards MIX_VOL_HIGH. The firmware static-asserts that the two
- * lists agree; changing one means changing both.
+ * Volume level. Same encoding settings_t::volume stores — 0 is off, and 1 to
+ * MIX_VOL_MAX run from very quiet up to full scale, so a bigger number is
+ * louder. The firmware static-asserts that the two lists agree; changing one
+ * means changing both.
  */
-#define MIX_VOL_HIGH 0
-#define MIX_VOL_MED  1
-#define MIX_VOL_LOW  2
-#define MIX_VOL_OFF  3
+#define MIX_VOL_OFF 0
+#define MIX_VOL_MAX 8
 
 /* Unsigned mid-scale: silence, and where the DAC parks. */
 #define MIX_SILENCE 128u
 
 enum mix_result_e {
     MIX_OK = 0,
-    MIX_ERR_ARGS = -2, /* NULL buffer, or vol_index past MIX_VOL_OFF */
+    MIX_ERR_ARGS = -2, /* NULL buffer, or vol_index past MIX_VOL_MAX */
 };
 
 /*
@@ -70,7 +68,7 @@ void mix_init(mix_state_t* s, uint32_t seed);
  *              when vol_index is MIX_VOL_OFF
  *   stereo     2 * n_frames samples, interleaved left then right
  *   n_frames   samples per channel
- *   vol_index  MIX_VOL_HIGH .. MIX_VOL_OFF
+ *   vol_index  MIX_VOL_OFF .. MIX_VOL_MAX
  *   out        n_frames bytes
  *
  * Returns MIX_OK, or MIX_ERR_ARGS without writing anything.

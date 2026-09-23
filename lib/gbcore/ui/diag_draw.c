@@ -57,9 +57,6 @@ static const uint8_t BTN_BITS[8] = {
     0x20, /* B      */
 };
 
-/* Same four names the in-game menu uses for the same four states. */
-static const char* const VOL_NAMES[4] = { "High", "Med", "Low", "Off" };
-
 static const char* const PATTERN_NAMES[DIAG_PATTERN_COUNT] = {
     "Colour bars", "Border", "Checkerboard",
 };
@@ -354,11 +351,19 @@ static void page_audio(const ui_canvas_t* cv, const diag_layout_t* g,
                        const diag_t* d)
 {
     uint8_t vol = diag_volume(d);
+    char buf[8];
+
+    /* Same text the in-game menu shows for the same level. */
+    if (vol == (uint8_t)MIX_VOL_OFF) {
+        snprintf(buf, sizeof(buf), "Off");
+    } else {
+        snprintf(buf, sizeof(buf), "%u/%u", (unsigned)vol,
+                 (unsigned)MIX_VOL_MAX);
+    }
 
     kv_row(cv, g, 0, "Tone", diag_tone_on(d) ? "on" : "off",
            diag_tone_on(d) ? COL_OK : COL_DIM);
-    kv_row(cv, g, 1, "Volume",
-           (vol <= (uint8_t)MIX_VOL_OFF) ? VOL_NAMES[vol] : "?", COL_TEXT);
+    kv_row(cv, g, 1, "Volume", buf, COL_TEXT);
     /* No hardware mute exists on this board, and a builder who does not know
      * that reads a silent "Off" as a dead amplifier. */
     full_row(cv, g, 3, "Off holds the DAC at mid-scale.", COL_DIM);

@@ -318,7 +318,7 @@ static void draw_page(int16_t w, int16_t h, uint8_t page, uint8_t pattern,
 
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(w, h, &geom));
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
-        diag_init(&st, 320, 240, w, h, 40, 12, 40, 12, MIX_VOL_MED, 1,
+        diag_init(&st, 320, 240, w, h, 40, 12, 40, 12, 5, 1,
                   TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
 
     for (i = 0; i < page; i++) {
@@ -802,7 +802,7 @@ static void test_a_null_argument_paints_nothing(void)
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(GEOM_24_W, GEOM_24_H, &geom));
     TEST_ASSERT_EQUAL_INT(DIAG_OK,
         diag_init(&st, 320, 240, GEOM_24_W, GEOM_24_H, 40, 12, 40, 12,
-                  MIX_VOL_MED, 0, TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
+                  5, 0, TRIM_FPA, TRIM_RATIO, DEF_FPA, DEF_RATIO));
 
     cv = canvas_over(&fk, &geom);
     diag_draw(NULL, &data, &geom, &ck, 0, &cv);

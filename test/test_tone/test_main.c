@@ -252,7 +252,7 @@ static void test_off_is_mid_scale_for_every_sample_of_the_tone(void)
     assert_guards_intact();
 }
 
-static void test_the_three_live_steps_stay_ordered(void)
+static void test_top_middle_and_bottom_levels_stay_ordered(void)
 {
     int high_lo;
     int high_hi;
@@ -261,12 +261,12 @@ static void test_the_three_live_steps_stay_ordered(void)
     int low_lo;
     int low_hi;
 
-    span_of_frame(MIX_VOL_HIGH, &high_lo, &high_hi);
-    span_of_frame(MIX_VOL_MED, &med_lo, &med_hi);
-    span_of_frame(MIX_VOL_LOW, &low_lo, &low_hi);
+    span_of_frame(MIX_VOL_MAX, &high_lo, &high_hi);
+    span_of_frame(5, &med_lo, &med_hi);
+    span_of_frame(1, &low_lo, &low_hi);
 
     /* Traced from the mixer's arithmetic on a 6000 mono sample: the scaled
-     * value is 6000, 4125 and 3000 at the three steps, and the dither adds
+     * value is 6000, 1500 and 234 at levels 8, 5 and 1, and the dither adds
      * [-256, 255] before the high byte is taken. The three bands do not
      * overlap, so the ordering holds whatever the dither draws. */
     TEST_ASSERT_GREATER_THAN_INT(med_hi, high_hi);
@@ -274,8 +274,8 @@ static void test_the_three_live_steps_stay_ordered(void)
     TEST_ASSERT_LESS_THAN_INT(med_lo, high_lo);
     TEST_ASSERT_LESS_THAN_INT(low_lo, med_lo);
 
-    /* Every step sits either side of mid-scale — a step that had collapsed
-     * into silence would pass the ordering above on one side only. */
+    /* Even the bottom level sits either side of mid-scale — a level that had
+     * collapsed into silence would pass the ordering above on one side only. */
     TEST_ASSERT_GREATER_THAN_INT(128, low_hi);
     TEST_ASSERT_LESS_THAN_INT(128, low_lo);
 }
@@ -285,7 +285,7 @@ static void test_this_amplitude_does_not_reach_a_rail_at_full_volume(void)
     int lo;
     int hi;
 
-    span_of_frame(MIX_VOL_HIGH, &lo, &hi);
+    span_of_frame(MIX_VOL_MAX, &lo, &hi);
 
     /* 6000 scaled by 256/256 plus 255 of dither is 6255, which is 152 as a
      * biased high byte; -6000 - 256 is 103. Both rails are far off, so a
@@ -307,7 +307,7 @@ int main(void)
     RUN_TEST(test_the_duty_cycle_is_half_over_a_whole_number_of_cycles);
     RUN_TEST(test_two_frames_equal_one_frame_of_twice_the_length);
     RUN_TEST(test_off_is_mid_scale_for_every_sample_of_the_tone);
-    RUN_TEST(test_the_three_live_steps_stay_ordered);
+    RUN_TEST(test_top_middle_and_bottom_levels_stay_ordered);
     RUN_TEST(test_this_amplitude_does_not_reach_a_rail_at_full_volume);
     return UNITY_END();
 }
