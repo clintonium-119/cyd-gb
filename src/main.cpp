@@ -218,6 +218,10 @@ static void poll_input(uint32_t now_ms) {
         case COMBO_EVENT_MENU:
             menu_req = true;
             return;
+        case COMBO_EVENT_FAST_FORWARD:
+            // Runtime only: never stored, so every boot starts at 1x.
+            emu_set_fast_forward(!emu_get_fast_forward());
+            return;
         case COMBO_EVENT_VOL_UP:
             volume = combo_step_u8(volume, +1, SETTINGS_VOL_OFF, SETTINGS_VOL_HIGH, 1);
             break;
