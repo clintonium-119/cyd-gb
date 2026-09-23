@@ -31,6 +31,7 @@ import argparse
 import hashlib
 import os
 import shutil
+import struct
 import subprocess
 import sys
 from pathlib import Path
@@ -60,6 +61,19 @@ ART_SUFFIX = ".565"
 # demands, since a file of any other size is from a different imaging run.
 ART_EDGE = 96
 ART_BYTES = ART_EDGE * ART_EDGE * 2
+
+# docs/CATALOG_FORMAT.md § Manuals: /manual/<stem>.1bp, one file per game, an
+# 8-byte header of magic, u16 version and u16 page count, then a u16 width and
+# u16 height per page, then the 1 bpp rasters back to back, little-endian.
+MANUAL_DIR = "manual"
+MANUAL_SUFFIX = ".1bp"
+MANUAL_MAGIC = b"GBMN"
+MANUAL_VERSION = 1
+
+# Every stored page fits within twice the game window, so one tile of it is one
+# window. A page wider than 2:1 is a spread and is stored as its two halves.
+PAGE_BOX = (532, 480)
+SPREAD_ASPECT = 2.0
 
 # The temp suffix, the same one SAVE_TMP_SUFFIX names on the device.
 TMP_SUFFIX = ".tmp"
@@ -170,6 +184,91 @@ def convert_565(source, destination):
             return False
     write_atomic(destination, data)
     return True
+
+
+def fit_within(aspect):
+    """The largest integer (w, h) of this width-to-height aspect inside PAGE_BOX."""
+    box_w, box_h = PAGE_BOX
+    if aspect >= box_w / box_h:
+        return box_w, max(1, round(box_w / aspect))
+    return max(1, round(box_h * aspect)), box_h
+
+
+def page_outputs(w_pts, h_pts):
+    """The stored pages one source page becomes, as (w, h, scale, half) specs.
+
+    scale is output pixels per point of the part rendered. half is None for a
+    whole page, else 0 for the left half of a spread and 1 for the right: a page
+    wider than SPREAD_ASPECT is cut down the middle and each half is fitted on
+    its own aspect, because a spread fitted whole leaves each page unreadable.
+    """
+    if w_pts / h_pts <= SPREAD_ASPECT:
+        w, h = fit_within(w_pts / h_pts)
+        return [(w, h, w / w_pts, None)]
+    half_pts = w_pts / 2
+    w, h = fit_within(half_pts / h_pts)
+    return [(w, h, w / half_pts, half) for half in (0, 1)]
+
+
+def otsu_threshold(histogram):
+    """The grey level t maximising between-class variance; grey <= t is black.
+
+    The first maximum wins, so a page of one grey value — where every split
+    scores zero — gets t = 0: a white page stays white and a black page black.
+    """
+    total = sum(histogram)
+    grand = sum(level * count for level, count in enumerate(histogram))
+    best_t = 0
+    best_score = -1.0
+    below = 0
+    below_sum = 0
+    for level in range(256):
+        below += histogram[level]
+        below_sum += level * histogram[level]
+        above = total - below
+        if below == 0 or above == 0:
+            score = 0.0
+        else:
+            difference = below_sum / below - (grand - below_sum) / above
+            score = below * above * difference * difference
+        if score > best_score:
+            best_t = level
+            best_score = score
+    return best_t
+
+
+def pack_page(grey, w, h, t):
+    """One page's raster: rows MSB-first, a set bit is black, rows byte-padded.
+
+    Pixels are mapped to ASCII '1'/'0' by a translate table and each row is
+    parsed as a base-2 integer, so no Python loop touches a single pixel.
+    """
+    table = bytes(0x31 if level <= t else 0x30 for level in range(256))
+    bits = grey.translate(table)
+    row_bytes = (w + 7) // 8
+    padding = b"0" * (row_bytes * 8 - w)
+    rows = []
+    for y in range(h):
+        row = bits[y * w:(y + 1) * w] + padding
+        rows.append(int(row, 2).to_bytes(row_bytes, "big"))
+    return b"".join(rows)
+
+
+def encode_manual(pages):
+    """The whole .1bp file from a list of (w, h, raster).
+
+    A raster of the wrong length is refused here, because the reader refuses a
+    file whose size is not exactly what its page table implies.
+    """
+    header = struct.pack("<4sHH", MANUAL_MAGIC, MANUAL_VERSION, len(pages))
+    table = []
+    for w, h, raster in pages:
+        if len(raster) != (w + 7) // 8 * h:
+            raise ValueError(
+                f"a {w}x{h} page needs {(w + 7) // 8 * h} bytes, not {len(raster)}"
+            )
+        table.append(struct.pack("<HH", w, h))
+    return header + b"".join(table) + b"".join(raster for _, _, raster in pages)
 
 
 def plan(games, rom_dir, media_dir):
