@@ -28,13 +28,20 @@ void ui_header(const ui_canvas_t* cv, int16_t w, const char* title,
 void ui_row_text(const ui_canvas_t* cv, int16_t x, int16_t y, int16_t w,
                  int16_t h, const char* s, uint8_t font, uint16_t fg)
 {
+    int16_t tw = (int16_t)(w - 2 * UI_PILL_PAD);
+
     cv->fill(cv->ctx, x, y, w, h, UI_COL_BG);
-    if (s != NULL) {
-        cv->text(cv->ctx, s, (int16_t)(x + UI_PILL_PAD),
-                 (int16_t)(y + text_dy(h, font)),
-                 (int16_t)(w - 2 * UI_PILL_PAD), 1, font, UI_ALIGN_LEFT, fg,
-                 UI_COL_BG);
+    if (s == NULL) {
+        return;
     }
+    /* Boxed to the text itself when it fits, so the box lies wholly under
+     * where the pill will go when this row is selected. */
+    if (cv->measure != NULL && cv->measure(cv->ctx, s, font) < tw) {
+        tw = cv->measure(cv->ctx, s, font);
+    }
+    cv->text(cv->ctx, s, (int16_t)(x + UI_PILL_PAD),
+             (int16_t)(y + text_dy(h, font)), tw, 1, font, UI_ALIGN_LEFT, fg,
+             UI_COL_BG);
 }
 
 int16_t ui_pill_row(const ui_canvas_t* cv, int16_t x, int16_t y,

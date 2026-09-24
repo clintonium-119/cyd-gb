@@ -11,13 +11,15 @@
 //
 // The writer has two screens. The list is a split: titles down the left, and
 // the highlighted title's cover with its snapshot stacked under it on the
-// right, so it fits 12 rows of about 19 characters at 266x240. A title too
-// wide for its row scrolls inside it, drawn offscreen so the scroll never
-// blanks the row. A title's detail page is laid out like the in-game Cart Info
+// right, so it fits 10 rows of about 18 characters at 266x240. The
+// highlighted title sits in a white pill that hugs it; a title too wide for
+// its row scrolls inside the pill, drawn offscreen so the scroll never blanks
+// the row. Under both screens are the theme's grey help line — the hovered
+// game's blurb on the list, what confirming does on a detail page — and the
+// button-hint footer. A title's detail page is laid out like the in-game Cart Info
 // page: the title on top over up to two rows, the cover and the snapshot side
 // by side under it, and the description below them in a band that is the only
-// thing that scrolls. The target line, the hold prompt and the hold bar sit
-// under the band.
+// thing that scrolls. The hold bar sits under the band.
 //
 // Pure C, no Arduino/ESP-IDF headers, no allocation, no framebuffer of its own.
 
@@ -27,6 +29,7 @@
 
 #include "ui/canvas.h"
 #include "ui/picker.h"
+#include "ui/theme.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,8 +40,8 @@ extern "C" {
 #define PICKER_ART_H  96
 #define PICKER_ART_PX (PICKER_ART_W * PICKER_ART_H)
 
-#define PICKER_HEADER_H 18
-#define PICKER_ROW_H    18 /* font 2: 16 + 2 */
+#define PICKER_HEADER_H UI_HEADER_H
+#define PICKER_ROW_H    UI_PILL_H_LIST /* font 2: 16 + 2 */
 #define PICKER_MIN_ROWS 3
 
 /* A description column narrower than this is not worth wrapping into. */
@@ -57,8 +60,8 @@ extern "C" {
 #define PICKER_DETAIL_X   8
 #define PICKER_DETAIL_GAP 8
 
-/* Target line 10 + gap 2 + prompt 18 + gap 2 + bar 10 + bottom margin 4. */
-#define PICKER_DETAIL_FOOT_H 46
+/* Bar 10 + gap 2 + help line 10 + hint footer 18. */
+#define PICKER_DETAIL_FOOT_H (PICKER_BAR_H + 2 + UI_HELP_H + UI_FOOT_H)
 
 #define PICKER_BAR_H 10
 
@@ -67,11 +70,13 @@ extern "C" {
 
 typedef struct picker_layout_s {
     int16_t w, h;
-    uint8_t rows;    /* list rows that fit under the header        */
-    int16_t list_w;  /* width of a row's text box, left of the art */
+    uint8_t rows;    /* list rows between the header and help line */
+    int16_t list_w;  /* width of a row's text inside its pill      */
     int16_t list_art_x;  /* the list's image column, left edge     */
     int16_t list_art_y;  /* the cover's top                       */
     int16_t list_shot_y; /* the snapshot's top, under the cover   */
+    int16_t help_y;      /* the help line's top, both screens      */
+    int16_t foot_y;      /* the hint footer's top, both screens    */
 
     /* The detail page, for a two-row title; a one-row title lifts media_y
      * and band_y by a font-2 row pitch and gives the band that much more. */
@@ -138,7 +143,7 @@ int16_t picker_row_overflow(const picker_t* p, const picker_layout_t* g,
 
 /*
  * Redraw the current screen in full. `desc` is NULL until the description has
- * been loaded; `art` and `shot` are read only while their state in `p` is
+ * been loaded — on the list, the hovered game's blurb for the help line; `art` and `shot` are read only while their state in `p` is
  * PICKER_MEDIA_READY. Paints nothing when `p`, `g` or `cv` is NULL.
  */
 void picker_draw(const picker_t* p, const picker_layout_t* g, const char* desc,
@@ -148,9 +153,10 @@ void picker_draw(const picker_t* p, const picker_layout_t* g, const char* desc,
 /*
  * Repaint only what `events` (picker_event_e bits from picker_input() or
  * picker_media_loaded()) names: the two rows a move touched, the highlighted
- * row alone for a marquee step, the image slots, the description band, or the
- * hold bar — where a rising bar paints only its filled part, never its track.
- * PICKER_EVENT_REDRAW is picker_draw(). The screen must already show the state
+ * row alone for a marquee step, the image slots, the description band, the
+ * help line, or the hold bar — where a rising bar paints only its filled part,
+ * never its track. On the list `desc` is the hovered game's blurb, shown in
+ * the help line; on a detail page it is the band's text. PICKER_EVENT_REDRAW is picker_draw(). The screen must already show the state
  * before these events, as the last draw left it. Same arguments otherwise.
  */
 void picker_draw_events(const picker_t* p, const picker_layout_t* g,

@@ -3,26 +3,13 @@
 #include <stdio.h>
 #include <string.h>
 
-/*
- * The in-game menu's colours, copied rather than shared because this side is
- * pure C, so the writer and the menu read as one UI (src/menu.cpp). The
- * highlight is the menu's: bold black on a white bar. Raw RGB565, as
- * everywhere else in this firmware — there is no named-colour layer to reach
- * for.
- */
-#define COL_BG     0x0000
-#define COL_ROW_BG 0x1082
-#define COL_HL_BG  0xFFFF
-#define COL_HL_FG  0x0000
-#define COL_TITLE  0xFFE0
-#define COL_DIM    0x7BEF
-#define COL_TEXT   0xFFFF
-#define COL_BAR    0xFFFF
+#include "ui/theme_draw.h"
 
 #define PCT_FULL 100
 
-/* Between the list's two stacked images. */
-#define PICKER_ART_GAP 4
+/* Between the list's two stacked images: as much as the help line under them
+ * leaves. */
+#define PICKER_ART_GAP 2
 
 /* The right edge of the list's title column: its rows' backgrounds end here,
  * and the image column starts. */
@@ -53,7 +40,17 @@ static const char* const DETAIL_TARGET[] = {
 #define TARGET_CANCEL 2
 #define TARGET_FINISH 3
 
-#define FOOTER_PROMPT "Hold A to confirm    B: Back"
+/* The footer's buttons: A opens a title, and on its page A is held to
+ * confirm and B goes back. B does nothing on the list. */
+static const ui_hint_t LIST_HINTS[] = {
+    { "A", "Select" },
+};
+static const ui_hint_t DETAIL_HINTS[] = {
+    { "A", "Hold to confirm" },
+    { "B", "Back" },
+};
+#define N_HINTS(a) ((uint8_t)(sizeof(a) / sizeof((a)[0])))
+
 #define ART_MISSING   "no art"
 #define SHOT_MISSING  "no snapshot"
 #define MARK_PREFIX   "* "
@@ -79,22 +76,25 @@ int picker_layout(int16_t w, int16_t h, picker_layout_t* out)
     memset(out, 0, sizeof(*out));
 
     /* An image plus a column narrow enough to still wrap into, and both of
-     * the list's images stacked under its header. */
+     * the list's images stacked between its header and the help line. */
     if (w < (int16_t)(PICKER_ART_W + 16 + 48) ||
-        h < (int16_t)(PICKER_HEADER_H + 2 * PICKER_ART_H + PICKER_ART_GAP)) {
+        h < (int16_t)(PICKER_HEADER_H + 2 * PICKER_ART_H + PICKER_ART_GAP +
+                      UI_HELP_H + UI_FOOT_H)) {
         return PICKER_ERR_ARGS;
     }
 
     out->w = w;
     out->h = h;
+    out->foot_y = (int16_t)(h - UI_FOOT_H);
+    out->help_y = (int16_t)(out->foot_y - UI_HELP_H);
 
-    out->rows = (uint8_t)((h - PICKER_HEADER_H) / PICKER_ROW_H);
-    /* The image column hugs the right edge; the titles get the rest, less a
-     * 4 px inset each side of their text. */
+    out->rows = (uint8_t)((out->help_y - PICKER_HEADER_H) / PICKER_ROW_H);
+    /* The image column hugs the right edge; the titles get the rest, and a
+     * title's text sits the pill's padding inside it. */
     out->list_art_x = (int16_t)(w - 4 - PICKER_ART_W);
     out->list_art_y = PICKER_HEADER_H;
     out->list_shot_y = (int16_t)(out->list_art_y + PICKER_ART_H + PICKER_ART_GAP);
-    out->list_w = (int16_t)(out->list_art_x - 4 - 4);
+    out->list_w = (int16_t)(TITLE_COL_W(out) - 2 * UI_PILL_PAD);
 
     /* Cart Info's page: title, then the images, then the band, each 8 px
      * from the next except the title's own 2 px row gap. */
@@ -264,8 +264,9 @@ static const char* row_label(const picker_t* p, uint16_t row, char* buf,
 }
 
 /*
- * One image, or its placeholder, whole: a plain slot while it loads and the
- * missing word once it is known not to exist.
+ * One image, or its placeholder, whole: a rounded dark slot while it loads and
+ * the missing word once it is known not to exist. The image's own corners
+ * are rounded by the binding, which owns the buffer.
  */
 static void draw_media(const ui_canvas_t* cv, int16_t x, int16_t y,
                        uint8_t state, const uint16_t* px, const char* missing)
@@ -275,29 +276,31 @@ static void draw_media(const ui_canvas_t* cv, int16_t x, int16_t y,
                   PICKER_ART_H);
         return;
     }
-    cv->fill(cv->ctx, x, y, PICKER_ART_W, PICKER_ART_H, COL_ROW_BG);
+    cv->fill(cv->ctx, x, y, PICKER_ART_W, PICKER_ART_H, UI_COL_BG);
+    cv->round_fill(cv->ctx, x, y, PICKER_ART_W, PICKER_ART_H, UI_IMG_R,
+                   UI_COL_SLOT, UI_COL_BG);
     if (state == PICKER_MEDIA_MISSING) {
         cv->text(cv->ctx, missing, x,
                  (int16_t)(y + PICKER_ART_H / 2 -
                            ui_font_height(UI_FONT_SMALL) / 2),
-                 PICKER_ART_W, 1, UI_FONT_SMALL, UI_ALIGN_CENTER, COL_DIM,
-                 COL_ROW_BG);
+                 PICKER_ART_W, 1, UI_FONT_SMALL, UI_ALIGN_CENTER, UI_COL_DIM,
+                 UI_COL_SLOT);
     }
 }
 
 static void draw_header(const picker_t* p, const picker_layout_t* g,
                         const ui_canvas_t* cv)
 {
-    cv->fill(cv->ctx, 0, 0, g->w, PICKER_HEADER_H, COL_ROW_BG);
-    /*
-     * Text sits at the row's own top, with no inset. A font-2 box is
-     * UI_ROW_PITCH(16) = 18 px, exactly PICKER_ROW_H, so a one-pixel inset
-     * would push the last row's box one pixel past the window — and the
-     * pitch's own trailing two pixels already are the gap an inset was for.
-     */
-    cv->text(cv->ctx, LIST_HEADER[p->mode == PICKER_MODE_IMMEDIATE ? 1 : 0], 4,
-             0, (int16_t)(g->w - 8), 1, UI_FONT_ROW, UI_ALIGN_LEFT, COL_TITLE,
-             COL_ROW_BG);
+    ui_header(cv, g->w, LIST_HEADER[p->mode == PICKER_MODE_IMMEDIATE ? 1 : 0],
+              NULL);
+}
+
+/* The list's help line: the hovered game's blurb, first row only. */
+static void draw_list_help(const picker_layout_t* g, const char* desc,
+                           const ui_canvas_t* cv)
+{
+    ui_help_line(cv, g->w, g->help_y,
+                 (desc != NULL && desc[0] != '\0') ? desc : NULL);
 }
 
 /* The highlighted title's cover, and its snapshot under it. An action row has
@@ -311,7 +314,7 @@ static void draw_list_media(const picker_t* p, const picker_layout_t* g,
     if (cursor >= p->row_count || p->rows[cursor].kind != PICKER_ROW_GAME) {
         cv->fill(cv->ctx, TITLE_COL_W(g), PICKER_HEADER_H,
                  (int16_t)(g->w - TITLE_COL_W(g)),
-                 (int16_t)(g->h - PICKER_HEADER_H), COL_BG);
+                 (int16_t)(g->help_y - PICKER_HEADER_H), UI_COL_BG);
         return;
     }
     draw_media(cv, g->list_art_x, g->list_art_y, p->art_state, art,
@@ -321,12 +324,10 @@ static void draw_list_media(const picker_t* p, const picker_layout_t* g,
 }
 
 /*
- * One list row, if it is on screen. The highlighted one is the in-game menu's
- * bar: bold black on white, the glyphs struck twice a pixel apart and
- * transparent, because an opaque second pass would wipe the first one's right
- * edge. It is built offscreen when the canvas can, so a marquee step replaces
- * the row in one push rather than blanking it; its label then starts
- * marquee_px to the left and is as wide as it needs to be to stay on one row.
+ * One list row, if it is on screen: white on black, or for the highlighted
+ * one the theme's pill, bold, which scrolls a label too wide for it by
+ * marquee_px. Every row's text starts at the same x, so nothing shifts as the
+ * pill moves.
  */
 static void draw_row(const picker_t* p, const picker_layout_t* g,
                      const ui_canvas_t* cv, uint16_t idx)
@@ -335,10 +336,6 @@ static void draw_row(const picker_t* p, const picker_layout_t* g,
     uint16_t first = list_first(&p->list);
     int16_t y;
     const char* label;
-    bool off;
-    int16_t dx;
-    int16_t x = 4;
-    int16_t w = g->list_w;
 
     if (idx < first || idx >= p->row_count ||
         idx - first >= (uint16_t)g->rows) {
@@ -348,41 +345,29 @@ static void draw_row(const picker_t* p, const picker_layout_t* g,
     label = row_label(p, idx, buf, sizeof(buf));
 
     if (idx != list_cursor(&p->list)) {
-        cv->fill(cv->ctx, 0, y, TITLE_COL_W(g), PICKER_ROW_H, COL_BG);
-        cv->text(cv->ctx, label, 4, y, g->list_w, 1, UI_FONT_ROW,
-                 UI_ALIGN_LEFT, COL_TEXT, COL_BG);
+        ui_row_text(cv, 0, y, TITLE_COL_W(g), PICKER_ROW_H, label, UI_FONT_ROW,
+                    UI_COL_TEXT);
         return;
     }
-
-    off = cv->begin != NULL && cv->end != NULL &&
-          cv->begin(cv->ctx, 0, y, TITLE_COL_W(g), PICKER_ROW_H);
-    if (off) {
-        x = (int16_t)(4 - p->marquee_px);
-        w = (int16_t)(g->list_w + p->marquee_span);
-    }
-    cv->fill(cv->ctx, 0, y, TITLE_COL_W(g), PICKER_ROW_H, COL_HL_BG);
-    for (dx = 0; dx <= 1; dx++) {
-        cv->text(cv->ctx, label, (int16_t)(x + dx), y, w, 1, UI_FONT_ROW,
-                 UI_ALIGN_LEFT, COL_HL_FG, COL_HL_FG);
-    }
-    if (off) {
-        cv->end(cv->ctx);
-    }
+    ui_pill_row(cv, 0, y, TITLE_COL_W(g), PICKER_ROW_H, label, UI_FONT_ROW,
+                true, false, p->marquee_px);
 }
 
 static void draw_list(const picker_t* p, const picker_layout_t* g,
-                      const uint16_t* art, const uint16_t* shot,
-                      const ui_canvas_t* cv)
+                      const char* desc, const uint16_t* art,
+                      const uint16_t* shot, const ui_canvas_t* cv)
 {
     uint16_t first = list_first(&p->list);
     uint8_t i;
 
-    cv->fill(cv->ctx, 0, 0, g->w, g->h, COL_BG);
+    cv->fill(cv->ctx, 0, 0, g->w, g->h, UI_COL_BG);
     draw_header(p, g, cv);
     for (i = 0; i < g->rows; i++) {
         draw_row(p, g, cv, (uint16_t)(first + i));
     }
     draw_list_media(p, g, cv, art, shot);
+    draw_list_help(g, desc, cv);
+    ui_hint_bar(cv, g->w, g->foot_y, LIST_HINTS, N_HINTS(LIST_HINTS));
 }
 
 int16_t picker_row_overflow(const picker_t* p, const picker_layout_t* g,
@@ -400,7 +385,8 @@ int16_t picker_row_overflow(const picker_t* p, const picker_layout_t* g,
     if (cursor >= p->row_count) {
         return 0;
     }
-    /* One more pixel for the bold pass. */
+    /* One more pixel for the bold pass; list_w is the text's room inside
+     * the widest pill. */
     over = (int16_t)(cv->measure(cv->ctx, row_label(p, cursor, buf, sizeof(buf)),
                                  UI_FONT_ROW) +
                      1 - g->list_w);
@@ -476,7 +462,7 @@ static void draw_band(const picker_t* p, const picker_layout_t* g,
     int16_t mark_x = (int16_t)(g->detail_x + g->detail_w);
     uint8_t i;
 
-    cv->fill(cv->ctx, 0, y, g->w, h, COL_BG);
+    cv->fill(cv->ctx, 0, y, g->w, h, UI_COL_BG);
     if (p->rows[p->detail_row].kind != PICKER_ROW_GAME) {
         return;
     }
@@ -488,23 +474,23 @@ static void draw_band(const picker_t* p, const picker_layout_t* g,
                 break;
             }
             cv->text(cv->ctx, line, g->detail_x, (int16_t)(y + i * pitch),
-                     g->detail_w, 1, UI_FONT_SMALL, UI_ALIGN_LEFT, COL_TEXT,
-                     COL_BG);
+                     g->detail_w, 1, UI_FONT_SMALL, UI_ALIGN_LEFT, UI_COL_TEXT,
+                     UI_COL_BG);
         }
     }
     if (p->scroll > 0) {
         cv->text(cv->ctx, SCROLL_BACK, mark_x, y, UI_FONT_SMALL_ADV, 1,
-                 UI_FONT_SMALL, UI_ALIGN_RIGHT, COL_DIM, COL_BG);
+                 UI_FONT_SMALL, UI_ALIGN_RIGHT, UI_COL_DIM, UI_COL_BG);
     }
     if (p->scroll < p->scroll_max) {
         cv->text(cv->ctx, SCROLL_MORE, mark_x,
                  (int16_t)(y + (rows - 1) * pitch), UI_FONT_SMALL_ADV, 1,
-                 UI_FONT_SMALL, UI_ALIGN_RIGHT, COL_DIM, COL_BG);
+                 UI_FONT_SMALL, UI_ALIGN_RIGHT, UI_COL_DIM, UI_COL_BG);
     }
 }
 
 /*
- * The hold bar: its track, and the part filled so far.
+ * The hold bar, rounded like the pill: its track, and the part filled so far.
  *
  * `grow` is a hold tick's repaint: the fill only ever gets longer while A is
  * held, so the filled part is painted over what is already there and the
@@ -516,16 +502,18 @@ static void draw_bar(const picker_t* p, const picker_layout_t* g,
                      const ui_canvas_t* cv, bool grow)
 {
     uint8_t pct = picker_hold_pct(p);
-    int16_t y = (int16_t)(g->h - 4 - PICKER_BAR_H);
+    int16_t y = (int16_t)(g->help_y - 2 - PICKER_BAR_H);
 
     if (!grow || pct == 0) {
         cv->fill(cv->ctx, g->detail_x, y, g->detail_w, PICKER_BAR_H,
-                 COL_ROW_BG);
+                 UI_COL_BG);
+        cv->round_fill(cv->ctx, g->detail_x, y, g->detail_w, PICKER_BAR_H,
+                       PICKER_BAR_H / 2, UI_COL_SLOT, UI_COL_BG);
     }
     if (pct > 0) {
-        cv->fill(cv->ctx, g->detail_x, y,
-                 (int16_t)(g->detail_w * pct / PCT_FULL), PICKER_BAR_H,
-                 COL_BAR);
+        cv->round_fill(cv->ctx, g->detail_x, y,
+                       (int16_t)(g->detail_w * pct / PCT_FULL), PICKER_BAR_H,
+                       PICKER_BAR_H / 2, UI_COL_PILL, UI_COL_SLOT);
     }
 }
 
@@ -548,24 +536,21 @@ static void draw_detail(const picker_t* p, const picker_layout_t* g,
                         const char* desc, const uint16_t* art,
                         const uint16_t* shot, const ui_canvas_t* cv)
 {
-    int16_t foot_y = (int16_t)(g->h - PICKER_DETAIL_FOOT_H);
-
-    cv->fill(cv->ctx, 0, 0, g->w, g->h, COL_BG);
+    cv->fill(cv->ctx, 0, 0, g->w, g->h, UI_COL_BG);
 
     /* White, as Cart Info draws its title. */
     cv->text(cv->ctx, detail_title(p), g->detail_x, g->title_y, g->detail_w,
-             PICKER_TITLE_ROWS, UI_FONT_ROW, UI_ALIGN_LEFT, COL_TEXT, COL_BG);
+             PICKER_TITLE_ROWS, UI_FONT_ROW, UI_ALIGN_LEFT, UI_COL_TEXT,
+             UI_COL_BG);
 
     draw_detail_media(p, g, art, shot, cv);
     draw_band(p, g, desc, cv);
 
-    /* What confirming does, how to confirm it, and how far the hold has got.
+    /* How far the hold has got, what confirming does, and how to confirm it.
      * No filename: the title already names the game. */
-    cv->text(cv->ctx, DETAIL_TARGET[detail_target(p)], g->detail_x, foot_y,
-             g->detail_w, 1, UI_FONT_SMALL, UI_ALIGN_LEFT, COL_DIM, COL_BG);
-    cv->text(cv->ctx, FOOTER_PROMPT, g->detail_x, (int16_t)(foot_y + 12),
-             g->detail_w, 1, UI_FONT_ROW, UI_ALIGN_CENTER, COL_DIM, COL_BG);
     draw_bar(p, g, cv, false);
+    ui_help_line(cv, g->w, g->help_y, DETAIL_TARGET[detail_target(p)]);
+    ui_hint_bar(cv, g->w, g->foot_y, DETAIL_HINTS, N_HINTS(DETAIL_HINTS));
 }
 
 /* Whether there is anything to draw, and a canvas to draw it with. */
@@ -575,7 +560,8 @@ static bool drawable(const picker_t* p, const picker_layout_t* g,
     if (p == NULL || g == NULL || cv == NULL) {
         return false;
     }
-    if (cv->fill == NULL || cv->text == NULL || cv->image == NULL) {
+    if (cv->fill == NULL || cv->round_fill == NULL || cv->text == NULL ||
+        cv->image == NULL || cv->measure == NULL) {
         return false;
     }
     return p->row_count != 0 && p->cat != NULL;
@@ -590,7 +576,7 @@ void picker_draw(const picker_t* p, const picker_layout_t* g, const char* desc,
     }
     switch (p->screen) {
     case PICKER_SCREEN_LIST:
-        draw_list(p, g, art, shot, cv);
+        draw_list(p, g, desc, art, shot, cv);
         break;
     case PICKER_SCREEN_DETAIL:
         if (p->detail_row < p->row_count) {
@@ -624,6 +610,9 @@ void picker_draw_events(const picker_t* p, const picker_layout_t* g,
         }
         if (events & PICKER_EVENT_MEDIA) {
             draw_list_media(p, g, cv, art, shot);
+        }
+        if (events & PICKER_EVENT_HELP) {
+            draw_list_help(g, desc, cv);
         }
         return;
     }
