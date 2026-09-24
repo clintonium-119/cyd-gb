@@ -80,15 +80,17 @@ typedef struct ui_canvas_s {
 #define UI_FONT_TITLE 4
 
 /*
- * The theme's three GFX outline fonts, which the binding selects with
- * setFreeFont(): FreeSans 9pt for prose, FreeSansBold 9pt for list rows and
- * FreeSansBold 12pt for headers. Their ids sit past the built-in ones so the
- * two kinds never collide. All three are proportional: a layout measures
- * them through the canvas, and never assumes an advance.
+ * The theme's four GFX fonts, rendered from Liberation Sans and selected by
+ * the binding with setFreeFont(): a regular face for prose, a bold one for
+ * list rows, a larger bold one for headers and a regular one at the rows'
+ * size for values. Their ids sit past the built-in ones so the two kinds
+ * never collide. All four are proportional: a layout measures them through
+ * the canvas, and never assumes an advance.
  */
-#define UI_FONT_TEXT 10
-#define UI_FONT_BOLD 11
-#define UI_FONT_HEAD 12
+#define UI_FONT_TEXT  10
+#define UI_FONT_BOLD  11
+#define UI_FONT_HEAD  12
+#define UI_FONT_VALUE 13
 
 /*
  * Font 1 is GLCD: a FIXED 6-pixel advance per glyph. This is the one glyph

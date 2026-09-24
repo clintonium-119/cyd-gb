@@ -230,10 +230,10 @@ static void assert_same_as_full(void)
 static void test_the_layout_fits_seven_rows_over_the_help_line(void)
 {
     TEST_ASSERT_EQUAL_UINT8(MENU_VISIBLE, g.visible);
-    TEST_ASSERT_EQUAL_INT16(222, g.foot_y);
-    TEST_ASSERT_EQUAL_INT16(200, g.help_y);
+    TEST_ASSERT_EQUAL_INT16(220, g.foot_y);
+    TEST_ASSERT_EQUAL_INT16(202, g.help_y);
     TEST_ASSERT_TRUE(MENU_TOP + MENU_VISIBLE * MENU_ROW_H <= g.help_y);
-    TEST_ASSERT_FALSE(menu_layout(W, 225, &g));
+    TEST_ASSERT_FALSE(menu_layout(W, 223, &g));
     TEST_ASSERT_FALSE(menu_layout(W, H, NULL));
 }
 
@@ -389,8 +389,8 @@ static void test_a_one_row_cart_title_gives_the_images_a_row(void)
     int16_t two = menu_draw_cart_title(
         &cv, &g, "The Legend of Zelda: Link's Awakening DX Edition");
 
-    TEST_ASSERT_EQUAL_INT16(UI_PAD + 20 + 2, one);
-    TEST_ASSERT_EQUAL_INT16(UI_PAD + 2 * 20 + 2, two);
+    TEST_ASSERT_EQUAL_INT16(UI_PAD + 17 + 2, one);
+    TEST_ASSERT_EQUAL_INT16(UI_PAD + 2 * 17 + 2, two);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
 }
 
@@ -401,13 +401,13 @@ static void test_the_band_fills_to_the_back_line_and_scrolls_inside_it(void)
         "escape. A dream-logic adventure that quietly erases its own world as "
         "you finish it, and one of the very finest games on the system.";
     menu_band_t b;
-    int16_t y = (int16_t)(UI_PAD + 2 * 20 + 2 + 96 + 8);
+    int16_t y = (int16_t)(UI_PAD + 2 * 17 + 2 + 96 + 8);
     unsigned i;
 
     menu_band_fit(&cv, &g, text, y, &b);
-    /* (222 - 2 - 150) / 20: down to the hints, the description being the
+    /* (220 - 2 - 144) / 15: down to the hints, the description being the
      * page's help. */
-    TEST_ASSERT_EQUAL_UINT16(3, b.rows);
+    TEST_ASSERT_EQUAL_UINT16(4, b.rows);
     TEST_ASSERT_EQUAL_INT16(W - 2 * UI_TEXT_X, b.w);
     /* The fake's 8 px advance, measured rather than assumed. */
     TEST_ASSERT_EQUAL_UINT8(8, b.adv.w['e' - 32]);
@@ -415,7 +415,7 @@ static void test_the_band_fills_to_the_back_line_and_scrolls_inside_it(void)
     b.first = 1;
     menu_draw_band(&cv, &b);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
-    TEST_ASSERT_TRUE(b.y + (int16_t)b.rows * 20 <= g.foot_y);
+    TEST_ASSERT_TRUE(b.y + (int16_t)b.rows * 15 <= g.foot_y);
     /* Every line fits the band at the measured advances. */
     for (i = 0; i < fk.logged; i++) {
         TEST_ASSERT_TRUE(strlen(fk.log[i].s) * 8 <= (size_t)b.w);

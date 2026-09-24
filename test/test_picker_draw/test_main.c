@@ -451,9 +451,9 @@ static void test_the_layout_at_266_by_240(void)
     picker_layout_t g;
 
     TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(GEOM_53_W, GEOM_53_H, &g));
-    TEST_ASSERT_EQUAL_INT16(222, g.foot_y);      /* 240 - 18             */
-    TEST_ASSERT_EQUAL_INT16(200, g.help_y);      /* 222 - 22             */
-    TEST_ASSERT_EQUAL_UINT8(9, g.rows);          /* (200 - 4) / 20       */
+    TEST_ASSERT_EQUAL_INT16(220, g.foot_y);      /* 240 - 20             */
+    TEST_ASSERT_EQUAL_INT16(202, g.help_y);      /* 220 - 18             */
+    TEST_ASSERT_EQUAL_UINT8(9, g.rows);          /* (202 - 4) / 20       */
     TEST_ASSERT_EQUAL_UINT8((g.help_y - PICKER_LIST_TOP) / UI_PILL_H_LIST,
                             g.rows);
     TEST_ASSERT_EQUAL_INT16(166, g.list_art_x);  /* 266 - 4 - 96         */
@@ -468,11 +468,11 @@ static void test_the_layout_at_266_by_240(void)
     TEST_ASSERT_EQUAL_INT16(UI_TEXT_X, g.detail_x);
     TEST_ASSERT_EQUAL_INT16(242, g.detail_w);    /* 266 - 2 * 12         */
     TEST_ASSERT_EQUAL_INT16(4, g.title_y);
-    TEST_ASSERT_EQUAL_INT16(46, g.media_y);      /* 4 + 2 * 20 + 2       */
+    TEST_ASSERT_EQUAL_INT16(40, g.media_y);      /* 4 + 2 * 17 + 2       */
     TEST_ASSERT_EQUAL_INT16(116, g.shot_x);      /* 12 + 96 + 8          */
-    TEST_ASSERT_EQUAL_INT16(150, g.band_y);      /* 46 + 96 + 8          */
-    TEST_ASSERT_EQUAL_INT16(48, g.band_h);       /* 240 - 40 - 2 - 150   */
-    TEST_ASSERT_EQUAL_UINT8(2, g.band_rows);     /* 48 / 20              */
+    TEST_ASSERT_EQUAL_INT16(144, g.band_y);      /* 40 + 96 + 8          */
+    TEST_ASSERT_EQUAL_INT16(56, g.band_h);       /* 240 - 38 - 2 - 144   */
+    TEST_ASSERT_EQUAL_UINT8(3, g.band_rows);     /* 56 / 15              */
     /* The band ends above the help line, which the hold bar shares. */
     TEST_ASSERT_LESS_OR_EQUAL_INT16(GEOM_53_H - PICKER_DETAIL_FOOT_H,
                                     g.band_y + g.band_h);
@@ -486,9 +486,9 @@ static void test_the_layout_refuses_a_window_it_cannot_compose(void)
     TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout(200, 100, &g));
     /* 150 < 96 + 16 + 48: an image and no usable column beside it. */
     TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout(150, 240, &g));
-    /* 237 < 4 + 96 + 2 + 96 + 22 + 18: the list's images do not stack
+    /* 235 < 4 + 96 + 2 + 96 + 18 + 20: the list's images do not stack
      * above the help line and the footer. */
-    TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout(266, 237, &g));
+    TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout(266, 235, &g));
     TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout(240, 216, NULL));
 }
 
@@ -743,8 +743,8 @@ static void test_a_one_row_title_gives_its_row_to_the_band(void)
     picker_input(&p, B_A, 0);
     TEST_ASSERT_EQUAL_UINT8(g.band_rows, picker_band_rows(&p, &g, &cv));
     snprintf(lib.e[0].title, sizeof(lib.e[0].title), "Tetris");
-    /* (48 + 20) / 20 */
-    TEST_ASSERT_EQUAL_UINT8(3, picker_band_rows(&p, &g, &cv));
+    /* (56 + 17) / 15 */
+    TEST_ASSERT_EQUAL_UINT8(4, picker_band_rows(&p, &g, &cv));
 }
 
 static void test_the_images_stay_put_while_the_band_scrolls(void)

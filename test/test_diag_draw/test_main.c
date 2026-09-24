@@ -412,9 +412,9 @@ static void test_the_layout_accepts_every_window(void)
 {
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(GEOM_24_W, GEOM_24_H, &geom));
     TEST_ASSERT_EQUAL_INT16(DIAG_HEADER_H + 2, geom.body_y);
-    /* (216 - 18 - 22 - 28) / 10 = 14 rows, well past the eight a page
+    /* (216 - 20 - 18 - 26) / 10 = 15 rows, well past the eight a page
      * needs. */
-    TEST_ASSERT_EQUAL_UINT8(14, geom.rows);
+    TEST_ASSERT_EQUAL_UINT8(15, geom.rows);
     TEST_ASSERT_EQUAL_INT16(GEOM_24_W / 8, geom.bar_w);
     TEST_ASSERT_EQUAL_INT16(GEOM_24_H - UI_FOOT_H, geom.foot_y);
     TEST_ASSERT_EQUAL_INT16(GEOM_24_H - UI_FOOT_H - UI_HELP_H, geom.help_y);
@@ -423,17 +423,17 @@ static void test_the_layout_accepts_every_window(void)
 
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(GEOM_26_W, GEOM_26_H, &geom));
     TEST_ASSERT_EQUAL_INT16(DIAG_HEADER_H + 2, geom.body_y);
-    /* (234 - 40 - 28) / 10 = 16. */
-    TEST_ASSERT_EQUAL_UINT8(16, geom.rows);
+    /* (234 - 38 - 26) / 10 = 17. */
+    TEST_ASSERT_EQUAL_UINT8(17, geom.rows);
     TEST_ASSERT_EQUAL_INT16(GEOM_26_W / 8, geom.bar_w);
 
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(GEOM_53_W, GEOM_53_H, &geom));
     TEST_ASSERT_EQUAL_INT16(DIAG_HEADER_H + 2, geom.body_y);
-    /* (240 - 40 - 28) / 10 = 17, and the footer is inside the window. */
+    /* (240 - 38 - 26) / 10 = 17, and the footer is inside the window. */
     TEST_ASSERT_EQUAL_UINT8(17, geom.rows);
     TEST_ASSERT_EQUAL_INT16(GEOM_53_W / 8, geom.bar_w);
-    TEST_ASSERT_EQUAL_INT16(200, geom.help_y);
-    TEST_ASSERT_EQUAL_INT16(222, geom.foot_y);
+    TEST_ASSERT_EQUAL_INT16(202, geom.help_y);
+    TEST_ASSERT_EQUAL_INT16(220, geom.foot_y);
     TEST_ASSERT_TRUE(geom.foot_y + UI_FOOT_H <= GEOM_53_H);
 }
 

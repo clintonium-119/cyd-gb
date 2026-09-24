@@ -156,12 +156,10 @@ void ui_hint_bar(const ui_canvas_t* cv, int16_t w, int16_t y,
 
         cv->round_fill(cv->ctx, cx, (int16_t)(oy + m), gw, UI_GLYPH_D,
                        UI_PILL_R(UI_GLYPH_D), UI_COL_GLYPH, UI_COL_HINT_BG);
-        /* Bold, struck twice a pixel apart: the 8 px font has no bold. Its
-         * glyphs sit at the top left of their cell, so the letter goes a
-         * pixel right of the circle's centre, and ui_text_dy puts it on its
-         * capitals' middle. */
+        /* Bold, struck twice a pixel apart: the 8 px font has no bold.
+         * ui_text_dy puts the letter on its capitals' middle. */
         for (dx = 0; dx <= 1; dx++) {
-            cv->text(cv->ctx, hints[i].button, (int16_t)(cx + 1 + dx), gy, gw, 1,
+            cv->text(cv->ctx, hints[i].button, (int16_t)(cx + dx), gy, gw, 1,
                      UI_FONT_HINT, UI_ALIGN_CENTER, UI_COL_GLYPH_FG,
                      UI_COL_GLYPH_FG);
         }

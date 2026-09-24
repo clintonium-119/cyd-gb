@@ -30,7 +30,7 @@ extern "C" {
 
 /* More entries than fit, so the list scrolls a window of MENU_VISIBLE of
  * them. The list has no header: 4 + 7 x 26 = 186, over the help line at
- * 200. */
+ * 202. */
 #define MENU_VISIBLE 7
 #define MENU_ROW_H   26
 #define MENU_TOP     UI_PAD

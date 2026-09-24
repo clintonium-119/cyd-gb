@@ -29,13 +29,13 @@ bool menu_layout(int16_t w, int16_t h, menu_layout_t* out)
     return out->help_y >= MENU_TOP + MENU_VISIBLE * MENU_ROW_H;
 }
 
-/* One row w wide from the inset: the label, and the value right-aligned
- * outside the pill. */
+/* One row w wide from the inset: the label in the bold list font, and the
+ * value right-aligned outside the pill in the regular value font. */
 static void draw_row_at(const ui_canvas_t* cv, int16_t y, int16_t w,
                         const char* label, const char* value, bool highlighted,
                         bool off)
 {
-    const int16_t ty = (int16_t)(y + ui_text_dy(MENU_ROW_H, UI_FONT_LIST));
+    const int16_t ty = (int16_t)(y + ui_text_dy(MENU_ROW_H, UI_FONT_VAL));
     const uint16_t fg = off ? UI_COL_DIM : UI_COL_TEXT;
     const int16_t right = (int16_t)(ROW_X + w - UI_PILL_PAD);
 
@@ -47,7 +47,7 @@ static void draw_row_at(const ui_canvas_t* cv, int16_t y, int16_t w,
 
         if (value != NULL) {
             max_w = (int16_t)(max_w -
-                              cv->measure(cv->ctx, value, UI_FONT_LIST) -
+                              cv->measure(cv->ctx, value, UI_FONT_VAL) -
                               UI_PILL_PAD);
         }
         cv->fill(cv->ctx, ROW_X, y, w, MENU_ROW_H, UI_COL_BG);
@@ -56,7 +56,7 @@ static void draw_row_at(const ui_canvas_t* cv, int16_t y, int16_t w,
     }
     if (value != NULL) {
         cv->text(cv->ctx, value, (int16_t)(ROW_X + UI_PILL_PAD), ty,
-                 (int16_t)(right - ROW_X - UI_PILL_PAD), 1, UI_FONT_LIST,
+                 (int16_t)(right - ROW_X - UI_PILL_PAD), 1, UI_FONT_VAL,
                  UI_ALIGN_RIGHT, fg, fg);
     }
 }
@@ -124,15 +124,15 @@ void menu_draw_hotkeys(const ui_canvas_t* cv, const menu_layout_t* g,
                        const char* const (*keys)[2], uint8_t n)
 {
     static const ui_hint_t HINTS[] = { { "B", "Back" } };
-    int16_t y = (int16_t)(UI_HEADER_H + ui_text_dy(MENU_ROW_H, UI_FONT_TEXT));
+    int16_t y = (int16_t)(UI_HEADER_H + ui_text_dy(MENU_ROW_H, UI_FONT_VAL));
     const int16_t w = (int16_t)(g->w - 2 * UI_TEXT_X);
     uint8_t i;
 
     menu_draw_title(cv, g, "Hotkeys");
     for (i = 0; i < n; i++) {
-        cv->text(cv->ctx, keys[i][0], UI_TEXT_X, y, w, 1, UI_FONT_TEXT,
+        cv->text(cv->ctx, keys[i][0], UI_TEXT_X, y, w, 1, UI_FONT_VAL,
                  UI_ALIGN_LEFT, UI_COL_TEXT, UI_COL_BG);
-        cv->text(cv->ctx, keys[i][1], UI_TEXT_X, y, w, 1, UI_FONT_TEXT,
+        cv->text(cv->ctx, keys[i][1], UI_TEXT_X, y, w, 1, UI_FONT_VAL,
                  UI_ALIGN_RIGHT, UI_COL_SUB, UI_COL_BG);
         y = (int16_t)(y + MENU_ROW_H);
     }

@@ -483,6 +483,12 @@ void display_clear(uint16_t color)
 
 // On any TFT_eSPI, so the canvas can wrap into an offscreen sprite as well as
 // onto the panel.
+// The theme's fonts, rendered from Liberation Sans; see src/fonts/README.md.
+#include "fonts/Sans6p25pt.h"
+#include "fonts/Sans7p5pt.h"
+#include "fonts/SansBold10pt.h"
+#include "fonts/SansBold7p5pt.h"
+
 // The canvas's font id selected on d, and the id drawString() and
 // textWidth() then take: a GFX font is font 1 with a free font set, and a
 // built-in one clears any free font a previous call left behind.
@@ -490,13 +496,16 @@ static uint8_t use_font(TFT_eSPI& d, uint8_t font)
 {
     switch (font) {
     case UI_FONT_TEXT:
-        d.setFreeFont(&FreeSans9pt7b);
+        d.setFreeFont(&Sans6p25pt);
         return 1;
     case UI_FONT_BOLD:
-        d.setFreeFont(&FreeSansBold9pt7b);
+        d.setFreeFont(&SansBold7p5pt);
         return 1;
     case UI_FONT_HEAD:
-        d.setFreeFont(&FreeSansBold12pt7b);
+        d.setFreeFont(&SansBold10pt);
+        return 1;
+    case UI_FONT_VALUE:
+        d.setFreeFont(&Sans7p5pt);
         return 1;
     default:
         d.setTextFont(font);

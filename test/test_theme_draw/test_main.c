@@ -598,11 +598,17 @@ static void test_one_row_bands_round_an_overview_row_by_row(void)
 
 static void test_text_is_centred_on_its_capitals_and_kept_in_its_box(void)
 {
-    /* 9pt: 12 px capitals, one blank row above them in an 18 px box. */
-    TEST_ASSERT_EQUAL_INT16((22 - 12) / 2 - 1, ui_text_dy(22, UI_FONT_LIST));
-    TEST_ASSERT_EQUAL_INT16((26 - 12) / 2 - 1, ui_text_dy(26, UI_FONT_LIST));
+    const int16_t cap = ui_font_cap(UI_FONT_LIST);
+    const int16_t lead = ui_font_lead(UI_FONT_LIST);
+    const int16_t fh = ui_font_height(UI_FONT_LIST);
+
+    /* The capitals' middle on the box's middle. */
+    TEST_ASSERT_EQUAL_INT16((22 - cap) / 2 - lead,
+                            ui_text_dy(22, UI_FONT_LIST));
+    TEST_ASSERT_EQUAL_INT16((26 - cap) / 2 - lead,
+                            ui_text_dy(26, UI_FONT_LIST));
     /* A box barely taller than the font keeps the font inside it. */
-    TEST_ASSERT_EQUAL_INT16(20 - 18, ui_text_dy(20, UI_FONT_LIST));
+    TEST_ASSERT_EQUAL_INT16(1, ui_text_dy((int16_t)(fh + 1), UI_FONT_LIST));
     TEST_ASSERT_EQUAL_INT16(0, ui_text_dy(10, UI_FONT_LIST));
     /* The 8 px font's 7 px capitals in a 12 px circle. */
     TEST_ASSERT_EQUAL_INT16(2, ui_text_dy(UI_GLYPH_D, UI_FONT_HINT));
