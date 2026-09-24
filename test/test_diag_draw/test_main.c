@@ -231,6 +231,7 @@ static ui_canvas_t canvas_over(fake_t* f, const diag_layout_t* g)
 {
     ui_canvas_t cv;
 
+    memset(&cv, 0, sizeof(cv));
     memset(f, 0, sizeof(*f));
     f->w = g->w;
     f->h = g->h;

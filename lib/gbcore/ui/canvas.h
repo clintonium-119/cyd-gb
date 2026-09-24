@@ -26,7 +26,7 @@ enum ui_align_e {
 };
 
 /*
- * The injected draw seam. Three calls, in the shape catalog_reader_t
+ * The injected draw seam, in the shape catalog_reader_t
  * established for gbcore: a ctx the caller owns plus function pointers.
  *
  * `text` is a box, not a baseline: top-left x, y, width w, up to `rows` lines
@@ -36,6 +36,20 @@ enum ui_align_e {
  * `image` takes a row range so the scrolling band can clip an image at its
  * edge: draw rows [row0, row0 + rows) of a w-wide image, with the top of that
  * range landing at y. The binding hands the driver px + row0 * w.
+ *
+ * A `text` call whose bg == fg paints only the glyph pixels and leaves the
+ * background alone. That is how a label is struck twice, one pixel apart, for
+ * bold: an opaque second pass would wipe the first pass's right edge.
+ *
+ * `measure` is the pixel width `s` takes in `font` on one row. It is required,
+ * because a layout that scrolls an overflowing label has to know it overflows.
+ *
+ * `begin` and `end` are optional; NULL means "draw straight to the panel".
+ * Between them, every fill, text and image lands in an offscreen w x h buffer
+ * whose top-left is window position x, y, clipped to that buffer, and `end`
+ * pushes the buffer to the panel in one go. That is how one row repaints
+ * without the panel ever showing it blank between its fill and its text.
+ * Coordinates stay window-relative throughout.
  */
 typedef struct ui_canvas_s {
     void* ctx;
@@ -46,6 +60,9 @@ typedef struct ui_canvas_s {
                  uint16_t bg);
     void (*image)(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
                   const uint16_t* px, int16_t row0, int16_t rows);
+    int16_t (*measure)(void* ctx, const char* s, uint8_t font);
+    void (*begin)(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h);
+    void (*end)(void* ctx);
 } ui_canvas_t;
 
 /* TFT_eSPI built-in font ids. */

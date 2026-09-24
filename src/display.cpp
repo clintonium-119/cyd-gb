@@ -481,14 +481,17 @@ void display_clear(uint16_t color)
     tft.fillScreen(color);
 }
 
-int16_t display_draw_wrapped(const char* s, int16_t cx, int16_t top,
-                             int16_t max_w, uint8_t max_rows, uint8_t font)
+// On any TFT_eSPI, so the canvas can wrap into an offscreen sprite as well as
+// onto the panel.
+static int16_t draw_wrapped(TFT_eSPI& d, const char* s, int16_t cx,
+                            int16_t top, int16_t max_w, uint8_t max_rows,
+                            uint8_t font)
 {
     char line[96];
     size_t at = 0;
     size_t len;
     uint8_t row = 0;
-    int16_t row_h = tft.fontHeight(font) + 2;
+    int16_t row_h = d.fontHeight(font) + 2;
 
     if (!s) {
         return top;
@@ -503,7 +506,7 @@ int16_t display_draw_wrapped(const char* s, int16_t cx, int16_t top,
         while (at + n < len && n < sizeof(line) - 1) {
             line[n] = s[at + n];
             line[n + 1] = '\0';
-            if (tft.textWidth(line, font) > max_w) {
+            if (d.textWidth(line, font) > max_w) {
                 line[n] = '\0';
                 break;
             }
@@ -526,7 +529,7 @@ int16_t display_draw_wrapped(const char* s, int16_t cx, int16_t top,
             break;
         }
         line[n] = '\0';
-        tft.drawString(line, cx, top + row * row_h, font);
+        d.drawString(line, cx, top + row * row_h, font);
         at += n;
         // The spaces the break consumed, so the next row does not open with
         // one — which at font 2 would indent it visibly against the rest.
@@ -536,6 +539,12 @@ int16_t display_draw_wrapped(const char* s, int16_t cx, int16_t top,
         row++;
     }
     return (int16_t)(top + row * row_h);
+}
+
+int16_t display_draw_wrapped(const char* s, int16_t cx, int16_t top,
+                             int16_t max_w, uint8_t max_rows, uint8_t font)
+{
+    return draw_wrapped(tft, s, cx, top, max_w, max_rows, font);
 }
 
 #if PUSH_TRANSPOSED
@@ -715,37 +724,56 @@ void display_dma_wait()
 static int16_t ox;
 static int16_t oy;
 
-// Window-relative coordinates in, panel coordinates out. Neither layout
-// module knows anything of the origin.
+// The offscreen row between cv_begin and cv_end, and the window position of
+// its top-left. NULL means every call goes straight to the panel.
+static TFT_eSprite* spr;
+static int16_t sx;
+static int16_t sy;
+
+// Window-relative coordinates in, panel coordinates out — or sprite
+// coordinates while a row is being built offscreen. Neither layout module
+// knows anything of the origin.
+static TFT_eSPI& target(int16_t* x, int16_t* y) {
+    if (spr) {
+        *x = (int16_t)(*x - sx);
+        *y = (int16_t)(*y - sy);
+        return *spr;
+    }
+    *x = (int16_t)(*x + ox);
+    *y = (int16_t)(*y + oy);
+    return tft;
+}
 
 static void cv_fill(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
                     uint16_t color) {
     (void)ctx;
-    tft.fillRect(ox + x, oy + y, w, h, color);
+    target(&x, &y).fillRect(x, y, w, h, color);
 }
 
 static void cv_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
                     uint8_t rows, uint8_t font, uint8_t align, uint16_t fg,
                     uint16_t bg) {
     (void)ctx;
+    TFT_eSPI& d = target(&x, &y);
     int16_t anchor = x;
 
-    tft.setTextColor(fg, bg);
+    // fg == bg is the seam's transparent text, and needs no branch here:
+    // TFT_eSPI already draws only the glyph pixels when the two match.
+    d.setTextColor(fg, bg);
     switch (align) {
         case UI_ALIGN_CENTER:
-            tft.setTextDatum(TC_DATUM);
+            d.setTextDatum(TC_DATUM);
             anchor = (int16_t)(x + w / 2);
             break;
         case UI_ALIGN_RIGHT:
-            tft.setTextDatum(TR_DATUM);
+            d.setTextDatum(TR_DATUM);
             anchor = (int16_t)(x + w);
             break;
         default:
-            tft.setTextDatum(TL_DATUM);
+            d.setTextDatum(TL_DATUM);
             break;
     }
-    display_draw_wrapped(s, (int16_t)(ox + anchor), (int16_t)(oy + y), w, rows,
-                         font);
+    draw_wrapped(d, s, anchor, y, w, rows, font);
 }
 
 static void cv_image(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
@@ -756,11 +784,52 @@ static void cv_image(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
     // driver is handed the first visible row and told how many follow.
     //
     // display_init() leaves setSwapBytes(true) in force and the .565 files are
-    // little-endian, so there is no per-pixel swap to do here.
-    tft.pushImage(ox + x, oy + y, w, rows, (uint16_t*)(px + (size_t)row0 * w));
+    // little-endian, so there is no per-pixel swap to do here. cv_begin sets
+    // the same on the sprite.
+    target(&x, &y).pushImage(x, y, w, rows,
+                             (uint16_t*)(px + (size_t)row0 * w));
 }
 
-static const ui_canvas_t canvas = { NULL, cv_fill, cv_text, cv_image };
+static int16_t cv_measure(void* ctx, const char* s, uint8_t font) {
+    (void)ctx;
+    return (int16_t)tft.textWidth(s, font);
+}
+
+// Allocated here and freed in cv_end, never kept: the writer's heap also holds
+// its 56 KB of buffers. A refused allocation draws straight to the panel
+// instead, which may flicker but still draws.
+static void cv_begin(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h) {
+    (void)ctx;
+    if (spr) {
+        return;
+    }
+    spr = new TFT_eSprite(&tft);
+    spr->setColorDepth(16);
+    if (!spr->createSprite(w, h)) {
+        Serial.printf("[TFT] no %d B for a %dx%d offscreen row\n",
+                      w * h * 2, w, h);
+        delete spr;
+        spr = NULL;
+        return;
+    }
+    spr->setSwapBytes(true);
+    sx = x;
+    sy = y;
+}
+
+static void cv_end(void* ctx) {
+    (void)ctx;
+    if (!spr) {
+        return;
+    }
+    spr->pushSprite(ox + sx, oy + sy);
+    spr->deleteSprite();
+    delete spr;
+    spr = NULL;
+}
+
+static const ui_canvas_t canvas = { NULL,       cv_fill,  cv_text, cv_image,
+                                    cv_measure, cv_begin, cv_end };
 
 const ui_canvas_t* display_canvas(int16_t x, int16_t y)
 {

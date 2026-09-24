@@ -67,6 +67,11 @@ typedef struct {
     unsigned range_faults; /* image row ranges outside the source image */
     unsigned null_strings;
     int16_t widest_desc;
+    /* The offscreen row between begin and end, and anything drawn outside
+     * it while it is open. */
+    bool off;
+    int16_t off_x, off_y, off_w, off_h;
+    unsigned off_violations, begins;
 } fake_t;
 
 static fake_t fk;
@@ -78,6 +83,12 @@ static void put_rect(fake_t* f, int16_t x, int16_t y, int16_t w, int16_t h)
 
     if (x < 0 || y < 0 || w < 0 || h < 0 || x + w > f->w || y + h > f->h) {
         f->violations++;
+        return;
+    }
+    if (f->off && (x < f->off_x || y < f->off_y ||
+                   x + w > f->off_x + f->off_w ||
+                   y + h > f->off_y + f->off_h)) {
+        f->off_violations++;
         return;
     }
     for (iy = y; iy < y + h; iy++) {
@@ -149,6 +160,36 @@ static void fk_image(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
     put_rect(f, x, y, w, h);
 }
 
+/* A fixed advance per glyph, 8 px at font 2 and 6 at font 1: close enough to
+ * the panel's proportional font 2 for layout arithmetic, and exact for font 1. */
+static int16_t fk_advance(uint8_t font)
+{
+    return (font == UI_FONT_SMALL) ? UI_FONT_SMALL_ADV : 8;
+}
+
+static int16_t fk_measure(void* ctx, const char* s, uint8_t font)
+{
+    (void)ctx;
+    return (s == NULL) ? 0 : (int16_t)(strlen(s) * fk_advance(font));
+}
+
+static void fk_begin(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h)
+{
+    fake_t* f = (fake_t*)ctx;
+
+    f->begins++;
+    f->off = true;
+    f->off_x = x;
+    f->off_y = y;
+    f->off_w = w;
+    f->off_h = h;
+}
+
+static void fk_end(void* ctx)
+{
+    ((fake_t*)ctx)->off = false;
+}
+
 static ui_canvas_t canvas_over(fake_t* f, int16_t w, int16_t h)
 {
     ui_canvas_t cv;
@@ -160,6 +201,9 @@ static ui_canvas_t canvas_over(fake_t* f, int16_t w, int16_t h)
     cv.fill = fk_fill;
     cv.text = fk_text;
     cv.image = fk_image;
+    cv.measure = fk_measure;
+    cv.begin = fk_begin;
+    cv.end = fk_end;
     return cv;
 }
 
@@ -283,6 +327,8 @@ static void assert_sane(void)
                                    "an image row range left its source");
     TEST_ASSERT_EQUAL_UINT_MESSAGE(0, fk.null_strings,
                                    "a NULL string or image was drawn");
+    TEST_ASSERT_EQUAL_UINT_MESSAGE(0, fk.off_violations,
+                                   "a primitive left its offscreen row");
     TEST_ASSERT_GREATER_THAN_UINT(0, fk.fills);
     TEST_ASSERT_GREATER_THAN_UINT(0, fk.texts);
 }
@@ -718,6 +764,31 @@ static void test_draw_paints_nothing_when_it_is_handed_nothing(void)
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
 }
 
+/* ─── the fake itself ────────────────────────────────────────────────────── */
+
+static void test_the_fake_measures_a_fixed_advance_per_glyph(void)
+{
+    ui_canvas_t cv = canvas_over(&fk, GEOM_53_W, GEOM_53_H);
+
+    TEST_ASSERT_EQUAL_INT16(6 * 8, cv.measure(cv.ctx, "Tetris", UI_FONT_ROW));
+    TEST_ASSERT_EQUAL_INT16(6 * UI_FONT_SMALL_ADV,
+                            cv.measure(cv.ctx, "Tetris", UI_FONT_SMALL));
+}
+
+static void test_the_fake_rejects_a_draw_outside_its_offscreen_row(void)
+{
+    ui_canvas_t cv = canvas_over(&fk, GEOM_53_W, GEOM_53_H);
+
+    cv.begin(cv.ctx, 4, 36, 158, PICKER_ROW_H);
+    cv.fill(cv.ctx, 4, 36, 158, PICKER_ROW_H, 0);
+    TEST_ASSERT_EQUAL_UINT(0, fk.off_violations);
+    cv.text(cv.ctx, "x", 4, 36, 159, 1, UI_FONT_ROW, UI_ALIGN_LEFT, 0, 0);
+    TEST_ASSERT_EQUAL_UINT(1, fk.off_violations);
+    cv.end(cv.ctx);
+    cv.fill(cv.ctx, 0, 0, 1, 1, 0);
+    TEST_ASSERT_EQUAL_UINT(1, fk.off_violations);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -740,5 +811,7 @@ int main(void)
     RUN_TEST(test_three_paragraphs_wrap_with_a_blank_line_between);
     RUN_TEST(test_a_full_description_scrolls_the_page_past_the_images);
     RUN_TEST(test_draw_paints_nothing_when_it_is_handed_nothing);
+    RUN_TEST(test_the_fake_measures_a_fixed_advance_per_glyph);
+    RUN_TEST(test_the_fake_rejects_a_draw_outside_its_offscreen_row);
     return UNITY_END();
 }
