@@ -57,8 +57,8 @@ static const char* const ROW_HELP[MENU_ENTRIES] = {
     "Read the scanned manual",
     "Cover, screenshot and story",
     "Tint for Game Boy games",
-    "Also Select + Up/Down",
-    "Also Select + Left/Right",
+    "Hotkey: Select + Up/Down",
+    "Hotkey: Select + Left/Right",
     "Combos that work in a game",
     "Restart from power-on",
 };
