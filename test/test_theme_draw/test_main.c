@@ -359,7 +359,7 @@ static void test_the_header_is_white_left_and_grey_right_on_black(void)
     TEST_ASSERT_EQUAL_UINT8(UI_ALIGN_LEFT, nth(OP_TEXT, 0)->align);
     TEST_ASSERT_EQUAL_INT16(UI_TEXT_X, nth(OP_TEXT, 0)->x);
     TEST_ASSERT_EQUAL_UINT8(UI_FONT_HEADER, nth(OP_TEXT, 0)->font);
-    TEST_ASSERT_EQUAL_HEX16(UI_COL_SUB, nth(OP_TEXT, 1)->color);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_DIM, nth(OP_TEXT, 1)->color);
     TEST_ASSERT_EQUAL_UINT8(UI_ALIGN_RIGHT, nth(OP_TEXT, 1)->align);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
 }
@@ -373,7 +373,7 @@ static void test_the_help_line_is_one_grey_row_inside_its_band(void)
     t = nth(OP_TEXT, 0);
     TEST_ASSERT_EQUAL_UINT8(1, t->rows);
     TEST_ASSERT_EQUAL_UINT8(UI_FONT_HELP, t->font);
-    TEST_ASSERT_EQUAL_HEX16(UI_COL_SUB, t->color);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_TEXT, t->color);
     TEST_ASSERT_EQUAL_INT16(UI_TEXT_X, t->x);
     TEST_ASSERT_TRUE(t->y >= 200);
     TEST_ASSERT_TRUE(t->y + t->h <= 200 + UI_HELP_H);
@@ -456,7 +456,7 @@ static void test_the_notice_title_is_red_only_for_an_error(void)
 {
     ui_notice(&cv, W, H, "Blank cart", "Put a game on it.", false, NULL, 0);
     TEST_ASSERT_EQUAL_HEX16(UI_COL_TEXT, nth(OP_TEXT, 0)->color);
-    TEST_ASSERT_EQUAL_HEX16(UI_COL_SUB, nth(OP_TEXT, 1)->color);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_TEXT, nth(OP_TEXT, 1)->color);
     setUp();
     ui_notice(&cv, W, H, "Unreadable tag", NULL, true, NULL, 0);
     TEST_ASSERT_EQUAL_HEX16(UI_COL_WARN, nth(OP_TEXT, 0)->color);

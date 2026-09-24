@@ -30,7 +30,7 @@ void ui_header(const ui_canvas_t* cv, int16_t w, const char* title,
     }
     if (right != NULL) {
         cv->text(cv->ctx, right, UI_TEXT_X, ry, (int16_t)(w - 2 * UI_TEXT_X),
-                 1, UI_FONT_HELP, UI_ALIGN_RIGHT, UI_COL_SUB, UI_COL_BG);
+                 1, UI_FONT_HELP, UI_ALIGN_RIGHT, UI_COL_DIM, UI_COL_BG);
     }
 }
 
@@ -100,7 +100,7 @@ void ui_help_line(const ui_canvas_t* cv, int16_t w, int16_t y, const char* s)
     cv->fill(cv->ctx, 0, y, w, UI_HELP_H, UI_COL_BG);
     if (s != NULL) {
         cv->text(cv->ctx, s, UI_TEXT_X, y, (int16_t)(w - 2 * UI_TEXT_X), 1,
-                 UI_FONT_HELP, UI_ALIGN_CENTER, UI_COL_SUB, UI_COL_BG);
+                 UI_FONT_HELP, UI_ALIGN_CENTER, UI_COL_TEXT, UI_COL_BG);
     }
 }
 
@@ -197,7 +197,7 @@ void ui_notice(const ui_canvas_t* cv, int16_t w, int16_t h, const char* title,
     }
     if (body != NULL && body[0] != '\0') {
         cv->text(cv->ctx, body, UI_PAD, body_y, bw, 4, UI_FONT_DESC,
-                 UI_ALIGN_CENTER, UI_COL_SUB, UI_COL_BG);
+                 UI_ALIGN_CENTER, UI_COL_TEXT, UI_COL_BG);
     }
     if (n > 0) {
         ui_hint_bar(cv, w, (int16_t)(h - UI_FOOT_H), hints, n);

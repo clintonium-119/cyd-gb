@@ -17,11 +17,12 @@
 
 /* RGB565 colours. */
 #define UI_COL_BG        0x0000 /* screen background */
-#define UI_COL_TEXT      0xFFFF /* primary text, hint labels */
-/* Prose at #DDDDDD and the hint pill at #4C4C4C, as chosen on glass; RGB565
- * holds them as #D8DCD8 and #484C48, the nearest it has. */
-#define UI_COL_SUB       0xDEFB /* help lines, descriptions, secondary text */
-#define UI_COL_DIM       0x7BEF /* a disabled row */
+/* White for everything that can be read or acted on, prose included, and
+ * one grey for what is disabled or read-only. The grey is #BBBBBB and the
+ * hint pill #4C4C4C, as chosen on glass; RGB565 holds them as #B8B8B8 and
+ * #484C48, the nearest it has. */
+#define UI_COL_TEXT      0xFFFF /* rows, titles, help lines, descriptions */
+#define UI_COL_DIM       0xBDD7 /* disabled or read-only text */
 #define UI_COL_PILL      0xFFFF /* the selected row's pill */
 #define UI_COL_PILL_TEXT 0x0000 /* text on the pill */
 #define UI_COL_PILL_DIM  0x6B4D /* a disabled row's text on the pill */

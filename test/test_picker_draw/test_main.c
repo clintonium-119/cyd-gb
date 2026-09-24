@@ -1068,7 +1068,7 @@ static void test_the_list_ends_in_a_help_line_and_a_hint_bar(void)
         if (fk.log[i].y >= g.help_y && fk.log[i].y < g.foot_y) {
             /* The blurb, from its start, in the help line's grey. */
             TEST_ASSERT_EQUAL_INT(0, strncmp(fk.log[i].s, DESC_200, 20));
-            TEST_ASSERT_EQUAL_HEX16(UI_COL_SUB, fk.log[i].fg);
+            TEST_ASSERT_EQUAL_HEX16(UI_COL_TEXT, fk.log[i].fg);
             help = true;
         }
         if (fk.log[i].y >= g.foot_y && strcmp(fk.log[i].s, "Select") == 0) {

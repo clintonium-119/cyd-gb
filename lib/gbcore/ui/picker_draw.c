@@ -349,7 +349,7 @@ static void draw_media(const ui_canvas_t* cv, int16_t x, int16_t y,
     if (state == PICKER_MEDIA_MISSING) {
         cv->text(cv->ctx, missing, x,
                  (int16_t)(y + ui_text_dy(PICKER_ART_H, UI_FONT_HELP)),
-                 PICKER_ART_W, 1, UI_FONT_HELP, UI_ALIGN_CENTER, UI_COL_SUB,
+                 PICKER_ART_W, 1, UI_FONT_HELP, UI_ALIGN_CENTER, UI_COL_DIM,
                  UI_COL_SLOT);
     }
 }
@@ -531,18 +531,18 @@ static void draw_band(const picker_t* p, const picker_layout_t* g,
                 break;
             }
             cv->text(cv->ctx, line, g->detail_x, (int16_t)(y + i * pitch),
-                     g->detail_w, 1, UI_FONT_DESC, UI_ALIGN_LEFT, UI_COL_SUB,
+                     g->detail_w, 1, UI_FONT_DESC, UI_ALIGN_LEFT, UI_COL_TEXT,
                      UI_COL_BG);
         }
     }
     if (p->scroll > 0) {
         cv->text(cv->ctx, SCROLL_BACK, mark_x, y, UI_FONT_SMALL_ADV, 1,
-                 UI_FONT_SMALL, UI_ALIGN_RIGHT, UI_COL_SUB, UI_COL_BG);
+                 UI_FONT_SMALL, UI_ALIGN_RIGHT, UI_COL_DIM, UI_COL_BG);
     }
     if (p->scroll < p->scroll_max) {
         cv->text(cv->ctx, SCROLL_MORE, mark_x,
                  (int16_t)(y + (rows - 1) * pitch), UI_FONT_SMALL_ADV, 1,
-                 UI_FONT_SMALL, UI_ALIGN_RIGHT, UI_COL_SUB, UI_COL_BG);
+                 UI_FONT_SMALL, UI_ALIGN_RIGHT, UI_COL_DIM, UI_COL_BG);
     }
 }
 

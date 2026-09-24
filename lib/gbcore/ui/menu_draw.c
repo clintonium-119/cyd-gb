@@ -133,7 +133,7 @@ void menu_draw_hotkeys(const ui_canvas_t* cv, const menu_layout_t* g,
         cv->text(cv->ctx, keys[i][0], UI_TEXT_X, y, w, 1, UI_FONT_LIST,
                  UI_ALIGN_LEFT, UI_COL_TEXT, UI_COL_BG);
         cv->text(cv->ctx, keys[i][1], UI_TEXT_X, y, w, 1, UI_FONT_VAL,
-                 UI_ALIGN_RIGHT, UI_COL_SUB, UI_COL_BG);
+                 UI_ALIGN_RIGHT, UI_COL_DIM, UI_COL_BG);
         y = (int16_t)(y + MENU_ROW_H);
     }
     menu_draw_footer(cv, g, "Combos that work in a game", HINTS, 1);
@@ -194,7 +194,7 @@ void menu_draw_band(const ui_canvas_t* cv, const menu_band_t* b)
             break;
         }
         cv->text(cv->ctx, line, b->x, (int16_t)(b->y + i * pitch), b->w, 1,
-                 UI_FONT_DESC, UI_ALIGN_LEFT, UI_COL_SUB, UI_COL_BG);
+                 UI_FONT_DESC, UI_ALIGN_LEFT, UI_COL_TEXT, UI_COL_BG);
     }
 }
 
@@ -211,5 +211,5 @@ void menu_draw_slot(const ui_canvas_t* cv, int16_t x, int16_t y, int16_t w,
 {
     cv->round_fill(cv->ctx, x, y, w, h, UI_IMG_R, UI_COL_SLOT, UI_COL_BG);
     cv->text(cv->ctx, msg, x, (int16_t)(y + ui_text_dy(h, UI_FONT_HELP)), w,
-             1, UI_FONT_HELP, UI_ALIGN_CENTER, UI_COL_SUB, UI_COL_SLOT);
+             1, UI_FONT_HELP, UI_ALIGN_CENTER, UI_COL_DIM, UI_COL_SLOT);
 }
