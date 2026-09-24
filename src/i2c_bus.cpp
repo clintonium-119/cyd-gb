@@ -18,4 +18,18 @@ void i2c_bus_init() {
     // SCL-on-TX0 is gone with the pin.
     Wire.begin(I2C_SDA, I2C_SCL);
     Wire.setClock(400000);   // design §1.3: 400 kHz is fine on these pins
+
+    // Bench aid: log every address that ACKs, so a silent peripheral reads
+    // as wiring (absent here) or protocol (present, but no answer). Two
+    // passes: a sleeping PN532 may miss the first address match.
+    for (int pass = 0; pass < 2; pass++) {
+        Serial.print("[i2c] ack:");
+        for (uint8_t addr = 1; addr < 0x78; addr++) {
+            Wire.beginTransmission(addr);
+            if (Wire.endTransmission() == 0) {
+                Serial.printf(" 0x%02X", addr);
+            }
+        }
+        Serial.println();
+    }
 }
