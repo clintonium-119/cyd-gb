@@ -705,7 +705,7 @@ static bool state_screen(const menu_cart_info_t* info)
                 continue;
             }
             if (!state_save(info->path)) {
-                notice("Save failed.");
+                notice("Save failed");
             }
         } else {
             if (!confirm("Load state? Progress since it was saved will "
@@ -715,7 +715,7 @@ static bool state_screen(const menu_cart_info_t* info)
             if (state_load(info->path)) {
                 return true;
             }
-            notice("Load failed.");
+            notice("Load failed");
         }
     }
 }

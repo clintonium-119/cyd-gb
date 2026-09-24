@@ -674,7 +674,7 @@ void loop() {
                                                 &dev_sel);
         Serial.printf("[DEV] writer pick=%d rom=%s target=%u\n",
                       (int)dev_pick, dev_sel.rom, (unsigned)dev_sel.target);
-        halt_notice("Dev writer", "Nothing written. Power off.");
+        halt_notice("Dev writer", "Nothing written. Power off");
     }
 #endif
 
@@ -704,7 +704,7 @@ void loop() {
             halt_screen("Unreadable tag", tag_payload);
             break;
         case BOOT_HALT_BLANK:
-            halt_notice("Blank cart. Use your MENU cart.", "");
+            halt_notice("Blank cart. Use your MENU cart", "");
             break;
         case BOOT_HALT_INSERT_WILDCARD:
             halt_notice("Insert your wildcard", "");
@@ -731,7 +731,7 @@ void loop() {
                 snprintf(detail, sizeof(detail), "code %d", rc);
                 halt_screen("Write failed", detail);
             }
-            halt_notice("MENU cart made. Power off.", "");
+            halt_notice("MENU cart made. Power off", "");
             break;
         case BOOT_WIZARD_ADOPT_MENU:
             rc = provision_wizard_adopt(BOOT_CLASS_MENU, &in.flags);
@@ -739,7 +739,7 @@ void loop() {
                 snprintf(detail, sizeof(detail), "code %d", rc);
                 halt_screen("Write failed", detail);
             }
-            halt_notice("Menu cart adopted. Power off.", "");
+            halt_notice("Menu cart adopted. Power off", "");
             break;
         case BOOT_WIZARD_ADOPT_WILD:
             rc = provision_wizard_adopt(BOOT_CLASS_WILD, &in.flags);
@@ -747,7 +747,7 @@ void loop() {
                 snprintf(detail, sizeof(detail), "code %d", rc);
                 halt_screen("Write failed", detail);
             }
-            halt_notice("Wildcard adopted. Power off.", "");
+            halt_notice("Wildcard adopted. Power off", "");
             break;
 
         // One call site for the writer, all three actions that open it.
@@ -771,8 +771,8 @@ void loop() {
                         halt_screen("Write failed", detail);
                     }
                     halt_notice(pa == BOOT_PICK_WRITE_WILD
-                                    ? "Wildcard made. Power off."
-                                    : "Game cart made. Power off.", "");
+                                    ? "Wildcard made. Power off"
+                                    : "Game cart made. Power off", "");
                     break;
                 case BOOT_PICK_FINISH_SETUP:
                     rc = provision_wizard_finish(&in.flags);
@@ -780,15 +780,15 @@ void loop() {
                         snprintf(detail, sizeof(detail), "code %d", rc);
                         halt_screen("Write failed", detail);
                     }
-                    halt_notice("Setup finished. Power off.", "");
+                    halt_notice("Setup finished. Power off", "");
                     break;
                 case BOOT_PICK_RECORD_PENDING:
                     settings_pending_save(&sel);
-                    halt_notice("Power off, insert your wildcard, power on.", "");
+                    halt_notice("Power off, insert your wildcard, power on", "");
                     break;
                 case BOOT_PICK_CLEAR_PENDING:
                     settings_pending_clear();
-                    halt_notice("Pending write cancelled. Power off.", "");
+                    halt_notice("Pending write cancelled. Power off", "");
                     break;
                 case BOOT_PICK_HALT_MENU_CART:
                     halt_notice("Menu cart", "");
