@@ -223,8 +223,9 @@ static void fk_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
     if (font == UI_FONT_SMALL && w > f->widest_desc) {
         f->widest_desc = w;
     }
-    /* The box the driver will clip into: rows lines at the font's pitch. */
-    h = (int16_t)(rows * UI_ROW_PITCH(ui_font_height(font)));
+    /* The box the driver will clip into: rows lines at the font's pitch, the
+     * last without the gap under it. */
+    h = (int16_t)(rows * UI_ROW_PITCH(ui_font_height(font)) - 2);
     /* Offscreen, the sprite clips a label sideways, which is how a marquee
      * scrolls one through a fixed box. It never clips a fill, an image, or a
      * text row taller than itself: those are still layout faults. */
@@ -451,29 +452,28 @@ static void test_the_layout_at_266_by_240(void)
 
     TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(GEOM_53_W, GEOM_53_H, &g));
     TEST_ASSERT_EQUAL_INT16(222, g.foot_y);      /* 240 - 18             */
-    TEST_ASSERT_EQUAL_INT16(212, g.help_y);      /* 222 - 10             */
-    TEST_ASSERT_EQUAL_UINT8(10, g.rows);         /* (212 - 18) / 18      */
-    TEST_ASSERT_EQUAL_UINT8((g.help_y - UI_HEADER_H) / UI_PILL_H_LIST, g.rows);
+    TEST_ASSERT_EQUAL_INT16(200, g.help_y);      /* 222 - 22             */
+    TEST_ASSERT_EQUAL_UINT8(9, g.rows);          /* (200 - 4) / 20       */
+    TEST_ASSERT_EQUAL_UINT8((g.help_y - PICKER_LIST_TOP) / UI_PILL_H_LIST,
+                            g.rows);
     TEST_ASSERT_EQUAL_INT16(166, g.list_art_x);  /* 266 - 4 - 96         */
-    TEST_ASSERT_EQUAL_INT16(146, g.list_w);      /* 166 - 4 - 2 * 8      */
-    TEST_ASSERT_EQUAL_INT16(18, g.list_art_y);   /* under the header     */
-    TEST_ASSERT_EQUAL_INT16(116, g.list_shot_y); /* 18 + 96 + 2          */
+    TEST_ASSERT_EQUAL_INT16(142, g.list_w);      /* 166 - 4 - 4 - 2 * 8  */
+    TEST_ASSERT_EQUAL_INT16(4, g.list_art_y);    /* no header            */
+    TEST_ASSERT_EQUAL_INT16(102, g.list_shot_y); /* 4 + 96 + 2           */
     /* Both images stacked, above the help line. */
     TEST_ASSERT_LESS_OR_EQUAL_INT16(g.help_y, g.list_shot_y + PICKER_ART_H);
     TEST_ASSERT_GREATER_OR_EQUAL_INT16(140, g.list_w);
 
     /* The detail page, Cart Info's numbers, for a two-row title. */
-    TEST_ASSERT_EQUAL_INT16(8, g.detail_x);
-    TEST_ASSERT_EQUAL_INT16(250, g.detail_w);    /* 266 - 16             */
-    TEST_ASSERT_EQUAL_INT16(8, g.title_y);
-    TEST_ASSERT_EQUAL_INT16(46, g.media_y);      /* 8 + 2 * 18 + 2       */
-    TEST_ASSERT_EQUAL_INT16(112, g.shot_x);      /* 8 + 96 + 8           */
+    TEST_ASSERT_EQUAL_INT16(UI_TEXT_X, g.detail_x);
+    TEST_ASSERT_EQUAL_INT16(242, g.detail_w);    /* 266 - 2 * 12         */
+    TEST_ASSERT_EQUAL_INT16(4, g.title_y);
+    TEST_ASSERT_EQUAL_INT16(46, g.media_y);      /* 4 + 2 * 20 + 2       */
+    TEST_ASSERT_EQUAL_INT16(116, g.shot_x);      /* 12 + 96 + 8          */
     TEST_ASSERT_EQUAL_INT16(150, g.band_y);      /* 46 + 96 + 8          */
     TEST_ASSERT_EQUAL_INT16(48, g.band_h);       /* 240 - 40 - 2 - 150   */
-    TEST_ASSERT_EQUAL_UINT8(4, g.band_rows);     /* 48 / 10              */
-    TEST_ASSERT_EQUAL_UINT8(41, g.desc_cols);    /* 250 / 6              */
-    TEST_ASSERT_GREATER_OR_EQUAL_UINT8(3, g.band_rows);
-    /* The band ends above the hold bar. */
+    TEST_ASSERT_EQUAL_UINT8(2, g.band_rows);     /* 48 / 20              */
+    /* The band ends above the help line, which the hold bar shares. */
     TEST_ASSERT_LESS_OR_EQUAL_INT16(GEOM_53_H - PICKER_DETAIL_FOOT_H,
                                     g.band_y + g.band_h);
 }
@@ -486,9 +486,9 @@ static void test_the_layout_refuses_a_window_it_cannot_compose(void)
     TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout(200, 100, &g));
     /* 150 < 96 + 16 + 48: an image and no usable column beside it. */
     TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout(150, 240, &g));
-    /* 239 < 18 + 96 + 2 + 96 + 10 + 18: the list's images do not stack
+    /* 237 < 4 + 96 + 2 + 96 + 22 + 18: the list's images do not stack
      * above the help line and the footer. */
-    TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout(266, 239, &g));
+    TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout(266, 237, &g));
     TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout(240, 216, NULL));
 }
 
@@ -623,7 +623,7 @@ static void test_the_marquee_row_stays_inside_the_title_column(void)
         TEST_ASSERT_EQUAL_UINT(1, fk.begins);
         TEST_ASSERT_LESS_OR_EQUAL_INT16(g.list_art_x,
                                         fk.off_x + fk.off_w);
-        TEST_ASSERT_EQUAL_INT16(PICKER_HEADER_H, fk.off_y);
+        TEST_ASSERT_EQUAL_INT16(PICKER_LIST_TOP, fk.off_y);
         TEST_ASSERT_EQUAL_INT16(PICKER_ROW_H, fk.off_h);
     }
 }
@@ -641,10 +641,10 @@ static void test_a_long_title_overflows_its_row_and_a_short_one_does_not(void)
     snprintf(lib.e[0].title, sizeof(lib.e[0].title), "Tetris");
     TEST_ASSERT_EQUAL_INT16(0, picker_row_overflow(&p, &g, &cv));
 
-    /* 47 characters, the catalog's longest: 47 * 8 + 1 - 158. */
+    /* 47 characters, the catalog's longest: 47 * 8 - 142. */
     memset(lib.e[0].title, 'W', CATALOG_TITLE_MAX - 1);
     lib.e[0].title[CATALOG_TITLE_MAX - 1] = '\0';
-    TEST_ASSERT_EQUAL_INT16((CATALOG_TITLE_MAX - 1) * 8 + 1 - g.list_w,
+    TEST_ASSERT_EQUAL_INT16((CATALOG_TITLE_MAX - 1) * 8 - g.list_w,
                             picker_row_overflow(&p, &g, &cv));
     TEST_ASSERT_GREATER_THAN_INT16(0, picker_row_overflow(&p, &g, &cv));
 }
@@ -709,7 +709,7 @@ static void test_both_images_sit_side_by_side_under_the_title(void)
     TEST_ASSERT_EQUAL_UINT(2, fk.images);
     TEST_ASSERT_EQUAL_INT16(PICKER_ART_W, fk.last_img_w);
     TEST_ASSERT_EQUAL_INT16(PICKER_ART_H, fk.last_img_rows);
-    TEST_ASSERT_EQUAL_INT16(8 + PICKER_ART_W + 8, fk.last_img_x);
+    TEST_ASSERT_EQUAL_INT16(UI_TEXT_X + PICKER_ART_W + 8, fk.last_img_x);
     TEST_ASSERT_EQUAL_INT16(g.media_y, fk.last_img_y);
 }
 
@@ -724,8 +724,8 @@ static void test_a_one_row_title_lifts_the_images_a_row(void)
     run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, false, 0,
                PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, DESC_200);
     assert_sane();
-    TEST_ASSERT_EQUAL_INT16(g.media_y - UI_ROW_PITCH(ui_font_height(UI_FONT_ROW)),
-                            fk.last_img_y);
+    TEST_ASSERT_EQUAL_INT16(
+        g.media_y - UI_ROW_PITCH(ui_font_height(UI_FONT_LIST)), fk.last_img_y);
 }
 
 static void test_a_one_row_title_gives_its_row_to_the_band(void)
@@ -743,8 +743,8 @@ static void test_a_one_row_title_gives_its_row_to_the_band(void)
     picker_input(&p, B_A, 0);
     TEST_ASSERT_EQUAL_UINT8(g.band_rows, picker_band_rows(&p, &g, &cv));
     snprintf(lib.e[0].title, sizeof(lib.e[0].title), "Tetris");
-    /* (48 + 18) / 10 */
-    TEST_ASSERT_EQUAL_UINT8(6, picker_band_rows(&p, &g, &cv));
+    /* (48 + 20) / 20 */
+    TEST_ASSERT_EQUAL_UINT8(3, picker_band_rows(&p, &g, &cv));
 }
 
 static void test_the_images_stay_put_while_the_band_scrolls(void)
@@ -822,10 +822,8 @@ static void test_the_hold_bar_appears_only_once_the_hold_starts(void)
     TEST_ASSERT_EQUAL_UINT(1, fk.bar_fills);
     /* A hold one tick short of done is a bar one pixel-step short of full. */
     TEST_ASSERT_GREATER_THAN_INT16((GEOM_53_W - 16) * 9 / 10, fk.bar_w);
-    /* Two pixels over the help line. */
-    TEST_ASSERT_EQUAL_INT16(GEOM_53_H - UI_FOOT_H - UI_HELP_H - 2 -
-                                PICKER_BAR_H,
-                            fk.bar_y);
+    /* In the help line's place, level with its words. */
+    TEST_ASSERT_EQUAL_INT16(GEOM_53_H - UI_FOOT_H - UI_HELP_H + 2, fk.bar_y);
 }
 
 /* ─── the description ─────────────────────────────────────────────────────── */
@@ -850,9 +848,9 @@ static void test_the_page_is_the_description_and_never_less_than_the_band(void)
     text[1333] = '\n';
     text[1334] = '\n';
     text[2000] = '\0';
-    TEST_ASSERT_EQUAL_UINT16(picker_desc_lines(text, g.desc_cols),
+    TEST_ASSERT_EQUAL_UINT16(picker_desc_lines_px(text, &g.adv, g.detail_w),
                              picker_page_lines(&g, text));
-    TEST_ASSERT_EQUAL_UINT16(picker_desc_lines(DESC_200, g.desc_cols),
+    TEST_ASSERT_EQUAL_UINT16(picker_desc_lines_px(DESC_200, &g.adv, g.detail_w),
                              picker_page_lines(&g, DESC_200));
 }
 
@@ -864,12 +862,13 @@ static void test_every_wrapped_line_fits_the_column_in_pixels(void)
     char line[PICKER_DESC_LINE_MAX];
 
     TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(GEOM_53_W, GEOM_53_H, &g));
-    lines = picker_desc_lines(DESC_200, g.desc_cols);
+    lines = picker_desc_lines_px(DESC_200, &g.adv, g.detail_w);
     TEST_ASSERT_GREATER_THAN_UINT16(0, lines);
 
     for (i = 0; i < lines; i++) {
         TEST_ASSERT_TRUE(
-            picker_desc_line(DESC_200, g.desc_cols, i, line, sizeof(line)));
+            picker_desc_line_px(DESC_200, &g.adv, g.detail_w, i, line,
+                                sizeof(line)));
         /* The property that makes this module's break points and
          * display_draw_wrapped's pixel breaking the same: font 1's advance is
          * fixed, so a line of n characters is exactly n * 6 pixels wide. */
@@ -878,7 +877,8 @@ static void test_every_wrapped_line_fits_the_column_in_pixels(void)
     }
     /* One past the end is not a line. */
     TEST_ASSERT_FALSE(
-        picker_desc_line(DESC_200, g.desc_cols, lines, line, sizeof(line)));
+        picker_desc_line_px(DESC_200, &g.adv, g.detail_w, lines, line,
+                            sizeof(line)));
 }
 
 static void test_the_wrap_breaks_at_spaces_and_hard_breaks_long_words(void)
@@ -979,12 +979,13 @@ static void test_draw_paints_nothing_when_it_is_handed_nothing(void)
 
 /* ─── colours and wording ─────────────────────────────────────────────────── */
 
-static void test_the_pending_list_header_reads_choose_a_game(void)
+static void test_the_list_opens_on_its_first_title(void)
 {
     fill_library(LIB_COUNT);
     run_list(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, false, NULL);
     assert_sane();
-    TEST_ASSERT_EQUAL_STRING("Choose a Game", fk.log[0].s);
+    /* No header: the first thing said is the first title. */
+    TEST_ASSERT_EQUAL_STRING(lib.e[0].title, fk.log[0].s);
 }
 
 static void test_the_cursor_row_is_bold_black_on_a_white_pill(void)
@@ -998,37 +999,34 @@ static void test_the_cursor_row_is_bold_black_on_a_white_pill(void)
     picker_layout(GEOM_53_W, GEOM_53_H, &g);
     run_list(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, false, NULL);
     assert_sane();
-    /* The cursor is on the first title: struck twice, transparent black, one
-     * pixel apart. Every other row is white on black. The header above and
-     * the help line and hints below are not rows. */
-    for (i = 1; i < fk.logged; i++) {
+    /* The cursor is on the first title: transparent black, in the bold list
+     * font. Every other row is white on black. The help line and hints below
+     * are not rows. */
+    for (i = 0; i < fk.logged; i++) {
         if (fk.log[i].y >= g.help_y) {
             continue;
         }
         if (fk.log[i].fg == 0x0000) {
             TEST_ASSERT_EQUAL_HEX16(0x0000, fk.log[i].bg);
             TEST_ASSERT_EQUAL_STRING(lib.e[0].title, fk.log[i].s);
-            if (black == 0) {
-                x0 = fk.log[i].x;
-            } else {
-                TEST_ASSERT_EQUAL_INT16(x0 + 1, fk.log[i].x);
-            }
+            x0 = fk.log[i].x;
             black++;
         } else {
             TEST_ASSERT_EQUAL_HEX16(0xFFFF, fk.log[i].fg);
         }
     }
-    TEST_ASSERT_EQUAL_UINT(2, black);
+    TEST_ASSERT_EQUAL_UINT(1, black);
+    TEST_ASSERT_EQUAL_INT16(UI_TEXT_X, x0);
     /* The pill itself, half its padding in from the row's left edge at the
      * row's middle, where no label box reaches; and nothing behind the next
      * row. */
     TEST_ASSERT_EQUAL_HEX16(
-        UI_COL_PILL, fk.fb[(PICKER_HEADER_H + PICKER_ROW_H / 2) * GEOM_53_W +
-                           UI_PILL_PAD / 2]);
+        UI_COL_PILL, fk.fb[(PICKER_LIST_TOP + PICKER_ROW_H / 2) * GEOM_53_W +
+                           UI_PAD + UI_PILL_PAD / 2]);
     TEST_ASSERT_EQUAL_HEX16(
-        UI_COL_BG, fk.fb[(PICKER_HEADER_H + PICKER_ROW_H + PICKER_ROW_H / 2) *
+        UI_COL_BG, fk.fb[(PICKER_LIST_TOP + PICKER_ROW_H + PICKER_ROW_H / 2) *
                              GEOM_53_W +
-                         UI_PILL_PAD / 2]);
+                         UI_PAD + UI_PILL_PAD / 2]);
 }
 
 /* The first round fill of a list draw is the cursor row's pill. */
@@ -1041,13 +1039,14 @@ static void test_the_pill_hugs_a_short_title_and_stops_at_the_column(void)
     snprintf(lib.e[0].title, sizeof(lib.e[0].title), "Tetris");
     run_list(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, false, NULL);
     assert_sane();
-    TEST_ASSERT_EQUAL_INT16(PICKER_HEADER_H, fk.rlog[0].y);
-    TEST_ASSERT_EQUAL_INT16(6 * 8 + 2 * UI_PILL_PAD + 1, fk.rlog[0].w);
+    TEST_ASSERT_EQUAL_INT16(PICKER_LIST_TOP, fk.rlog[0].y);
+    TEST_ASSERT_EQUAL_INT16(UI_PAD, fk.rlog[0].x);
+    TEST_ASSERT_EQUAL_INT16(6 * 8 + 2 * UI_PILL_PAD, fk.rlog[0].w);
 
     fill_library(LIB_COUNT);
     run_list(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, false, NULL);
     assert_sane();
-    TEST_ASSERT_EQUAL_INT16(g.list_art_x - 4, fk.rlog[0].w);
+    TEST_ASSERT_EQUAL_INT16(g.list_art_x - 4 - UI_PAD, fk.rlog[0].w);
 }
 
 static void test_the_list_ends_in_a_help_line_and_a_hint_bar(void)
@@ -1068,7 +1067,7 @@ static void test_the_list_ends_in_a_help_line_and_a_hint_bar(void)
         if (fk.log[i].y >= g.help_y && fk.log[i].y < g.foot_y) {
             /* The blurb, from its start, in the help line's grey. */
             TEST_ASSERT_EQUAL_INT(0, strncmp(fk.log[i].s, DESC_200, 20));
-            TEST_ASSERT_EQUAL_HEX16(UI_COL_DIM, fk.log[i].fg);
+            TEST_ASSERT_EQUAL_HEX16(UI_COL_SUB, fk.log[i].fg);
             help = true;
         }
         if (fk.log[i].y >= g.foot_y && strcmp(fk.log[i].s, "Select") == 0) {
@@ -1178,7 +1177,7 @@ static void test_a_hold_tick_paints_only_the_bar_and_never_its_track(void)
 
     seq_begin();
     seq_open();
-    bar_y = (int16_t)(sg.help_y - 2 - PICKER_BAR_H);
+    bar_y = (int16_t)(sg.help_y + 2);
     seq_step(picker_input(&sp, B_A, 300));
     seq_step(picker_input(&sp, B_A, 500));
     assert_painted_within(sg.detail_x, bar_y, sg.detail_x + sg.detail_w,
@@ -1186,11 +1185,11 @@ static void test_a_hold_tick_paints_only_the_bar_and_never_its_track(void)
     TEST_ASSERT_EQUAL_UINT(0, fk.track_fills);
     TEST_ASSERT_EQUAL_UINT(1, fk.bar_fills);
 
-    /* Letting go lays the track back down, and only the track. */
+    /* Letting go puts the help line back in the bar's place, and only
+     * that. */
     seq_step(picker_input(&sp, B_NONE, 600));
-    assert_painted_within(sg.detail_x, bar_y, sg.detail_x + sg.detail_w,
-                          bar_y + PICKER_BAR_H);
-    TEST_ASSERT_EQUAL_UINT(1, fk.track_fills);
+    assert_painted_within(0, sg.help_y, GEOM_53_W, sg.help_y + UI_HELP_H);
+    TEST_ASSERT_EQUAL_UINT(0, fk.track_fills);
 }
 
 static void test_a_help_event_paints_only_the_help_line(void)
@@ -1223,10 +1222,10 @@ static void test_a_move_paints_only_its_two_rows_and_the_image_column(void)
                             ev);
 
     seq_step(PICKER_EVENT_ROWS);
-    assert_painted_within(0, PICKER_HEADER_H, sg.list_art_x - 4,
-                          PICKER_HEADER_H + 2 * PICKER_ROW_H);
+    assert_painted_within(0, PICKER_LIST_TOP, sg.list_art_x - 4,
+                          PICKER_LIST_TOP + 2 * PICKER_ROW_H);
     seq_step(PICKER_EVENT_MEDIA);
-    assert_painted_within(sg.list_art_x - 4, PICKER_HEADER_H, GEOM_53_W,
+    assert_painted_within(sg.list_art_x - 4, PICKER_LIST_TOP, GEOM_53_W,
                           GEOM_53_H);
 }
 
@@ -1246,8 +1245,8 @@ static void test_a_marquee_step_paints_only_the_highlighted_row_offscreen(void)
     fk.begins = 0;
     seq_step(ev);
     TEST_ASSERT_EQUAL_UINT(1, fk.begins);
-    assert_painted_within(0, PICKER_HEADER_H, sg.list_art_x - 4,
-                          PICKER_HEADER_H + PICKER_ROW_H);
+    assert_painted_within(0, PICKER_LIST_TOP, sg.list_art_x - 4,
+                          PICKER_LIST_TOP + PICKER_ROW_H);
 }
 
 static void test_images_landing_on_a_detail_page_paint_only_the_images(void)
@@ -1391,7 +1390,7 @@ int main(void)
     RUN_TEST(test_a_newline_ends_the_line_and_a_blank_one_is_empty);
     RUN_TEST(test_three_paragraphs_wrap_with_a_blank_line_between);
     RUN_TEST(test_draw_paints_nothing_when_it_is_handed_nothing);
-    RUN_TEST(test_the_pending_list_header_reads_choose_a_game);
+    RUN_TEST(test_the_list_opens_on_its_first_title);
     RUN_TEST(test_the_cursor_row_is_bold_black_on_a_white_pill);
     RUN_TEST(test_the_pill_hugs_a_short_title_and_stops_at_the_column);
     RUN_TEST(test_the_list_ends_in_a_help_line_and_a_hint_bar);

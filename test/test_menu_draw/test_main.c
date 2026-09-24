@@ -118,7 +118,7 @@ static void fk_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
                     uint16_t bg)
 {
     fake_t* f = (fake_t*)ctx;
-    int16_t h = (int16_t)(rows * UI_ROW_PITCH(ui_font_height(font)));
+    int16_t h = (int16_t)(rows * UI_ROW_PITCH(ui_font_height(font)) - 2);
 
     (void)align;
     f->texts++;
@@ -175,7 +175,7 @@ static ui_canvas_t canvas_over(fake_t* f)
 #define ROW_MANUAL 2
 #define ROW_VOLUME 5
 
-static const ui_hint_t HINTS[] = { { "A", "Select" }, { "B", "Resume" } };
+static const ui_hint_t HINTS[] = { { "B", "Resume" }, { "A", "Select" } };
 
 static menu_item_t items[N_ROWS];
 static menu_layout_t g;
@@ -231,9 +231,9 @@ static void test_the_layout_fits_seven_rows_over_the_help_line(void)
 {
     TEST_ASSERT_EQUAL_UINT8(MENU_VISIBLE, g.visible);
     TEST_ASSERT_EQUAL_INT16(222, g.foot_y);
-    TEST_ASSERT_EQUAL_INT16(212, g.help_y);
+    TEST_ASSERT_EQUAL_INT16(200, g.help_y);
     TEST_ASSERT_TRUE(MENU_TOP + MENU_VISIBLE * MENU_ROW_H <= g.help_y);
-    TEST_ASSERT_FALSE(menu_layout(W, 220, &g));
+    TEST_ASSERT_FALSE(menu_layout(W, 225, &g));
     TEST_ASSERT_FALSE(menu_layout(W, H, NULL));
 }
 
@@ -258,11 +258,10 @@ static void test_the_full_list_stays_inside_the_window(void)
 
     menu_draw(&cv, &g, &v);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
-    /* The header, a label per visible row plus the values among them, the
+    /* No header: a label per visible row plus the values among them, the
      * help line and the hints. */
-    TEST_ASSERT_EQUAL_STRING("Paused", fk.log[0].s);
-    TEST_ASSERT_EQUAL_HEX16(UI_COL_TEXT, fk.log[0].fg);
-    TEST_ASSERT_GREATER_OR_EQUAL_UINT(1u + MENU_VISIBLE, fk.texts);
+    TEST_ASSERT_EQUAL_STRING("Resume", fk.log[0].s);
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT(MENU_VISIBLE, fk.texts);
     for (i = 0; i < fk.logged; i++) {
         help = help || strcmp(fk.log[i].s, "Back to the game.") == 0;
     }
@@ -307,23 +306,14 @@ static void test_a_value_change_repaints_to_the_full_screen(void)
 
 static void test_the_highlight_is_a_bold_pill_that_hugs_its_label(void)
 {
-    unsigned i;
-    unsigned passes = 0;
-    int16_t x0 = 0;
-
     menu_draw_bar(&cv, &g, MENU_TOP, "Resume", NULL, true, false);
-    for (i = 0; i < fk.logged; i++) {
-        TEST_ASSERT_EQUAL_HEX16(fk.log[i].fg, fk.log[i].bg);
-        TEST_ASSERT_EQUAL_HEX16(UI_COL_PILL_TEXT, fk.log[i].fg);
-        if (passes++ == 0) {
-            x0 = fk.log[i].x;
-        } else {
-            TEST_ASSERT_EQUAL_INT16(x0 + 1, fk.log[i].x);
-        }
-    }
-    TEST_ASSERT_EQUAL_UINT(2, passes);
+    /* One transparent black pass in the bold list font. */
+    TEST_ASSERT_EQUAL_UINT(1, fk.logged);
+    TEST_ASSERT_EQUAL_HEX16(fk.log[0].fg, fk.log[0].bg);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_PILL_TEXT, fk.log[0].fg);
+    TEST_ASSERT_EQUAL_INT16(UI_TEXT_X, fk.log[0].x);
     TEST_ASSERT_EQUAL_UINT(1, fk.rlogged);
-    TEST_ASSERT_EQUAL_INT16(6 * 8 + 2 * UI_PILL_PAD + 1, fk.rlog[0].w);
+    TEST_ASSERT_EQUAL_INT16(6 * 8 + 2 * UI_PILL_PAD, fk.rlog[0].w);
     TEST_ASSERT_EQUAL_INT16(11, fk.rlog[0].r);
     TEST_ASSERT_EQUAL_HEX16(UI_COL_PILL, fk.rlog[0].color);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
@@ -399,8 +389,8 @@ static void test_a_one_row_cart_title_gives_the_images_a_row(void)
     int16_t two = menu_draw_cart_title(
         &cv, &g, "The Legend of Zelda: Link's Awakening DX Edition");
 
-    TEST_ASSERT_EQUAL_INT16(8 + 18 + 2, one);
-    TEST_ASSERT_EQUAL_INT16(8 + 2 * 18 + 2, two);
+    TEST_ASSERT_EQUAL_INT16(UI_PAD + 20 + 2, one);
+    TEST_ASSERT_EQUAL_INT16(UI_PAD + 2 * 20 + 2, two);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
 }
 
@@ -411,20 +401,27 @@ static void test_the_band_fills_to_the_back_line_and_scrolls_inside_it(void)
         "escape. A dream-logic adventure that quietly erases its own world as "
         "you finish it, and one of the very finest games on the system.";
     menu_band_t b;
-    int16_t y = (int16_t)(8 + 2 * 18 + 2 + 96 + 8);
+    int16_t y = (int16_t)(UI_PAD + 2 * 20 + 2 + 96 + 8);
+    unsigned i;
 
-    menu_band_fit(&g, text, y, &b);
-    /* (222 - 2 - 150) / 10: down to the hints, the description being the
+    menu_band_fit(&cv, &g, text, y, &b);
+    /* (222 - 2 - 150) / 20: down to the hints, the description being the
      * page's help. */
-    TEST_ASSERT_EQUAL_UINT16(7, b.rows);
-    TEST_ASSERT_EQUAL_UINT8(41, b.cols);
+    TEST_ASSERT_EQUAL_UINT16(3, b.rows);
+    TEST_ASSERT_EQUAL_INT16(W - 2 * UI_TEXT_X, b.w);
+    /* The fake's 8 px advance, measured rather than assumed. */
+    TEST_ASSERT_EQUAL_UINT8(8, b.adv.w['e' - 32]);
     menu_draw_band(&cv, &b);
     b.first = 1;
     menu_draw_band(&cv, &b);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
-    TEST_ASSERT_TRUE(b.y + (int16_t)b.rows * 10 <= g.foot_y);
+    TEST_ASSERT_TRUE(b.y + (int16_t)b.rows * 20 <= g.foot_y);
+    /* Every line fits the band at the measured advances. */
+    for (i = 0; i < fk.logged; i++) {
+        TEST_ASSERT_TRUE(strlen(fk.log[i].s) * 8 <= (size_t)b.w);
+    }
 
-    menu_band_fit(&g, NULL, y, &b);
+    menu_band_fit(&cv, &g, NULL, y, &b);
     TEST_ASSERT_EQUAL_UINT16(0, b.rows);
     fk.fills = 0;
     menu_draw_band(&cv, &b);

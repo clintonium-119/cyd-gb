@@ -35,7 +35,7 @@
 #define MANUAL_INK   UI_COL_BG
 #define MANUAL_PAPER UI_COL_TEXT
 
-static const ui_hint_t HINTS[] = { { "A", "Zoom" }, { "B", "Back" } };
+static const ui_hint_t HINTS[] = { { "B", "Back" }, { "A", "Zoom" } };
 
 // Everything one open reader holds, all of it heap and all of it freed on
 // the way out.
@@ -136,7 +136,7 @@ static bool draw_overview(const view_t* v, const manual_nav_t* nav)
     if (chrome) {
         ui_header(cv, GAME_W, "Manual", label);
         ui_help_line(cv, GAME_W, GAME_H - UI_FOOT_H - UI_HELP_H,
-                     "Left and Right turn the page.");
+                     "Left and Right turn pages.");
     }
     for (uint16_t r = 0; r < p->h; r += MANUAL_BAND_ROWS) {
         uint16_t n = (uint16_t)(p->h - r);
@@ -165,11 +165,11 @@ static bool draw_overview(const view_t* v, const manual_nav_t* nav)
     ui_hint_bar(cv, GAME_W, GAME_H - UI_FOOT_H, HINTS,
                 (uint8_t)(sizeof(HINTS) / sizeof(HINTS[0])));
     if (!chrome) {
-        cv->text(cv->ctx, label, UI_PAD,
-                 (int16_t)(GAME_H - UI_FOOT_H +
-                           (UI_FOOT_H - UI_ROW_PITCH(ui_font_height(
-                                            UI_FONT_HINT))) /
-                               2),
+        // On the hint labels' line: the footer's pill is a pixel inside its
+        // band and two short of it.
+        cv->text(cv->ctx, label, UI_TEXT_X,
+                 (int16_t)(GAME_H - UI_FOOT_H + 1 +
+                           ui_text_dy(UI_FOOT_H - 2, UI_FONT_HINT)),
                  (int16_t)(GAME_W / 2), 1, UI_FONT_HINT, UI_ALIGN_LEFT,
                  UI_COL_TEXT, UI_COL_BG);
     }

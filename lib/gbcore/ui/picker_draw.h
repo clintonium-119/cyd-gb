@@ -40,37 +40,44 @@ extern "C" {
 #define PICKER_ART_H  96
 #define PICKER_ART_PX (PICKER_ART_W * PICKER_ART_H)
 
-#define PICKER_HEADER_H UI_HEADER_H
-#define PICKER_ROW_H    UI_PILL_H_LIST /* font 2: 16 + 2 */
+/* The list has no header: its rows and its images start at the top inset,
+ * and the help line says which game is hovered. */
+#define PICKER_LIST_TOP UI_PAD
+#define PICKER_ROW_H    UI_PILL_H_LIST
 #define PICKER_MIN_ROWS 3
 
-/* A description column narrower than this is not worth wrapping into. */
-#define PICKER_DESC_MIN_COLS 8
-
 /*
- * The detail page, mirroring Cart Info's numbers: an 8 px margin, the images
- * 8 px apart with 8 px under them.
+ * The detail page, mirroring Cart Info's numbers: the rows' text margin, the
+ * images 8 px apart with 8 px under them.
  *
- * Two title rows because 250 px at about 8 px per glyph is 31 characters a
- * row, and 2 x 31 = 62 is past CATALOG_TITLE_MAX - 1 (47) — so a title is
- * never clipped on the page whose job is to name the game. A title that fits
- * one row gives the other to the description.
+ * Two title rows because 242 px at about 9 px per bold glyph is 26
+ * characters a row, and 2 x 26 = 52 is past CATALOG_TITLE_MAX - 1 (47) — so
+ * a title is never clipped on the page whose job is to name the game. A title
+ * that fits one row gives the other to the description.
  */
 #define PICKER_TITLE_ROWS 2
-#define PICKER_DETAIL_X   8
+#define PICKER_DETAIL_X   UI_TEXT_X
 #define PICKER_DETAIL_GAP 8
 
-/* Bar 10 + gap 2 + help line 10 + hint footer 18. */
-#define PICKER_DETAIL_FOOT_H (PICKER_BAR_H + 2 + UI_HELP_H + UI_FOOT_H)
+/* The help line and the hint footer. The hold bar takes the help line's
+ * place while A is held, so it costs the band nothing. */
+#define PICKER_DETAIL_FOOT_H (UI_HELP_H + UI_FOOT_H)
 
 #define PICKER_BAR_H 10
+
+/* One glyph advance per printable ASCII character, measured once through the
+ * canvas for the description's font: what the word wrap sums, so it breaks
+ * where the driver would without measuring a string per character. */
+typedef struct picker_adv_s {
+    uint8_t w[95];
+} picker_adv_t;
 
 /* The longest wrapped line this module will hand back. */
 #define PICKER_DESC_LINE_MAX 64
 
 typedef struct picker_layout_s {
     int16_t w, h;
-    uint8_t rows;    /* list rows between the header and help line */
+    uint8_t rows;    /* list rows above the help line              */
     int16_t list_w;  /* width of a row's text inside its pill      */
     int16_t list_art_x;  /* the list's image column, left edge     */
     int16_t list_art_y;  /* the cover's top                       */
@@ -87,8 +94,8 @@ typedef struct picker_layout_s {
     int16_t shot_x;     /* the snapshot's left edge, beside the cover */
     int16_t band_y;     /* the description band's top             */
     int16_t band_h;
-    uint8_t band_rows;  /* font-1 lines that fit in the band      */
-    uint8_t desc_cols;  /* characters per wrapped line            */
+    uint8_t band_rows;  /* description lines that fit in the band  */
+    picker_adv_t adv;   /* the description font's advances        */
 } picker_layout_t;
 
 /*
@@ -98,9 +105,23 @@ typedef struct picker_layout_s {
  * PICKER_ERR_ARGS for a NULL out, a list shorter than PICKER_MIN_ROWS, a band
  * with no room for a line, a description column under PICKER_DESC_MIN_COLS, a
  * window too narrow to hold an image and a column beside it, or one too short
- * to stack both images under the list header.
+ * to stack both images above the help line.
  */
 int picker_layout(int16_t w, int16_t h, picker_layout_t* out);
+
+/*
+ * Measure the description font's advances into g->adv. Until this is called
+ * picker_layout() leaves a stand-in of 8 px a glyph, which is what the host
+ * suite's fake canvas measures. Does nothing when either is NULL or the
+ * canvas cannot measure.
+ */
+void picker_layout_measure(picker_layout_t* g, const ui_canvas_t* cv);
+
+/* One font's advances, measured through the canvas; what
+ * picker_layout_measure() does for the description font. Does nothing when
+ * the canvas cannot measure. */
+void picker_adv_measure(const ui_canvas_t* cv, uint8_t font,
+                        picker_adv_t* out);
 
 /*
  * How many lines `s` wraps to at `cols` characters. A newline is a hard break,
@@ -108,8 +129,14 @@ int picker_layout(int16_t w, int16_t h, picker_layout_t* out);
  */
 uint16_t picker_desc_lines(const char* s, uint8_t cols);
 
+/* The same, and picker_desc_line()'s, at `max_w` pixels of advances `a`. */
+uint16_t picker_desc_lines_px(const char* s, const picker_adv_t* a,
+                              int16_t max_w);
+bool picker_desc_line_px(const char* s, const picker_adv_t* a, int16_t max_w,
+                         uint16_t line, char* out, size_t out_sz);
+
 /*
- * The description's height in font-1 lines, never less than band_rows — what
+ * The description's height in lines, never less than band_rows — what
  * picker_set_scroll_span() takes as page_lines. Only the description scrolls.
  */
 uint16_t picker_page_lines(const picker_layout_t* g, const char* desc);

@@ -115,6 +115,7 @@ static enum boot_pick_e writer_run(enum writer_mode_e mode,
                       (unsigned)DESC_MAX);
     }
     cv = display_canvas(cfg.game_x, cfg.game_y);
+    picker_layout_measure(&geom, cv);
     picker_set_marquee_span(&picker, picker_row_overflow(&picker, &geom, cv));
     tft.fillScreen(TFT_BLACK);
     picker_draw(&picker, &geom, NULL, art, shot, cv);
@@ -153,13 +154,21 @@ static enum boot_pick_e writer_run(enum writer_mode_e mode,
                                            PICKER_ART_PX);
 
             // The theme rounds every image's corners, and the buffer is ours.
+            // Both files letterbox their picture on black, so the corners
+            // are found rather than assumed at the file's edge.
             if (have_art) {
-                ui_round_corners_565(art, PICKER_ART_W, PICKER_ART_H, 0,
-                                     PICKER_ART_H, UI_IMG_R, UI_COL_BG);
+                ui_inset_t in;
+
+                ui_inset_begin(&in, PICKER_ART_W, PICKER_ART_H);
+                ui_round_inset_565(&in, art, 0, PICKER_ART_H, UI_IMG_R,
+                                   UI_COL_BG);
             }
             if (have_shot) {
-                ui_round_corners_565(shot, PICKER_ART_W, PICKER_ART_H, 0,
-                                     PICKER_ART_H, UI_IMG_R, UI_COL_BG);
+                ui_inset_t in;
+
+                ui_inset_begin(&in, PICKER_ART_W, PICKER_ART_H);
+                ui_round_inset_565(&in, shot, 0, PICKER_ART_H, UI_IMG_R,
+                                   UI_COL_BG);
             }
 
             if (!media_logged) {

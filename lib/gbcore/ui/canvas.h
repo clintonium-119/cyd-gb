@@ -80,6 +80,17 @@ typedef struct ui_canvas_s {
 #define UI_FONT_TITLE 4
 
 /*
+ * The theme's three GFX outline fonts, which the binding selects with
+ * setFreeFont(): FreeSans 9pt for prose, FreeSansBold 9pt for list rows and
+ * FreeSansBold 12pt for headers. Their ids sit past the built-in ones so the
+ * two kinds never collide. All three are proportional: a layout measures
+ * them through the canvas, and never assumes an advance.
+ */
+#define UI_FONT_TEXT 10
+#define UI_FONT_BOLD 11
+#define UI_FONT_HEAD 12
+
+/*
  * Font 1 is GLCD: a FIXED 6-pixel advance per glyph. This is the one glyph
  * width a layout module may assume, and it is what makes the writer's word
  * wrap exact — a line of `cols` characters measures cols * 6 pixels, so the
@@ -89,8 +100,16 @@ typedef struct ui_canvas_s {
  */
 #define UI_FONT_SMALL_ADV 6
 
-/* Heights of the three fonts, and the row pitch display_draw_wrapped() uses. */
+/* Heights of the fonts — for a GFX font its tallest ascent plus its deepest
+ * descent, the box its text fills — and the row pitch display_draw_wrapped()
+ * uses. */
 uint8_t ui_font_height(uint8_t font);
+
+/* A font's capital height, and the blank rows above its capitals inside its
+ * box — what centring a line on its capitals, rather than on its box, needs.
+ */
+uint8_t ui_font_cap(uint8_t font);
+uint8_t ui_font_lead(uint8_t font);
 #define UI_ROW_PITCH(font_h) ((font_h) + 2)
 
 #ifdef __cplusplus

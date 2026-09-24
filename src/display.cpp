@@ -483,15 +483,39 @@ void display_clear(uint16_t color)
 
 // On any TFT_eSPI, so the canvas can wrap into an offscreen sprite as well as
 // onto the panel.
+// The canvas's font id selected on d, and the id drawString() and
+// textWidth() then take: a GFX font is font 1 with a free font set, and a
+// built-in one clears any free font a previous call left behind.
+static uint8_t use_font(TFT_eSPI& d, uint8_t font)
+{
+    switch (font) {
+    case UI_FONT_TEXT:
+        d.setFreeFont(&FreeSans9pt7b);
+        return 1;
+    case UI_FONT_BOLD:
+        d.setFreeFont(&FreeSansBold9pt7b);
+        return 1;
+    case UI_FONT_HEAD:
+        d.setFreeFont(&FreeSansBold12pt7b);
+        return 1;
+    default:
+        d.setTextFont(font);
+        return font;
+    }
+}
+
 static int16_t draw_wrapped(TFT_eSPI& d, const char* s, int16_t cx,
                             int16_t top, int16_t max_w, uint8_t max_rows,
-                            uint8_t font)
+                            uint8_t id)
 {
     char line[96];
     size_t at = 0;
     size_t len;
     uint8_t row = 0;
-    int16_t row_h = d.fontHeight(font) + 2;
+    // The pitch the layouts assume, which for a GFX font is not its
+    // yAdvance.
+    int16_t row_h = (int16_t)UI_ROW_PITCH(ui_font_height(id));
+    uint8_t font = use_font(d, id);
 
     if (!s) {
         return top;
@@ -538,6 +562,7 @@ static int16_t draw_wrapped(TFT_eSPI& d, const char* s, int16_t cx,
         }
         row++;
     }
+    d.setTextFont(1);
     return (int16_t)(top + row * row_h);
 }
 
@@ -798,7 +823,10 @@ static void cv_image(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
 
 static int16_t cv_measure(void* ctx, const char* s, uint8_t font) {
     (void)ctx;
-    return (int16_t)tft.textWidth(s, font);
+    int16_t w = (int16_t)tft.textWidth(s, use_font(tft, font));
+
+    tft.setTextFont(1);
+    return w;
 }
 
 // Allocated here and freed in cv_end, never kept: the writer's heap also holds

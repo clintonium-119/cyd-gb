@@ -62,17 +62,17 @@ static const char* const NFC_STATE_NAMES[] = {
 /* The four classes the boot classifier reports, in its own order. */
 static const char* const CLASS_NAMES[4] = { "blank", "MENU", "WILD", "game" };
 
-/* One help line per page: what the page is for, in one font-1 row. */
+/* One help line per page: what the page is for, in one line of prose. */
 static const char* const HELPS[DIAG_PAGE_COUNT] = {
-    "Press each button; its row lights up.",
-    "Card, catalog and free space.",
-    "The tag on the reader, as the boot sees it.",
-    "Battery voltage at the pin and the cell.",
-    "A test tone at each volume step.",
-    "Test patterns for the panel and its scaler.",
-    "Centre the window behind the bezel.",
-    "Match the panel's refresh to the game's.",
-    "Frameskip, firmware version and build time.",
+    "Press a button to light it.",
+    "Card, catalog, free space.",
+    "The tag as the boot reads it.",
+    "Battery at pin and cell.",
+    "A tone at each volume.",
+    "Panel and scaler patterns.",
+    "Centre the window.",
+    "Match the game's refresh.",
+    "Frameskip and build.",
 };
 
 /* One hint footer per page: what the buttons do here. Paging is named on
@@ -85,12 +85,13 @@ static const ui_hint_t HINTS_AUDIO[] = {
     { "A", "Tone" }, { "U/D", "Volume" }, HINT_PAGE,
 };
 static const ui_hint_t HINTS_DISPLAY[] = { { "U/D", "Pattern" }, HINT_PAGE };
+/* B before A, as the buttons sit on the console. */
 static const ui_hint_t HINTS_NUDGE[] = {
-    { "D-pad", "Move" }, { "A", "Save" }, { "B", "Default" },
+    { "D-pad", "Move" }, { "B", "Default" }, { "A", "Save" },
 };
 static const ui_hint_t HINTS_TRIM[] = {
-    { "Start", "Run" }, { "D-pad", "Porch" }, { "A", "Save" },
-    { "B", "Default" },
+    { "Start", "Run" }, { "D-pad", "Porch" }, { "B", "Default" },
+    { "A", "Save" },
 };
 static const ui_hint_t HINTS_SYSTEM[] = { { "U/D", "Frameskip" }, HINT_PAGE };
 

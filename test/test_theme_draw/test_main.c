@@ -121,7 +121,7 @@ static void fk_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
     c->x = x;
     c->y = y;
     c->w = w;
-    c->h = (int16_t)(rows * UI_ROW_PITCH(ui_font_height(font)));
+    c->h = (int16_t)(rows * UI_ROW_PITCH(ui_font_height(font)) - 2);
     c->rows = rows;
     c->font = font;
     c->align = align;
@@ -227,26 +227,18 @@ static const call_t* nth(int op, unsigned k)
 static void test_the_pill_hugs_a_short_label(void)
 {
     int16_t pw = ui_pill_row(&cv, 4, 40, 200, UI_PILL_H_ROW, "Resume",
-                             UI_FONT_ROW, false, false, 0);
+                             UI_FONT_LIST, false, 0);
 
     TEST_ASSERT_EQUAL_INT16(6 * 8 + 2 * UI_PILL_PAD, pw);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
     TEST_ASSERT_EQUAL_UINT(0, fk.off_violations);
 }
 
-static void test_a_bold_pill_is_one_pixel_wider(void)
-{
-    int16_t pw = ui_pill_row(&cv, 4, 40, 200, UI_PILL_H_ROW, "Resume",
-                             UI_FONT_ROW, true, false, 0);
-
-    TEST_ASSERT_EQUAL_INT16(6 * 8 + 2 * UI_PILL_PAD + 1, pw);
-}
-
 static void test_an_overflowing_label_is_held_to_max_w(void)
 {
     int16_t pw = ui_pill_row(&cv, 4, 40, 120, UI_PILL_H_LIST,
                              "The Legend of Zelda: Link's Awakening",
-                             UI_FONT_ROW, true, false, 0);
+                             UI_FONT_LIST, false, 0);
 
     TEST_ASSERT_EQUAL_INT16(120, pw);
     TEST_ASSERT_EQUAL_INT16(120, nth(OP_ROUND, 0)->w);
@@ -258,8 +250,7 @@ static void test_the_pill_is_one_white_round_fill_of_half_its_height(void)
 {
     const call_t* c;
 
-    ui_pill_row(&cv, 4, 40, 200, UI_PILL_H_ROW, "Resume", UI_FONT_ROW, false,
-                false, 0);
+    ui_pill_row(&cv, 4, 40, 200, UI_PILL_H_ROW, "Resume", UI_FONT_LIST, false, 0);
     TEST_ASSERT_EQUAL_UINT(1, count(OP_ROUND));
     c = nth(OP_ROUND, 0);
     TEST_ASSERT_EQUAL_INT16(UI_PILL_H_ROW / 2, c->r);
@@ -273,7 +264,7 @@ static void test_the_pill_is_one_white_round_fill_of_half_its_height(void)
 static void test_the_pill_is_built_offscreen_at_its_own_size(void)
 {
     int16_t pw = ui_pill_row(&cv, 4, 40, 200, UI_PILL_H_ROW, "Resume",
-                             UI_FONT_ROW, false, false, 0);
+                             UI_FONT_LIST, false, 0);
 
     TEST_ASSERT_EQUAL_UINT(1, fk.begins);
     TEST_ASSERT_EQUAL_UINT(1, fk.ends);
@@ -281,31 +272,26 @@ static void test_the_pill_is_built_offscreen_at_its_own_size(void)
     TEST_ASSERT_EQUAL_INT16(UI_PILL_H_ROW, fk.off_h);
 }
 
-static void test_bold_is_two_transparent_passes_a_pixel_apart(void)
+static void test_the_label_is_one_transparent_black_pass(void)
 {
     const call_t* a;
-    const call_t* b;
 
-    ui_pill_row(&cv, 4, 40, 200, UI_PILL_H_ROW, "Resume", UI_FONT_ROW, true,
-                false, 0);
-    TEST_ASSERT_EQUAL_UINT(2, count(OP_TEXT));
+    ui_pill_row(&cv, 4, 40, 200, UI_PILL_H_ROW, "Resume", UI_FONT_LIST, false,
+                0);
+    TEST_ASSERT_EQUAL_UINT(1, count(OP_TEXT));
     a = nth(OP_TEXT, 0);
-    b = nth(OP_TEXT, 1);
-    TEST_ASSERT_EQUAL_INT16(a->x + 1, b->x);
-    TEST_ASSERT_EQUAL_INT16(a->y, b->y);
     TEST_ASSERT_EQUAL_HEX16(UI_COL_PILL_TEXT, a->color);
     TEST_ASSERT_EQUAL_HEX16(a->color, a->bg);
-    TEST_ASSERT_EQUAL_HEX16(b->color, b->bg);
+    TEST_ASSERT_EQUAL_UINT8(UI_FONT_LIST, a->font);
 }
 
-static void test_a_dim_label_is_one_pass_in_the_dim_on_pill_grey(void)
+static void test_a_dim_label_is_in_the_dim_on_pill_grey(void)
 {
     int16_t pw = ui_pill_row(&cv, 4, 40, 200, UI_PILL_H_ROW, "Manual",
-                             UI_FONT_ROW, true, true, 0);
+                             UI_FONT_LIST, true, 0);
 
     TEST_ASSERT_EQUAL_UINT(1, count(OP_TEXT));
     TEST_ASSERT_EQUAL_HEX16(UI_COL_PILL_DIM, nth(OP_TEXT, 0)->color);
-    /* Never bold, so no bold pixel either. */
     TEST_ASSERT_EQUAL_INT16(6 * 8 + 2 * UI_PILL_PAD, pw);
 }
 
@@ -316,12 +302,10 @@ static void test_a_marquee_moves_the_text_and_not_the_pill(void)
     int16_t moved;
     const char* s = "The Legend of Zelda: Link's Awakening";
 
-    still = ui_pill_row(&cv, 4, 40, 120, UI_PILL_H_LIST, s, UI_FONT_ROW, true,
-                        false, 0);
+    still = ui_pill_row(&cv, 4, 40, 120, UI_PILL_H_LIST, s, UI_FONT_LIST, false, 0);
     x0 = nth(OP_TEXT, 0)->x;
     setUp();
-    moved = ui_pill_row(&cv, 4, 40, 120, UI_PILL_H_LIST, s, UI_FONT_ROW, true,
-                        false, 5);
+    moved = ui_pill_row(&cv, 4, 40, 120, UI_PILL_H_LIST, s, UI_FONT_LIST, false, 5);
     TEST_ASSERT_EQUAL_INT16(still, moved);
     TEST_ASSERT_EQUAL_INT16(x0 - 5, nth(OP_TEXT, 0)->x);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
@@ -333,7 +317,7 @@ static void test_without_a_buffer_the_marquee_is_ignored_and_the_text_fits(void)
     const char* s = "The Legend of Zelda: Link's Awakening";
 
     fk.refuse_begin = true;
-    ui_pill_row(&cv, 4, 40, 120, UI_PILL_H_LIST, s, UI_FONT_ROW, true, false,
+    ui_pill_row(&cv, 4, 40, 120, UI_PILL_H_LIST, s, UI_FONT_LIST, false,
                 5);
     TEST_ASSERT_EQUAL_INT16(4 + UI_PILL_PAD, nth(OP_TEXT, 0)->x);
     TEST_ASSERT_EQUAL_INT16(120 - 2 * UI_PILL_PAD, nth(OP_TEXT, 0)->w);
@@ -345,19 +329,18 @@ static void test_a_plain_row_and_a_pill_start_their_text_at_one_x(void)
 {
     int16_t plain;
 
-    ui_row_text(&cv, 4, 40, 200, UI_PILL_H_ROW, "Resume", UI_FONT_ROW,
+    ui_row_text(&cv, 4, 40, 200, UI_PILL_H_ROW, "Resume", UI_FONT_LIST,
                 UI_COL_TEXT);
     plain = nth(OP_TEXT, 0)->x;
     setUp();
-    ui_pill_row(&cv, 4, 40, 200, UI_PILL_H_ROW, "Resume", UI_FONT_ROW, true,
-                false, 0);
+    ui_pill_row(&cv, 4, 40, 200, UI_PILL_H_ROW, "Resume", UI_FONT_LIST, false, 0);
     TEST_ASSERT_EQUAL_INT16(plain, nth(OP_TEXT, 0)->x);
     TEST_ASSERT_EQUAL_INT16(4 + UI_PILL_PAD, plain);
 }
 
 static void test_a_plain_row_is_cleared_to_black_with_no_bar(void)
 {
-    ui_row_text(&cv, 4, 40, 200, UI_PILL_H_ROW, "Resume", UI_FONT_ROW,
+    ui_row_text(&cv, 4, 40, 200, UI_PILL_H_ROW, "Resume", UI_FONT_LIST,
                 UI_COL_TEXT);
     TEST_ASSERT_EQUAL_UINT(1, count(OP_FILL));
     TEST_ASSERT_EQUAL_HEX16(UI_COL_BG, nth(OP_FILL, 0)->color);
@@ -374,7 +357,9 @@ static void test_the_header_is_white_left_and_grey_right_on_black(void)
     TEST_ASSERT_EQUAL_INT16(UI_HEADER_H, nth(OP_FILL, 0)->h);
     TEST_ASSERT_EQUAL_HEX16(UI_COL_TEXT, nth(OP_TEXT, 0)->color);
     TEST_ASSERT_EQUAL_UINT8(UI_ALIGN_LEFT, nth(OP_TEXT, 0)->align);
-    TEST_ASSERT_EQUAL_HEX16(UI_COL_DIM, nth(OP_TEXT, 1)->color);
+    TEST_ASSERT_EQUAL_INT16(UI_TEXT_X, nth(OP_TEXT, 0)->x);
+    TEST_ASSERT_EQUAL_UINT8(UI_FONT_HEADER, nth(OP_TEXT, 0)->font);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_SUB, nth(OP_TEXT, 1)->color);
     TEST_ASSERT_EQUAL_UINT8(UI_ALIGN_RIGHT, nth(OP_TEXT, 1)->align);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
 }
@@ -388,7 +373,8 @@ static void test_the_help_line_is_one_grey_row_inside_its_band(void)
     t = nth(OP_TEXT, 0);
     TEST_ASSERT_EQUAL_UINT8(1, t->rows);
     TEST_ASSERT_EQUAL_UINT8(UI_FONT_HELP, t->font);
-    TEST_ASSERT_EQUAL_HEX16(UI_COL_DIM, t->color);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_SUB, t->color);
+    TEST_ASSERT_EQUAL_INT16(UI_TEXT_X, t->x);
     TEST_ASSERT_TRUE(t->y >= 200);
     TEST_ASSERT_TRUE(t->y + t->h <= 200 + UI_HELP_H);
     TEST_ASSERT_TRUE(t->x + t->w <= W);
@@ -435,8 +421,14 @@ static void test_two_hints_right_align_and_a_word_button_stretches(void)
     TEST_ASSERT_EQUAL_INT16(gw0, g0->w);
     TEST_ASSERT_TRUE(g0->w > UI_GLYPH_D);
     TEST_ASSERT_EQUAL_INT16(UI_GLYPH_D, g1->w);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_HINT_BG, outer->color);
     TEST_ASSERT_EQUAL_HEX16(UI_COL_GLYPH, g0->color);
-    TEST_ASSERT_EQUAL_HEX16(UI_COL_HINT, nth(OP_TEXT, 1)->color);
+    /* The button's letter, struck twice a pixel apart in black, then its
+     * label in white. */
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_GLYPH_FG, nth(OP_TEXT, 0)->color);
+    TEST_ASSERT_EQUAL_INT16(nth(OP_TEXT, 0)->x + 1, nth(OP_TEXT, 1)->x);
+    TEST_ASSERT_EQUAL_STRING("Palette", nth(OP_TEXT, 2)->s);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_TEXT, nth(OP_TEXT, 2)->color);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
 }
 
@@ -464,18 +456,18 @@ static void test_the_notice_title_is_red_only_for_an_error(void)
 {
     ui_notice(&cv, W, H, "Blank cart", "Put a game on it.", false, NULL, 0);
     TEST_ASSERT_EQUAL_HEX16(UI_COL_TEXT, nth(OP_TEXT, 0)->color);
-    TEST_ASSERT_EQUAL_HEX16(UI_COL_DIM, nth(OP_TEXT, 1)->color);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_SUB, nth(OP_TEXT, 1)->color);
     setUp();
     ui_notice(&cv, W, H, "Unreadable tag", NULL, true, NULL, 0);
     TEST_ASSERT_EQUAL_HEX16(UI_COL_WARN, nth(OP_TEXT, 0)->color);
     TEST_ASSERT_EQUAL_UINT(1, count(OP_TEXT));
 }
 
-static void test_a_long_notice_title_wraps_in_font_2(void)
+static void test_a_long_notice_title_wraps_in_the_list_font(void)
 {
     ui_notice(&cv, W, H, "This title is far too long for the large font",
               "body", false, NULL, 0);
-    TEST_ASSERT_EQUAL_UINT8(UI_FONT_ROW, nth(OP_TEXT, 0)->font);
+    TEST_ASSERT_EQUAL_UINT8(UI_FONT_LIST, nth(OP_TEXT, 0)->font);
     TEST_ASSERT_EQUAL_UINT8(2, nth(OP_TEXT, 0)->rows);
     TEST_ASSERT_TRUE(nth(OP_TEXT, 1)->y >=
                      nth(OP_TEXT, 0)->y + nth(OP_TEXT, 0)->h);
@@ -491,7 +483,7 @@ static void test_a_notice_without_hints_has_no_footer_and_a_four_row_body(void)
     TEST_ASSERT_EQUAL_UINT(1, count(OP_FILL));
     TEST_ASSERT_EQUAL_UINT(0, count(OP_ROUND));
     TEST_ASSERT_EQUAL_UINT8(4, nth(OP_TEXT, 1)->rows);
-    TEST_ASSERT_EQUAL_UINT8(UI_FONT_ROW, nth(OP_TEXT, 1)->font);
+    TEST_ASSERT_EQUAL_UINT8(UI_FONT_DESC, nth(OP_TEXT, 1)->font);
     TEST_ASSERT_TRUE(nth(OP_TEXT, 1)->y + nth(OP_TEXT, 1)->h <= H);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
 }
@@ -503,8 +495,8 @@ static void test_a_notice_with_hints_ends_in_the_footer(void)
     ui_notice(&cv, W, H, "Ready", "Insert a cart.", false, hints, 1);
     TEST_ASSERT_EQUAL_INT16(H - UI_FOOT_H, nth(OP_FILL, 1)->y);
     TEST_ASSERT_EQUAL_INT16(UI_FOOT_H, nth(OP_FILL, 1)->h);
-    /* Title, body, then the hint's button and label. */
-    TEST_ASSERT_EQUAL_UINT(4, count(OP_TEXT));
+    /* Title, body, then the hint's button, twice, and label. */
+    TEST_ASSERT_EQUAL_UINT(5, count(OP_TEXT));
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
 }
 
@@ -602,16 +594,76 @@ static void test_one_row_bands_round_an_overview_row_by_row(void)
     }
 }
 
+/* ─── text placement ─────────────────────────────────────────────────────── */
+
+static void test_text_is_centred_on_its_capitals_and_kept_in_its_box(void)
+{
+    /* 9pt: 12 px capitals, one blank row above them in an 18 px box. */
+    TEST_ASSERT_EQUAL_INT16((22 - 12) / 2 - 1, ui_text_dy(22, UI_FONT_LIST));
+    TEST_ASSERT_EQUAL_INT16((26 - 12) / 2 - 1, ui_text_dy(26, UI_FONT_LIST));
+    /* A box barely taller than the font keeps the font inside it. */
+    TEST_ASSERT_EQUAL_INT16(20 - 18, ui_text_dy(20, UI_FONT_LIST));
+    TEST_ASSERT_EQUAL_INT16(0, ui_text_dy(10, UI_FONT_LIST));
+    /* The 8 px font's 7 px capitals in a 12 px circle. */
+    TEST_ASSERT_EQUAL_INT16(2, ui_text_dy(UI_GLYPH_D, UI_FONT_HINT));
+}
+
+/* ─── letterboxed corners ────────────────────────────────────────────────── */
+
+/* A 96-square file holding an 86-row picture 5 rows down, black around it,
+ * the way the imaging tool pads a screenshot. */
+static void test_a_letterboxed_picture_is_rounded_at_its_own_corners(void)
+{
+    ui_inset_t in;
+    size_t y;
+    size_t x;
+    int16_t b;
+
+    for (y = 0; y < IMG; y++) {
+        for (x = 0; x < IMG; x++) {
+            img[y * IMG + x] = (y >= 5 && y < 91) ? 0xABCD : 0;
+        }
+    }
+    ui_inset_begin(&in, IMG, IMG);
+    for (b = 0; b < IMG; b += 16) {
+        ui_round_inset_565(&in, img + (size_t)b * IMG, b, 16, UI_IMG_R, 0);
+    }
+    TEST_ASSERT_TRUE(in.found);
+    TEST_ASSERT_EQUAL_INT16(5, in.top);
+    TEST_ASSERT_EQUAL_INT16(0, in.left);
+    /* The picture's top-left and bottom-right corners, not the file's. */
+    TEST_ASSERT_EQUAL_HEX16(0, img[5 * IMG + 0]);
+    TEST_ASSERT_EQUAL_HEX16(0, img[90 * IMG + 95]);
+    TEST_ASSERT_EQUAL_HEX16(0xABCD, img[5 * IMG + UI_IMG_R]);
+    TEST_ASSERT_EQUAL_HEX16(0xABCD, img[(5 + UI_IMG_R) * IMG + 0]);
+    TEST_ASSERT_EQUAL_HEX16(0xABCD, img[48 * IMG + 0]);
+}
+
+static void test_an_all_black_image_is_left_alone(void)
+{
+    ui_inset_t in;
+    size_t i;
+
+    for (i = 0; i < IMG * IMG; i++) {
+        img[i] = 0;
+    }
+    ui_inset_begin(&in, IMG, IMG);
+    ui_round_inset_565(&in, img, 0, IMG, UI_IMG_R, 0);
+    TEST_ASSERT_FALSE(in.found);
+    for (i = 0; i < IMG * IMG; i++) {
+        TEST_ASSERT_EQUAL_HEX16(0, img[i]);
+    }
+}
+
 int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_the_pill_hugs_a_short_label);
-    RUN_TEST(test_a_bold_pill_is_one_pixel_wider);
     RUN_TEST(test_an_overflowing_label_is_held_to_max_w);
     RUN_TEST(test_the_pill_is_one_white_round_fill_of_half_its_height);
     RUN_TEST(test_the_pill_is_built_offscreen_at_its_own_size);
-    RUN_TEST(test_bold_is_two_transparent_passes_a_pixel_apart);
-    RUN_TEST(test_a_dim_label_is_one_pass_in_the_dim_on_pill_grey);
+    RUN_TEST(test_the_label_is_one_transparent_black_pass);
+    RUN_TEST(test_a_dim_label_is_in_the_dim_on_pill_grey);
     RUN_TEST(test_a_marquee_moves_the_text_and_not_the_pill);
     RUN_TEST(test_without_a_buffer_the_marquee_is_ignored_and_the_text_fits);
     RUN_TEST(test_a_plain_row_and_a_pill_start_their_text_at_one_x);
@@ -623,7 +675,7 @@ int main(void)
     RUN_TEST(test_two_hints_right_align_and_a_word_button_stretches);
     RUN_TEST(test_hints_that_do_not_fit_are_dropped_from_the_end);
     RUN_TEST(test_the_notice_title_is_red_only_for_an_error);
-    RUN_TEST(test_a_long_notice_title_wraps_in_font_2);
+    RUN_TEST(test_a_long_notice_title_wraps_in_the_list_font);
     RUN_TEST(test_a_notice_without_hints_has_no_footer_and_a_four_row_body);
     RUN_TEST(test_a_notice_with_hints_ends_in_the_footer);
     RUN_TEST(test_the_top_band_loses_its_corner_pixels_only);
@@ -631,5 +683,8 @@ int main(void)
     RUN_TEST(test_the_bottom_band_rounds_the_last_corner);
     RUN_TEST(test_a_one_row_band_masks_only_its_own_corner_run);
     RUN_TEST(test_one_row_bands_round_an_overview_row_by_row);
+    RUN_TEST(test_text_is_centred_on_its_capitals_and_kept_in_its_box);
+    RUN_TEST(test_a_letterboxed_picture_is_rounded_at_its_own_corners);
+    RUN_TEST(test_an_all_black_image_is_left_alone);
     return UNITY_END();
 }

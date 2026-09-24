@@ -49,31 +49,32 @@ static const char* const ROW_LABELS[MENU_ENTRIES] = {
     "Reset",
 };
 
-// What each row does, in the grey line over the hints. One font-1 row each:
-// 43 characters at most across the window.
+// What each row does, in the grey line over the hints. One line of prose
+// each, which at 9pt is about 28 characters across the window.
 static const char* const ROW_HELP[MENU_ENTRIES] = {
     "Back to the game.",
-    "Save or load a snapshot of the game.",
+    "Save or load this moment.",
     "Read the scanned manual.",
-    "Cover, screenshot and description.",
-    "Tint for original Game Boy games.",
-    "Also Select + Up/Down in a game.",
-    "Also Select + Right/Left in a game.",
-    "Button combos that work in a game.",
-    "Restart the game from power-on.",
+    "Cover, screenshot and story.",
+    "Tint for Game Boy games.",
+    "Also Select + Up/Down.",
+    "Also Select + Left/Right.",
+    "Combos that work in a game.",
+    "Restart from power-on.",
 };
-#define HELP_NO_MANUAL "No manual on the card for this game."
+#define HELP_NO_MANUAL "No manual for this game."
 
 // What the buttons do on the list: A acts on an action row, Left and Right
-// adjust a value row, and B always resumes.
+// adjust a value row, and B always resumes. B comes first, as it sits on the
+// console.
 static const ui_hint_t HINTS_ACTION[] = {
-    { "A", "Select" }, { "B", "Resume" },
+    { "B", "Resume" }, { "A", "Select" },
 };
 static const ui_hint_t HINTS_VALUE[] = {
-    { "L/R", "Adjust" }, { "B", "Resume" },
+    { "B", "Resume" }, { "L/R", "Adjust" },
 };
-static const ui_hint_t HINTS_PAGE[] = { { "U/D", "Scroll" }, { "B", "Back" } };
-static const ui_hint_t HINTS_CHOOSE[] = { { "A", "Select" }, { "B", "Back" } };
+static const ui_hint_t HINTS_PAGE[] = { { "B", "Back" }, { "U/D", "Scroll" } };
+static const ui_hint_t HINTS_CHOOSE[] = { { "B", "Back" }, { "A", "Select" } };
 #define N_HINTS(a) ((uint8_t)(sizeof(a) / sizeof((a)[0])))
 
 // Whether the running cartridge has a manual on the card, settled once each
@@ -206,28 +207,29 @@ static void draw_hotkeys()
 #define CART_BAND_ROWS 16
 #define CART_BAND_PX   (CART_ART_W * CART_BAND_ROWS)
 
-// Where one image's bands are going: its left edge, its top, its width and
-// its height.
+// Where one image's bands are going: its left edge, its top and its width,
+// and the picture's box inside the file as the bands reveal it.
 typedef struct cart_blit_s {
     int16_t x;
     int16_t y;
     int16_t w;
-    int16_t h;
+    ui_inset_t in;
 } cart_blit_t;
 
 // Each band is its own small image at its own height, so the canvas never
-// needs the whole picture. The theme rounds every image's corners, which only
-// touches the first and last bands. setSwapBytes(true) is the resting state
-// display_bus_acquire() leaves in force and the .565 files are little-endian,
-// so there is no swap to do.
+// needs the whole picture. The theme rounds every image's corners — the
+// picture's, which a letterboxed screenshot has inside its file — and that
+// only touches the bands at its top and bottom. setSwapBytes(true) is the
+// resting state display_bus_acquire() leaves in force and the .565 files are
+// little-endian, so there is no swap to do.
 static void blit_band(void* ctx, const uint16_t* px, size_t row0, size_t rows)
 {
-    const cart_blit_t* at = (const cart_blit_t*)ctx;
+    cart_blit_t* at = (cart_blit_t*)ctx;
 
     // The band buffer is the one this file allocated and handed the stream;
     // it is only const on the way back.
-    ui_round_corners_565((uint16_t*)px, at->w, at->h, (int16_t)row0,
-                         (int16_t)rows, UI_IMG_R, UI_COL_BG);
+    ui_round_inset_565(&at->in, (uint16_t*)px, (int16_t)row0, (int16_t)rows,
+                       UI_IMG_R, UI_COL_BG);
     cv->image(cv->ctx, at->x, (int16_t)(at->y + row0), at->w, (int16_t)rows,
               px, 0, (int16_t)rows);
 }
@@ -318,12 +320,14 @@ static void draw_cart_info(const menu_cart_info_t* info, char** desc,
         // no swap to do here.
         px = (uint16_t*)malloc(CART_BAND_PX * sizeof(uint16_t));
         if (px) {
-            cart_blit_t at = { x, y, CART_ART_W, CART_ART_H };
+            cart_blit_t at = { x, y, CART_ART_W, {} };
 
+            ui_inset_begin(&at.in, CART_ART_W, CART_ART_H);
             art_ok = sd_media_stream(ART_PATH, name, px, CART_ART_W,
                                      CART_ART_H, CART_BAND_ROWS, blit_band,
                                      &at);
             at.x = (int16_t)(x + CART_ART_W + MENU_CART_GAP);
+            ui_inset_begin(&at.in, CART_ART_W, CART_ART_H);
             shot_ok = sd_media_stream(SHOT_PATH, name, px, CART_ART_W,
                                       CART_ART_H, CART_BAND_ROWS, blit_band,
                                       &at);
@@ -355,7 +359,7 @@ static void draw_cart_info(const menu_cart_info_t* info, char** desc,
         // Whatever is left between the art and the footer, as many lines as
         // fit. A taller geometry spends it on more of the description rather
         // than on gap.
-        menu_band_fit(&geom, text, y, band);
+        menu_band_fit(cv, &geom, text, y, band);
         menu_draw_band(cv, band);
         *desc = text;
     }
@@ -479,27 +483,42 @@ static void page_input(menu_band_t* band)
 // the cartridge RAM, loading one rewinds the battery save too, so a load
 // always asks first, and so does a save that would replace a state.
 
-// The snapshot's top, under the header, and where the choices start under
-// it.
-#define STATE_THUMB_Y (MENU_TOP + 4)
-#define STATE_BARS_Y  (STATE_THUMB_Y + EMU_THUMB_H + 8)
+// The snapshot is stored at half size and drawn at twice that, which is the
+// Game Boy's own screen size, right-aligned under the header; the choices
+// stand in a column to its left.
+#define STATE_SCALE   2
+#define STATE_SHOW_W  (EMU_THUMB_W * STATE_SCALE)
+#define STATE_SHOW_H  (EMU_THUMB_H * STATE_SCALE)
+#define STATE_TOP     (UI_HEADER_H + 4)
+#define STATE_SHOW_X  (GAME_W - 8 - STATE_SHOW_W)
+#define STATE_COL_W   (STATE_SHOW_X - 8 - UI_PAD)
 // 80 x 24 x 2 is 3,840 bytes; three bands make the snapshot.
 #define STATE_BAND_ROWS 24
 
-// Up and Down between n bars at STATE_BARS_Y, A to pick one, B to back out.
-// Returns the bar picked, or -1 for B. A dimmed bar can be highlighted but
-// not picked. Starts with every button up, so a press still held from the
-// screen before cannot pick anything here.
-static int choose(const char* const* labels, const bool* off, uint8_t n,
-                  uint8_t cursor)
+// n choices from y0, w wide, the cursor's in a pill.
+static void draw_choices(const char* const* labels, const bool* off,
+                         uint8_t n, uint8_t cursor, int16_t y0, int16_t w)
 {
-    const int16_t y0 = STATE_BARS_Y;
+    for (uint8_t i = 0; i < n; i++) {
+        menu_draw_choice(cv, (int16_t)(y0 + i * MENU_ROW_H), w, labels[i],
+                         i == cursor, off && off[i]);
+    }
+}
+
+// Up and Down between n choices at y0, A to pick one, B to back out, with
+// the highlighted one's help over the hints. Returns the choice picked, or -1
+// for B. A dimmed choice can be highlighted but not picked. Starts with
+// every button up, so a press still held from the screen before cannot pick
+// anything here.
+static int choose(const char* const* labels, const char* const* helps,
+                  const bool* off, uint8_t n, uint8_t cursor, int16_t y0,
+                  int16_t w)
+{
     uint16_t prev = 0;
 
-    for (uint8_t i = 0; i < n; i++) {
-        menu_draw_bar(cv, &geom, (int16_t)(y0 + i * MENU_ROW_H), labels[i],
-                      NULL, i == cursor, off && off[i]);
-    }
+    draw_choices(labels, off, n, cursor, y0, w);
+    menu_draw_footer(cv, &geom, helps[cursor], HINTS_CHOOSE,
+                     N_HINTS(HINTS_CHOOSE));
     wait_release();
     for (;;) {
         uint16_t word;
@@ -525,26 +544,31 @@ static int choose(const char* const* labels, const bool* off, uint8_t n,
             next = (uint8_t)(cursor + 1);
         }
         if (next != cursor) {
-            menu_draw_bar(cv, &geom, (int16_t)(y0 + cursor * MENU_ROW_H),
-                          labels[cursor], NULL, false, off && off[cursor]);
-            menu_draw_bar(cv, &geom, (int16_t)(y0 + next * MENU_ROW_H),
-                          labels[next], NULL, true, off && off[next]);
+            menu_draw_choice(cv, (int16_t)(y0 + cursor * MENU_ROW_H), w,
+                             labels[cursor], false, off && off[cursor]);
+            menu_draw_choice(cv, (int16_t)(y0 + next * MENU_ROW_H), w,
+                             labels[next], true, off && off[next]);
             cursor = next;
+            menu_draw_footer(cv, &geom, helps[cursor], HINTS_CHOOSE,
+                             N_HINTS(HINTS_CHOOSE));
         }
         delay(MENU_POLL_MS);
     }
 }
 
-// The question in the space the snapshot takes, then No and Yes. The cursor
-// starts on No, so nothing is lost to a press that was not meant for this.
-static bool confirm(const char* question)
+// The question under the header, then No and Yes under it, each saying what
+// it does. The cursor starts on No, so nothing is lost to a press that was
+// not meant for this.
+static bool confirm(const char* question, const char* const* helps)
 {
     static const char* const LABELS[2] = { "No", "Yes" };
+    const int16_t y0 = (int16_t)(STATE_TOP +
+                                 3 * UI_ROW_PITCH(ui_font_height(UI_FONT_TEXT)));
 
     menu_draw_title(cv, &geom, "Save State");
     menu_draw_question(cv, &geom, question);
-    menu_draw_footer(cv, &geom, NULL, HINTS_CHOOSE, N_HINTS(HINTS_CHOOSE));
-    return choose(LABELS, NULL, 2, 0) == 1;
+    return choose(LABELS, helps, NULL, 2, 0, y0,
+                  (int16_t)(geom.w - 2 * UI_PAD)) == 1;
 }
 
 static void notice(const char* msg)
@@ -594,30 +618,54 @@ static bool state_load(const char* rom_path)
            && emu_state_load(vfs);
 }
 
-// The snapshot centred under the title, or a line saying there is none.
+// One band of the half-size snapshot, drawn at STATE_SCALE: each source row
+// doubled across into one screen row's buffer, pushed STATE_SCALE times, and
+// each of those rounded as its own one-row band of the scaled picture.
+static uint16_t* show_row; // STATE_SHOW_W pixels, while the screen draws
+
+static void blit_thumb(void* ctx, const uint16_t* px, size_t row0,
+                       size_t rows)
+{
+    (void)ctx;
+    for (size_t r = 0; r < rows; r++) {
+        const uint16_t* src = px + r * EMU_THUMB_W;
+
+        for (int16_t k = 0; k < STATE_SCALE; k++) {
+            int16_t y = (int16_t)((row0 + r) * STATE_SCALE + k);
+
+            for (int16_t x = 0; x < STATE_SHOW_W; x++) {
+                show_row[x] = src[x / STATE_SCALE];
+            }
+            ui_round_corners_565(show_row, STATE_SHOW_W, STATE_SHOW_H, y, 1,
+                                 UI_IMG_R, UI_COL_BG);
+            cv->image(cv->ctx, STATE_SHOW_X, (int16_t)(STATE_TOP + y),
+                      STATE_SHOW_W, 1, show_row, 0, 1);
+        }
+    }
+}
+
+// The snapshot at the right under the title, or a slot saying there is none.
 static void draw_state(const char* rom_path, bool have)
 {
-    const int16_t x = (int16_t)((geom.w - EMU_THUMB_W) / 2);
-    const int16_t y = STATE_THUMB_Y;
     bool shown = false;
 
     menu_draw_title(cv, &geom, "Save State");
-    menu_draw_footer(cv, &geom, "One saved state per game, beside its save.",
-                     HINTS_CHOOSE, N_HINTS(HINTS_CHOOSE));
     if (have) {
         uint16_t* px = (uint16_t*)malloc(EMU_THUMB_W * STATE_BAND_ROWS
                                          * sizeof(uint16_t));
-        cart_blit_t at = { x, y, EMU_THUMB_W, EMU_THUMB_H };
 
-        if (px) {
+        show_row = (uint16_t*)malloc(STATE_SHOW_W * sizeof(uint16_t));
+        if (px && show_row) {
             shown = sd_thumb_stream(rom_path, px, EMU_THUMB_W, EMU_THUMB_H,
-                                    STATE_BAND_ROWS, blit_band, &at);
-            free(px);
+                                    STATE_BAND_ROWS, blit_thumb, NULL);
         }
+        free(show_row);
+        show_row = NULL;
+        free(px);
     }
     if (!shown) {
-        menu_draw_slot(cv, x, y, EMU_THUMB_W, EMU_THUMB_H,
-                       have ? "No snapshot" : "No saved state");
+        menu_draw_slot(cv, STATE_SHOW_X, STATE_TOP, STATE_SHOW_W,
+                       STATE_SHOW_H, have ? "No snapshot" : "No saved state");
     }
 }
 
@@ -625,7 +673,13 @@ static void draw_state(const char* rom_path, bool have)
 // where the state left it and the only thing left to do is play it.
 static bool state_screen(const menu_cart_info_t* info)
 {
-    static const char* const LABELS[3] = { "Save", "Load", "Back" };
+    static const char* const LABELS[2] = { "Save", "Load" };
+    static const char* const REPLACE[2] = {
+        "Keep the state you saved.", "Replace it with this moment.",
+    };
+    static const char* const LOAD[2] = {
+        "Keep playing from here.", "Progress since then is lost.",
+    };
     uint8_t cursor = 0;
 
     if (!info) {
@@ -633,17 +687,21 @@ static bool state_screen(const menu_cart_info_t* info)
     }
     for (;;) {
         const bool have = sd_state_exists(info->path);
-        const bool off[3] = { false, !have, false };
+        const bool off[2] = { false, !have };
+        const char* const helps[2] = {
+            have ? "Replace the saved moment." : "Save the game as it is now.",
+            have ? "Back to the saved moment." : "No saved state yet.",
+        };
         int pick;
 
         draw_state(info->path, have);
-        pick = choose(LABELS, off, 3, cursor);
-        if (pick < 0 || pick == 2) {
+        pick = choose(LABELS, helps, off, 2, cursor, STATE_TOP, STATE_COL_W);
+        if (pick < 0) {
             return false;
         }
         cursor = (uint8_t)pick;
         if (pick == 0) {
-            if (have && !confirm("Replace saved state?")) {
+            if (have && !confirm("Replace saved state?", REPLACE)) {
                 continue;
             }
             if (!state_save(info->path)) {
@@ -651,7 +709,7 @@ static bool state_screen(const menu_cart_info_t* info)
             }
         } else {
             if (!confirm("Load state? Progress since it was saved will "
-                         "be lost.")) {
+                         "be lost.", LOAD)) {
                 continue;
             }
             if (state_load(info->path)) {

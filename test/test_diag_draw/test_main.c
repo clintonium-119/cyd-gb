@@ -215,8 +215,9 @@ static void fk_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
         f->seen[f->seen_n][sizeof f->seen[0] - 1] = '\0';
         f->seen_n++;
     }
-    /* The box the driver will clip into: rows lines at the font's pitch. */
-    h = (int16_t)(rows * UI_ROW_PITCH(ui_font_height(font)));
+    /* The box the driver will clip into: rows lines at the font's pitch, the
+     * last without the gap under it. */
+    h = (int16_t)(rows * UI_ROW_PITCH(ui_font_height(font)) - 2);
     if (y >= f->help_y && y + h <= f->help_y + UI_HELP_H) {
         f->help_texts++;
         if (strlen(s) * UI_FONT_SMALL_ADV > (size_t)(f->w - 2 * UI_PAD)) {
@@ -411,9 +412,9 @@ static void test_the_layout_accepts_every_window(void)
 {
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(GEOM_24_W, GEOM_24_H, &geom));
     TEST_ASSERT_EQUAL_INT16(DIAG_HEADER_H + 2, geom.body_y);
-    /* (216 - 18 - 10 - 20) / 10 = 16 rows, well past the eight a page
+    /* (216 - 18 - 22 - 28) / 10 = 14 rows, well past the eight a page
      * needs. */
-    TEST_ASSERT_EQUAL_UINT8(16, geom.rows);
+    TEST_ASSERT_EQUAL_UINT8(14, geom.rows);
     TEST_ASSERT_EQUAL_INT16(GEOM_24_W / 8, geom.bar_w);
     TEST_ASSERT_EQUAL_INT16(GEOM_24_H - UI_FOOT_H, geom.foot_y);
     TEST_ASSERT_EQUAL_INT16(GEOM_24_H - UI_FOOT_H - UI_HELP_H, geom.help_y);
@@ -422,23 +423,23 @@ static void test_the_layout_accepts_every_window(void)
 
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(GEOM_26_W, GEOM_26_H, &geom));
     TEST_ASSERT_EQUAL_INT16(DIAG_HEADER_H + 2, geom.body_y);
-    /* (234 - 28 - 20) / 10 = 18. */
-    TEST_ASSERT_EQUAL_UINT8(18, geom.rows);
+    /* (234 - 40 - 28) / 10 = 16. */
+    TEST_ASSERT_EQUAL_UINT8(16, geom.rows);
     TEST_ASSERT_EQUAL_INT16(GEOM_26_W / 8, geom.bar_w);
 
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(GEOM_53_W, GEOM_53_H, &geom));
     TEST_ASSERT_EQUAL_INT16(DIAG_HEADER_H + 2, geom.body_y);
-    /* (240 - 28 - 20) / 10 = 19, and the footer is inside the window. */
-    TEST_ASSERT_EQUAL_UINT8(19, geom.rows);
+    /* (240 - 40 - 28) / 10 = 17, and the footer is inside the window. */
+    TEST_ASSERT_EQUAL_UINT8(17, geom.rows);
     TEST_ASSERT_EQUAL_INT16(GEOM_53_W / 8, geom.bar_w);
-    TEST_ASSERT_EQUAL_INT16(212, geom.help_y);
+    TEST_ASSERT_EQUAL_INT16(200, geom.help_y);
     TEST_ASSERT_EQUAL_INT16(222, geom.foot_y);
     TEST_ASSERT_TRUE(geom.foot_y + UI_FOOT_H <= GEOM_53_H);
 }
 
 static void test_the_layout_refuses_a_window_with_too_few_rows(void)
 {
-    /* (60 - 28 - 20) / 10 = 1 row, under DIAG_MIN_ROWS. */
+    /* 60 - 40 leaves less than a row under the 28 px header. */
     TEST_ASSERT_EQUAL_INT(DIAG_ERR_ARGS, diag_layout(100, 60, &geom));
     TEST_ASSERT_EQUAL_INT(DIAG_ERR_ARGS,
         diag_layout(GEOM_24_W, GEOM_24_H, NULL));

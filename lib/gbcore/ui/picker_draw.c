@@ -12,15 +12,11 @@
 #define PICKER_ART_GAP 2
 
 /* The right edge of the list's title column: its rows' backgrounds end here,
- * and the image column starts. */
+ * and the image column starts. A row starts at the window's inset. */
 #define TITLE_COL_W(g) ((int16_t)((g)->list_art_x - 4))
+#define ROW_W(g)       ((int16_t)(TITLE_COL_W(g) - UI_PAD))
 
 /* ─── strings ─────────────────────────────────────────────────────────────── */
-
-static const char* const LIST_HEADER[] = {
-    "Choose a Game",      /* PICKER_MODE_PENDING   */
-    "Setup: pick a game", /* PICKER_MODE_IMMEDIATE */
-};
 
 static const char* const ACTION_LABEL[] = {
     "",                     /* PICKER_ROW_GAME — the catalog title  */
@@ -30,10 +26,10 @@ static const char* const ACTION_LABEL[] = {
 
 /* What confirming this row will do, in one line under the title. */
 static const char* const DETAIL_TARGET[] = {
-    "Your wildcard becomes this game.",
-    "This blank cart becomes this game.",
-    "The write you lined up is dropped.",
-    "Setup ends. Only a MENU cart reopens this.",
+    "Writes it to your wildcard.",
+    "Writes it to this blank cart.",
+    "Drops the write you lined up.",
+    "Ends setup. MENU reopens it.",
 };
 #define TARGET_WILD   0
 #define TARGET_BLANK  1
@@ -46,8 +42,8 @@ static const ui_hint_t LIST_HINTS[] = {
     { "A", "Select" },
 };
 static const ui_hint_t DETAIL_HINTS[] = {
-    { "A", "Hold to confirm" },
     { "B", "Back" },
+    { "A", "Hold to confirm" },
 };
 #define N_HINTS(a) ((uint8_t)(sizeof(a) / sizeof((a)[0])))
 
@@ -59,26 +55,32 @@ static const ui_hint_t DETAIL_HINTS[] = {
 
 /* ─── fonts ───────────────────────────────────────────────────────────────── */
 
-static uint8_t small_pitch(void)
+static uint8_t desc_pitch(void)
 {
-    return (uint8_t)UI_ROW_PITCH(ui_font_height(UI_FONT_SMALL));
+    return (uint8_t)UI_ROW_PITCH(ui_font_height(UI_FONT_DESC));
+}
+
+static uint8_t title_pitch(void)
+{
+    return (uint8_t)UI_ROW_PITCH(ui_font_height(UI_FONT_LIST));
 }
 
 /* ─── geometry ────────────────────────────────────────────────────────────── */
 
 int picker_layout(int16_t w, int16_t h, picker_layout_t* out)
 {
-    uint8_t pitch = small_pitch();
+    uint8_t pitch = desc_pitch();
 
     if (out == NULL || pitch == 0) {
         return PICKER_ERR_ARGS;
     }
     memset(out, 0, sizeof(*out));
+    memset(out->adv.w, 8, sizeof(out->adv.w));
 
     /* An image plus a column narrow enough to still wrap into, and both of
-     * the list's images stacked between its header and the help line. */
+     * the list's images stacked above the help line. */
     if (w < (int16_t)(PICKER_ART_W + 16 + 48) ||
-        h < (int16_t)(PICKER_HEADER_H + 2 * PICKER_ART_H + PICKER_ART_GAP +
+        h < (int16_t)(PICKER_LIST_TOP + 2 * PICKER_ART_H + PICKER_ART_GAP +
                       UI_HELP_H + UI_FOOT_H)) {
         return PICKER_ERR_ARGS;
     }
@@ -88,22 +90,21 @@ int picker_layout(int16_t w, int16_t h, picker_layout_t* out)
     out->foot_y = (int16_t)(h - UI_FOOT_H);
     out->help_y = (int16_t)(out->foot_y - UI_HELP_H);
 
-    out->rows = (uint8_t)((out->help_y - PICKER_HEADER_H) / PICKER_ROW_H);
+    out->rows = (uint8_t)((out->help_y - PICKER_LIST_TOP) / PICKER_ROW_H);
     /* The image column hugs the right edge; the titles get the rest, and a
      * title's text sits the pill's padding inside it. */
     out->list_art_x = (int16_t)(w - 4 - PICKER_ART_W);
-    out->list_art_y = PICKER_HEADER_H;
+    out->list_art_y = PICKER_LIST_TOP;
     out->list_shot_y = (int16_t)(out->list_art_y + PICKER_ART_H + PICKER_ART_GAP);
-    out->list_w = (int16_t)(TITLE_COL_W(out) - 2 * UI_PILL_PAD);
+    out->list_w = (int16_t)(ROW_W(out) - 2 * UI_PILL_PAD);
 
     /* Cart Info's page: title, then the images, then the band, each 8 px
      * from the next except the title's own 2 px row gap. */
     out->detail_x = PICKER_DETAIL_X;
     out->detail_w = (int16_t)(w - 2 * PICKER_DETAIL_X);
-    out->title_y = PICKER_DETAIL_X;
-    out->media_y = (int16_t)(out->title_y +
-                             PICKER_TITLE_ROWS * UI_ROW_PITCH(
-                                 ui_font_height(UI_FONT_ROW)) + 2);
+    out->title_y = UI_PAD;
+    out->media_y = (int16_t)(out->title_y + PICKER_TITLE_ROWS * title_pitch() +
+                             2);
     out->shot_x = (int16_t)(out->detail_x + PICKER_ART_W + PICKER_DETAIL_GAP);
     out->band_y = (int16_t)(out->media_y + PICKER_ART_H + PICKER_DETAIL_GAP);
     out->band_h = (int16_t)(h - PICKER_DETAIL_FOOT_H - 2 - out->band_y);
@@ -111,57 +112,111 @@ int picker_layout(int16_t w, int16_t h, picker_layout_t* out)
         return PICKER_ERR_ARGS;
     }
     out->band_rows = (uint8_t)(out->band_h / pitch);
-    out->desc_cols = (uint8_t)(out->detail_w / UI_FONT_SMALL_ADV);
 
-    if (out->rows < PICKER_MIN_ROWS || out->band_rows < 1 ||
-        out->desc_cols < PICKER_DESC_MIN_COLS) {
+    if (out->rows < PICKER_MIN_ROWS || out->band_rows < 1) {
         return PICKER_ERR_ARGS;
     }
     return PICKER_OK;
 }
 
+void picker_adv_measure(const ui_canvas_t* cv, uint8_t font,
+                        picker_adv_t* out)
+{
+    char one[2] = { 0, 0 };
+    char two[3] = { 0, 0, 0 };
+    uint8_t i;
+
+    if (cv == NULL || cv->measure == NULL || out == NULL) {
+        return;
+    }
+    /* A string's measured width counts its last glyph's ink, not its
+     * advance, so the advance is what a second copy adds. */
+    for (i = 0; i < sizeof(out->w); i++) {
+        int16_t d;
+
+        one[0] = two[0] = two[1] = (char)(' ' + i);
+        d = (int16_t)(cv->measure(cv->ctx, two, font) -
+                      cv->measure(cv->ctx, one, font));
+        out->w[i] = (uint8_t)((d > 0) ? d : 0);
+    }
+}
+
+void picker_layout_measure(picker_layout_t* g, const ui_canvas_t* cv)
+{
+    if (g != NULL) {
+        picker_adv_measure(cv, UI_FONT_DESC, &g->adv);
+    }
+}
+
 /* ─── description word wrap ───────────────────────────────────────────────── */
 
 /*
- * How many characters of `s + at` belong on one line of `cols`, and how many
- * to skip before the next line starts.
+ * How many characters of `s + at` belong on one line `max_w` wide, and how
+ * many to skip before the next line starts.
  *
  * A newline that fits ends the line there, and is skipped rather than drawn;
  * a newline at the start of the remainder is an empty line, which is how the
  * blank line between two paragraphs is drawn. Otherwise the break is the last
  * space that fits, so prose does not break mid-word the way a filename may. A
- * word longer than the column is broken at the column, because the
+ * word longer than the line is broken where the line runs out, because the
  * alternative is a line that cannot be drawn. The skipped space itself is not
  * drawn.
  *
- * Exact because font 1's advance is fixed: `cols` characters measure
- * cols * UI_FONT_SMALL_ADV pixels, which is the width the caller asked for.
+ * Widths are summed advances, `a` per printable character, or one per
+ * character when `a` is NULL, which makes max_w a column count. A summed
+ * advance is never less than the driver's measure of the same string, so a
+ * line this breaks is one the driver draws whole.
  */
-static void wrap_one(const char* s, size_t at, uint8_t cols, size_t* take,
-                     size_t* skip)
+static uint16_t adv_of(const picker_adv_t* a, char c)
+{
+    unsigned u = (unsigned char)c;
+
+    if (a == NULL) {
+        return 1;
+    }
+    if (u < 32 || u > 126) {
+        u = '?';
+    }
+    return a->w[u - 32];
+}
+
+static void wrap_one(const char* s, size_t at, const picker_adv_t* a,
+                     int16_t max_w, size_t* take, size_t* skip)
 {
     size_t len = strlen(s);
     size_t left = len - at;
     size_t last_space = 0;
+    size_t cols = 0;
+    int32_t used = 0;
     size_t i;
+
+    /* How many characters fit: the column count the rules below use. */
+    while (cols < left && s[at + cols] != '\n' &&
+           used + adv_of(a, s[at + cols]) <= max_w) {
+        used += adv_of(a, s[at + cols]);
+        cols++;
+    }
+    if (cols == 0 && left > 0 && s[at] != '\n') {
+        cols = 1;
+    }
 
     /* One past the column, like the space below: a newline right after a
      * full-width line ends that line rather than an earlier space. */
-    for (i = 0; i <= (size_t)cols && i < left; i++) {
+    for (i = 0; i <= cols && i < left; i++) {
         if (s[at + i] == '\n') {
             *take = i;
             *skip = i + 1;
             return;
         }
     }
-    if (left <= (size_t)cols) {
+    if (left <= cols) {
         *take = left;
         *skip = left;
         return;
     }
     /* One past the column, so a space landing exactly at the break is used
      * rather than pushed to the next line. */
-    for (i = 0; i <= (size_t)cols; i++) {
+    for (i = 0; i <= cols; i++) {
         if (s[at + i] == ' ') {
             last_space = i;
         }
@@ -175,13 +230,14 @@ static void wrap_one(const char* s, size_t at, uint8_t cols, size_t* take,
     *skip = cols;
 }
 
-uint16_t picker_desc_lines(const char* s, uint8_t cols)
+uint16_t picker_desc_lines_px(const char* s, const picker_adv_t* a,
+                              int16_t max_w)
 {
     size_t at = 0;
     size_t len;
     uint16_t lines = 0;
 
-    if (s == NULL || cols == 0) {
+    if (s == NULL || max_w <= 0) {
         return 0;
     }
     len = strlen(s);
@@ -189,7 +245,7 @@ uint16_t picker_desc_lines(const char* s, uint8_t cols)
         size_t take = 0;
         size_t skip = 0;
 
-        wrap_one(s, at, cols, &take, &skip);
+        wrap_one(s, at, a, max_w, &take, &skip);
         if (skip == 0) {
             break;
         }
@@ -199,14 +255,14 @@ uint16_t picker_desc_lines(const char* s, uint8_t cols)
     return lines;
 }
 
-bool picker_desc_line(const char* s, uint8_t cols, uint16_t line, char* out,
-                      size_t out_sz)
+bool picker_desc_line_px(const char* s, const picker_adv_t* a, int16_t max_w,
+                         uint16_t line, char* out, size_t out_sz)
 {
     size_t at = 0;
     size_t len;
     uint16_t n = 0;
 
-    if (s == NULL || out == NULL || out_sz == 0 || cols == 0) {
+    if (s == NULL || out == NULL || out_sz == 0 || max_w <= 0) {
         return false;
     }
     out[0] = '\0';
@@ -215,7 +271,7 @@ bool picker_desc_line(const char* s, uint8_t cols, uint16_t line, char* out,
         size_t take = 0;
         size_t skip = 0;
 
-        wrap_one(s, at, cols, &take, &skip);
+        wrap_one(s, at, a, max_w, &take, &skip);
         if (skip == 0) {
             break;
         }
@@ -233,6 +289,17 @@ bool picker_desc_line(const char* s, uint8_t cols, uint16_t line, char* out,
     return false;
 }
 
+uint16_t picker_desc_lines(const char* s, uint8_t cols)
+{
+    return picker_desc_lines_px(s, NULL, cols);
+}
+
+bool picker_desc_line(const char* s, uint8_t cols, uint16_t line, char* out,
+                      size_t out_sz)
+{
+    return picker_desc_line_px(s, NULL, cols, line, out, out_sz);
+}
+
 uint16_t picker_page_lines(const picker_layout_t* g, const char* desc)
 {
     uint16_t lines;
@@ -240,7 +307,7 @@ uint16_t picker_page_lines(const picker_layout_t* g, const char* desc)
     if (g == NULL) {
         return 0;
     }
-    lines = picker_desc_lines(desc, g->desc_cols);
+    lines = picker_desc_lines_px(desc, &g->adv, g->detail_w);
     return (lines > g->band_rows) ? lines : g->band_rows;
 }
 
@@ -281,18 +348,10 @@ static void draw_media(const ui_canvas_t* cv, int16_t x, int16_t y,
                    UI_COL_SLOT, UI_COL_BG);
     if (state == PICKER_MEDIA_MISSING) {
         cv->text(cv->ctx, missing, x,
-                 (int16_t)(y + PICKER_ART_H / 2 -
-                           ui_font_height(UI_FONT_SMALL) / 2),
-                 PICKER_ART_W, 1, UI_FONT_SMALL, UI_ALIGN_CENTER, UI_COL_DIM,
+                 (int16_t)(y + ui_text_dy(PICKER_ART_H, UI_FONT_HELP)),
+                 PICKER_ART_W, 1, UI_FONT_HELP, UI_ALIGN_CENTER, UI_COL_SUB,
                  UI_COL_SLOT);
     }
-}
-
-static void draw_header(const picker_t* p, const picker_layout_t* g,
-                        const ui_canvas_t* cv)
-{
-    ui_header(cv, g->w, LIST_HEADER[p->mode == PICKER_MODE_IMMEDIATE ? 1 : 0],
-              NULL);
 }
 
 /* The list's help line: the hovered game's blurb, first row only. */
@@ -312,9 +371,9 @@ static void draw_list_media(const picker_t* p, const picker_layout_t* g,
     uint16_t cursor = list_cursor(&p->list);
 
     if (cursor >= p->row_count || p->rows[cursor].kind != PICKER_ROW_GAME) {
-        cv->fill(cv->ctx, TITLE_COL_W(g), PICKER_HEADER_H,
+        cv->fill(cv->ctx, TITLE_COL_W(g), PICKER_LIST_TOP,
                  (int16_t)(g->w - TITLE_COL_W(g)),
-                 (int16_t)(g->help_y - PICKER_HEADER_H), UI_COL_BG);
+                 (int16_t)(g->help_y - PICKER_LIST_TOP), UI_COL_BG);
         return;
     }
     draw_media(cv, g->list_art_x, g->list_art_y, p->art_state, art,
@@ -325,7 +384,7 @@ static void draw_list_media(const picker_t* p, const picker_layout_t* g,
 
 /*
  * One list row, if it is on screen: white on black, or for the highlighted
- * one the theme's pill, bold, which scrolls a label too wide for it by
+ * one black in the theme's pill, which scrolls a label too wide for it by
  * marquee_px. Every row's text starts at the same x, so nothing shifts as the
  * pill moves.
  */
@@ -341,16 +400,16 @@ static void draw_row(const picker_t* p, const picker_layout_t* g,
         idx - first >= (uint16_t)g->rows) {
         return;
     }
-    y = (int16_t)(PICKER_HEADER_H + (idx - first) * PICKER_ROW_H);
+    y = (int16_t)(PICKER_LIST_TOP + (idx - first) * PICKER_ROW_H);
     label = row_label(p, idx, buf, sizeof(buf));
 
     if (idx != list_cursor(&p->list)) {
-        ui_row_text(cv, 0, y, TITLE_COL_W(g), PICKER_ROW_H, label, UI_FONT_ROW,
+        ui_row_text(cv, UI_PAD, y, ROW_W(g), PICKER_ROW_H, label, UI_FONT_LIST,
                     UI_COL_TEXT);
         return;
     }
-    ui_pill_row(cv, 0, y, TITLE_COL_W(g), PICKER_ROW_H, label, UI_FONT_ROW,
-                true, false, p->marquee_px);
+    ui_pill_row(cv, UI_PAD, y, ROW_W(g), PICKER_ROW_H, label, UI_FONT_LIST,
+                false, p->marquee_px);
 }
 
 static void draw_list(const picker_t* p, const picker_layout_t* g,
@@ -361,7 +420,6 @@ static void draw_list(const picker_t* p, const picker_layout_t* g,
     uint8_t i;
 
     cv->fill(cv->ctx, 0, 0, g->w, g->h, UI_COL_BG);
-    draw_header(p, g, cv);
     for (i = 0; i < g->rows; i++) {
         draw_row(p, g, cv, (uint16_t)(first + i));
     }
@@ -385,11 +443,10 @@ int16_t picker_row_overflow(const picker_t* p, const picker_layout_t* g,
     if (cursor >= p->row_count) {
         return 0;
     }
-    /* One more pixel for the bold pass; list_w is the text's room inside
-     * the widest pill. */
+    /* list_w is the text's room inside the widest pill. */
     over = (int16_t)(cv->measure(cv->ctx, row_label(p, cursor, buf, sizeof(buf)),
-                                 UI_FONT_ROW) +
-                     1 - g->list_w);
+                                 UI_FONT_LIST) -
+                     g->list_w);
     return (over > 0) ? over : 0;
 }
 
@@ -424,16 +481,16 @@ static int16_t detail_lift(const picker_t* p, const picker_layout_t* g,
                            const ui_canvas_t* cv)
 {
     if (cv->measure == NULL ||
-        cv->measure(cv->ctx, detail_title(p), UI_FONT_ROW) > g->detail_w) {
+        cv->measure(cv->ctx, detail_title(p), UI_FONT_LIST) > g->detail_w) {
         return 0;
     }
-    return (int16_t)UI_ROW_PITCH(ui_font_height(UI_FONT_ROW));
+    return (int16_t)title_pitch();
 }
 
 uint8_t picker_band_rows(const picker_t* p, const picker_layout_t* g,
                          const ui_canvas_t* cv)
 {
-    uint8_t pitch = small_pitch();
+    uint8_t pitch = desc_pitch();
 
     if (g == NULL) {
         return 0;
@@ -454,7 +511,7 @@ static void draw_band(const picker_t* p, const picker_layout_t* g,
                       const char* desc, const ui_canvas_t* cv)
 {
     char line[PICKER_DESC_LINE_MAX];
-    uint8_t pitch = small_pitch();
+    uint8_t pitch = desc_pitch();
     int16_t lift = detail_lift(p, g, cv);
     int16_t y = (int16_t)(g->band_y - lift);
     int16_t h = (int16_t)(g->band_h + lift);
@@ -468,45 +525,52 @@ static void draw_band(const picker_t* p, const picker_layout_t* g,
     }
     if (desc != NULL && desc[0] != '\0') {
         for (i = 0; i < rows; i++) {
-            if (!picker_desc_line(desc, g->desc_cols,
-                                  (uint16_t)(p->scroll + i), line,
-                                  sizeof(line))) {
+            if (!picker_desc_line_px(desc, &g->adv, g->detail_w,
+                                     (uint16_t)(p->scroll + i), line,
+                                     sizeof(line))) {
                 break;
             }
             cv->text(cv->ctx, line, g->detail_x, (int16_t)(y + i * pitch),
-                     g->detail_w, 1, UI_FONT_SMALL, UI_ALIGN_LEFT, UI_COL_TEXT,
+                     g->detail_w, 1, UI_FONT_DESC, UI_ALIGN_LEFT, UI_COL_SUB,
                      UI_COL_BG);
         }
     }
     if (p->scroll > 0) {
         cv->text(cv->ctx, SCROLL_BACK, mark_x, y, UI_FONT_SMALL_ADV, 1,
-                 UI_FONT_SMALL, UI_ALIGN_RIGHT, UI_COL_DIM, UI_COL_BG);
+                 UI_FONT_SMALL, UI_ALIGN_RIGHT, UI_COL_SUB, UI_COL_BG);
     }
     if (p->scroll < p->scroll_max) {
         cv->text(cv->ctx, SCROLL_MORE, mark_x,
                  (int16_t)(y + (rows - 1) * pitch), UI_FONT_SMALL_ADV, 1,
-                 UI_FONT_SMALL, UI_ALIGN_RIGHT, UI_COL_DIM, UI_COL_BG);
+                 UI_FONT_SMALL, UI_ALIGN_RIGHT, UI_COL_SUB, UI_COL_BG);
     }
 }
 
 /*
- * The hold bar, rounded like the pill: its track, and the part filled so far.
+ * The help line's band: what confirming does, or while A is held the hold
+ * bar in its place — rounded like the pill, its track and the part filled so
+ * far.
  *
  * `grow` is a hold tick's repaint: the fill only ever gets longer while A is
  * held, so the filled part is painted over what is already there and the
  * track is left alone. Blanking the track first on every 16 ms tick, under the
- * panel's own refresh, was the flicker. A release, or a full draw, lays the
- * track down again.
+ * panel's own refresh, was the flicker. The press that starts a hold lays the
+ * track down, and letting go puts the words back.
  */
 static void draw_bar(const picker_t* p, const picker_layout_t* g,
                      const ui_canvas_t* cv, bool grow)
 {
     uint8_t pct = picker_hold_pct(p);
-    int16_t y = (int16_t)(g->help_y - 2 - PICKER_BAR_H);
+    /* Level with the words it replaces: their capitals start a pixel down
+     * and run 12. */
+    int16_t y = (int16_t)(g->help_y + 2);
 
+    if (!p->hold_active) {
+        ui_help_line(cv, g->w, g->help_y, DETAIL_TARGET[detail_target(p)]);
+        return;
+    }
     if (!grow || pct == 0) {
-        cv->fill(cv->ctx, g->detail_x, y, g->detail_w, PICKER_BAR_H,
-                 UI_COL_BG);
+        cv->fill(cv->ctx, 0, g->help_y, g->w, UI_HELP_H, UI_COL_BG);
         cv->round_fill(cv->ctx, g->detail_x, y, g->detail_w, PICKER_BAR_H,
                        PICKER_BAR_H / 2, UI_COL_SLOT, UI_COL_BG);
     }
@@ -540,16 +604,15 @@ static void draw_detail(const picker_t* p, const picker_layout_t* g,
 
     /* White, as Cart Info draws its title. */
     cv->text(cv->ctx, detail_title(p), g->detail_x, g->title_y, g->detail_w,
-             PICKER_TITLE_ROWS, UI_FONT_ROW, UI_ALIGN_LEFT, UI_COL_TEXT,
+             PICKER_TITLE_ROWS, UI_FONT_LIST, UI_ALIGN_LEFT, UI_COL_TEXT,
              UI_COL_BG);
 
     draw_detail_media(p, g, art, shot, cv);
     draw_band(p, g, desc, cv);
 
-    /* How far the hold has got, what confirming does, and how to confirm it.
-     * No filename: the title already names the game. */
+    /* What confirming does, or how far the hold has got, and how to confirm
+     * it. No filename: the title already names the game. */
     draw_bar(p, g, cv, false);
-    ui_help_line(cv, g->w, g->help_y, DETAIL_TARGET[detail_target(p)]);
     ui_hint_bar(cv, g->w, g->foot_y, DETAIL_HINTS, N_HINTS(DETAIL_HINTS));
 }
 

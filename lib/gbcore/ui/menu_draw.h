@@ -21,6 +21,7 @@
 #include <stdint.h>
 
 #include "ui/canvas.h"
+#include "ui/picker_draw.h"
 #include "ui/theme_draw.h"
 
 #ifdef __cplusplus
@@ -28,10 +29,11 @@ extern "C" {
 #endif
 
 /* More entries than fit, so the list scrolls a window of MENU_VISIBLE of
- * them. 18 + 7 x 26 = 200, over the help line at 212. */
+ * them. The list has no header: 4 + 7 x 26 = 186, over the help line at
+ * 200. */
 #define MENU_VISIBLE 7
 #define MENU_ROW_H   26
-#define MENU_TOP     UI_HEADER_H /* the header above the first row */
+#define MENU_TOP     UI_PAD
 
 typedef struct menu_layout_s {
     int16_t w, h;
@@ -64,8 +66,8 @@ typedef struct menu_view_s {
     uint8_t n_hints;
 } menu_view_t;
 
-/* The whole list screen: the window cleared, the header, the rows, the help
- * line and the hints. */
+/* The whole list screen: the window cleared, the rows, the help line and
+ * the hints. */
 void menu_draw(const ui_canvas_t* cv, const menu_layout_t* g,
                const menu_view_t* v);
 
@@ -87,6 +89,10 @@ void menu_draw_bar(const ui_canvas_t* cv, const menu_layout_t* g, int16_t y,
                    const char* label, const char* value, bool highlighted,
                    bool off);
 
+/* One of the Save State screens' choices, a row w wide from the inset. */
+void menu_draw_choice(const ui_canvas_t* cv, int16_t y, int16_t w,
+                      const char* label, bool highlighted, bool off);
+
 /* The window cleared and a page's header. */
 void menu_draw_title(const ui_canvas_t* cv, const menu_layout_t* g,
                      const char* title);
@@ -101,7 +107,7 @@ void menu_draw_hotkeys(const ui_canvas_t* cv, const menu_layout_t* g,
                        const char* const (*keys)[2], uint8_t n);
 
 /* Cart Info's left margin and width, and its images' gap. */
-#define MENU_CART_X   8
+#define MENU_CART_X   UI_TEXT_X
 #define MENU_CART_W(g) ((int16_t)((g)->w - 2 * MENU_CART_X))
 #define MENU_CART_GAP 8
 
@@ -121,7 +127,7 @@ typedef struct menu_band_s {
     int16_t x;
     int16_t y;
     int16_t w;
-    uint8_t cols;
+    picker_adv_t adv;
     uint16_t rows;
     uint16_t lines;
     uint16_t first;
@@ -129,8 +135,8 @@ typedef struct menu_band_s {
 
 /* The band from y down to the hint footer, as many lines as fit: Cart Info's
  * help line is its description. */
-void menu_band_fit(const menu_layout_t* g, const char* text, int16_t y,
-                   menu_band_t* b);
+void menu_band_fit(const ui_canvas_t* cv, const menu_layout_t* g,
+                   const char* text, int16_t y, menu_band_t* b);
 
 /* The band cleared and drawn alone — what a scroll repaints. */
 void menu_draw_band(const ui_canvas_t* cv, const menu_band_t* b);
