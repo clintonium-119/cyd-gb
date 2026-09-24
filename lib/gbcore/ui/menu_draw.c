@@ -130,7 +130,7 @@ void menu_draw_hotkeys(const ui_canvas_t* cv, const menu_layout_t* g,
 
     menu_draw_title(cv, g, "Hotkeys");
     for (i = 0; i < n; i++) {
-        cv->text(cv->ctx, keys[i][0], UI_TEXT_X, y, w, 1, UI_FONT_VAL,
+        cv->text(cv->ctx, keys[i][0], UI_TEXT_X, y, w, 1, UI_FONT_LIST,
                  UI_ALIGN_LEFT, UI_COL_TEXT, UI_COL_BG);
         cv->text(cv->ctx, keys[i][1], UI_TEXT_X, y, w, 1, UI_FONT_VAL,
                  UI_ALIGN_RIGHT, UI_COL_SUB, UI_COL_BG);
@@ -194,7 +194,7 @@ void menu_draw_band(const ui_canvas_t* cv, const menu_band_t* b)
             break;
         }
         cv->text(cv->ctx, line, b->x, (int16_t)(b->y + i * pitch), b->w, 1,
-                 UI_FONT_DESC, UI_ALIGN_LEFT, UI_COL_SUB, UI_COL_BG);
+                 UI_FONT_DESC, UI_ALIGN_CENTER, UI_COL_SUB, UI_COL_BG);
     }
 }
 

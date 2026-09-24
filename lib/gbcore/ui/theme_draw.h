@@ -64,8 +64,8 @@ int16_t ui_pill_row(const ui_canvas_t* cv, int16_t x, int16_t y,
                     int16_t max_w, int16_t h, const char* s, uint8_t font,
                     bool dim, int16_t marquee_px);
 
-/* One line of grey prose from UI_TEXT_X (s may be NULL), clipped to one row
- * of w, at the top of a UI_HELP_H band. */
+/* One line of grey prose centred between the text margins (s may be NULL),
+ * clipped to one row, at the top of a UI_HELP_H band. */
 void ui_help_line(const ui_canvas_t* cv, int16_t w, int16_t y, const char* s);
 
 /*

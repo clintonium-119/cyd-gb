@@ -100,7 +100,7 @@ void ui_help_line(const ui_canvas_t* cv, int16_t w, int16_t y, const char* s)
     cv->fill(cv->ctx, 0, y, w, UI_HELP_H, UI_COL_BG);
     if (s != NULL) {
         cv->text(cv->ctx, s, UI_TEXT_X, y, (int16_t)(w - 2 * UI_TEXT_X), 1,
-                 UI_FONT_HELP, UI_ALIGN_LEFT, UI_COL_SUB, UI_COL_BG);
+                 UI_FONT_HELP, UI_ALIGN_CENTER, UI_COL_SUB, UI_COL_BG);
     }
 }
 

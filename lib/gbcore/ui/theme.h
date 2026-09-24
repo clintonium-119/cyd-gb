@@ -18,17 +18,14 @@
 /* RGB565 colours. */
 #define UI_COL_BG        0x0000 /* screen background */
 #define UI_COL_TEXT      0xFFFF /* primary text, hint labels */
-/* Two neutral greys a clear step apart, so they read as a pair rather than
- * two near-misses: prose at #A8A8A8 (about 8.8:1 on black) and the hint pill
- * at #484848 (white labels at about 9.7:1). Both keep green's extra bit in
- * step with red and blue, so neither leans green the way the old values
- * did. */
-#define UI_COL_SUB       0xAD55 /* help lines, descriptions, secondary text */
+/* Prose at #CCCCCC and the hint pill at #444444, as chosen on glass; RGB565
+ * holds them as #C8CCC8 and #404440, the nearest it has. */
+#define UI_COL_SUB       0xCE79 /* help lines, descriptions, secondary text */
 #define UI_COL_DIM       0x7BEF /* a disabled row */
 #define UI_COL_PILL      0xFFFF /* the selected row's pill */
 #define UI_COL_PILL_TEXT 0x0000 /* text on the pill */
 #define UI_COL_PILL_DIM  0x6B4D /* a disabled row's text on the pill */
-#define UI_COL_HINT_BG   0x4A49 /* the hint footer's pill */
+#define UI_COL_HINT_BG   0x4228 /* the hint footer's pill */
 #define UI_COL_GLYPH     0xFFFF /* a button's circle in the hint footer */
 #define UI_COL_GLYPH_FG  0x0000 /* the button's letter in it */
 #define UI_COL_OK        0x07E0 /* a check that passed */

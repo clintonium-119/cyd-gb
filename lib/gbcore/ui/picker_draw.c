@@ -531,7 +531,7 @@ static void draw_band(const picker_t* p, const picker_layout_t* g,
                 break;
             }
             cv->text(cv->ctx, line, g->detail_x, (int16_t)(y + i * pitch),
-                     g->detail_w, 1, UI_FONT_DESC, UI_ALIGN_LEFT, UI_COL_SUB,
+                     g->detail_w, 1, UI_FONT_DESC, UI_ALIGN_CENTER, UI_COL_SUB,
                      UI_COL_BG);
         }
     }
