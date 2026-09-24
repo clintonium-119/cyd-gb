@@ -18,9 +18,9 @@
 /* RGB565 colours. */
 #define UI_COL_BG        0x0000 /* screen background */
 #define UI_COL_TEXT      0xFFFF /* primary text, hint labels */
-/* Prose at #CCCCCC and the hint pill at #444444, as chosen on glass; RGB565
- * holds them as #C8CCC8 and #404440, the nearest it has. */
-#define UI_COL_SUB       0xCE79 /* help lines, descriptions, secondary text */
+/* Prose at #EEEEEE and the hint pill at #444444, as chosen on glass; RGB565
+ * holds them as #E8ECE8 and #404440, the nearest it has. */
+#define UI_COL_SUB       0xEF7D /* help lines, descriptions, secondary text */
 #define UI_COL_DIM       0x7BEF /* a disabled row */
 #define UI_COL_PILL      0xFFFF /* the selected row's pill */
 #define UI_COL_PILL_TEXT 0x0000 /* text on the pill */

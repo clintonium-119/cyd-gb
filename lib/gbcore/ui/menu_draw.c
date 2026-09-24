@@ -194,7 +194,7 @@ void menu_draw_band(const ui_canvas_t* cv, const menu_band_t* b)
             break;
         }
         cv->text(cv->ctx, line, b->x, (int16_t)(b->y + i * pitch), b->w, 1,
-                 UI_FONT_DESC, UI_ALIGN_CENTER, UI_COL_SUB, UI_COL_BG);
+                 UI_FONT_DESC, UI_ALIGN_LEFT, UI_COL_SUB, UI_COL_BG);
     }
 }
 
