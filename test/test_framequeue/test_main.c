@@ -362,6 +362,7 @@ static void test_counters_report_depth_and_stalls(void)
 
     TEST_ASSERT_EQUAL_UINT8(0u, framequeue_max_depth(&q));
     TEST_ASSERT_EQUAL_UINT32(0u, framequeue_overflows(&q));
+    TEST_ASSERT_EQUAL_UINT32(0u, framequeue_rejects(&q));
 
     /* produce, produce, pop: depth peaks at both slots in use. */
     TEST_ASSERT_EQUAL_INT(FRAMEQUEUE_OK, commit_next(&q, 0, 0));
@@ -380,6 +381,73 @@ static void test_counters_report_depth_and_stalls(void)
     TEST_ASSERT_EQUAL_INT(FRAMEQUEUE_OK, framequeue_acquire(&q, &slot));
     TEST_ASSERT_EQUAL_UINT8(2u, framequeue_max_depth(&q));
     TEST_ASSERT_EQUAL_UINT32(2u, framequeue_overflows(&q));
+}
+
+static void test_a_refused_commit_is_abandoned_and_the_queue_runs_on(void)
+{
+    framequeue_meta_t bad = meta_of(0, 5);
+    int slot = -1;
+    int i;
+
+    /* Half a frame is committed, then the producer loses its place. */
+    produce_one(&q, 0, 0);
+    produce_one(&q, 0, 1);
+
+    /* Refuse-and-abandon more times than there are slots. Without abandon
+     * the second refusal strands the last slot and acquire answers FULL
+     * forever, with no consumer able to free it (BUG-0015). */
+    for (i = 0; i < 3 * FRAMEQUEUE_SLOTS; i++) {
+        int r = framequeue_acquire(&q, &slot);
+
+        if (r == FRAMEQUEUE_FULL) {
+            consume_one(&q);
+            r = framequeue_acquire(&q, &slot);
+        }
+        TEST_ASSERT_EQUAL_INT(FRAMEQUEUE_OK, r);
+        TEST_ASSERT_EQUAL_INT(FRAMEQUEUE_ERR_ORDER,
+                              framequeue_commit(&q, slot, &bad));
+        TEST_ASSERT_EQUAL_INT(FRAMEQUEUE_OK, framequeue_abandon(&q, slot));
+    }
+    TEST_ASSERT_EQUAL_UINT32((uint32_t)(3 * FRAMEQUEUE_SLOTS),
+                             framequeue_rejects(&q));
+
+    /* The partial frame still pops, and the next frame starts at block 0
+     * even though frame 0 never reached its last block. */
+    while (framequeue_pop(&q, &slot, NULL) == FRAMEQUEUE_OK) {
+        TEST_ASSERT_EQUAL_INT(FRAMEQUEUE_OK, framequeue_release(&q, slot));
+    }
+    for (i = 0; i < BLOCKS_PER_FRAME; i++) {
+        produce_one(&q, 1, (uint8_t)i);
+    }
+    TEST_ASSERT_EQUAL_UINT32((uint32_t)(3 * FRAMEQUEUE_SLOTS),
+                             framequeue_rejects(&q));
+}
+
+static void test_only_the_slot_the_producer_holds_can_be_abandoned(void)
+{
+    int a = -1;
+    int b = -1;
+    framequeue_meta_t m = meta_of(0, 0);
+
+    /* Nothing held. */
+    TEST_ASSERT_EQUAL_INT(FRAMEQUEUE_ERR_STATE, framequeue_abandon(&q, 0));
+    TEST_ASSERT_EQUAL_INT(FRAMEQUEUE_ERR_STATE, framequeue_abandon(&q, -1));
+    TEST_ASSERT_EQUAL_INT(FRAMEQUEUE_ERR_STATE, framequeue_abandon(NULL, 0));
+
+    /* Committed is the consumer's now. */
+    TEST_ASSERT_EQUAL_INT(FRAMEQUEUE_OK, framequeue_acquire(&q, &a));
+    TEST_ASSERT_EQUAL_INT(FRAMEQUEUE_OK, framequeue_commit(&q, a, &m));
+    TEST_ASSERT_EQUAL_INT(FRAMEQUEUE_ERR_STATE, framequeue_abandon(&q, a));
+
+    /* Holding one uncommitted slot: that one, and only that one. */
+    TEST_ASSERT_EQUAL_INT(FRAMEQUEUE_OK, framequeue_acquire(&q, &b));
+    TEST_ASSERT_EQUAL_INT(FRAMEQUEUE_ERR_STATE, framequeue_abandon(&q, a));
+    TEST_ASSERT_EQUAL_INT(FRAMEQUEUE_OK, framequeue_abandon(&q, b));
+    TEST_ASSERT_EQUAL_INT(FRAMEQUEUE_ERR_STATE, framequeue_abandon(&q, b));
+
+    /* The freed slot is the next one handed out. */
+    TEST_ASSERT_EQUAL_INT(FRAMEQUEUE_OK, framequeue_acquire(&q, &a));
+    TEST_ASSERT_EQUAL_INT(b, a);
 }
 
 static void test_init_rejects_an_impossible_frame(void)
@@ -401,6 +469,8 @@ int main(void)
     RUN_TEST(test_slots_are_released_only_by_their_consumer);
     RUN_TEST(test_two_queues_do_not_share_state);
     RUN_TEST(test_counters_report_depth_and_stalls);
+    RUN_TEST(test_a_refused_commit_is_abandoned_and_the_queue_runs_on);
+    RUN_TEST(test_only_the_slot_the_producer_holds_can_be_abandoned);
     RUN_TEST(test_init_rejects_an_impossible_frame);
     return UNITY_END();
 }

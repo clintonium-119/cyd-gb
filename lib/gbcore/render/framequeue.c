@@ -64,6 +64,7 @@ int framequeue_init(framequeue_t* fq, uint8_t blocks_per_frame)
     fq->depth = 0;
     fq->max_depth = 0;
     fq->overflows = 0;
+    fq->rejects = 0;
     fq->paused = false;
     fq->have_prev = false;
     fq->prev.frame_seq = 0;
@@ -115,6 +116,7 @@ int framequeue_commit(framequeue_t* fq, int slot,
     if (!commit_in_order(fq, meta)) {
         /* The slot stays producer-owned and nothing already committed is
          * touched, so a caller that can correct the metadata may retry. */
+        fq->rejects++;
         return FRAMEQUEUE_ERR_ORDER;
     }
     fq->meta[slot] = *meta;
@@ -122,6 +124,31 @@ int framequeue_commit(framequeue_t* fq, int slot,
     fq->commit_idx = next_idx((uint8_t)slot);
     fq->prev = *meta;
     fq->have_prev = true;
+    return FRAMEQUEUE_OK;
+}
+
+int framequeue_abandon(framequeue_t* fq, int slot)
+{
+    if (!fq) {
+        return FRAMEQUEUE_ERR_STATE;
+    }
+    if (slot < 0 || slot >= FRAMEQUEUE_SLOTS) {
+        return FRAMEQUEUE_ERR_STATE;
+    }
+    /* Oldest uncommitted and newest acquired at once: the only slot the
+     * producer holds. Rewinding acquire_idx onto it keeps the ring order
+     * every other verb relies on. */
+    if ((uint8_t)slot != fq->commit_idx ||
+        fq->state[slot] != FRAMEQUEUE_SLOT_PRODUCER ||
+        next_idx((uint8_t)slot) != fq->acquire_idx) {
+        return FRAMEQUEUE_ERR_STATE;
+    }
+    fq->state[slot] = FRAMEQUEUE_SLOT_FREE;
+    fq->acquire_idx = (uint8_t)slot;
+    fq->depth--;
+    /* The dropped frame may have committed some blocks already; like a
+     * pause, it must not constrain what comes next. */
+    fq->have_prev = false;
     return FRAMEQUEUE_OK;
 }
 
@@ -201,6 +228,11 @@ bool framequeue_drained(const framequeue_t* fq)
 uint32_t framequeue_overflows(const framequeue_t* fq)
 {
     return fq ? fq->overflows : 0u;
+}
+
+uint32_t framequeue_rejects(const framequeue_t* fq)
+{
+    return fq ? fq->rejects : 0u;
 }
 
 uint8_t framequeue_max_depth(const framequeue_t* fq)

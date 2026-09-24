@@ -436,6 +436,46 @@ static void transpose_lines(unsigned from, unsigned to)
 }
 #endif
 
+// A consumer that has not freed a slot in this long is stuck, not slow: a
+// whole frame's push is under 17 ms.
+#define Q_STALL_WARN_US 500000
+
+/*
+ * Wait for a free slot. FULL is the overlap working, so it waits as long as
+ * it takes, but it says so once if the consumer looks stuck: an unbounded
+ * silent spin turned BUG-0015 into a white screen with no log.
+ */
+static int acquire_slot(int* slot)
+{
+    int64_t t0 = esp_timer_get_time();
+    bool warned = false;
+    int r;
+
+    while ((r = framequeue_acquire(&fq, slot)) == FRAMEQUEUE_FULL) {
+        if (!warned && esp_timer_get_time() - t0 > Q_STALL_WARN_US) {
+            Serial.println("[EMU] frame queue full for 500 ms; consumer stalled");
+            warned = true;
+        }
+        taskYIELD();
+    }
+    q_stall_acc += (uint32_t)(esp_timer_get_time() - t0);
+    return r;
+}
+
+/*
+ * A commit was refused. Give the slot back and drop the rest of the frame;
+ * without the abandon the slot is stranded and two refusals wedge the
+ * producer for good (BUG-0015).
+ */
+static void drop_refused(int slot)
+{
+    Serial.println("[EMU] frame queue rejected a commit; frame dropped");
+    if (framequeue_abandon(&fq, slot) != FRAMEQUEUE_OK) {
+        Serial.println("[EMU] frame queue could not take the slot back");
+    }
+    frame_dropped = true;
+}
+
 #if PUSH_ORDER == PUSH_ROW
 /*
  * Producer half: copy block `blk` out of the frame buffer into a queue slot
@@ -449,15 +489,8 @@ static void commit_block(uint_fast8_t blk)
     framequeue_meta_t meta;
     const uint8_t* first;
     int slot = 0;
-    int r;
-    int64_t t0;
 
-    t0 = esp_timer_get_time();
-    while ((r = framequeue_acquire(&fq, &slot)) == FRAMEQUEUE_FULL) {
-        taskYIELD();
-    }
-    q_stall_acc += (uint32_t)(esp_timer_get_time() - t0);
-    if (r != FRAMEQUEUE_OK) {
+    if (acquire_slot(&slot) != FRAMEQUEUE_OK) {
         frame_dropped = true;
         return;
     }
@@ -474,8 +507,7 @@ static void commit_block(uint_fast8_t blk)
     }
 
     if (framequeue_commit(&fq, slot, &meta) != FRAMEQUEUE_OK) {
-        Serial.println("[EMU] frame queue rejected a block");
-        frame_dropped = true;
+        drop_refused(slot);
         return;
     }
     if (push_task) {
@@ -505,15 +537,8 @@ static void commit_blocks(int from, int to)
 static void open_frame_slot()
 {
     int slot = 0;
-    int r;
-    int64_t t0;
 
-    t0 = esp_timer_get_time();
-    while ((r = framequeue_acquire(&fq, &slot)) == FRAMEQUEUE_FULL) {
-        taskYIELD();
-    }
-    q_stall_acc += (uint32_t)(esp_timer_get_time() - t0);
-    if (r != FRAMEQUEUE_OK) {
+    if (acquire_slot(&slot) != FRAMEQUEUE_OK) {
         frame_dropped = true;
         return;
     }
@@ -533,8 +558,8 @@ static void commit_frame()
     meta.frame_seq = frame_seq;
     meta.last_in_frame = 1;
     if (framequeue_commit(&fq, tpose_slot, &meta) != FRAMEQUEUE_OK) {
-        Serial.println("[EMU] frame queue rejected a frame");
-        frame_dropped = true;
+        drop_refused(tpose_slot);
+        tpose_slot = -1;
         return;
     }
     if (push_task) {
@@ -1296,11 +1321,16 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     /* auto: whether the Game Boy Color's table knew this cartridge, which is
      * the one fact about the palette that cannot be read off the screen —
      * a cart it does not know looks like any other DMG Green boot. */
-    Serial.printf("[EMU] gnuboy '%s' %uKB push:%s auto:%s heap:%u\n", title,
+    /* largest: the biggest single malloc that can succeed from here on,
+     * which is the number game-time features are sized against — total free
+     * heap says nothing about fragmentation. */
+    Serial.printf("[EMU] gnuboy '%s' %uKB push:%s auto:%s heap:%u "
+                  "largest:%u\n", title,
                   romlen / 1024,
                   PUSH_TRANSPOSED ? "col" : "row",
                   auto_ok ? "yes" : "no",
-                  ESP.getFreeHeap());
+                  ESP.getFreeHeap(),
+                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     return true;
 }
 
@@ -1423,11 +1453,25 @@ void emu_run_frame()
         speaker_get_stats(&aunder, &aover, &await_us);
         /* tools/perf_capture.py parses these field names; keep them. */
 #ifndef QUIET_PERF
+        {
+            // Once, a second into play: the boot line's heap figure goes out
+            // while the bench board's USB link is still re-enumerating.
+            static bool heap_logged = false;
+
+            if (!heap_logged) {
+                Serial.printf("[EMU] heap free:%u largest:%u\n",
+                              (unsigned)ESP.getFreeHeap(),
+                              (unsigned)heap_caps_get_largest_free_block(
+                                  MALLOC_CAP_8BIT));
+                heap_logged = true;
+            }
+        }
         Serial.printf("[PERF] emu=%uus scale=%uus push=%uus qstall=%uus "
-                      "qovf=%u apu=%uus await=%uus aunder=%u aover=%u "
-                      "fps=%u split=c0 core=gnuboy ff=%u ff2=%u\n",
+                      "qovf=%u qrej=%u apu=%uus await=%uus aunder=%u "
+                      "aover=%u fps=%u split=c0 core=gnuboy ff=%u ff2=%u\n",
                       emu_us, scale_us, push_us, q_stall_us,
-                      framequeue_overflows(&fq), apu_us, await_us, aunder,
+                      framequeue_overflows(&fq), framequeue_rejects(&fq),
+                      apu_us, await_us, aunder,
                       aover, cfps, ffwd ? 1u : 0u, cff2);
 #endif
     }

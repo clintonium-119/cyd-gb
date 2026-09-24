@@ -14,6 +14,10 @@
 //   FREE -> (acquire) PRODUCER -> (commit) COMMITTED -> (pop) CONSUMER
 //        -> (release) FREE
 //
+// plus one way back: PRODUCER -> (abandon) FREE, for a slot whose commit was
+// refused. Without it a refused slot never reaches a consumer, so nothing can
+// ever free it, and two refusals wedge a two-slot producer for good.
+//
 // Ordering is enforced at commit time, and that is what makes "frames never
 // interleave rows" a provable property rather than a hoped-for one: a commit
 // must be the exact successor of the previous commit, and pops are FIFO, so
@@ -86,6 +90,7 @@ typedef struct framequeue_s {
     uint8_t depth;       /* slots not FREE right now            */
     uint8_t max_depth;   /* peak of depth since init            */
     uint32_t overflows;  /* acquire calls answered FULL         */
+    uint32_t rejects;    /* commits refused as out of order     */
     bool paused;
     bool have_prev;             /* a commit has happened since init/resume */
     framequeue_meta_t prev;     /* metadata of that commit                 */
@@ -120,10 +125,23 @@ int framequeue_acquire(framequeue_t* fq, int* slot);
  * sequence may jump, because frameskip drops whole frames, but it may not
  * repeat). last_in_frame must be set on block blocks_per_frame - 1 and clear
  * everywhere else. A rejected commit leaves the slot producer-owned and the
- * stored metadata untouched, so the caller may retry with corrected metadata.
+ * stored metadata untouched, so the caller may retry with corrected metadata
+ * — or, if it cannot, must framequeue_abandon() the slot. Each ERR_ORDER also
+ * bumps the reject counter.
  */
 int framequeue_commit(framequeue_t* fq, int slot,
                       const framequeue_meta_t* meta);
+
+/*
+ * Producer: give back a slot it acquired and will not commit — the frame in
+ * progress is dropped. `slot` must be the only producer-owned slot (the one
+ * acquired most recently and not yet committed), or the call is
+ * FRAMEQUEUE_ERR_STATE. The slot returns to FREE and is the next one acquire
+ * hands out, so ring order holds. The commit sequence restarts as after a
+ * resume: whatever part of the frame was already committed still pops, and
+ * the next commit must be block 0 of a new frame.
+ */
+int framequeue_abandon(framequeue_t* fq, int slot);
 
 /*
  * Consumer: take the oldest committed slot. Writes its index to `slot` and, if
@@ -161,9 +179,15 @@ void framequeue_resume(framequeue_t* fq);
  */
 bool framequeue_drained(const framequeue_t* fq);
 
-/* Acquire calls answered FULL since init — the producer stalled behind the
- * display, which is the number that says whether the split is paying off. */
+/* Acquire calls answered FULL since init. This counts polls, not lost work:
+ * a producer spinning on a full queue bumps it once per spin, so it scales
+ * with how often the caller asks. Compare it between builds as a contention
+ * signal; a frame is lost only when a commit is refused (framequeue_rejects). */
 uint32_t framequeue_overflows(const framequeue_t* fq);
+
+/* Commits refused as out of order since init. Unlike the overflow count, a
+ * non-zero value here means frames were actually lost. */
+uint32_t framequeue_rejects(const framequeue_t* fq);
 
 /* Peak number of slots in use at once since init. Reaching FRAMEQUEUE_SLOTS
  * means the pipeline genuinely overlapped; staying at 1 means it never did. */

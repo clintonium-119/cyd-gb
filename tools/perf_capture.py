@@ -11,6 +11,15 @@ steps ask for, plus the derived terms:
 
 `stats` reports which accounting the log carries; a log must not mix them.
 
+Two counters are easy to misread, and `stats` labels them:
+
+    qovf  acquire polls answered FULL - a spin count that scales with the
+          poll rate. Compare it between builds; it is never zero, and that is
+          normal (BUG-0017). Frames lost are qrej, commits the queue refused.
+    aunder writes that found the audio queue estimated empty. An event count
+          since BUG-0016; older logs latched, and read one per frame forever
+          after a single shortfall.
+
     python tools/perf_capture.py capture /dev/ttyUSB0 out.log 90 [--no-reset]
     python tools/perf_capture.py stats out.log [--skip 10] [--from SEC --to SEC]
 
@@ -26,6 +35,9 @@ import time
 FIELDS = ("emu", "scale", "push", "qstall", "qovf", "apu", "await", "aunder", "aover", "fps")
 PERF_RE = re.compile(r"\[PERF\] " + " ".join(r"%s=(\d+)(?:us)?" % f for f in FIELDS)
                      + r"(?: split=(\w+))?")
+# Added after the fixed field list, so it is matched on its own: older logs
+# have no qrej and must still parse.
+QREJ_RE = re.compile(r" qrej=(\d+)")
 TS_RE = re.compile(r"^\[\s*([\d.]+)\] ")
 BUDGET_US = 16_667
 
@@ -84,7 +96,8 @@ def parse(path, skip, t_from, t_to):
     rows = []
     with open(path, errors="replace") as f:
         for line in f:
-            m = PERF_RE.search(line)
+            q = QREJ_RE.search(line)
+            m = PERF_RE.search(QREJ_RE.sub("", line))
             if not m:
                 continue
             ts = TS_RE.match(line)
@@ -93,6 +106,7 @@ def parse(path, skip, t_from, t_to):
                 continue
             r = dict(zip(FIELDS, map(int, m.groups()[:len(FIELDS)])))
             r["t"] = t
+            r["qrej"] = int(q.group(1)) if q else None
             r["split"] = m.group(len(FIELDS) + 1) or ""
             if r["split"] == "c0":
                 r["emu_core"] = r["emu"] - r["qstall"]
@@ -122,9 +136,17 @@ def stats(rows):
     print("frame budget: median emu+apu %d us vs %d us -> %s"
           % (med("frame"), BUDGET_US, "inside" if med("frame") < BUDGET_US else
              "OVER by %d us" % (med("frame") - BUDGET_US)))
-    print("qovf final %d (delta over capture %d); aunder final %d (delta %d); aover final %d"
-          % (rows[-1]["qovf"], rows[-1]["qovf"] - rows[0]["qovf"],
-             rows[-1]["aunder"], rows[-1]["aunder"] - rows[0]["aunder"], rows[-1]["aover"]))
+    secs = (rows[-1]["t"] - rows[0]["t"]) if rows[0]["t"] is not None else 0
+    dq = rows[-1]["qovf"] - rows[0]["qovf"]
+    print("qovf (acquire polls answered FULL - contention, not lost frames): "
+          "delta %d%s" % (dq, ", %.0f/s" % (dq / secs) if secs > 0 else ""))
+    if rows[-1]["qrej"] is None:
+        print("qrej (frames lost to refused commits): not in this log")
+    else:
+        print("qrej (frames lost to refused commits): final %d (delta %d)"
+              % (rows[-1]["qrej"], rows[-1]["qrej"] - (rows[0]["qrej"] or 0)))
+    print("aunder (starved writes) final %d (delta %d); aover final %d"
+          % (rows[-1]["aunder"], rows[-1]["aunder"] - rows[0]["aunder"], rows[-1]["aover"]))
     q, e, s = med("qstall"), med("emu_core"), med("scale")
     if q > 1000:
         b = "display (qstall large)"

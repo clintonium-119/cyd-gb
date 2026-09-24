@@ -1,0 +1,27 @@
+# capture start 2026-09-24T09:15:12-0400 port=/dev/ttyUSB0 baud=115200 duration=12s
+[   0.201] ets Jul 29 2019 12:21:46
+[   0.201] 
+[   0.201] rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+[   0.201] configsip: 0, SPIWP:0xee
+[   0.201] clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+[   0.201] mode:DIO, clock div:1
+[   0.201] load:0x3fff0030,len:1344
+[   0.201] load:0x40078000,len:13964
+[   0.201] load:0x40080400,len:3600
+[   0.201] entry 0x400805f0
+[   0.401] E (204) esp_core_dff}���͡� No core dump partition found!
+[   0.401] E (204) esp_core_dump_flash: No core dump partition found!
+[   0.433] # link dropped: device reports readiness to read but returned no data (device disconnected or multiple access on port?)
+[   1.457] # link reopened (no reset)
+[   2.258] [EMU] heap free:122388 largest:38900
+[   2.258] [PERF] emu=11904us scale=6916us push=3887us qstall=4us qovf=0 qrej=0 apu=53us await=4477us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[   3.260] [PERF] emu=11889us scale=6907us push=3879us qstall=18us qovf=0 qrej=0 apu=54us await=4539us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[   4.261] [PERF] emu=11891us scale=6889us push=3825us qstall=3us qovf=0 qrej=0 apu=53us await=4527us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[   5.262] [PERF] emu=11891us scale=6893us push=3828us qstall=20us qovf=0 qrej=0 apu=54us await=4536us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[   6.264] [PERF] emu=11999us scale=6905us push=3886us qstall=3us qovf=0 qrej=0 apu=53us await=4413us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[   7.265] [PERF] emu=6538us scale=6873us push=3926us qstall=6us qovf=3714 qrej=0 apu=55us await=9830us aunder=1 aover=0 fps=59 split=c0 core=gnuboy ff=0 ff2=0
+[   8.266] [PERF] emu=6539us scale=6888us push=3841us qstall=5us qovf=3714 qrej=0 apu=54us await=9831us aunder=1 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[   9.268] [PERF] emu=6526us scale=6892us push=3835us qstall=6us qovf=3714 qrej=0 apu=55us await=9830us aunder=1 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  10.269] [PERF] emu=6526us scale=6875us push=3917us qstall=6us qovf=3714 qrej=0 apu=62us await=9816us aunder=1 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  11.270] [PERF] emu=4180us scale=6898us push=3830us qstall=0us qovf=3714 qrej=0 apu=0us await=8275us aunder=1 aover=0 fps=76 split=c0 core=gnuboy ff=0 ff2=0
+# capture end, elapsed 12.1s

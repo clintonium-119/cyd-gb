@@ -1,0 +1,28 @@
+# capture start 2026-09-24T09:18:34-0400 port=/dev/ttyUSB0 baud=115200 duration=480s
+[  13.377] # link dropped: device reports readiness to read but returned no data (device disconnected or multiple access on port?)
+[  17.903] # link reopened (no reset)
+[  18.304] [SD] Type:2 Size:120MB
+[  20.306] [DIAG] enter c1f65f3-dirty built 2026-09-24T13:17Z
+[  20.306] [TFT] porch trim 11 + 20/64
+[  26.715] [DIAG] redraw 18563 us
+[  27.116] [DIAG] page System
+[  27.316] [DIAG] page Panel trim
+[  37.729] [TFT] MADCTL 0xD8, scan order reversed, rot 2
+[  37.730] [TFT] COLMOD 0x53 for the frame path
+[  41.535] [DIAG] fixture grid +0,-5 px/frame
+[  41.935] [DIAG] fixture noise +0,-5 px/frame
+[  45.941] [DIAG] trim run thrown away: the marks disagreed too much to average
+[  77.584] [DIAG] fixture check +0,-5 px/frame
+[  78.185] [DIAG] fixture stripe +0,-5 px/frame
+[  79.386] [DIAG] fixture grid +0,-5 px/frame
+[  80.188] [DIAG] fixture grid +0,-4 px/frame
+[  80.388] [DIAG] fixture grid +0,-3 px/frame
+[  80.588] [DIAG] fixture grid +0,-2 px/frame
+[  81.790] [DIAG] fixture grid +0,-1 px/frame
+[  82.390] [DIAG] fixture grid +0,+0 px/frame
+[  83.191] [DIAG] fixture noise +0,+0 px/frame
+[  83.992] [DIAG] fixture noise +0,-1 px/frame
+[  84.793] [DIAG] fixture check +0,-1 px/frame
+[  87.196] [DIAG] fixture stripe +0,-1 px/frame
+[  87.597] [DIAG] fixture grid +0,-1 px/frame
+[  88.398] [DIAG] fixture noise +0,-1 px/frame
