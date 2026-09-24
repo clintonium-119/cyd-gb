@@ -67,6 +67,7 @@ typedef struct {
     unsigned header_rules;   /* a 1 px rule under the header             */
     unsigned body_overruns;  /* body text running into the help line     */
     unsigned help_too_wide;  /* a help line longer than its one row      */
+    unsigned small_overflow; /* font-1 text longer than its box holds    */
     unsigned range_faults;   /* image row ranges outside the source block */
 
     unsigned bar_fills;      /* fills exactly bar_w wide                  */
@@ -218,6 +219,14 @@ static void fk_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
     /* The box the driver will clip into: rows lines at the font's pitch, the
      * last without the gap under it. */
     h = (int16_t)(rows * UI_ROW_PITCH(ui_font_height(font)) - 2);
+    /* Font 1's advance is fixed, so a string too long for its box is known
+     * exactly; a box of several rows gets a column's slack per row for the
+     * word it pushes down. */
+    if (font == UI_FONT_SMALL &&
+        strlen(s) * UI_FONT_SMALL_ADV >
+            (size_t)(w * rows - (rows - 1) * 8 * UI_FONT_SMALL_ADV)) {
+        f->small_overflow++;
+    }
     if (y >= f->help_y && y + h <= f->help_y + UI_HELP_H) {
         f->help_texts++;
         if (strlen(s) * UI_FONT_SMALL_ADV > (size_t)(f->w - 2 * UI_PAD)) {
@@ -419,7 +428,8 @@ static void test_the_layout_accepts_every_window(void)
     TEST_ASSERT_EQUAL_INT16(GEOM_24_H - UI_FOOT_H, geom.foot_y);
     TEST_ASSERT_EQUAL_INT16(GEOM_24_H - UI_FOOT_H - UI_HELP_H, geom.help_y);
     TEST_ASSERT_EQUAL_INT16(12 * UI_FONT_SMALL_ADV, geom.label_w);
-    TEST_ASSERT_EQUAL_INT16(GEOM_24_W - geom.label_w - 8, geom.col_w);
+    TEST_ASSERT_EQUAL_INT16(GEOM_24_W - geom.label_w - 2 * UI_TEXT_X,
+                            geom.col_w);
 
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(GEOM_26_W, GEOM_26_H, &geom));
     TEST_ASSERT_EQUAL_INT16(DIAG_HEADER_H + 2, geom.body_y);
@@ -733,6 +743,21 @@ static void test_the_header_has_no_band_and_no_rule(void)
     }
 }
 
+static void test_every_page_starts_its_rows_at_the_title_and_fits_them(void)
+{
+    uint8_t page;
+    uint8_t pattern;
+
+    fill_data();
+    for (page = 0; page < DIAG_PAGE_COUNT; page++) {
+        for (pattern = 0; pattern < DIAG_PATTERN_COUNT; pattern++) {
+            draw_page(GEOM_53_W, GEOM_53_H, page, pattern, true, 0);
+            TEST_ASSERT_EQUAL_UINT_MESSAGE(0, fk.small_overflow,
+                                           diag_page_title(page));
+        }
+    }
+}
+
 static void test_no_page_runs_into_the_help_line(void)
 {
     uint8_t page;
@@ -984,5 +1009,6 @@ int main(void)
     RUN_TEST(test_the_pages_that_had_a_page_hint_still_name_it);
     RUN_TEST(test_the_header_has_no_band_and_no_rule);
     RUN_TEST(test_no_page_runs_into_the_help_line);
+    RUN_TEST(test_every_page_starts_its_rows_at_the_title_and_fits_them);
     return UNITY_END();
 }

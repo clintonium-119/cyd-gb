@@ -136,8 +136,9 @@ int diag_layout(int16_t w, int16_t h, diag_layout_t* out)
     /* Twelve font-1 columns: "more than one" is the longest label any page
      * puts in the left column, and 12 x 6 = 72 px holds it. */
     out->label_w = (int16_t)(12 * UI_FONT_SMALL_ADV);
-    /* A 4 px margin either side of the pair. */
-    out->col_w = (int16_t)(w - out->label_w - 8);
+    /* The rows' text margin either side of the pair, level with the
+     * header's title. */
+    out->col_w = (int16_t)(w - out->label_w - 2 * UI_TEXT_X);
     if (out->col_w <= 0) {
         return DIAG_ERR_ARGS;
     }
@@ -162,18 +163,26 @@ static void kv_row(const ui_canvas_t* cv, const diag_layout_t* g, uint8_t row,
 {
     int16_t y = row_y(g, row);
 
-    cv->text(cv->ctx, label, 4, y, g->label_w, 1, UI_FONT_SMALL,
+    cv->text(cv->ctx, label, UI_TEXT_X, y, g->label_w, 1, UI_FONT_SMALL,
              UI_ALIGN_LEFT, UI_COL_DIM, UI_COL_BG);
-    cv->text(cv->ctx, value, (int16_t)(4 + g->label_w), y, g->col_w, 1,
-             UI_FONT_SMALL, UI_ALIGN_LEFT, fg, UI_COL_BG);
+    cv->text(cv->ctx, value, (int16_t)(UI_TEXT_X + g->label_w), y, g->col_w,
+             1, UI_FONT_SMALL, UI_ALIGN_LEFT, fg, UI_COL_BG);
 }
 
-/* A whole-width line, for anything that has no label. */
+/* A whole-width line, for anything that has no label, wrapped over up to n
+ * rows at spaces: the caller leaves the rows under it free. */
+static void full_rows(const ui_canvas_t* cv, const diag_layout_t* g,
+                      uint8_t row, uint8_t n, const char* s, uint16_t fg)
+{
+    cv->text(cv->ctx, s, UI_TEXT_X, row_y(g, row),
+             (int16_t)(g->w - 2 * UI_TEXT_X), n, UI_FONT_SMALL, UI_ALIGN_LEFT,
+             fg, UI_COL_BG);
+}
+
 static void full_row(const ui_canvas_t* cv, const diag_layout_t* g,
                      uint8_t row, const char* s, uint16_t fg)
 {
-    cv->text(cv->ctx, s, 4, row_y(g, row), (int16_t)(g->w - 8), 1,
-             UI_FONT_SMALL, UI_ALIGN_LEFT, fg, UI_COL_BG);
+    full_rows(cv, g, row, 1, s, fg);
 }
 
 static void draw_header(const ui_canvas_t* cv, const diag_layout_t* g,
@@ -225,12 +234,14 @@ static void page_buttons(const ui_canvas_t* cv, const diag_layout_t* g,
         char gpa[12];
 
         snprintf(gpa, sizeof(gpa), "GPA%u", (unsigned)data->gpa[i]);
-        cv->text(cv->ctx, BTN_LABELS[i], 4, y, g->label_w, 1, UI_FONT_SMALL,
+        cv->text(cv->ctx, BTN_LABELS[i], UI_TEXT_X, y, g->label_w, 1,
+                 UI_FONT_SMALL,
                  UI_ALIGN_LEFT, down ? UI_COL_TEXT : UI_COL_DIM, UI_COL_BG);
-        cv->text(cv->ctx, gpa, (int16_t)(4 + g->label_w), y, 48, 1,
+        cv->text(cv->ctx, gpa, (int16_t)(UI_TEXT_X + g->label_w), y, 48, 1,
                  UI_FONT_SMALL, UI_ALIGN_LEFT, UI_COL_DIM, UI_COL_BG);
         /* The box is the part a builder watches: one press, one row lights. */
-        cv->fill(cv->ctx, (int16_t)(4 + g->label_w + 52), (int16_t)(y + 1), 16,
+        cv->fill(cv->ctx, (int16_t)(UI_TEXT_X + g->label_w + 52),
+                 (int16_t)(y + 1), 16,
                  8, down ? UI_COL_OK : UI_COL_SLOT);
     }
 }
@@ -311,7 +322,9 @@ static void page_nfc(const ui_canvas_t* cv, const diag_layout_t* g,
         snprintf(buf, sizeof(buf), "0x%02X (%s)", data->auth0,
                  (data->auth0 == 0xFF) ? "open" : "protected");
         kv_row(cv, g, 4, "AUTH0", buf, UI_COL_TEXT);
-        snprintf(buf, sizeof(buf), "0x%02X PROT %u CFGLCK %u AUTHLIM %u",
+        /* Closed up, so the whole register fits one row inside the text
+         * margins: 27 columns of the 28 there are. */
+        snprintf(buf, sizeof(buf), "0x%02X PROT%u CFGLCK%u AUTHLIM%u",
                  data->access, (unsigned)((data->access >> 7) & 1u),
                  (unsigned)((data->access >> 6) & 1u),
                  (unsigned)(data->access & 7u));
@@ -327,11 +340,11 @@ static void page_nfc(const ui_canvas_t* cv, const diag_layout_t* g,
     /* Two rows for the decoded text: the box clips at its own width, and two
      * font-1 rows of (w - 8 - label_w) hold more than the tag's own cap. */
     if (data->ndef_read_ok) {
-        cv->text(cv->ctx, "Text", 4, row_y(g, 7), g->label_w, 1,
+        cv->text(cv->ctx, "Text", UI_TEXT_X, row_y(g, 7), g->label_w, 1,
                  UI_FONT_SMALL, UI_ALIGN_LEFT, UI_COL_DIM, UI_COL_BG);
         cv->text(cv->ctx,
                  (data->payload[0] != '\0') ? data->payload : "(empty)",
-                 (int16_t)(4 + g->label_w), row_y(g, 7), g->col_w, 2,
+                 (int16_t)(UI_TEXT_X + g->label_w), row_y(g, 7), g->col_w, 2,
                  UI_FONT_SMALL, UI_ALIGN_LEFT, UI_COL_TEXT, UI_COL_BG);
     } else {
         snprintf(buf, sizeof(buf), "not read (%d)", data->ndef_rc);
@@ -612,15 +625,15 @@ static void page_trim(const ui_canvas_t* cv, const diag_layout_t* g,
      * own: only a scattered run blames the marking (BUG-0018). */
     if (verdict == DIAG_TRIM_SCATTERED) {
         kv_row(cv, g, 4, "Crossing", "marks disagreed", UI_COL_WARN);
-        full_row(cv, g, 5, "Mark only the seam, only when you see it.",
+        full_rows(cv, g, 5, 2, "Mark only the seam, only when you see it.",
                  UI_COL_WARN);
     } else if (verdict == DIAG_TRIM_SLOWING) {
         kv_row(cv, g, 4, "Crossing", "slowing - near the null", UI_COL_OK);
-        full_row(cv, g, 5, "Each gap was longer. Run again or stop.",
+        full_rows(cv, g, 5, 2, "Each gap was longer. Run again or stop.",
                  UI_COL_TEXT);
     } else if (verdict == DIAG_TRIM_SETTLED) {
         kv_row(cv, g, 4, "Crossing", "none in 5 min - settled", UI_COL_OK);
-        full_row(cv, g, 5, "The unit is trimmed. Write the porch down.",
+        full_rows(cv, g, 5, 2, "The unit is trimmed. Write the porch down.",
                  UI_COL_TEXT);
     } else if (span > 0u) {
         uint32_t tenths = (span * 1000u + DIAG_TRIM_FPS_X100 / 2u)
@@ -640,30 +653,31 @@ static void page_trim(const ui_canvas_t* cv, const diag_layout_t* g,
 
     if (d->trim_step != 0) {
         snprintf(buf, sizeof(buf), "%+d/64", (int)-d->trim_step);
-        kv_row(cv, g, 6, "Last move", buf, UI_COL_TEXT);
+        kv_row(cv, g, 7, "Last move", buf, UI_COL_TEXT);
     } else if (verdict == DIAG_TRIM_SCATTERED) {
-        kv_row(cv, g, 6, "Last move", "none - run thrown away", UI_COL_WARN);
+        kv_row(cv, g, 7, "Last move", "none - run thrown away", UI_COL_WARN);
     } else if (verdict == DIAG_TRIM_SLOWING) {
-        kv_row(cv, g, 6, "Last move", "none - rate still moving", UI_COL_TEXT);
+        kv_row(cv, g, 7, "Last move", "none - rate still moving", UI_COL_TEXT);
     } else if (verdict == DIAG_TRIM_SETTLED) {
-        kv_row(cv, g, 6, "Last move", "none needed", UI_COL_OK);
+        kv_row(cv, g, 7, "Last move", "none needed", UI_COL_OK);
     } else if (span > 0u) {
         /* A run long enough that the correction rounded to nothing is the
          * end of the road, not a failure: the register cannot express a
          * smaller change. */
-        kv_row(cv, g, 6, "Last move", "none left to give", UI_COL_OK);
+        kv_row(cv, g, 7, "Last move", "none left to give", UI_COL_OK);
     } else {
-        kv_row(cv, g, 6, "Last move", "-", UI_COL_DIM);
+        kv_row(cv, g, 7, "Last move", "-", UI_COL_DIM);
     }
 
     snprintf(buf, sizeof(buf), "Start, then mark each of %u crossings",
              (unsigned)DIAG_TRIM_MARKS);
-    full_row(cv, g, 8, buf, UI_COL_DIM);
-    full_row(cv, g, 9, "In a run: D-pad scrolls, B pattern, A gives up",
+    /* Each instruction has two rows, and the verdict above them has 5-6. */
+    full_rows(cv, g, 9, 2, buf, UI_COL_DIM);
+    full_rows(cv, g, 11, 2, "In a run: D-pad scrolls, B pattern, A gives up",
              UI_COL_DIM);
 
     if (diag_toast_active(d, now_ms)) {
-        full_row(cv, g, 11, "Saved", UI_COL_OK);
+        full_row(cv, g, 14, "Saved", UI_COL_OK);
     }
 }
 
