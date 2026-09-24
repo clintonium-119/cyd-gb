@@ -72,6 +72,13 @@ typedef struct {
     bool off;
     int16_t off_x, off_y, off_w, off_h;
     unsigned off_violations, begins;
+    /* Every text call, in order, for the tests that ask what was said. */
+    struct {
+        char s[CATALOG_TITLE_MAX + 4];
+        int16_t x, y;
+        uint16_t fg, bg;
+    } log[64];
+    unsigned logged;
 } fake_t;
 
 static fake_t fk;
@@ -107,8 +114,9 @@ static void fk_fill(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
     if (w == PICKER_ART_W) {
         f->art_fills++;
     }
-    /* COL_BAR, the hold bar's green — the one colour a test asserts on. */
-    if (color == 0x07E0) {
+    /* COL_BAR, the hold bar's white. The list highlight is white too, so the
+     * bar is told apart by its height. */
+    if (color == 0xFFFF && h == PICKER_BAR_H) {
         f->bar_fills++;
         f->bar_w = w;
         f->bar_y = y;
@@ -124,12 +132,18 @@ static void fk_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
     int16_t h;
 
     (void)align;
-    (void)fg;
-    (void)bg;
     f->texts++;
     if (s == NULL) {
         f->null_strings++;
         return;
+    }
+    if (f->logged < sizeof(f->log) / sizeof(f->log[0])) {
+        snprintf(f->log[f->logged].s, sizeof(f->log[0].s), "%s", s);
+        f->log[f->logged].x = x;
+        f->log[f->logged].y = y;
+        f->log[f->logged].fg = fg;
+        f->log[f->logged].bg = bg;
+        f->logged++;
     }
     if (font == UI_FONT_SMALL && w > f->widest_desc) {
         f->widest_desc = w;
@@ -764,6 +778,44 @@ static void test_draw_paints_nothing_when_it_is_handed_nothing(void)
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
 }
 
+/* ─── colours and wording ─────────────────────────────────────────────────── */
+
+static void test_the_pending_list_header_reads_choose_a_game(void)
+{
+    fill_library(LIB_COUNT);
+    run_list(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, false, NULL);
+    assert_sane();
+    TEST_ASSERT_EQUAL_STRING("Choose a Game", fk.log[0].s);
+}
+
+static void test_the_cursor_row_is_bold_black_on_a_white_bar(void)
+{
+    unsigned i;
+    unsigned black = 0;
+    int16_t x0 = 0;
+
+    fill_library(LIB_COUNT);
+    run_list(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, false, NULL);
+    assert_sane();
+    /* The cursor is on the first title: struck twice, transparent black, one
+     * pixel apart. Every other row is white on black. */
+    for (i = 1; i < fk.logged; i++) {
+        if (fk.log[i].fg == 0x0000) {
+            TEST_ASSERT_EQUAL_HEX16(0x0000, fk.log[i].bg);
+            TEST_ASSERT_EQUAL_STRING(lib.e[0].title, fk.log[i].s);
+            if (black == 0) {
+                x0 = fk.log[i].x;
+            } else {
+                TEST_ASSERT_EQUAL_INT16(x0 + 1, fk.log[i].x);
+            }
+            black++;
+        } else {
+            TEST_ASSERT_EQUAL_HEX16(0xFFFF, fk.log[i].fg);
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT(2, black);
+}
+
 /* ─── the fake itself ────────────────────────────────────────────────────── */
 
 static void test_the_fake_measures_a_fixed_advance_per_glyph(void)
@@ -811,6 +863,8 @@ int main(void)
     RUN_TEST(test_three_paragraphs_wrap_with_a_blank_line_between);
     RUN_TEST(test_a_full_description_scrolls_the_page_past_the_images);
     RUN_TEST(test_draw_paints_nothing_when_it_is_handed_nothing);
+    RUN_TEST(test_the_pending_list_header_reads_choose_a_game);
+    RUN_TEST(test_the_cursor_row_is_bold_black_on_a_white_bar);
     RUN_TEST(test_the_fake_measures_a_fixed_advance_per_glyph);
     RUN_TEST(test_the_fake_rejects_a_draw_outside_its_offscreen_row);
     return UNITY_END();

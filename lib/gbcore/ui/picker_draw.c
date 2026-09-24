@@ -4,24 +4,27 @@
 #include <string.h>
 
 /*
- * The fork's row colours, kept so the writer looks like the rest of the UI
- * (src/menu.cpp). Raw RGB565, as everywhere else in this firmware — there is
- * no named-colour layer to reach for.
+ * The in-game menu's colours, copied rather than shared because this side is
+ * pure C, so the writer and the menu read as one UI (src/menu.cpp). The
+ * highlight is the menu's: bold black on a white bar. Raw RGB565, as
+ * everywhere else in this firmware — there is no named-colour layer to reach
+ * for.
  */
 #define COL_BG     0x0000
 #define COL_ROW_BG 0x1082
-#define COL_HL_BG  0x2945
+#define COL_HL_BG  0xFFFF
+#define COL_HL_FG  0x0000
 #define COL_TITLE  0xFFE0
 #define COL_DIM    0x7BEF
 #define COL_TEXT   0xFFFF
-#define COL_BAR    0x07E0
+#define COL_BAR    0xFFFF
 
 #define PCT_FULL 100
 
 /* ─── strings ─────────────────────────────────────────────────────────────── */
 
 static const char* const LIST_HEADER[] = {
-    "Make a cart",        /* PICKER_MODE_PENDING   */
+    "Choose a Game",      /* PICKER_MODE_PENDING   */
     "Setup: pick a game", /* PICKER_MODE_IMMEDIATE */
 };
 
@@ -293,10 +296,23 @@ static void draw_list(const picker_t* p, const picker_layout_t* g,
         if (idx >= p->row_count) {
             break;
         }
-        bg = (idx == cursor) ? COL_HL_BG : COL_BG;
-        cv->fill(cv->ctx, 0, y, g->w, PICKER_ROW_H, bg);
+        if (idx != cursor) {
+            cv->fill(cv->ctx, 0, y, g->w, PICKER_ROW_H, COL_BG);
+            cv->text(cv->ctx, row_label(p, idx, buf, sizeof(buf)), 4, y,
+                     g->list_w, 1, UI_FONT_ROW, UI_ALIGN_LEFT, COL_TEXT,
+                     COL_BG);
+            continue;
+        }
+        /* Bold is the same glyphs struck twice a pixel apart, transparent
+         * over the bar: an opaque second pass would wipe the first one's
+         * right edge. */
+        cv->fill(cv->ctx, 0, y, g->w, PICKER_ROW_H, COL_HL_BG);
         cv->text(cv->ctx, row_label(p, idx, buf, sizeof(buf)), 4, y,
-                 g->list_w, 1, UI_FONT_ROW, UI_ALIGN_LEFT, COL_TEXT, bg);
+                 g->list_w, 1, UI_FONT_ROW, UI_ALIGN_LEFT, COL_HL_FG,
+                 COL_HL_FG);
+        cv->text(cv->ctx, row_label(p, idx, buf, sizeof(buf)), 5, y,
+                 g->list_w, 1, UI_FONT_ROW, UI_ALIGN_LEFT, COL_HL_FG,
+                 COL_HL_FG);
     }
 }
 
