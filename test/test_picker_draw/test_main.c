@@ -977,6 +977,10 @@ static void test_the_cursor_row_is_bold_black_on_a_white_bar(void)
         }
     }
     TEST_ASSERT_EQUAL_UINT(2, black);
+    /* The bar itself: the row's left edge, which no label box reaches. */
+    TEST_ASSERT_EQUAL_HEX16(0xFFFF, fk.fb[PICKER_HEADER_H * GEOM_53_W]);
+    TEST_ASSERT_EQUAL_HEX16(0x0000,
+                            fk.fb[(PICKER_HEADER_H + PICKER_ROW_H) * GEOM_53_W]);
 }
 
 /* ─── partial redraws ─────────────────────────────────────────────────────── */
@@ -1113,6 +1117,20 @@ static void test_a_marquee_step_paints_only_the_highlighted_row_offscreen(void)
                           PICKER_HEADER_H + PICKER_ROW_H);
 }
 
+static void test_images_landing_on_a_detail_page_paint_only_the_images(void)
+{
+    uint16_t idx = 0;
+
+    seq_begin();
+    /* Opened before the settle ran out, so the images arrive on the page. */
+    seq_step(picker_input(&sp, B_A, 10));
+    picker_input(&sp, B_NONE, 20);
+    TEST_ASSERT_TRUE(picker_media_due(&sp, 30, &idx));
+    seq_step(picker_media_loaded(&sp, idx, true, true));
+    assert_painted_within(sg.detail_x, sg.media_y, sg.shot_x + PICKER_ART_W,
+                          sg.media_y + PICKER_ART_H);
+}
+
 static void test_partial_draws_add_up_to_a_full_draw(void)
 {
     uint16_t idx = 0;
@@ -1230,6 +1248,7 @@ int main(void)
     RUN_TEST(test_a_scroll_paints_only_the_band);
     RUN_TEST(test_a_move_paints_only_its_two_rows_and_the_image_column);
     RUN_TEST(test_a_marquee_step_paints_only_the_highlighted_row_offscreen);
+    RUN_TEST(test_images_landing_on_a_detail_page_paint_only_the_images);
     RUN_TEST(test_partial_draws_add_up_to_a_full_draw);
     RUN_TEST(test_the_fake_measures_a_fixed_advance_per_glyph);
     RUN_TEST(test_the_fake_rejects_a_draw_outside_its_offscreen_row);
