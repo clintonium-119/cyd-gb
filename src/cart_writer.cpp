@@ -22,7 +22,8 @@
 //             button word and a millis() timestamp
 //   * draw  — the display module's canvas, asked for at the per-unit
 //             game_x / game_y so the writer renders inside the game window
-//   * read  — the catalog index, a title's description, and its two images
+//   * read  — the catalog index, the highlighted title's two images once the
+//             highlight has settled on it, and an opened title's description
 //
 // It reaches for nothing below itself. The names it must not mention are the
 // guard test's list, not repeated here, because that test scans this file's
@@ -34,7 +35,8 @@
 // otherwise sit idle through every game, in DRAM whose largest free block at
 // game time is about 15 KB (TASK-0001). The writer's boot runs nothing else,
 // so they come from a heap that has room. The two image buffers are separate
-// rather than shared because the detail page's band scrolls over both at once.
+// rather than shared because both images are on screen at once, and a partial
+// redraw may repaint either without reading the card again.
 
 // One expander read every WRITER_POLL_MS, matching the in-game menu. That is
 // longer than the input module's debounce window, so two successive samples
@@ -62,6 +64,8 @@ static enum boot_pick_e writer_run(enum writer_mode_e mode,
     bool immediate = (mode == WRITER_MODE_IMMEDIATE);
     uint32_t drawn_us = 0;
     bool logged = false;
+    bool media_logged = false;
+    const ui_canvas_t* cv;
     int rc;
 
     rc = catalog_index_build(cat, idx);
@@ -106,9 +110,10 @@ static enum boot_pick_e writer_run(enum writer_mode_e mode,
         Serial.printf("[WRITER] no %u B for descriptions\n",
                       (unsigned)DESC_MAX);
     }
+    cv = display_canvas(cfg.game_x, cfg.game_y);
+    picker_set_marquee_span(&picker, picker_row_overflow(&picker, &geom, cv));
     tft.fillScreen(TFT_BLACK);
-    picker_draw(&picker, &geom, NULL, art, shot,
-                display_canvas(cfg.game_x, cfg.game_y));
+    picker_draw(&picker, &geom, NULL, art, shot, cv);
 
     for (;;) {
         button_update();
@@ -122,13 +127,29 @@ static enum boot_pick_e writer_run(enum writer_mode_e mode,
             break;
         }
 
+        // A new highlight: how far its label overflows, so the marquee
+        // knows whether to run and how far.
+        if (picker.screen == PICKER_SCREEN_LIST &&
+            (ev & (PICKER_EVENT_ROWS | PICKER_EVENT_REDRAW))) {
+            picker_set_marquee_span(&picker,
+                                    picker_row_overflow(&picker, &geom, cv));
+        }
+
         // The highlight settled on a title: its cover and snapshot.
         if (picker_media_due(&picker, now, &ci)) {
+            uint32_t began = micros();
             bool have_art =
                 sd_media_read(ART_PATH, idx->e[ci].filename, art, PICKER_ART_PX);
             bool have_shot = sd_media_read(SHOT_PATH, idx->e[ci].filename, shot,
                                            PICKER_ART_PX);
 
+            if (!media_logged) {
+                // Once per session, like the redraw figure: how long a held
+                // Down stalls at each title it settles on.
+                Serial.printf("[WRITER] media %lu us\n",
+                              (unsigned long)(micros() - began));
+                media_logged = true;
+            }
             ev |= picker_media_loaded(&picker, ci, have_art, have_shot);
         }
 
@@ -146,17 +167,17 @@ static enum boot_pick_e writer_run(enum writer_mode_e mode,
             picker_set_scroll_span(
                 &picker,
                 picker_page_lines(&geom, desc && desc[0] ? desc : NULL),
-                picker_band_rows(&picker, &geom,
-                                 display_canvas(cfg.game_x, cfg.game_y)));
+                picker_band_rows(&picker, &geom, cv));
             ev |= PICKER_EVENT_BAND;
         }
 
         if (ev != PICKER_EVENT_NONE) {
             uint32_t began = micros();
 
-            picker_draw(&picker, &geom, desc && desc[0] ? desc : NULL, art,
-                        shot,
-                        display_canvas(cfg.game_x, cfg.game_y));
+            // Only what changed. A full repaint on every hold tick blanked
+            // the window under the panel's refresh, which was the flicker.
+            picker_draw_events(&picker, &geom, ev,
+                               desc && desc[0] ? desc : NULL, art, shot, cv);
             drawn_us = micros() - began;
             if (!logged) {
                 // Once per session: the figure the bench needs, without a
