@@ -8,9 +8,10 @@
 // buffer and the Arduino binding adds the per-unit game_x / game_y origin, and
 // the same code serves both.
 //
-// Eight pages share one header — the page's title on the left, its number on
-// the right, a rule under both — and one footer line naming what the buttons
-// do there. Between them each page is its own thing: eight live button rows,
+// The pages share the theme's chrome: the page's title on the left and its
+// number on the right, a grey help line saying what the page is for, and the
+// button-hint footer naming what the buttons do there. Between them each page
+// is its own thing: eight live button rows,
 // four readouts, a tag dump, a battery, a tone, three test patterns, the
 // nudge, and the build's own version.
 //
@@ -30,13 +31,14 @@
 #include "render/scaler.h"
 #include "ui/canvas.h"
 #include "ui/diag.h"
+#include "ui/theme.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Font 2's row, matching the writer's header. */
-#define DIAG_HEADER_H 18
+/* The theme's header, as the writer and the menu draw it. */
+#define DIAG_HEADER_H UI_HEADER_H
 /* Font 1's pitch: UI_ROW_PITCH(8). Every body row is one of these. */
 #define DIAG_ROW_H 10
 /* A page with fewer body rows than this cannot say anything useful, so the
@@ -50,15 +52,16 @@ extern "C" {
 typedef struct diag_layout_s {
     int16_t w, h;
     int16_t body_y;   /* first body row's top: header plus a 2 px gap    */
-    uint8_t rows;     /* body rows that fit between body_y and the edge  */
+    uint8_t rows;     /* body rows between body_y and the help line      */
     int16_t col_w;    /* width of a row's value box                      */
     int16_t label_w;  /* width of a row's label box, 12 font-1 columns   */
     int16_t bar_w;    /* one colour bar, w / 8                           */
-    int16_t footer_y; /* the button-hint line's top                      */
+    int16_t help_y;   /* the grey help line's top                        */
+    int16_t foot_y;   /* the button-hint footer's top                    */
 } diag_layout_t;
 
 /*
- * Work out every number the eight pages need from the window size alone, so
+ * Work out every number the pages need from the window size alone, so
  * the three render geometries are the same code with different inputs.
  *
  * DIAG_ERR_ARGS for a NULL out or a window with fewer than DIAG_MIN_ROWS body

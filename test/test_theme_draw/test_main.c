@@ -440,6 +440,24 @@ static void test_two_hints_right_align_and_a_word_button_stretches(void)
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
 }
 
+static void test_hints_that_do_not_fit_are_dropped_from_the_end(void)
+{
+    static const ui_hint_t hints[] = {
+        { "Start", "Run" }, { "D-pad", "Porch" }, { "A", "Save" },
+        { "B", "Default" },
+    };
+    unsigned i;
+
+    ui_hint_bar(&cv, 240, H - UI_FOOT_H, hints, 4);
+    TEST_ASSERT_EQUAL_UINT(0, fk.violations);
+    /* The outer pill and three glyphs: "B Default" did not fit. */
+    TEST_ASSERT_EQUAL_UINT(4, count(OP_ROUND));
+    TEST_ASSERT_TRUE(nth(OP_ROUND, 0)->x >= UI_PAD);
+    for (i = 0; i < fk.n; i++) {
+        TEST_ASSERT_TRUE(strcmp(fk.log[i].s, "Default") != 0);
+    }
+}
+
 /* ─── the notice ─────────────────────────────────────────────────────────── */
 
 static void test_the_notice_title_is_red_only_for_an_error(void)
@@ -560,6 +578,7 @@ int main(void)
     RUN_TEST(test_a_null_help_line_only_clears);
     RUN_TEST(test_no_hints_paints_only_the_background);
     RUN_TEST(test_two_hints_right_align_and_a_word_button_stretches);
+    RUN_TEST(test_hints_that_do_not_fit_are_dropped_from_the_end);
     RUN_TEST(test_the_notice_title_is_red_only_for_an_error);
     RUN_TEST(test_a_long_notice_title_wraps_in_font_2);
     RUN_TEST(test_a_notice_with_hints_ends_in_the_footer);

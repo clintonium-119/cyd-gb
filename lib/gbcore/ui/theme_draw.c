@@ -130,12 +130,21 @@ void ui_hint_bar(const ui_canvas_t* cv, int16_t w, int16_t y,
     if (hints == NULL || n == 0) {
         return;
     }
+    /* As many hints as fit inside the window's insets, first ones first. */
     for (i = 0; i < n; i++) {
-        ow = (int16_t)(ow + glyph_w(cv, hints[i].button) + UI_HINT_GAP +
-                       cv->measure(cv->ctx, hints[i].label, UI_FONT_HINT));
-        if (i > 0) {
-            ow = (int16_t)(ow + UI_HINT_GAP);
+        int16_t more = (int16_t)(glyph_w(cv, hints[i].button) + UI_HINT_GAP +
+                                 cv->measure(cv->ctx, hints[i].label,
+                                             UI_FONT_HINT) +
+                                 (i > 0 ? UI_HINT_GAP : 0));
+
+        if (ow + more > w - 2 * UI_PAD) {
+            break;
         }
+        ow = (int16_t)(ow + more);
+    }
+    n = i;
+    if (n == 0) {
+        return;
     }
     cx = (int16_t)(w - UI_PAD - ow);
     cv->round_fill(cv->ctx, cx, oy, ow, oh, UI_PILL_R(oh), UI_COL_PILL,

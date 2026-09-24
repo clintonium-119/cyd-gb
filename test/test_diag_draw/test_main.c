@@ -57,6 +57,16 @@ typedef struct {
     unsigned violations, fills, texts, images;
     unsigned round_fills;
     unsigned null_strings;
+
+    /* The theme's chrome, found by where it lands. */
+    int16_t help_y, foot_y;
+    unsigned help_fills;     /* the help line's band cleared             */
+    unsigned foot_fills;     /* the hint footer's band cleared           */
+    unsigned help_texts;     /* text inside the help line's band         */
+    unsigned header_bands;   /* a dark band behind the header            */
+    unsigned header_rules;   /* a 1 px rule under the header             */
+    unsigned body_overruns;  /* body text running into the help line     */
+    unsigned help_too_wide;  /* a help line longer than its one row      */
     unsigned range_faults;   /* image row ranges outside the source block */
 
     unsigned bar_fills;      /* fills exactly bar_w wide                  */
@@ -110,6 +120,18 @@ static void fk_fill(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
     fake_t* f = (fake_t*)ctx;
 
     f->fills++;
+    if (x == 0 && w == f->w && y == f->help_y && h == UI_HELP_H) {
+        f->help_fills++;
+    }
+    if (x == 0 && w == f->w && y == f->foot_y && h == UI_FOOT_H) {
+        f->foot_fills++;
+    }
+    if (y == 0 && h == DIAG_HEADER_H && color == COL_ROW_BG) {
+        f->header_bands++;
+    }
+    if (y == DIAG_HEADER_H && h == 1) {
+        f->header_rules++;
+    }
     if (w == f->bar_w && h > DIAG_ROW_H) {
         f->bar_fills++;
     }
@@ -195,7 +217,25 @@ static void fk_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
     }
     /* The box the driver will clip into: rows lines at the font's pitch. */
     h = (int16_t)(rows * UI_ROW_PITCH(ui_font_height(font)));
+    if (y >= f->help_y && y + h <= f->help_y + UI_HELP_H) {
+        f->help_texts++;
+        if (strlen(s) * UI_FONT_SMALL_ADV > (size_t)(f->w - 2 * UI_PAD)) {
+            f->help_too_wide++;
+        }
+    } else if (y < f->help_y && y + h > f->help_y) {
+        f->body_overruns++;
+    }
     put_rect(f, x, y, w, h);
+}
+
+/* A fixed advance: exact at font 1, a stand-in elsewhere. */
+static int16_t fk_measure(void* ctx, const char* s, uint8_t font)
+{
+    (void)ctx;
+    return (s == NULL) ? 0
+                       : (int16_t)(strlen(s) * ((font == UI_FONT_SMALL)
+                                                    ? UI_FONT_SMALL_ADV
+                                                    : 8));
 }
 
 static void fk_image(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
@@ -249,11 +289,14 @@ static ui_canvas_t canvas_over(fake_t* f, const diag_layout_t* g)
     f->w = g->w;
     f->h = g->h;
     f->bar_w = g->bar_w;
+    f->help_y = g->help_y;
+    f->foot_y = g->foot_y;
     cv.ctx = f;
     cv.fill = fk_fill;
     cv.round_fill = fk_round_fill;
     cv.text = fk_text;
     cv.image = fk_image;
+    cv.measure = fk_measure;
     return cv;
 }
 
@@ -368,32 +411,34 @@ static void test_the_layout_accepts_every_window(void)
 {
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(GEOM_24_W, GEOM_24_H, &geom));
     TEST_ASSERT_EQUAL_INT16(DIAG_HEADER_H + 2, geom.body_y);
-    /* (216 - 20 - 2) / 10 = 19 rows, well past the eight a page needs. */
-    TEST_ASSERT_EQUAL_UINT8(19, geom.rows);
+    /* (216 - 18 - 10 - 20) / 10 = 16 rows, well past the eight a page
+     * needs. */
+    TEST_ASSERT_EQUAL_UINT8(16, geom.rows);
     TEST_ASSERT_EQUAL_INT16(GEOM_24_W / 8, geom.bar_w);
-    TEST_ASSERT_EQUAL_INT16(GEOM_24_H - DIAG_ROW_H - 2, geom.footer_y);
+    TEST_ASSERT_EQUAL_INT16(GEOM_24_H - UI_FOOT_H, geom.foot_y);
+    TEST_ASSERT_EQUAL_INT16(GEOM_24_H - UI_FOOT_H - UI_HELP_H, geom.help_y);
     TEST_ASSERT_EQUAL_INT16(12 * UI_FONT_SMALL_ADV, geom.label_w);
     TEST_ASSERT_EQUAL_INT16(GEOM_24_W - geom.label_w - 8, geom.col_w);
 
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(GEOM_26_W, GEOM_26_H, &geom));
     TEST_ASSERT_EQUAL_INT16(DIAG_HEADER_H + 2, geom.body_y);
-    /* (234 - 20 - 2) / 10 = 21. */
-    TEST_ASSERT_EQUAL_UINT8(21, geom.rows);
+    /* (234 - 28 - 20) / 10 = 18. */
+    TEST_ASSERT_EQUAL_UINT8(18, geom.rows);
     TEST_ASSERT_EQUAL_INT16(GEOM_26_W / 8, geom.bar_w);
 
     TEST_ASSERT_EQUAL_INT(DIAG_OK, diag_layout(GEOM_53_W, GEOM_53_H, &geom));
     TEST_ASSERT_EQUAL_INT16(DIAG_HEADER_H + 2, geom.body_y);
-    /* (240 - 20 - 2) / 10 = 21 — no fewer than the old 260 x 234 gave, and
-     * the footer is inside the window. */
-    TEST_ASSERT_EQUAL_UINT8(21, geom.rows);
+    /* (240 - 28 - 20) / 10 = 19, and the footer is inside the window. */
+    TEST_ASSERT_EQUAL_UINT8(19, geom.rows);
     TEST_ASSERT_EQUAL_INT16(GEOM_53_W / 8, geom.bar_w);
-    TEST_ASSERT_EQUAL_INT16(GEOM_53_H - DIAG_ROW_H - 2, geom.footer_y);
-    TEST_ASSERT_TRUE(geom.footer_y + DIAG_ROW_H <= GEOM_53_H);
+    TEST_ASSERT_EQUAL_INT16(212, geom.help_y);
+    TEST_ASSERT_EQUAL_INT16(222, geom.foot_y);
+    TEST_ASSERT_TRUE(geom.foot_y + UI_FOOT_H <= GEOM_53_H);
 }
 
 static void test_the_layout_refuses_a_window_with_too_few_rows(void)
 {
-    /* (60 - 20 - 2) / 10 = 3 rows, under DIAG_MIN_ROWS. */
+    /* (60 - 28 - 20) / 10 = 1 row, under DIAG_MIN_ROWS. */
     TEST_ASSERT_EQUAL_INT(DIAG_ERR_ARGS, diag_layout(100, 60, &geom));
     TEST_ASSERT_EQUAL_INT(DIAG_ERR_ARGS,
         diag_layout(GEOM_24_W, GEOM_24_H, NULL));
@@ -628,6 +673,80 @@ static void test_the_checkerboard_refuses_an_unclaimed_width(void)
     TEST_ASSERT_TRUE(fk.texts > 0);
 }
 
+/* ─── the theme's chrome ─────────────────────────────────────────────────── */
+
+static bool drew_text(const char* want);
+
+static void test_every_page_has_a_help_line_and_a_hint_footer(void)
+{
+    uint8_t page;
+
+    fill_data();
+    for (page = 0; page < DIAG_PAGE_COUNT; page++) {
+        draw_page(GEOM_53_W, GEOM_53_H, page, 0, true, 0);
+        assert_clean();
+        TEST_ASSERT_EQUAL_UINT_MESSAGE(1, fk.help_fills, "no help band");
+        TEST_ASSERT_EQUAL_UINT_MESSAGE(1, fk.help_texts, "no help text");
+        TEST_ASSERT_EQUAL_UINT_MESSAGE(1, fk.foot_fills, "no hint footer");
+        /* The outer pill and at least one glyph. */
+        TEST_ASSERT_GREATER_OR_EQUAL_UINT(2, fk.round_fills);
+    }
+}
+
+static void test_every_help_line_fits_one_row(void)
+{
+    uint8_t page;
+
+    fill_data();
+    for (page = 0; page < DIAG_PAGE_COUNT; page++) {
+        draw_page(GEOM_53_W, GEOM_53_H, page, 0, true, 0);
+        TEST_ASSERT_EQUAL_UINT_MESSAGE(0, fk.help_too_wide,
+                                       diag_page_title(page));
+    }
+}
+
+static void test_the_pages_that_had_a_page_hint_still_name_it(void)
+{
+    uint8_t page;
+
+    fill_data();
+    for (page = 0; page < DIAG_PAGE_COUNT; page++) {
+        draw_page(GEOM_53_W, GEOM_53_H, page, 0, true, 0);
+        if (page == DIAG_PAGE_NUDGE || page == DIAG_PAGE_TRIM) {
+            continue;
+        }
+        TEST_ASSERT_TRUE_MESSAGE(drew_text("Sel+L/R"), diag_page_title(page));
+        TEST_ASSERT_TRUE(drew_text("Page"));
+    }
+}
+
+static void test_the_header_has_no_band_and_no_rule(void)
+{
+    uint8_t page;
+
+    fill_data();
+    for (page = 0; page < DIAG_PAGE_COUNT; page++) {
+        draw_page(GEOM_53_W, GEOM_53_H, page, 0, true, 0);
+        TEST_ASSERT_EQUAL_UINT(0, fk.header_bands);
+        TEST_ASSERT_EQUAL_UINT(0, fk.header_rules);
+    }
+}
+
+static void test_no_page_runs_into_the_help_line(void)
+{
+    uint8_t page;
+
+    fill_data();
+    for (page = 0; page < DIAG_PAGE_COUNT; page++) {
+        draw_page(GEOM_24_W, GEOM_24_H, page, 0, true, 0);
+        TEST_ASSERT_EQUAL_UINT_MESSAGE(0, fk.body_overruns,
+                                       diag_page_title(page));
+        draw_page(GEOM_53_W, GEOM_53_H, page, 0, true, 0);
+        TEST_ASSERT_EQUAL_UINT_MESSAGE(0, fk.body_overruns,
+                                       diag_page_title(page));
+    }
+}
+
 /* ─── individual pages ────────────────────────────────────────────────────── */
 
 static void test_the_buttons_page_lights_a_box_per_pressed_button(void)
@@ -859,5 +978,10 @@ int main(void)
     RUN_TEST(test_a_missing_build_string_still_paints);
     RUN_TEST(test_a_missing_card_and_catalog_still_paint);
     RUN_TEST(test_a_null_argument_paints_nothing);
+    RUN_TEST(test_every_page_has_a_help_line_and_a_hint_footer);
+    RUN_TEST(test_every_help_line_fits_one_row);
+    RUN_TEST(test_the_pages_that_had_a_page_hint_still_name_it);
+    RUN_TEST(test_the_header_has_no_band_and_no_rule);
+    RUN_TEST(test_no_page_runs_into_the_help_line);
     return UNITY_END();
 }

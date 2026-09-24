@@ -205,7 +205,9 @@ static void redraw(uint32_t now_ms)
 }
 
 // The one line the page cannot draw itself, because it has to be on the panel
-// before the reader blocks rather than after it answers.
+// before the reader blocks rather than after it answers. It takes the help
+// line's place, in white so it reads as news, and leaves the hints alone; the
+// redraw after the scan puts the help back.
 static void say_scanning()
 {
     int16_t ox = 0;
@@ -214,10 +216,10 @@ static void say_scanning()
 
     diag_origin(&d, &ox, &oy);
     cv = display_canvas(ox, oy);
-    cv->fill(cv->ctx, 0, geom.footer_y, geom.w, DIAG_ROW_H, TFT_BLACK);
-    cv->text(cv->ctx, "Scanning...", 4, geom.footer_y,
-             (int16_t)(geom.w - 8), 1, UI_FONT_SMALL, UI_ALIGN_LEFT,
-             TFT_WHITE, TFT_BLACK);
+    cv->fill(cv->ctx, 0, geom.help_y, geom.w, UI_HELP_H, UI_COL_BG);
+    cv->text(cv->ctx, "Scanning...", UI_PAD, geom.help_y,
+             (int16_t)(geom.w - 2 * UI_PAD), 1, UI_FONT_HELP, UI_ALIGN_LEFT,
+             UI_COL_TEXT, UI_COL_BG);
 }
 
 // ─── the panel-trim fixture ─────────────────────────────────────────────────

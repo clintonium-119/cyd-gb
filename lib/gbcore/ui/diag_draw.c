@@ -3,19 +3,7 @@
 
 #include "audio/mix.h"
 #include "ui/diag_draw.h"
-
-/*
- * Colours, matching the writer's layout and the in-game menu. Raw RGB565, as
- * everywhere else in this firmware — there is no named-colour layer to reach
- * for.
- */
-#define COL_BG     0x0000
-#define COL_ROW_BG 0x1082
-#define COL_TITLE  0xFFE0
-#define COL_DIM    0x7BEF
-#define COL_TEXT   0xFFFF
-#define COL_OK     0x07E0
-#define COL_WARN   0xF800
+#include "ui/theme_draw.h"
 
 /* The colour-bar page, left to right: a descending luminance ramp, so a
  * channel that is dead shows up as a bar that matches its neighbour. */
@@ -74,18 +62,46 @@ static const char* const NFC_STATE_NAMES[] = {
 /* The four classes the boot classifier reports, in its own order. */
 static const char* const CLASS_NAMES[4] = { "blank", "MENU", "WILD", "game" };
 
-/* One footer line per page: what the buttons do here. Paging is named on
- * every one of them, because it is the only way off a page. */
-static const char* const FOOTERS[DIAG_PAGE_COUNT] = {
-    "Select+L/R: page",
-    "Select+L/R: page",
-    "A: scan   Select+L/R: page",
-    "Select+L/R: page",
-    "A: tone   Up/Down: volume   Select+L/R: page",
-    "Up/Down: pattern   Select+L/R: page",
-    "D-pad: move   A: save   B: default",
-    "Start: run   D-pad: porch   A: save   B: default",
-    "Up/Down: frameskip   Select+L/R: page",
+/* One help line per page: what the page is for, in one font-1 row. */
+static const char* const HELPS[DIAG_PAGE_COUNT] = {
+    "Press each button; its row lights up.",
+    "Card, catalog and free space.",
+    "The tag on the reader, as the boot sees it.",
+    "Battery voltage at the pin and the cell.",
+    "A test tone at each volume step.",
+    "Test patterns for the panel and its scaler.",
+    "Centre the window behind the bezel.",
+    "Match the panel's refresh to the game's.",
+    "Frameskip, firmware version and build time.",
+};
+
+/* One hint footer per page: what the buttons do here. Paging is named on
+ * every page that has room for it, because it is the only way off a page;
+ * the two tuning pages spend the footer on their own buttons. */
+#define HINT_PAGE { "Sel+L/R", "Page" }
+static const ui_hint_t HINTS_PAGE[] = { HINT_PAGE };
+static const ui_hint_t HINTS_NFC[] = { { "A", "Scan" }, HINT_PAGE };
+static const ui_hint_t HINTS_AUDIO[] = {
+    { "A", "Tone" }, { "U/D", "Volume" }, HINT_PAGE,
+};
+static const ui_hint_t HINTS_DISPLAY[] = { { "U/D", "Pattern" }, HINT_PAGE };
+static const ui_hint_t HINTS_NUDGE[] = {
+    { "D-pad", "Move" }, { "A", "Save" }, { "B", "Default" },
+};
+static const ui_hint_t HINTS_TRIM[] = {
+    { "Start", "Run" }, { "D-pad", "Porch" }, { "A", "Save" },
+    { "B", "Default" },
+};
+static const ui_hint_t HINTS_SYSTEM[] = { { "U/D", "Frameskip" }, HINT_PAGE };
+
+#define HINTS(a) { (a), (uint8_t)(sizeof(a) / sizeof((a)[0])) }
+static const struct {
+    const ui_hint_t* hints;
+    uint8_t n;
+} FOOTERS[DIAG_PAGE_COUNT] = {
+    HINTS(HINTS_PAGE),    HINTS(HINTS_PAGE),   HINTS(HINTS_NFC),
+    HINTS(HINTS_PAGE),    HINTS(HINTS_AUDIO),  HINTS(HINTS_DISPLAY),
+    HINTS(HINTS_NUDGE),   HINTS(HINTS_TRIM),   HINTS(HINTS_SYSTEM),
 };
 
 /* ─── geometry ────────────────────────────────────────────────────────────── */
@@ -105,11 +121,12 @@ int diag_layout(int16_t w, int16_t h, diag_layout_t* out)
 
     out->w = w;
     out->h = h;
-    /* Two pixels under the header's rule, so a body row's box never touches
-     * it. */
+    out->foot_y = (int16_t)(h - UI_FOOT_H);
+    out->help_y = (int16_t)(out->foot_y - UI_HELP_H);
+    /* Two pixels under the header, so a body row's box never touches it. */
     out->body_y = (int16_t)(DIAG_HEADER_H + 2);
 
-    body_h = (int16_t)(h - out->body_y - 2);
+    body_h = (int16_t)(out->help_y - out->body_y);
     if (body_h < (int16_t)(DIAG_MIN_ROWS * DIAG_ROW_H)) {
         return DIAG_ERR_ARGS;
     }
@@ -125,7 +142,6 @@ int diag_layout(int16_t w, int16_t h, diag_layout_t* out)
     }
 
     out->bar_w = (int16_t)(w / BAR_COUNT);
-    out->footer_y = (int16_t)(h - DIAG_ROW_H - 2);
 
     return DIAG_OK;
 }
@@ -146,9 +162,9 @@ static void kv_row(const ui_canvas_t* cv, const diag_layout_t* g, uint8_t row,
     int16_t y = row_y(g, row);
 
     cv->text(cv->ctx, label, 4, y, g->label_w, 1, UI_FONT_SMALL,
-             UI_ALIGN_LEFT, COL_DIM, COL_BG);
+             UI_ALIGN_LEFT, UI_COL_DIM, UI_COL_BG);
     cv->text(cv->ctx, value, (int16_t)(4 + g->label_w), y, g->col_w, 1,
-             UI_FONT_SMALL, UI_ALIGN_LEFT, fg, COL_BG);
+             UI_FONT_SMALL, UI_ALIGN_LEFT, fg, UI_COL_BG);
 }
 
 /* A whole-width line, for anything that has no label. */
@@ -156,7 +172,7 @@ static void full_row(const ui_canvas_t* cv, const diag_layout_t* g,
                      uint8_t row, const char* s, uint16_t fg)
 {
     cv->text(cv->ctx, s, 4, row_y(g, row), (int16_t)(g->w - 8), 1,
-             UI_FONT_SMALL, UI_ALIGN_LEFT, fg, COL_BG);
+             UI_FONT_SMALL, UI_ALIGN_LEFT, fg, UI_COL_BG);
 }
 
 static void draw_header(const ui_canvas_t* cv, const diag_layout_t* g,
@@ -165,30 +181,34 @@ static void draw_header(const ui_canvas_t* cv, const diag_layout_t* g,
     const char* title = diag_page_title(page);
     char num[8];
 
-    cv->fill(cv->ctx, 0, 0, g->w, g->h, COL_BG);
-    cv->fill(cv->ctx, 0, 0, g->w, DIAG_HEADER_H, COL_ROW_BG);
-
+    cv->fill(cv->ctx, 0, 0, g->w, g->h, UI_COL_BG);
     snprintf(num, sizeof(num), "%u/%u", (unsigned)(page + 1),
              (unsigned)DIAG_PAGE_COUNT);
     /* diag_page_title() answers NULL only past the last page, which cannot
      * reach here — but the canvas must never see a NULL string, so this
      * substitutes rather than trusting the caller. */
-    cv->text(cv->ctx, (title != NULL) ? title : "?", 4, 0,
-             (int16_t)(g->w - 48), 1, UI_FONT_ROW, UI_ALIGN_LEFT, COL_TITLE,
-             COL_ROW_BG);
-    cv->text(cv->ctx, num, (int16_t)(g->w - 44), 0, 40, 1, UI_FONT_ROW,
-             UI_ALIGN_RIGHT, COL_DIM, COL_ROW_BG);
-
-    cv->fill(cv->ctx, 0, DIAG_HEADER_H, g->w, 1, COL_DIM);
+    ui_header(cv, g->w, (title != NULL) ? title : "?", num);
 }
 
+/* The help line and the hint footer. */
 static void draw_footer(const ui_canvas_t* cv, const diag_layout_t* g,
                         uint8_t page)
 {
-    const char* s = (page < DIAG_PAGE_COUNT) ? FOOTERS[page] : "";
+    if (page >= DIAG_PAGE_COUNT) {
+        return;
+    }
+    ui_help_line(cv, g->w, g->help_y, HELPS[page]);
+    ui_hint_bar(cv, g->w, g->foot_y, FOOTERS[page].hints, FOOTERS[page].n);
+}
 
-    cv->text(cv->ctx, s, 4, g->footer_y, (int16_t)(g->w - 8), 1,
-             UI_FONT_SMALL, UI_ALIGN_LEFT, COL_DIM, COL_BG);
+/* The pages whose picture is the window's own edge. The footer's bands are
+ * cleared the window's full width, so on these it goes down first and the
+ * border is drawn over it. */
+static bool draws_border(const diag_t* d, uint8_t page)
+{
+    return page == DIAG_PAGE_NUDGE ||
+           (page == DIAG_PAGE_DISPLAY &&
+            diag_pattern(d) == DIAG_PATTERN_BORDER);
 }
 
 /* ─── pages ───────────────────────────────────────────────────────────────── */
@@ -205,12 +225,12 @@ static void page_buttons(const ui_canvas_t* cv, const diag_layout_t* g,
 
         snprintf(gpa, sizeof(gpa), "GPA%u", (unsigned)data->gpa[i]);
         cv->text(cv->ctx, BTN_LABELS[i], 4, y, g->label_w, 1, UI_FONT_SMALL,
-                 UI_ALIGN_LEFT, down ? COL_TEXT : COL_DIM, COL_BG);
+                 UI_ALIGN_LEFT, down ? UI_COL_TEXT : UI_COL_DIM, UI_COL_BG);
         cv->text(cv->ctx, gpa, (int16_t)(4 + g->label_w), y, 48, 1,
-                 UI_FONT_SMALL, UI_ALIGN_LEFT, COL_DIM, COL_BG);
+                 UI_FONT_SMALL, UI_ALIGN_LEFT, UI_COL_DIM, UI_COL_BG);
         /* The box is the part a builder watches: one press, one row lights. */
         cv->fill(cv->ctx, (int16_t)(4 + g->label_w + 52), (int16_t)(y + 1), 16,
-                 8, down ? COL_OK : COL_ROW_BG);
+                 8, down ? UI_COL_OK : UI_COL_SLOT);
     }
 }
 
@@ -220,26 +240,26 @@ static void page_sd(const ui_canvas_t* cv, const diag_layout_t* g,
     char buf[40];
 
     kv_row(cv, g, 0, "Card", data->sd_ok ? "mounted" : "not mounted",
-           data->sd_ok ? COL_OK : COL_WARN);
+           data->sd_ok ? UI_COL_OK : UI_COL_WARN);
 
     snprintf(buf, sizeof(buf), "%u", (unsigned)data->rom_count);
-    kv_row(cv, g, 1, "ROMs", buf, COL_TEXT);
+    kv_row(cv, g, 1, "ROMs", buf, UI_COL_TEXT);
 
     if (data->catalog_ok) {
         snprintf(buf, sizeof(buf), "%u entries",
                  (unsigned)data->catalog_count);
-        kv_row(cv, g, 2, "Catalog", buf, COL_TEXT);
+        kv_row(cv, g, 2, "Catalog", buf, UI_COL_TEXT);
     } else {
-        kv_row(cv, g, 2, "Catalog", "missing", COL_WARN);
+        kv_row(cv, g, 2, "Catalog", "missing", UI_COL_WARN);
     }
 
     if (data->sd_stats_ok) {
         snprintf(buf, sizeof(buf), "%lu MB of %lu MB",
                  (unsigned long)data->sd_used_mb,
                  (unsigned long)data->sd_total_mb);
-        kv_row(cv, g, 3, "Used", buf, COL_TEXT);
+        kv_row(cv, g, 3, "Used", buf, UI_COL_TEXT);
     } else {
-        kv_row(cv, g, 3, "Used", "size unavailable", COL_DIM);
+        kv_row(cv, g, 3, "Used", "size unavailable", UI_COL_DIM);
     }
 }
 
@@ -262,59 +282,59 @@ static void page_nfc(const ui_canvas_t* cv, const diag_layout_t* g,
         snprintf(buf, sizeof(buf), "fw %u.%u",
                  (unsigned)((data->nfc_fw >> 16) & 0xFFu),
                  (unsigned)((data->nfc_fw >> 8) & 0xFFu));
-        kv_row(cv, g, 0, "Reader", buf, COL_OK);
+        kv_row(cv, g, 0, "Reader", buf, UI_COL_OK);
     } else {
-        kv_row(cv, g, 0, "Reader", "not answering", COL_WARN);
+        kv_row(cv, g, 0, "Reader", "not answering", UI_COL_WARN);
     }
 
     kv_row(cv, g, 1, "State",
            (data->nfc_state < (uint8_t)(sizeof(NFC_STATE_NAMES)
                                         / sizeof(NFC_STATE_NAMES[0])))
                ? NFC_STATE_NAMES[data->nfc_state] : "?",
-           COL_TEXT);
+           UI_COL_TEXT);
 
     kv_row(cv, g, 2, "UID", (data->uid_hex[0] != '\0') ? data->uid_hex : "-",
-           COL_TEXT);
+           UI_COL_TEXT);
 
     if (data->version_ok) {
         snprintf(buf, sizeof(buf), "%02X %02X %02X %02X %02X %02X %02X %02X",
                  data->version[0], data->version[1], data->version[2],
                  data->version[3], data->version[4], data->version[5],
                  data->version[6], data->version[7]);
-        kv_row(cv, g, 3, "Version", buf, COL_TEXT);
+        kv_row(cv, g, 3, "Version", buf, UI_COL_TEXT);
     } else {
-        kv_row(cv, g, 3, "Version", "-", COL_DIM);
+        kv_row(cv, g, 3, "Version", "-", UI_COL_DIM);
     }
 
     if (data->cfg_ok) {
         snprintf(buf, sizeof(buf), "0x%02X (%s)", data->auth0,
                  (data->auth0 == 0xFF) ? "open" : "protected");
-        kv_row(cv, g, 4, "AUTH0", buf, COL_TEXT);
+        kv_row(cv, g, 4, "AUTH0", buf, UI_COL_TEXT);
         snprintf(buf, sizeof(buf), "0x%02X PROT %u CFGLCK %u AUTHLIM %u",
                  data->access, (unsigned)((data->access >> 7) & 1u),
                  (unsigned)((data->access >> 6) & 1u),
                  (unsigned)(data->access & 7u));
-        kv_row(cv, g, 5, "ACCESS", buf, COL_TEXT);
+        kv_row(cv, g, 5, "ACCESS", buf, UI_COL_TEXT);
     } else {
-        kv_row(cv, g, 4, "AUTH0", "-", COL_DIM);
-        kv_row(cv, g, 5, "ACCESS", "-", COL_DIM);
+        kv_row(cv, g, 4, "AUTH0", "-", UI_COL_DIM);
+        kv_row(cv, g, 5, "ACCESS", "-", UI_COL_DIM);
     }
 
     kv_row(cv, g, 6, "Class",
-           (data->cls < 4u) ? CLASS_NAMES[data->cls] : "?", COL_TEXT);
+           (data->cls < 4u) ? CLASS_NAMES[data->cls] : "?", UI_COL_TEXT);
 
     /* Two rows for the decoded text: the box clips at its own width, and two
      * font-1 rows of (w - 8 - label_w) hold more than the tag's own cap. */
     if (data->ndef_read_ok) {
         cv->text(cv->ctx, "Text", 4, row_y(g, 7), g->label_w, 1,
-                 UI_FONT_SMALL, UI_ALIGN_LEFT, COL_DIM, COL_BG);
+                 UI_FONT_SMALL, UI_ALIGN_LEFT, UI_COL_DIM, UI_COL_BG);
         cv->text(cv->ctx,
                  (data->payload[0] != '\0') ? data->payload : "(empty)",
                  (int16_t)(4 + g->label_w), row_y(g, 7), g->col_w, 2,
-                 UI_FONT_SMALL, UI_ALIGN_LEFT, COL_TEXT, COL_BG);
+                 UI_FONT_SMALL, UI_ALIGN_LEFT, UI_COL_TEXT, UI_COL_BG);
     } else {
         snprintf(buf, sizeof(buf), "not read (%d)", data->ndef_rc);
-        kv_row(cv, g, 7, "Text", buf, COL_DIM);
+        kv_row(cv, g, 7, "Text", buf, UI_COL_DIM);
     }
 
     row = 9;
@@ -328,7 +348,7 @@ static void page_nfc(const ui_canvas_t* cv, const diag_layout_t* g,
                                    data->ndef_raw[idx],
                                    (i + 1 < HEX_COLS) ? " " : "");
         }
-        full_row(cv, g, (uint8_t)(row + r), hex, COL_DIM);
+        full_row(cv, g, (uint8_t)(row + r), hex, UI_COL_DIM);
     }
 }
 
@@ -338,10 +358,10 @@ static void page_battery(const ui_canvas_t* cv, const diag_layout_t* g,
     char buf[40];
 
     snprintf(buf, sizeof(buf), "%u", (unsigned)data->bat_raw);
-    kv_row(cv, g, 0, "ADC raw", buf, COL_TEXT);
+    kv_row(cv, g, 0, "ADC raw", buf, UI_COL_TEXT);
 
     snprintf(buf, sizeof(buf), "%u mV", (unsigned)data->bat_pin_mv);
-    kv_row(cv, g, 1, "Pin", buf, COL_TEXT);
+    kv_row(cv, g, 1, "Pin", buf, UI_COL_TEXT);
 
     /* The divider is shown as the number the firmware actually used, because
      * it is a placeholder until the bench meters the real one. */
@@ -349,7 +369,7 @@ static void page_battery(const ui_canvas_t* cv, const diag_layout_t* g,
              (unsigned)data->bat_cell_mv,
              (unsigned)(data->bat_divider_x100 / 100u),
              (unsigned)(data->bat_divider_x100 % 100u));
-    kv_row(cv, g, 2, "Cell", buf, COL_TEXT);
+    kv_row(cv, g, 2, "Cell", buf, UI_COL_TEXT);
 }
 
 static void page_audio(const ui_canvas_t* cv, const diag_layout_t* g,
@@ -358,12 +378,12 @@ static void page_audio(const ui_canvas_t* cv, const diag_layout_t* g,
     uint8_t vol = diag_volume(d);
 
     kv_row(cv, g, 0, "Tone", diag_tone_on(d) ? "on" : "off",
-           diag_tone_on(d) ? COL_OK : COL_DIM);
+           diag_tone_on(d) ? UI_COL_OK : UI_COL_DIM);
     kv_row(cv, g, 1, "Volume",
-           (vol <= (uint8_t)MIX_VOL_HIGH) ? VOL_NAMES[vol] : "?", COL_TEXT);
+           (vol <= (uint8_t)MIX_VOL_HIGH) ? VOL_NAMES[vol] : "?", UI_COL_TEXT);
     /* No hardware mute exists on this board, and a builder who does not know
      * that reads a silent "Off" as a dead amplifier. */
-    full_row(cv, g, 3, "Off holds the DAC at mid-scale.", COL_DIM);
+    full_row(cv, g, 3, "Off holds the DAC at mid-scale.", UI_COL_DIM);
 }
 
 /* The four window edges, one pixel each, plus a cross through the middle. The
@@ -371,13 +391,13 @@ static void page_audio(const ui_canvas_t* cv, const diag_layout_t* g,
  * window is off-centre or just shifted. */
 static void draw_border(const ui_canvas_t* cv, const diag_layout_t* g)
 {
-    cv->fill(cv->ctx, 0, 0, g->w, 1, COL_TEXT);
-    cv->fill(cv->ctx, 0, (int16_t)(g->h - 1), g->w, 1, COL_TEXT);
-    cv->fill(cv->ctx, 0, 0, 1, g->h, COL_TEXT);
-    cv->fill(cv->ctx, (int16_t)(g->w - 1), 0, 1, g->h, COL_TEXT);
+    cv->fill(cv->ctx, 0, 0, g->w, 1, UI_COL_TEXT);
+    cv->fill(cv->ctx, 0, (int16_t)(g->h - 1), g->w, 1, UI_COL_TEXT);
+    cv->fill(cv->ctx, 0, 0, 1, g->h, UI_COL_TEXT);
+    cv->fill(cv->ctx, (int16_t)(g->w - 1), 0, 1, g->h, UI_COL_TEXT);
 
-    cv->fill(cv->ctx, 0, (int16_t)(g->h / 2), g->w, 1, COL_DIM);
-    cv->fill(cv->ctx, (int16_t)(g->w / 2), 0, 1, g->h, COL_DIM);
+    cv->fill(cv->ctx, 0, (int16_t)(g->h / 2), g->w, 1, UI_COL_DIM);
+    cv->fill(cv->ctx, (int16_t)(g->w / 2), 0, 1, g->h, UI_COL_DIM);
 }
 
 void diag_checker_build(diag_checker_t* ck, uint8_t idx)
@@ -421,7 +441,7 @@ static void page_checker(const ui_canvas_t* cv, const diag_layout_t* g,
 
     if (ck == NULL) {
         draw_border(cv, g);
-        full_row(cv, g, 0, "Checkerboard needs a buffer.", COL_WARN);
+        full_row(cv, g, 0, "Checkerboard needs a buffer.", UI_COL_WARN);
         return;
     }
 
@@ -439,7 +459,7 @@ static void page_checker(const ui_canvas_t* cv, const diag_layout_t* g,
     }
     if (info == NULL) {
         draw_border(cv, g);
-        full_row(cv, g, 0, "No scaler geometry for this width.", COL_WARN);
+        full_row(cv, g, 0, "No scaler geometry for this width.", UI_COL_WARN);
         return;
     }
 
@@ -487,7 +507,7 @@ static void page_display(const ui_canvas_t* cv, const diag_layout_t* g,
          * over the white one. */
         for (i = 0; i < BAR_COUNT; i++) {
             cv->fill(cv->ctx, (int16_t)(i * g->bar_w), bars_y, g->bar_w,
-                     (int16_t)(g->footer_y - bars_y), BAR_COLORS[i]);
+                     (int16_t)(g->help_y - bars_y), BAR_COLORS[i]);
         }
         break;
     case DIAG_PATTERN_BORDER:
@@ -502,7 +522,7 @@ static void page_display(const ui_canvas_t* cv, const diag_layout_t* g,
 
     /* Last, so it stays legible over whatever the pattern painted. */
     if (pattern < DIAG_PATTERN_COUNT) {
-        full_row(cv, g, 0, PATTERN_NAMES[pattern], COL_TEXT);
+        full_row(cv, g, 0, PATTERN_NAMES[pattern], UI_COL_TEXT);
     }
 }
 
@@ -517,13 +537,13 @@ static void page_nudge(const ui_canvas_t* cv, const diag_layout_t* g,
     diag_origin(d, &x, &y);
 
     snprintf(buf, sizeof(buf), "X %d   Y %d", (int)x, (int)y);
-    full_row(cv, g, 0, buf, COL_TEXT);
+    full_row(cv, g, 0, buf, UI_COL_TEXT);
     snprintf(buf, sizeof(buf), "default %d, %d", (int)d->default_x,
              (int)d->default_y);
-    full_row(cv, g, 1, buf, COL_DIM);
+    full_row(cv, g, 1, buf, UI_COL_DIM);
 
     if (diag_toast_active(d, now_ms)) {
-        full_row(cv, g, 3, "Saved", COL_OK);
+        full_row(cv, g, 3, "Saved", UI_COL_OK);
     }
 }
 
@@ -558,7 +578,7 @@ static void page_trim(const ui_canvas_t* cv, const diag_layout_t* g,
 
     snprintf(buf, sizeof(buf), "%u + %u/64", (unsigned)fpa, (unsigned)ratio);
     kv_row(cv, g, 0, "Porch", buf,
-           diag_trim_unsaved(d) ? COL_WARN : COL_TEXT);
+           diag_trim_unsaved(d) ? UI_COL_WARN : UI_COL_TEXT);
 
     /* What a power cycle brings back, always on screen beside what the page
      * is showing. The page corrects the working porch itself at the end of
@@ -572,35 +592,35 @@ static void page_trim(const ui_canvas_t* cv, const diag_layout_t* g,
         snprintf(buf, sizeof(buf), "%u + %u/64%s", (unsigned)sf, (unsigned)sr,
                  diag_trim_unsaved(d) ? "   A to save" : "");
         kv_row(cv, g, 1, "Stored", buf,
-               diag_trim_unsaved(d) ? COL_WARN : COL_OK);
+               diag_trim_unsaved(d) ? UI_COL_WARN : UI_COL_OK);
     }
 
     snprintf(buf, sizeof(buf), "%u + %u/64", (unsigned)d->default_trim_fpa,
              (unsigned)d->default_trim_ratio);
-    kv_row(cv, g, 2, "Default", buf, COL_DIM);
+    kv_row(cv, g, 2, "Default", buf, UI_COL_DIM);
 
     /* What the next run will draw, and the only place it can be read: a run
      * fills the window with the fixture, so there is nowhere to show this
      * while it is the thing being looked at. */
     fixture_text(buf, sizeof(buf), diag_trim_pattern(d), vx, vy);
-    kv_row(cv, g, 3, "Fixture", buf, COL_TEXT);
+    kv_row(cv, g, 3, "Fixture", buf, UI_COL_TEXT);
 
     /* Declining to move without saying why would look like a page that had
      * stopped working, which is how a builder learns to distrust it. The
      * three reasons want different things from the builder, so each says its
      * own: only a scattered run blames the marking (BUG-0018). */
     if (verdict == DIAG_TRIM_SCATTERED) {
-        kv_row(cv, g, 4, "Crossing", "marks disagreed", COL_WARN);
+        kv_row(cv, g, 4, "Crossing", "marks disagreed", UI_COL_WARN);
         full_row(cv, g, 5, "Mark only the seam, only when you see it.",
-                 COL_WARN);
+                 UI_COL_WARN);
     } else if (verdict == DIAG_TRIM_SLOWING) {
-        kv_row(cv, g, 4, "Crossing", "slowing - near the null", COL_OK);
+        kv_row(cv, g, 4, "Crossing", "slowing - near the null", UI_COL_OK);
         full_row(cv, g, 5, "Each gap was longer. Run again or stop.",
-                 COL_TEXT);
+                 UI_COL_TEXT);
     } else if (verdict == DIAG_TRIM_SETTLED) {
-        kv_row(cv, g, 4, "Crossing", "none in 5 min - settled", COL_OK);
+        kv_row(cv, g, 4, "Crossing", "none in 5 min - settled", UI_COL_OK);
         full_row(cv, g, 5, "The unit is trimmed. Write the porch down.",
-                 COL_TEXT);
+                 UI_COL_TEXT);
     } else if (span > 0u) {
         uint32_t tenths = (span * 1000u + DIAG_TRIM_FPS_X100 / 2u)
                         / (uint32_t)DIAG_TRIM_FPS_X100;
@@ -608,41 +628,41 @@ static void page_trim(const ui_canvas_t* cv, const diag_layout_t* g,
         snprintf(buf, sizeof(buf), "%lu frames, %lu.%lu s",
                  (unsigned long)span, (unsigned long)(tenths / 10u),
                  (unsigned long)(tenths % 10u));
-        kv_row(cv, g, 4, "Crossing", buf, COL_TEXT);
+        kv_row(cv, g, 4, "Crossing", buf, UI_COL_TEXT);
         /* A crossing interval means nothing without the fixture it was
          * counted on, and that is a builder's to change now. */
         fixture_text(buf, sizeof(buf), d->span_pat, d->span_vx, d->span_vy);
-        kv_row(cv, g, 5, "Counted on", buf, COL_DIM);
+        kv_row(cv, g, 5, "Counted on", buf, UI_COL_DIM);
     } else {
-        kv_row(cv, g, 4, "Crossing", "not counted yet", COL_DIM);
+        kv_row(cv, g, 4, "Crossing", "not counted yet", UI_COL_DIM);
     }
 
     if (d->trim_step != 0) {
         snprintf(buf, sizeof(buf), "%+d/64", (int)-d->trim_step);
-        kv_row(cv, g, 6, "Last move", buf, COL_TEXT);
+        kv_row(cv, g, 6, "Last move", buf, UI_COL_TEXT);
     } else if (verdict == DIAG_TRIM_SCATTERED) {
-        kv_row(cv, g, 6, "Last move", "none - run thrown away", COL_WARN);
+        kv_row(cv, g, 6, "Last move", "none - run thrown away", UI_COL_WARN);
     } else if (verdict == DIAG_TRIM_SLOWING) {
-        kv_row(cv, g, 6, "Last move", "none - rate still moving", COL_TEXT);
+        kv_row(cv, g, 6, "Last move", "none - rate still moving", UI_COL_TEXT);
     } else if (verdict == DIAG_TRIM_SETTLED) {
-        kv_row(cv, g, 6, "Last move", "none needed", COL_OK);
+        kv_row(cv, g, 6, "Last move", "none needed", UI_COL_OK);
     } else if (span > 0u) {
         /* A run long enough that the correction rounded to nothing is the
          * end of the road, not a failure: the register cannot express a
          * smaller change. */
-        kv_row(cv, g, 6, "Last move", "none left to give", COL_OK);
+        kv_row(cv, g, 6, "Last move", "none left to give", UI_COL_OK);
     } else {
-        kv_row(cv, g, 6, "Last move", "-", COL_DIM);
+        kv_row(cv, g, 6, "Last move", "-", UI_COL_DIM);
     }
 
     snprintf(buf, sizeof(buf), "Start, then mark each of %u crossings",
              (unsigned)DIAG_TRIM_MARKS);
-    full_row(cv, g, 8, buf, COL_DIM);
+    full_row(cv, g, 8, buf, UI_COL_DIM);
     full_row(cv, g, 9, "In a run: D-pad scrolls, B pattern, A gives up",
-             COL_DIM);
+             UI_COL_DIM);
 
     if (diag_toast_active(d, now_ms)) {
-        full_row(cv, g, 11, "Saved", COL_OK);
+        full_row(cv, g, 11, "Saved", UI_COL_OK);
     }
 }
 
@@ -652,13 +672,13 @@ static void page_system(const ui_canvas_t* cv, const diag_layout_t* g,
     char buf[16];
 
     snprintf(buf, sizeof(buf), "%u", (unsigned)diag_frameskip(d));
-    kv_row(cv, g, 0, "Frameskip", buf, COL_TEXT);
+    kv_row(cv, g, 0, "Frameskip", buf, UI_COL_TEXT);
     kv_row(cv, g, 1, "Version",
            (data->fw_version[0] != '\0') ? data->fw_version : "unknown",
-           COL_TEXT);
+           UI_COL_TEXT);
     kv_row(cv, g, 2, "Built",
            (data->build_time[0] != '\0') ? data->build_time : "unknown",
-           COL_TEXT);
+           UI_COL_TEXT);
 }
 
 /* ─── the draw ────────────────────────────────────────────────────────────── */
@@ -672,12 +692,16 @@ void diag_draw(const diag_t* d, const diag_data_t* data,
     if (d == NULL || data == NULL || g == NULL || cv == NULL) {
         return;
     }
-    if (cv->fill == NULL || cv->text == NULL || cv->image == NULL) {
+    if (cv->fill == NULL || cv->round_fill == NULL || cv->text == NULL ||
+        cv->image == NULL || cv->measure == NULL) {
         return;
     }
 
     page = diag_page(d);
     draw_header(cv, g, page);
+    if (draws_border(d, page)) {
+        draw_footer(cv, g, page);
+    }
 
     switch (page) {
     case DIAG_PAGE_BUTTONS:
@@ -711,5 +735,7 @@ void diag_draw(const diag_t* d, const diag_data_t* data,
         break;
     }
 
-    draw_footer(cv, g, page);
+    if (!draws_border(d, page)) {
+        draw_footer(cv, g, page);
+    }
 }

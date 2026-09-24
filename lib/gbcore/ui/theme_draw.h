@@ -64,7 +64,8 @@ void ui_help_line(const ui_canvas_t* cv, int16_t w, int16_t y, const char* s);
 /*
  * The button-hint footer: a UI_FOOT_H band cleared, and when n > 0 one pill
  * right-aligned to the window's inset holding each button's glyph pill and
- * then its label.
+ * then its label. Hints that would not fit inside the insets are dropped from
+ * the end, so list the ones that matter most first.
  */
 void ui_hint_bar(const ui_canvas_t* cv, int16_t w, int16_t y,
                  const ui_hint_t* hints, uint8_t n);
