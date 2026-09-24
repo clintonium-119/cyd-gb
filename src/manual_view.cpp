@@ -136,7 +136,7 @@ static bool draw_overview(const view_t* v, const manual_nav_t* nav)
     if (chrome) {
         ui_header(cv, GAME_W, "Manual", label);
         ui_help_line(cv, GAME_W, GAME_H - UI_FOOT_H - UI_HELP_H,
-                     "Left and Right turn pages.");
+                     "Left and Right turn pages");
     }
     for (uint16_t r = 0; r < p->h; r += MANUAL_BAND_ROWS) {
         uint16_t n = (uint16_t)(p->h - r);

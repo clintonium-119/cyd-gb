@@ -468,11 +468,11 @@ static void test_the_layout_at_266_by_240(void)
     TEST_ASSERT_EQUAL_INT16(UI_TEXT_X, g.detail_x);
     TEST_ASSERT_EQUAL_INT16(242, g.detail_w);    /* 266 - 2 * 12         */
     TEST_ASSERT_EQUAL_INT16(4, g.title_y);
-    TEST_ASSERT_EQUAL_INT16(40, g.media_y);      /* 4 + 2 * 17 + 2       */
+    TEST_ASSERT_EQUAL_INT16(50, g.media_y);      /* 4 + 2 * 22 + 2       */
     TEST_ASSERT_EQUAL_INT16(116, g.shot_x);      /* 12 + 96 + 8          */
-    TEST_ASSERT_EQUAL_INT16(144, g.band_y);      /* 40 + 96 + 8          */
-    TEST_ASSERT_EQUAL_INT16(56, g.band_h);       /* 240 - 38 - 2 - 144   */
-    TEST_ASSERT_EQUAL_UINT8(3, g.band_rows);     /* 56 / 15              */
+    TEST_ASSERT_EQUAL_INT16(154, g.band_y);      /* 50 + 96 + 8          */
+    TEST_ASSERT_EQUAL_INT16(46, g.band_h);       /* 240 - 38 - 2 - 154   */
+    TEST_ASSERT_EQUAL_UINT8(3, g.band_rows);     /* 46 / 15              */
     /* The band ends above the help line, which the hold bar shares. */
     TEST_ASSERT_LESS_OR_EQUAL_INT16(GEOM_53_H - PICKER_DETAIL_FOOT_H,
                                     g.band_y + g.band_h);
@@ -725,7 +725,8 @@ static void test_a_one_row_title_lifts_the_images_a_row(void)
                PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, DESC_200);
     assert_sane();
     TEST_ASSERT_EQUAL_INT16(
-        g.media_y - UI_ROW_PITCH(ui_font_height(UI_FONT_LIST)), fk.last_img_y);
+        g.media_y - UI_ROW_PITCH(ui_font_height(UI_FONT_HEADER)),
+        fk.last_img_y);
 }
 
 static void test_a_one_row_title_gives_its_row_to_the_band(void)
@@ -743,7 +744,7 @@ static void test_a_one_row_title_gives_its_row_to_the_band(void)
     picker_input(&p, B_A, 0);
     TEST_ASSERT_EQUAL_UINT8(g.band_rows, picker_band_rows(&p, &g, &cv));
     snprintf(lib.e[0].title, sizeof(lib.e[0].title), "Tetris");
-    /* (56 + 17) / 15 */
+    /* (46 + 22) / 15 */
     TEST_ASSERT_EQUAL_UINT8(4, picker_band_rows(&p, &g, &cv));
 }
 

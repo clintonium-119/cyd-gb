@@ -26,10 +26,10 @@ static const char* const ACTION_LABEL[] = {
 
 /* What confirming this row will do, in one line under the title. */
 static const char* const DETAIL_TARGET[] = {
-    "Writes it to your wildcard.",
-    "Writes it to this blank cart.",
-    "Drops the write you lined up.",
-    "Ends setup. MENU reopens it.",
+    "Writes it to your wildcard",
+    "Writes it to this blank cart",
+    "Drops the write you lined up",
+    "Ends setup. MENU reopens it",
 };
 #define TARGET_WILD   0
 #define TARGET_BLANK  1
@@ -62,7 +62,7 @@ static uint8_t desc_pitch(void)
 
 static uint8_t title_pitch(void)
 {
-    return (uint8_t)UI_ROW_PITCH(ui_font_height(UI_FONT_LIST));
+    return (uint8_t)UI_ROW_PITCH(ui_font_height(UI_FONT_HEADER));
 }
 
 /* ─── geometry ────────────────────────────────────────────────────────────── */
@@ -481,7 +481,7 @@ static int16_t detail_lift(const picker_t* p, const picker_layout_t* g,
                            const ui_canvas_t* cv)
 {
     if (cv->measure == NULL ||
-        cv->measure(cv->ctx, detail_title(p), UI_FONT_LIST) > g->detail_w) {
+        cv->measure(cv->ctx, detail_title(p), UI_FONT_HEADER) > g->detail_w) {
         return 0;
     }
     return (int16_t)title_pitch();
@@ -602,9 +602,9 @@ static void draw_detail(const picker_t* p, const picker_layout_t* g,
 {
     cv->fill(cv->ctx, 0, 0, g->w, g->h, UI_COL_BG);
 
-    /* White, as Cart Info draws its title. */
+    /* White, in the header font, as Game Details draws its title. */
     cv->text(cv->ctx, detail_title(p), g->detail_x, g->title_y, g->detail_w,
-             PICKER_TITLE_ROWS, UI_FONT_LIST, UI_ALIGN_LEFT, UI_COL_TEXT,
+             PICKER_TITLE_ROWS, UI_FONT_HEADER, UI_ALIGN_LEFT, UI_COL_TEXT,
              UI_COL_BG);
 
     draw_detail_media(p, g, art, shot, cv);

@@ -41,7 +41,7 @@ static const char* const ROW_LABELS[MENU_ENTRIES] = {
     "Resume",
     "Save State",
     "Game Manual",
-    "Cart Info",
+    "Game Details",
     "Color Palette",
     "Volume",
     "Brightness",
@@ -52,17 +52,17 @@ static const char* const ROW_LABELS[MENU_ENTRIES] = {
 // What each row does, in the grey line over the hints. One line of prose
 // each, which at 9pt is about 28 characters across the window.
 static const char* const ROW_HELP[MENU_ENTRIES] = {
-    "Back to the game.",
-    "Save or load this moment.",
-    "Read the scanned manual.",
-    "Cover, screenshot and story.",
-    "Tint for Game Boy games.",
-    "Also Select + Up/Down.",
-    "Also Select + Left/Right.",
-    "Combos that work in a game.",
-    "Restart from power-on.",
+    "Back to the game",
+    "Save or load this moment",
+    "Read the scanned manual",
+    "Cover, screenshot and story",
+    "Tint for Game Boy games",
+    "Also Select + Up/Down",
+    "Also Select + Left/Right",
+    "Combos that work in a game",
+    "Restart from power-on",
 };
-#define HELP_NO_MANUAL "No manual for this game."
+#define HELP_NO_MANUAL "No manual for this game"
 
 // What the buttons do on the list: A acts on an action row, Left and Right
 // adjust a value row, and B always resumes. B comes first, as it sits on the
@@ -675,10 +675,10 @@ static bool state_screen(const menu_cart_info_t* info)
 {
     static const char* const LABELS[2] = { "Save", "Load" };
     static const char* const REPLACE[2] = {
-        "Keep the state you saved.", "Replace it with this moment.",
+        "Keep the state you saved", "Replace it with this moment",
     };
     static const char* const LOAD[2] = {
-        "Keep playing from here.", "Progress since then is lost.",
+        "Keep playing from here", "Progress since then is lost",
     };
     uint8_t cursor = 0;
 
@@ -689,8 +689,8 @@ static bool state_screen(const menu_cart_info_t* info)
         const bool have = sd_state_exists(info->path);
         const bool off[2] = { false, !have };
         const char* const helps[2] = {
-            have ? "Replace the saved moment." : "Save the game as it is now.",
-            have ? "Back to the saved moment." : "No saved state yet.",
+            have ? "Replace the saved moment" : "Save the game as it is now",
+            have ? "Back to the saved moment" : "No saved state yet",
         };
         int pick;
 

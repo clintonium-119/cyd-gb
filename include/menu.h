@@ -23,7 +23,7 @@ enum menu_result_e {
     MENU_RESET,
 };
 
-// Nine rows — Resume, Save State, Game Manual, Cart Info, Color Palette,
+// Nine rows — Resume, Save State, Game Manual, Game Details, Color Palette,
 // Volume, Brightness, Hotkeys, Reset — drawn inside the game window seven at
 // a time and scrolled, driven by the D-pad, with A to act and B to go back.
 // Hotkeys opens a view-only page listing the fixed button combos. Game Manual

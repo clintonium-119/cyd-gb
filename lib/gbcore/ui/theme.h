@@ -18,12 +18,15 @@
 /* RGB565 colours. */
 #define UI_COL_BG        0x0000 /* screen background */
 #define UI_COL_TEXT      0xFFFF /* primary text, hint labels */
-#define UI_COL_SUB       0xBDF7 /* help lines, descriptions, secondary text */
+/* One grey for prose on black and for the hint pill under white labels:
+ * #787878 reads at about 4.7:1 on black and carries white at about 4.4:1,
+ * which is as close to both as one grey gets. */
+#define UI_COL_SUB       0x7BCF /* help lines, descriptions, secondary text */
 #define UI_COL_DIM       0x7BEF /* a disabled row */
 #define UI_COL_PILL      0xFFFF /* the selected row's pill */
 #define UI_COL_PILL_TEXT 0x0000 /* text on the pill */
 #define UI_COL_PILL_DIM  0x6B4D /* a disabled row's text on the pill */
-#define UI_COL_HINT_BG   0x632C /* the hint footer's pill */
+#define UI_COL_HINT_BG   UI_COL_SUB /* the hint footer's pill */
 #define UI_COL_GLYPH     0xFFFF /* a button's circle in the hint footer */
 #define UI_COL_GLYPH_FG  0x0000 /* the button's letter in it */
 #define UI_COL_OK        0x07E0 /* a check that passed */

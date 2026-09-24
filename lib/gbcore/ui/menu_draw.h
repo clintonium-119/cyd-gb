@@ -112,8 +112,9 @@ void menu_draw_hotkeys(const ui_canvas_t* cv, const menu_layout_t* g,
 #define MENU_CART_GAP 8
 
 /*
- * Cart Info's top: the window cleared and the game's title over up to two
- * rows, which is the page's header, as on the writer's page for a title.
+ * Game Details' top: the window cleared and the game's title over up to two
+ * rows in the header font, which is the page's header, as on the writer's
+ * page for a title.
  * Returns the y under it — one row lower for a title that fits one — which is
  * where the images go.
  */

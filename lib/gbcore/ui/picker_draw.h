@@ -50,8 +50,8 @@ extern "C" {
  * The detail page, mirroring Cart Info's numbers: the rows' text margin, the
  * images 8 px apart with 8 px under them.
  *
- * Two title rows because 242 px at about 7 px per bold glyph is 34
- * characters a row, and 2 x 34 = 68 is past CATALOG_TITLE_MAX - 1 (47) — so
+ * Two title rows because 242 px at about 10 px per header glyph is 24
+ * characters a row, and 2 x 24 = 48 is past CATALOG_TITLE_MAX - 1 (47) — so
  * a title is never clipped on the page whose job is to name the game. A title
  * that fits one row gives the other to the description.
  */

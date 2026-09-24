@@ -389,8 +389,8 @@ static void test_a_one_row_cart_title_gives_the_images_a_row(void)
     int16_t two = menu_draw_cart_title(
         &cv, &g, "The Legend of Zelda: Link's Awakening DX Edition");
 
-    TEST_ASSERT_EQUAL_INT16(UI_PAD + 17 + 2, one);
-    TEST_ASSERT_EQUAL_INT16(UI_PAD + 2 * 17 + 2, two);
+    TEST_ASSERT_EQUAL_INT16(UI_PAD + 22 + 2, one);
+    TEST_ASSERT_EQUAL_INT16(UI_PAD + 2 * 22 + 2, two);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
 }
 
@@ -401,11 +401,11 @@ static void test_the_band_fills_to_the_back_line_and_scrolls_inside_it(void)
         "escape. A dream-logic adventure that quietly erases its own world as "
         "you finish it, and one of the very finest games on the system.";
     menu_band_t b;
-    int16_t y = (int16_t)(UI_PAD + 2 * 17 + 2 + 96 + 8);
+    int16_t y = (int16_t)(UI_PAD + 2 * 22 + 2 + 96 + 8);
     unsigned i;
 
     menu_band_fit(&cv, &g, text, y, &b);
-    /* (220 - 2 - 144) / 15: down to the hints, the description being the
+    /* (220 - 2 - 154) / 15: down to the hints, the description being the
      * page's help. */
     TEST_ASSERT_EQUAL_UINT16(4, b.rows);
     TEST_ASSERT_EQUAL_INT16(W - 2 * UI_TEXT_X, b.w);

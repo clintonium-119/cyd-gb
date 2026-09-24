@@ -136,7 +136,7 @@ void menu_draw_hotkeys(const ui_canvas_t* cv, const menu_layout_t* g,
                  UI_ALIGN_RIGHT, UI_COL_SUB, UI_COL_BG);
         y = (int16_t)(y + MENU_ROW_H);
     }
-    menu_draw_footer(cv, g, "Combos that work in a game.", HINTS, 1);
+    menu_draw_footer(cv, g, "Combos that work in a game", HINTS, 1);
 }
 
 int16_t menu_draw_cart_title(const ui_canvas_t* cv, const menu_layout_t* g,
@@ -150,12 +150,12 @@ int16_t menu_draw_cart_title(const ui_canvas_t* cv, const menu_layout_t* g,
     }
     /* Two rows because a catalog title runs to 47 characters; one that fits
      * a row leaves the other to the description. */
-    rows = (cv->measure(cv->ctx, title, UI_FONT_LIST) <= MENU_CART_W(g)) ? 1
-                                                                         : 2;
+    rows = (cv->measure(cv->ctx, title, UI_FONT_HEADER) <= MENU_CART_W(g)) ? 1
+                                                                           : 2;
     cv->text(cv->ctx, title, MENU_CART_X, UI_PAD, MENU_CART_W(g),
-             (uint8_t)rows, UI_FONT_LIST, UI_ALIGN_LEFT, UI_COL_TEXT,
+             (uint8_t)rows, UI_FONT_HEADER, UI_ALIGN_LEFT, UI_COL_TEXT,
              UI_COL_BG);
-    return (int16_t)(UI_PAD + rows * font_pitch(UI_FONT_LIST) + 2);
+    return (int16_t)(UI_PAD + rows * font_pitch(UI_FONT_HEADER) + 2);
 }
 
 void menu_band_fit(const ui_canvas_t* cv, const menu_layout_t* g,

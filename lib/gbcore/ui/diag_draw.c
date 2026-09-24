@@ -64,15 +64,15 @@ static const char* const CLASS_NAMES[4] = { "blank", "MENU", "WILD", "game" };
 
 /* One help line per page: what the page is for, in one line of prose. */
 static const char* const HELPS[DIAG_PAGE_COUNT] = {
-    "Press a button to light it.",
-    "Card, catalog, free space.",
-    "The tag as the boot reads it.",
-    "Battery at pin and cell.",
-    "A tone at each volume.",
-    "Panel and scaler patterns.",
-    "Centre the window.",
-    "Match the game's refresh.",
-    "Frameskip and build.",
+    "Press a button to light it",
+    "Card, catalog, free space",
+    "The tag as the boot reads it",
+    "Battery at pin and cell",
+    "A tone at each volume",
+    "Panel and scaler patterns",
+    "Centre the window",
+    "Match the game's refresh",
+    "Frameskip and build",
 };
 
 /* One hint footer per page: what the buttons do here. Paging is named on
