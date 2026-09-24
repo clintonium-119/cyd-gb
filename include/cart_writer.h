@@ -25,7 +25,9 @@
 //   4. When it renders, it renders inside the game window, like every other
 //      screen on this device.
 //   5. Every exit is a halt or a power-off prompt. Nothing runs after the
-//      writer in the same boot, so its buffers may be static and generous.
+//      writer in the same boot, so its buffers may be generous. The big ones
+//      are allocated on entry and freed on exit, not static: static storage
+//      is paid in every boot, including every boot that plays a game.
 //
 // `pending_set` drives whether a Cancel entry is offered; `flags` drives the
 // starter filter and whether Finish setup is available.

@@ -9,6 +9,7 @@
 #include "ui/picker_draw.h"
 
 #include <Arduino.h>
+#include <esp_heap_caps.h>
 
 // The writer's binding.
 //
@@ -27,18 +28,22 @@
 // guard test's list, not repeated here, because that test scans this file's
 // comments too.
 //
-// Every exit is a halt, so the buffers below are static and generous (rule 5
-// in cart_writer.h). The two image buffers are separate rather than shared
-// because the detail page's band scrolls over both at once.
+// Every exit is a halt, so the buffers below may be generous (rule 5 in
+// cart_writer.h). The three big ones are on the heap for the writer's lifetime
+// rather than static: .bss is reserved in every boot, and these 56 KB would
+// otherwise sit idle through every game, in DRAM whose largest free block at
+// game time is about 15 KB (TASK-0001). The writer's boot runs nothing else,
+// so they come from a heap that has room. The two image buffers are separate
+// rather than shared because the detail page's band scrolls over both at once.
 
 // One expander read every WRITER_POLL_MS, matching the in-game menu. That is
 // longer than the input module's debounce window, so two successive samples
 // are already stable and the picker's edge detection needs no filter.
 #define WRITER_POLL_MS 16
 
-static catalog_index_t idx;                 // about 19 KB
-static uint16_t art[PICKER_ART_PX];         // 18,432 B — the box art
-static uint16_t shot[PICKER_ART_PX];        // 18,432 B — the gameplay snapshot
+static catalog_index_t* idx;                // about 19 KB
+static uint16_t* art;                       // 18,432 B — the box art
+static uint16_t* shot;                      // 18,432 B — the gameplay snapshot
 // The title's full description, DESC_MAX on the heap while the writer is up:
 // this translation unit links into every image, and a 4 KB static would come
 // out of DRAM that has about 15 KB to spare. NULL when it was refused.
@@ -50,22 +55,16 @@ static settings_t cfg;
 
 // ─── the writer ─────────────────────────────────────────────────────────────
 
-enum boot_pick_e writer_open(enum writer_mode_e mode,
-                             const catalog_reader_t* cat,
-                             const boot_flags_t* flags, bool pending_set,
-                             boot_selection_t* out) {
+static enum boot_pick_e writer_run(enum writer_mode_e mode,
+                                   const catalog_reader_t* cat,
+                                   const boot_flags_t* flags, bool pending_set,
+                                   boot_selection_t* out) {
     bool immediate = (mode == WRITER_MODE_IMMEDIATE);
     uint32_t drawn_us = 0;
     bool logged = false;
     int rc;
 
-    if (!out || !cat) {
-        // No catalog to show. The caller halts on whatever it booted from,
-        // exactly as it did when this body was a stub.
-        return BOOT_PICK_NONE;
-    }
-
-    rc = catalog_index_build(cat, &idx);
+    rc = catalog_index_build(cat, idx);
     if (rc != CATALOG_OK && rc != CATALOG_ERR_FULL) {
         // ERR_FULL is fine: the first CATALOG_MAX entries are intact.
         Serial.printf("[WRITER] catalog build failed (%d)\n", rc);
@@ -95,7 +94,7 @@ enum boot_pick_e writer_open(enum writer_mode_e mode,
 
     rc = picker_init(&picker, immediate ? PICKER_MODE_IMMEDIATE
                                         : PICKER_MODE_PENDING,
-                     &idx, flags ? flags->wild_done : false, pending_set,
+                     idx, flags ? flags->wild_done : false, pending_set,
                      immediate ? &made : NULL, geom.rows);
     if (rc != PICKER_OK) {
         Serial.printf("[WRITER] no rows to show (%d)\n", rc);
@@ -127,13 +126,13 @@ enum boot_pick_e writer_open(enum writer_mode_e mode,
         // wanted once, behind the screen transition rather than mid-scroll.
         if (picker_media_due(&picker, &ci)) {
             bool have_art =
-                sd_media_read(ART_PATH, idx.e[ci].filename, art, PICKER_ART_PX);
-            bool have_shot = sd_media_read(SHOT_PATH, idx.e[ci].filename, shot,
+                sd_media_read(ART_PATH, idx->e[ci].filename, art, PICKER_ART_PX);
+            bool have_shot = sd_media_read(SHOT_PATH, idx->e[ci].filename, shot,
                                            PICKER_ART_PX);
 
             // The full text from /desc, else the catalog's blurb.
-            if (desc && !sd_desc_read(idx.e[ci].filename, desc, DESC_MAX)
-                && catalog_read_desc(cat, idx.e[ci].offset, desc, DESC_MAX) !=
+            if (desc && !sd_desc_read(idx->e[ci].filename, desc, DESC_MAX)
+                && catalog_read_desc(cat, idx->e[ci].offset, desc, DESC_MAX) !=
                        CATALOG_OK) {
                 desc[0] = '\0';
             }
@@ -172,4 +171,36 @@ enum boot_pick_e writer_open(enum writer_mode_e mode,
     free(desc);
     desc = NULL;
     return picker_result(&picker, out);
+}
+
+enum boot_pick_e writer_open(enum writer_mode_e mode,
+                             const catalog_reader_t* cat,
+                             const boot_flags_t* flags, bool pending_set,
+                             boot_selection_t* out) {
+    enum boot_pick_e pick = BOOT_PICK_NONE;
+
+    if (!out || !cat) {
+        // No catalog to show. The caller halts on whatever it booted from,
+        // exactly as it did when this body was a stub.
+        return BOOT_PICK_NONE;
+    }
+
+    idx = (catalog_index_t*)malloc(sizeof(*idx));
+    art = (uint16_t*)malloc(PICKER_ART_PX * sizeof(uint16_t));
+    shot = (uint16_t*)malloc(PICKER_ART_PX * sizeof(uint16_t));
+    if (idx && art && shot) {
+        pick = writer_run(mode, cat, flags, pending_set, out);
+    } else {
+        // Refused, the same way a missing catalog is: the caller halts.
+        Serial.printf("[WRITER] no heap for the picker (largest block %u)\n",
+                      (unsigned)heap_caps_get_largest_free_block(
+                          MALLOC_CAP_8BIT));
+    }
+    free(shot);
+    free(art);
+    free(idx);
+    shot = NULL;
+    art = NULL;
+    idx = NULL;
+    return pick;
 }
