@@ -18,8 +18,8 @@
 /* RGB565 colours. */
 #define UI_COL_BG        0x0000 /* screen background */
 #define UI_COL_TEXT      0xFFFF /* primary text */
-#define UI_COL_DIM       0x7BEF /* secondary text, a disabled row */
-#define UI_COL_HINT      0x9CD3 /* hint labels, help line */
+#define UI_COL_DIM       0x7BEF /* secondary text, the help line, a disabled row */
+#define UI_COL_HINT      0x9CD3 /* hint labels in the button-hint footer */
 #define UI_COL_PILL      0xFFFF /* the selected row's pill */
 #define UI_COL_PILL_TEXT 0x0000 /* text on the pill */
 #define UI_COL_PILL_DIM  0x6B4D /* a disabled row's text on the pill */
