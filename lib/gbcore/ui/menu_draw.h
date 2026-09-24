@@ -2,12 +2,13 @@
 // The in-game menu's layout — everything the menu draws, with nothing it
 // decides.
 //
-// The list of rows under the title, the Hotkeys page, the Cart Info page's
-// title and description band, and the Save State screens' bars, question and
-// message, each one function over the injected canvas. Every coordinate is
-// window-relative: the host test paints a w x h buffer and the Arduino
-// binding adds the per-unit game_x / game_y origin, and the same code serves
-// both.
+// The list of rows under the header, the Hotkeys page, the Cart Info page's
+// title and description band, and the Save State screens' choices, question
+// and message, each one function over the injected canvas, all in the theme's
+// grammar: white on black, the selected row in a white pill, a grey help line
+// over the button-hint footer. Every coordinate is window-relative: the host
+// test paints a w x h buffer and the Arduino binding adds the per-unit
+// game_x / game_y origin, and the same code serves both.
 //
 // The binding keeps the state machine, the card reads and the image bands:
 // the cover, the snapshot and the save-state thumbnail arrive in bands small
@@ -20,36 +21,27 @@
 #include <stdint.h>
 
 #include "ui/canvas.h"
+#include "ui/theme_draw.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /* More entries than fit, so the list scrolls a window of MENU_VISIBLE of
- * them. 7 x 26 + 40 = 222, inside the window's 240. */
+ * them. 18 + 7 x 26 = 200, over the help line at 212. */
 #define MENU_VISIBLE 7
 #define MENU_ROW_H   26
-#define MENU_TOP     40 /* the title band above the first row */
-
-/* The fork's row colour, kept so this looks like the rest of the UI. The
- * highlighted row is inverted, bold black on a white bar, because the fork's
- * near-black highlight was hard to find at a glance. The dimmed grey is a
- * bench value, not derived. */
-#define MENU_ROW_BG 0x1082
-#define MENU_HL_BG  0xFFFF
-#define MENU_HL_FG  0x0000
-#define MENU_HL_DIM 0x6B4D
-#define MENU_TITLE  0xFFE0
-#define MENU_DIM    0x7BEF
-#define MENU_TEXT   0xFFFF
-#define MENU_BG     0x0000
+#define MENU_TOP     UI_HEADER_H /* the header above the first row */
 
 typedef struct menu_layout_s {
     int16_t w, h;
-    uint8_t visible; /* list rows under the title */
+    uint8_t visible; /* list rows under the header      */
+    int16_t help_y;  /* the help line's top             */
+    int16_t foot_y;  /* the hint footer's top           */
 } menu_layout_t;
 
-/* False for a NULL out or a window too short for MENU_VISIBLE rows. */
+/* False for a NULL out or a window too short for MENU_VISIBLE rows above the
+ * help line. */
 bool menu_layout(int16_t w, int16_t h, menu_layout_t* out);
 
 /* One list row: its label, its value on the right or NULL for an action, and
@@ -61,15 +53,19 @@ typedef struct menu_item_s {
 } menu_item_t;
 
 /* The list as the binding holds it: every row, the window's top one and the
- * highlighted one. */
+ * highlighted one, and the help line and hints for that highlight. */
 typedef struct menu_view_s {
     const menu_item_t* items;
     uint8_t n;
     uint16_t first;
     uint16_t cursor;
+    const char* help;
+    const ui_hint_t* hints;
+    uint8_t n_hints;
 } menu_view_t;
 
-/* The whole list screen: the window cleared, the title, the rows. */
+/* The whole list screen: the window cleared, the header, the rows, the help
+ * line and the hints. */
 void menu_draw(const ui_canvas_t* cv, const menu_layout_t* g,
                const menu_view_t* v);
 
@@ -78,25 +74,29 @@ void menu_draw(const ui_canvas_t* cv, const menu_layout_t* g,
 void menu_draw_rows(const ui_canvas_t* cv, const menu_layout_t* g,
                     const menu_view_t* v);
 
-/* Row idx alone, if it is in the window: a move repaints two of these, a
- * value change one. */
+/* Row idx alone, if it is in the window: a move repaints two of these and
+ * the footer, a value change one. */
 void menu_draw_row(const ui_canvas_t* cv, const menu_layout_t* g,
                    const menu_view_t* v, uint16_t idx);
 
-/* One bar whose top is y: the label left, the value (if any) right. What a
- * list row is, and what the Save State screens choose between. */
+/* One row whose top is y: the label left, the value (if any) right and
+ * outside the pill. What a list row is, and what the Save State screens
+ * choose between. The selected label sits in a pill that hugs it, bold
+ * unless the row is off. */
 void menu_draw_bar(const ui_canvas_t* cv, const menu_layout_t* g, int16_t y,
                    const char* label, const char* value, bool highlighted,
                    bool off);
 
-/* The window cleared and a page's title across its top. */
+/* The window cleared and a page's header. */
 void menu_draw_title(const ui_canvas_t* cv, const menu_layout_t* g,
                      const char* title);
 
-/* "B: Back", bottom left: the way off every page the list opens. */
-void menu_draw_back(const ui_canvas_t* cv, const menu_layout_t* g);
+/* The help line (help may be NULL) and the hint footer under it. */
+void menu_draw_footer(const ui_canvas_t* cv, const menu_layout_t* g,
+                      const char* help, const ui_hint_t* hints, uint8_t n);
 
-/* The Hotkeys page in full: n combo / action pairs under its title. */
+/* The Hotkeys page in full: n combo / action pairs under its header, and
+ * its footer. */
 void menu_draw_hotkeys(const ui_canvas_t* cv, const menu_layout_t* g,
                        const char* const (*keys)[2], uint8_t n);
 
@@ -106,7 +106,8 @@ void menu_draw_hotkeys(const ui_canvas_t* cv, const menu_layout_t* g,
 #define MENU_CART_GAP 8
 
 /*
- * Cart Info's top: the window cleared and the title over up to two rows.
+ * Cart Info's top: the window cleared and the game's title over up to two
+ * rows, which is the page's header, as on the writer's page for a title.
  * Returns the y under it — one row lower for a title that fits one — which is
  * where the images go.
  */
@@ -126,20 +127,21 @@ typedef struct menu_band_s {
     uint16_t first;
 } menu_band_t;
 
-/* The band from y down to the Back line, as many lines as fit. */
+/* The band from y down to the hint footer, as many lines as fit: Cart Info's
+ * help line is its description. */
 void menu_band_fit(const menu_layout_t* g, const char* text, int16_t y,
                    menu_band_t* b);
 
 /* The band cleared and drawn alone — what a scroll repaints. */
 void menu_draw_band(const ui_canvas_t* cv, const menu_band_t* b);
 
-/* The Save State question, wrapped over up to three rows under the title. */
+/* The Save State question, wrapped over up to three rows under the header. */
 void menu_draw_question(const ui_canvas_t* cv, const menu_layout_t* g,
                         const char* q);
 
-/* One centred line of font 2 whose middle is y_mid. */
-void menu_draw_message(const ui_canvas_t* cv, const menu_layout_t* g,
-                       const char* msg, int16_t y_mid, uint16_t fg);
+/* An empty image slot: rounded, dark, with a grey word in it. */
+void menu_draw_slot(const ui_canvas_t* cv, int16_t x, int16_t y, int16_t w,
+                    int16_t h, const char* msg);
 
 #ifdef __cplusplus
 }

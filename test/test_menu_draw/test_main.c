@@ -37,6 +37,11 @@ typedef struct {
         uint16_t color;
     } flog[32];
     unsigned flogged;
+    struct {
+        int16_t x, y, w, h, r;
+        uint16_t color;
+    } rlog[16];
+    unsigned rlogged;
 } fake_t;
 
 static fake_t fk;
@@ -93,9 +98,19 @@ static void fk_fill(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
 static void fk_round_fill(void* ctx, int16_t x, int16_t y, int16_t w,
                           int16_t h, int16_t r, uint16_t color, uint16_t bg)
 {
-    (void)r;
+    fake_t* f = (fake_t*)ctx;
+
     (void)bg;
-    put_rect((fake_t*)ctx, x, y, w, h, PAINT_SET, color);
+    if (f->rlogged < sizeof(f->rlog) / sizeof(f->rlog[0])) {
+        f->rlog[f->rlogged].x = x;
+        f->rlog[f->rlogged].y = y;
+        f->rlog[f->rlogged].w = w;
+        f->rlog[f->rlogged].h = h;
+        f->rlog[f->rlogged].r = r;
+        f->rlog[f->rlogged].color = color;
+        f->rlogged++;
+    }
+    put_rect(f, x, y, w, h, PAINT_SET, color);
 }
 
 static void fk_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
@@ -160,6 +175,8 @@ static ui_canvas_t canvas_over(fake_t* f)
 #define ROW_MANUAL 2
 #define ROW_VOLUME 5
 
+static const ui_hint_t HINTS[] = { { "A", "Select" }, { "B", "Resume" } };
+
 static menu_item_t items[N_ROWS];
 static menu_layout_t g;
 static menu_view_t v;
@@ -187,6 +204,9 @@ void setUp(void)
     v.n = N_ROWS;
     v.first = 0;
     v.cursor = 0;
+    v.help = "Back to the game.";
+    v.hints = HINTS;
+    v.n_hints = 2;
     cv = canvas_over(&fk);
 }
 
@@ -207,29 +227,57 @@ static void assert_same_as_full(void)
 
 /* ─── the list ────────────────────────────────────────────────────────────── */
 
-static void test_the_layout_fits_seven_rows_under_the_title(void)
+static void test_the_layout_fits_seven_rows_over_the_help_line(void)
 {
     TEST_ASSERT_EQUAL_UINT8(MENU_VISIBLE, g.visible);
-    TEST_ASSERT_TRUE(MENU_TOP + MENU_VISIBLE * MENU_ROW_H <= H);
-    TEST_ASSERT_FALSE(menu_layout(W, MENU_TOP + 6 * MENU_ROW_H, &g));
+    TEST_ASSERT_EQUAL_INT16(222, g.foot_y);
+    TEST_ASSERT_EQUAL_INT16(212, g.help_y);
+    TEST_ASSERT_TRUE(MENU_TOP + MENU_VISIBLE * MENU_ROW_H <= g.help_y);
+    TEST_ASSERT_FALSE(menu_layout(W, 220, &g));
     TEST_ASSERT_FALSE(menu_layout(W, H, NULL));
+}
+
+/* The footer's band cleared: one fill across the window at foot_y. */
+static bool drew_footer(void)
+{
+    unsigned i;
+
+    for (i = 0; i < fk.flogged; i++) {
+        if (fk.flog[i].y == g.foot_y && fk.flog[i].w == W &&
+            fk.flog[i].h == UI_FOOT_H) {
+            return true;
+        }
+    }
+    return false;
 }
 
 static void test_the_full_list_stays_inside_the_window(void)
 {
+    unsigned i;
+    bool help = false;
+
     menu_draw(&cv, &g, &v);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
-    /* Title, and a label per visible row plus the values among them. */
-    TEST_ASSERT_EQUAL_STRING("PAUSED", fk.log[0].s);
+    /* The header, a label per visible row plus the values among them, the
+     * help line and the hints. */
+    TEST_ASSERT_EQUAL_STRING("Paused", fk.log[0].s);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_TEXT, fk.log[0].fg);
     TEST_ASSERT_GREATER_OR_EQUAL_UINT(1u + MENU_VISIBLE, fk.texts);
+    for (i = 0; i < fk.logged; i++) {
+        help = help || strcmp(fk.log[i].s, "Back to the game.") == 0;
+    }
+    TEST_ASSERT_TRUE(help);
+    TEST_ASSERT_TRUE(drew_footer());
 }
 
 static void test_a_cursor_move_repaints_to_the_full_screen(void)
 {
     menu_draw(&cv, &g, &v);
     v.cursor = 1;
+    v.help = "Save or load a snapshot of the game.";
     menu_draw_row(&cv, &g, &v, 0);
     menu_draw_row(&cv, &g, &v, 1);
+    menu_draw_footer(&cv, &g, v.help, v.hints, v.n_hints);
     assert_same_as_full();
 }
 
@@ -257,7 +305,7 @@ static void test_a_value_change_repaints_to_the_full_screen(void)
     assert_same_as_full();
 }
 
-static void test_the_highlight_is_bold_and_a_dimmed_row_is_not(void)
+static void test_the_highlight_is_a_bold_pill_that_hugs_its_label(void)
 {
     unsigned i;
     unsigned passes = 0;
@@ -266,7 +314,7 @@ static void test_the_highlight_is_bold_and_a_dimmed_row_is_not(void)
     menu_draw_bar(&cv, &g, MENU_TOP, "Resume", NULL, true, false);
     for (i = 0; i < fk.logged; i++) {
         TEST_ASSERT_EQUAL_HEX16(fk.log[i].fg, fk.log[i].bg);
-        TEST_ASSERT_EQUAL_HEX16(MENU_HL_FG, fk.log[i].fg);
+        TEST_ASSERT_EQUAL_HEX16(UI_COL_PILL_TEXT, fk.log[i].fg);
         if (passes++ == 0) {
             x0 = fk.log[i].x;
         } else {
@@ -274,22 +322,56 @@ static void test_the_highlight_is_bold_and_a_dimmed_row_is_not(void)
         }
     }
     TEST_ASSERT_EQUAL_UINT(2, passes);
-    TEST_ASSERT_EQUAL_HEX16(MENU_HL_BG, fk.flog[0].color);
+    TEST_ASSERT_EQUAL_UINT(1, fk.rlogged);
+    TEST_ASSERT_EQUAL_INT16(6 * 8 + 2 * UI_PILL_PAD + 1, fk.rlog[0].w);
+    TEST_ASSERT_EQUAL_INT16(11, fk.rlog[0].r);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_PILL, fk.rlog[0].color);
+    TEST_ASSERT_EQUAL_UINT(0, fk.violations);
+}
+
+static void test_a_dimmed_row_is_grey_and_never_bold(void)
+{
+    menu_draw_bar(&cv, &g, MENU_TOP, "Game Manual (Unavailable)", NULL, false,
+                  true);
+    TEST_ASSERT_EQUAL_UINT(1, fk.logged);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_DIM, fk.log[0].fg);
 
     cv = canvas_over(&fk);
     menu_draw_bar(&cv, &g, MENU_TOP, "Game Manual (Unavailable)", NULL, true,
                   true);
     TEST_ASSERT_EQUAL_UINT(1, fk.logged);
-    TEST_ASSERT_EQUAL_HEX16(MENU_HL_DIM, fk.log[0].fg);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_PILL_DIM, fk.log[0].fg);
 }
 
-static void test_the_save_state_choice_inverts_only_the_highlight(void)
+static void test_a_value_sits_outside_the_pill(void)
+{
+    int16_t value_w = 4 * 8; /* "High" */
+    unsigned i;
+
+    menu_draw_bar(&cv, &g, MENU_TOP, "Volume", "High", true, false);
+    TEST_ASSERT_EQUAL_UINT(1, fk.rlogged);
+    TEST_ASSERT_TRUE(fk.rlog[0].w <=
+                     W - 2 * UI_PAD - value_w - UI_PILL_PAD);
+    /* The value is set right against the pill's text inset, and its glyphs
+     * therefore start past the pill's end. */
+    for (i = 0; i < fk.logged; i++) {
+        if (strcmp(fk.log[i].s, "High") == 0) {
+            TEST_ASSERT_TRUE(fk.log[i].x + (W - 2 * (UI_PAD + UI_PILL_PAD)) -
+                                 value_w >
+                             fk.rlog[0].x + fk.rlog[0].w);
+            TEST_ASSERT_EQUAL_HEX16(UI_COL_TEXT, fk.log[i].fg);
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT(0, fk.violations);
+}
+
+static void test_the_save_state_choice_pills_only_the_highlight(void)
 {
     menu_draw_bar(&cv, &g, 100, "No", NULL, true, false);
     menu_draw_bar(&cv, &g, 100 + MENU_ROW_H, "Yes", NULL, false, false);
-    TEST_ASSERT_EQUAL_UINT(2, fk.flogged);
-    TEST_ASSERT_EQUAL_HEX16(MENU_HL_BG, fk.flog[0].color);
-    TEST_ASSERT_EQUAL_HEX16(MENU_ROW_BG, fk.flog[1].color);
+    TEST_ASSERT_EQUAL_UINT(1, fk.rlogged);
+    TEST_ASSERT_EQUAL_INT16(100 + (MENU_ROW_H - UI_PILL_H_ROW) / 2,
+                            fk.rlog[0].y);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
 }
 
@@ -306,8 +388,9 @@ static void test_the_hotkeys_page_stays_inside_the_window(void)
 
     menu_draw_hotkeys(&cv, &g, keys, 4);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
-    TEST_ASSERT_EQUAL_STRING("HOTKEYS", fk.log[0].s);
-    TEST_ASSERT_EQUAL_STRING("B: Back", fk.log[fk.logged - 1].s);
+    TEST_ASSERT_EQUAL_STRING("Hotkeys", fk.log[0].s);
+    TEST_ASSERT_EQUAL_STRING("Back", fk.log[fk.logged - 1].s);
+    TEST_ASSERT_TRUE(drew_footer());
 }
 
 static void test_a_one_row_cart_title_gives_the_images_a_row(void)
@@ -331,14 +414,15 @@ static void test_the_band_fills_to_the_back_line_and_scrolls_inside_it(void)
     int16_t y = (int16_t)(8 + 2 * 18 + 2 + 96 + 8);
 
     menu_band_fit(&g, text, y, &b);
-    /* (240 - 18 - 150 - 2) / 10 */
+    /* (222 - 2 - 150) / 10: down to the hints, the description being the
+     * page's help. */
     TEST_ASSERT_EQUAL_UINT16(7, b.rows);
     TEST_ASSERT_EQUAL_UINT8(41, b.cols);
     menu_draw_band(&cv, &b);
     b.first = 1;
     menu_draw_band(&cv, &b);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
-    TEST_ASSERT_TRUE(b.y + (int16_t)b.rows * 10 <= H - 18);
+    TEST_ASSERT_TRUE(b.y + (int16_t)b.rows * 10 <= g.foot_y);
 
     menu_band_fit(&g, NULL, y, &b);
     TEST_ASSERT_EQUAL_UINT16(0, b.rows);
@@ -347,29 +431,68 @@ static void test_the_band_fills_to_the_back_line_and_scrolls_inside_it(void)
     TEST_ASSERT_EQUAL_UINT(0, fk.fills);
 }
 
-static void test_the_question_and_message_stay_inside_the_window(void)
+static void test_the_save_state_screens_stay_inside_the_window(void)
 {
-    menu_draw_title(&cv, &g, "SAVE STATE");
+    static const ui_hint_t hints[] = { { "A", "Select" }, { "B", "Back" } };
+
+    menu_draw_title(&cv, &g, "Save State");
     menu_draw_question(&cv, &g,
                        "Load state? Progress since it was saved will be lost.");
-    menu_draw_message(&cv, &g, "Load failed.", MENU_TOP + 36, MENU_TEXT);
-    menu_draw_back(&cv, &g);
+    menu_draw_slot(&cv, (W - 80) / 2, MENU_TOP + 4, 80, 72, "No saved state");
+    menu_draw_footer(&cv, &g, NULL, hints, 2);
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
+    TEST_ASSERT_TRUE(drew_footer());
+    /* The slot is rounded like an image. */
+    TEST_ASSERT_EQUAL_INT16(UI_IMG_R, fk.rlog[0].r);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_SLOT, fk.rlog[0].color);
+}
+
+/* The save-state thumbnail streams in three 24-row bands: the first and last
+ * lose their corners, the middle is untouched — so there is no seam. */
+static void test_the_thumbnail_bands_round_only_the_outer_corners(void)
+{
+    static uint16_t band[80 * 24];
+    size_t i;
+    int16_t b;
+
+    for (b = 0; b < 3; b++) {
+        for (i = 0; i < 80 * 24; i++) {
+            band[i] = 0xABCD;
+        }
+        ui_round_corners_565(band, 80, 72, (int16_t)(b * 24), 24, UI_IMG_R,
+                             UI_COL_BG);
+        if (b == 0) {
+            TEST_ASSERT_EQUAL_HEX16(UI_COL_BG, band[0]);
+            TEST_ASSERT_EQUAL_HEX16(UI_COL_BG, band[79]);
+            TEST_ASSERT_EQUAL_HEX16(0xABCD, band[23 * 80]);
+        } else if (b == 1) {
+            for (i = 0; i < 80 * 24; i++) {
+                TEST_ASSERT_EQUAL_HEX16(0xABCD, band[i]);
+            }
+        } else {
+            TEST_ASSERT_EQUAL_HEX16(UI_COL_BG, band[23 * 80]);
+            TEST_ASSERT_EQUAL_HEX16(UI_COL_BG, band[23 * 80 + 79]);
+            TEST_ASSERT_EQUAL_HEX16(0xABCD, band[0]);
+        }
+    }
 }
 
 int main(void)
 {
     UNITY_BEGIN();
-    RUN_TEST(test_the_layout_fits_seven_rows_under_the_title);
+    RUN_TEST(test_the_layout_fits_seven_rows_over_the_help_line);
     RUN_TEST(test_the_full_list_stays_inside_the_window);
     RUN_TEST(test_a_cursor_move_repaints_to_the_full_screen);
     RUN_TEST(test_a_scroll_repaints_the_rows_and_leaves_the_title);
     RUN_TEST(test_a_value_change_repaints_to_the_full_screen);
-    RUN_TEST(test_the_highlight_is_bold_and_a_dimmed_row_is_not);
-    RUN_TEST(test_the_save_state_choice_inverts_only_the_highlight);
+    RUN_TEST(test_the_highlight_is_a_bold_pill_that_hugs_its_label);
+    RUN_TEST(test_a_dimmed_row_is_grey_and_never_bold);
+    RUN_TEST(test_a_value_sits_outside_the_pill);
+    RUN_TEST(test_the_save_state_choice_pills_only_the_highlight);
     RUN_TEST(test_the_hotkeys_page_stays_inside_the_window);
     RUN_TEST(test_a_one_row_cart_title_gives_the_images_a_row);
     RUN_TEST(test_the_band_fills_to_the_back_line_and_scrolls_inside_it);
-    RUN_TEST(test_the_question_and_message_stay_inside_the_window);
+    RUN_TEST(test_the_save_state_screens_stay_inside_the_window);
+    RUN_TEST(test_the_thumbnail_bands_round_only_the_outer_corners);
     return UNITY_END();
 }
