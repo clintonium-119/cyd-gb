@@ -623,7 +623,7 @@ static void swap565(uint16_t* px, size_t n)
 // phase's point — this build is for the eye, never for the stopwatch.
 //
 //   PLATFORMIO_BUILD_FLAGS="-DPREVIEW_444 -DDEV_ROM_PATH='\"...\"'" \
-//     pio run -e cyd-gnuboy -t upload
+//     pio run -e cyd -t upload
 static void quantise444(uint16_t* px, size_t n)
 {
     size_t i;
@@ -828,7 +828,7 @@ void display_bus_release()
 // Never returns, needs no cartridge and no card.
 //
 //   PLATFORMIO_BUILD_FLAGS='-DPUSH_ORDER=PUSH_COL -DPANEL_FILL_PROBE' \
-//     pio run -e cyd-gnuboy -t upload
+//     pio run -e cyd -t upload
 void display_fill_probe()
 {
     static uint16_t col[GAME_H];

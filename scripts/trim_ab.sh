@@ -81,7 +81,7 @@ printf '%s trial %2d porch=%s/64\n' "$(date -Is)" "$trial" "$arm" >> "$LOG"
 # toolchain fault without it.
 PLATFORMIO_BUILD_FLAGS="-DPANEL_TRIM_FORCE -DPANEL_TRIM_FPA=$fpa \
 -DPANEL_TRIM_RATIO=$ratio -DDEV_ROM_PATH='\"$ROM\"' ${EXTRA:-}" \
-    pio run -e cyd-gnuboy -t upload >/dev/null
+    pio run -e cyd -t upload >/dev/null
 
 echo "trial $trial flashed. Play it, score it for annoyance, run the next one."
 echo "when the series is done: $0 --reveal"

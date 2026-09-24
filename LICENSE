@@ -26,32 +26,19 @@ Vendored cores and the licence of a built image
 ================================================================================
 
 The MIT terms above cover the first-party code in this repository: everything
-under src/, include/ (except include/peanut_gb.h), lib/gbcore/, lib/gb_runner/,
-test/ and tools/. lib/minigb_apu/ is third-party under its own permissive
-terms; see lib/minigb_apu/LICENSE.
+under src/, include/, lib/gbcore/, lib/gnuboy_runner/, test/ and tools/.
 
-Two emulator cores are vendored, and exactly one is linked into any given
-firmware image. Which one you build decides the licence of that image.
+The emulator core is vendored, and it decides the licence of a built image.
 
   lib/gnuboy/          gnuboy, as carried by retro-go, GPL-2.0-or-later. See
                        lib/gnuboy/COPYING for the full text and
-                       lib/gnuboy/CREDITS for authorship. An image built with
-                       this core is a combined work with GPL-2.0 code, so that
-                       image is distributed under GPL-2.0-or-later, and anyone
-                       distributing it owes the corresponding source under
-                       those terms.
-
-                       THIS IS THE SHIPPED CORE, and the `cyd-gnuboy`
-                       environment is what a bare `pio run` builds. The
-                       firmware handed to a user is therefore
+                       lib/gnuboy/CREDITS for authorship. Every firmware image
+                       links this core, so every image is a combined work with
+                       GPL-2.0 code and is distributed under GPL-2.0-or-later.
+                       The firmware handed to a user is therefore
                        GPL-2.0-or-later, and that user is entitled to the
                        corresponding source on request.
 
-  include/peanut_gb.h  Peanut-GB, MIT, copyright 2018-2023 Mahyar Koshkouei.
-                       An image built with this core is distributed under MIT.
-                       It remains available and supported as the `cyd`
-                       environment; it is no longer the default.
-
-The MIT grant on the first-party code is unaffected either way: it stays MIT at
-the source level, and the GPL obligation attaches only to the combined image
+The MIT grant on the first-party code is unaffected: it stays MIT at the source
+level, and the GPL obligation attaches only to the combined image
 that links lib/gnuboy/.

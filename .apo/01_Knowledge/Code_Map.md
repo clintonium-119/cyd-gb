@@ -8,7 +8,7 @@ title: "Code Map"
 status: in_progress
 owner: ""
 created: '2026-08-27'
-updated: '2026-08-27'
+updated: '2026-09-23'
 reviewed_on: ""
 related_notes: ["[[01_Knowledge/System_Overview]]", "[[01_Knowledge/Coding_Standards]]"]
 tags: [apovault, knowledge, architecture]
@@ -32,7 +32,7 @@ small codebase and takes the single-subsystem fallback.
 
 ```
 cyd-gb/
-├── include/       9 headers — one per src/ module, plus hw_config.h and vendored peanut_gb.h
+├── include/       20 headers — first-party only; the vendored core is lib/gnuboy/ (2026-09-23)
 ├── src/           8 .cpp modules, flat, no subdirectories
 ├── scripts/       post_build_timestamp.py — PlatformIO post-build hook
 ├── reference/     DMG-CYD-wiring.pdf, DMG-CYD-audio-mod.pdf, ORIGINAL_ROADMAP.md (design doc)
@@ -40,7 +40,7 @@ cyd-gb/
 ├── platformio.ini single [env:cyd] environment; all pin config lives in build_flags
 ├── partitions.csv nvs / otadata / app0 (2 MB) / spiffs (1.98 MB)
 ├── README.md      documents the inherited fork, not the target
-└── LICENSE        MIT
+└── LICENSE        MIT for first-party code; a built image is GPL-2.0-or-later (links lib/gnuboy/)
 ```
 
 **Source:** `ls -F`, `ls -F include/ src/ scripts/ reference/` (read 2026-08-27).
@@ -56,15 +56,16 @@ They actually live in `reference/`. **Source:** `reference/ORIGINAL_ROADMAP.md:6
 | `src/bt_scanner.cpp` | 1033 | Largest first-party file. BLE beacon scanner. Marked **delete** by `reference/ORIGINAL_ROADMAP.md` §9 |
 | `src/touch_input.cpp` | 422 | Bit-bang XPT2046 driver + calibration + NVS settings. Marked **delete** |
 | `src/ui_launcher.cpp` | 287 | ROM browser, in-game menu, settings. Marked **replace** |
-| `src/emulator_bridge.cpp` | 196 | Peanut-GB glue. Marked keep-callbacks/rewrite-palette-path |
+| `src/emulator_bridge_gnuboy.cpp` | 1719 | gnuboy glue behind `include/emulator_bridge.h` — the only emulator bridge (2026-09-23) |
 | `src/sd_manager.cpp` | 82 | Marked **keep as-is** — the only file `reference/ORIGINAL_ROADMAP.md` §9 leaves untouched |
 | `src/display.cpp` | 52 | Marked **replace entirely** |
 | `src/button_input.cpp` | 37 | I²C expander read. Not listed in §9 |
 | `include/hw_config.h` | 67 | All pin and geometry constants. Marked **rewrite for this board** |
-| `include/peanut_gb.h` | 4044 | Vendored emulator core. Do not edit; it is upstream |
+| `lib/gnuboy/` | 11 source files | Vendored gnuboy core (retro-go, GPL-2.0-or-later). Refresh with `scripts/update_gnuboy.sh`; local modifications are listed in the pin comment at `lib/gnuboy/gnuboy.h:1-12` |
 | `platformio.ini` | 76 | Board, build flags, `lib_deps`. §9 lists five config changes required |
 
-**Sources:** `wc -l src/*.cpp include/*.h`, `reference/ORIGINAL_ROADMAP.md:554-577` (read 2026-08-27).
+**Sources:** `wc -l src/*.cpp include/*.h`, `reference/ORIGINAL_ROADMAP.md:554-577` (read 2026-08-27);
+`wc -l src/emulator_bridge_gnuboy.cpp`, `ls lib/gnuboy/`, `lib/gnuboy/gnuboy.h:1-12` (read 2026-09-23).
 
 ## Module Boundaries — `cyd-gb`
 
@@ -72,17 +73,18 @@ They actually live in `reference/`. **Source:** `reference/ORIGINAL_ROADMAP.md:6
 
 Boundaries are enforced by convention only; there is no build-level enforcement. Observed rules:
 
-- **Each `src/<name>.cpp` has exactly one `include/<name>.h`.** The only header without a `.cpp` is
-  `hw_config.h` (constants) and the vendored `peanut_gb.h`. **Source:** `ls -F src/ include/`.
+- **Each `src/<name>.cpp` has exactly one `include/<name>.h`.** Headers without a same-named `.cpp`:
+  `build_info.h`, `gnuboy_hook.h`, `hw_config.h`, `render_config.h`, and `emulator_bridge.h` (implemented
+  by `emulator_bridge_gnuboy.cpp`). **Source:** `ls -F src/ include/` (read 2026-09-23).
 - **Module state is file-scope `static`, never exposed.** Every module keeps its state private and publishes
-  only functions. Examples: `static Pg pg[PG_N]` and `static struct gb_s* gb` in `emulator_bridge.cpp:22,49`;
+  only functions. Examples: `static const uint8_t* rom` in `emulator_bridge_gnuboy.cpp:91`;
   `static volatile uint16_t cur_btns` in `button_input.cpp:5`; `static SPIClass sdSPI(VSPI)` and
   `static bool ready` in `sd_manager.cpp:7-8`.
 - **One documented exception:** `display.h:3` declares `extern TFT_eSPI tft`, defined at `display.cpp:5`. The
   TFT object is global, and `ui_launcher.cpp` draws through it directly.
-- **`peanut_gb.h` is included in exactly one translation unit** — `emulator_bridge.cpp:12` — with its feature
-  macros defined immediately above the include (`emulator_bridge.cpp:9-11`). No other module sees `struct
-  gb_s`. This is what makes the emulator swappable.
+- **gnuboy's headers are included in exactly one firmware translation unit** — `gnuboy.h` and `hw.h` at
+  `emulator_bridge_gnuboy.cpp:17-18`. No other `src/` module sees gnuboy's state; everything goes through
+  `include/emulator_bridge.h`. **Source:** `grep -rn '#include' src/` (read 2026-09-23).
 - **`hw_config.h` is the single source of pin numbers within C++ code**, but it is *not* the only source
   overall: `platformio.ini:19-71` defines an overlapping set of pin macros as `-D` build flags for TFT_eSPI's
   benefit. `SD_PIN_CS` (`hw_config.h:16`) and `-DSD_CS=5` (`platformio.ini:66`) are the same pin declared
@@ -102,13 +104,9 @@ The rules above describe the Arduino layer (`src/` + `include/`). Since the host
   `<module>_<verb>` free functions, built by PlatformIO's LDF for both `env:cyd` and `env:native`.
   `src/<name>.cpp` + `include/<name>.h` pairing remains the rule for the Arduino wrappers only.
   **Source:** `lib/gbcore/`, `platformio.ini` (`[env:native]`).
-- **`lib/gb_runner/` is test-only** — a headless Peanut-GB runner for the native suite; nothing under
-  `src/` may reference it, so it never links into firmware (checked by the unchanged `env:cyd` flash
-  size). **Source:** `lib/gb_runner/gb_runner.h` header comment.
-- **`peanut_gb.h` in one FIRMWARE translation unit still holds** — `emulator_bridge.cpp` remains the
-  only include under `src/`; the host-side includes (`lib/gb_runner/gb_runner.c`,
-  `test/test_toolchain/test_main.c`) never compile into `env:cyd`, so the emulator stays swappable.
-  **Source:** `grep -rn "peanut_gb.h" src/ lib/ test/` (read 2026-08-31).
+- **`lib/gnuboy_runner/` is test-only** — a headless gnuboy runner for the native suite; nothing under
+  `src/` may reference it, so it never links into firmware. **Source:** `lib/gnuboy_runner/gnuboy_runner.h`
+  header comment; `grep -rln gnuboy_runner src/` → none (read 2026-09-23).
 
 ## Boot and control flow
 
@@ -134,6 +132,9 @@ SPIFFS if it fits and opens it (`main.cpp:196`), `emu_init()` allocates the page
 calls `gb_init()` (`main.cpp:199`), then `run_emu()` loops on `emu_run_frame()` until the Start+Select combo
 opens the in-game menu (`main.cpp:206`, `:83-118`, `:24-30`).
 **Sources:** `src/main.cpp:177-209`, `src/emulator_bridge.cpp:117-176` (read 2026-08-27).
+*Correction 2026-09-23:* this paragraph is the inherited fork's flow. `src/emulator_bridge.cpp` (Peanut-GB,
+`gb_init()`) and the SPIFFS cache are gone; the bridge is `src/emulator_bridge_gnuboy.cpp` and the ROM is
+read from the raw `romdata` partition (`partitions.csv`).
 
 **This `loop()` structure is itself the thing `reference/ORIGINAL_ROADMAP.md` §6.1 forbids** — quitting a game returns to a full
 ROM browser. `reference/ORIGINAL_ROADMAP.md:417-425` replaces it with a single boot-time NFC read, and §8.1 removes the menu's

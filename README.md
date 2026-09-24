@@ -25,31 +25,21 @@ the pins the firmware actually declares are in [`include/hw_config.h`](include/h
 | SD card | onboard slot on IO5 / IO18 / IO19 / IO23 |
 | Buttons | 8-way PCB via an MCP23017 expander at I²C 0x20, polled once per frame |
 | Cartridges | PN532 NFC reader at I²C 0x24 — *planned* |
-| Audio | onboard amp on the DAC (IO26) through I2S built-in-DAC DMA; MiniGB APU, summed to mono; four volume states, off parks the DAC at mid-scale (there is no amp-enable pin) |
+| Audio | onboard amp on the DAC (IO26) through I2S built-in-DAC DMA; gnuboy's sound unit, summed to mono; four volume states, off parks the DAC at mid-scale (there is no amp-enable pin) |
 | I²C bus | SDA IO22, SCL IO21 — the whole bus, power included, on the 4-pin CN1 plug, pins as silkscreened on the board |
 | Power | 3.7 V LiPo with integrated protection, charged through the board's own charger |
 
 ## Building
 
 ```sh
-pio run                          # build the shipped image (gnuboy core)
+pio run                          # build the firmware (gnuboy core)
 pio run -t upload                # flash it
-pio run -e cyd                   # build the Peanut-GB image instead
 pio device monitor               # serial, 115200
 ```
 
-Two emulator cores are vendored and exactly one is linked per image, so the environment picks the
-core.
-
-**`cyd-gnuboy` is what ships**, and a bare `pio run` builds it. It was chosen on a measurement
-against Peanut-GB on one board in one sitting — Pokemon Yellow's overworld at 26/16 with interlace
-off on both cores — where it cost 7,718 us of emulation plus audio against 10,165, peaked at 13.0 ms
-a frame against 23.4, held a minimum 59 fps against 57, and sounded clean where Peanut-GB was rough.
-Because it links `lib/gnuboy/`, **the shipped firmware is GPL-2.0-or-later** and anyone given a unit
-is entitled to the corresponding source; see [`LICENSE`](LICENSE).
-
-`cyd` still builds the Peanut-GB image, which is MIT and keeps its interlace — that trick is
-load-bearing for that renderer, which is the whole reason the comparison happened.
+The emulator core is gnuboy, vendored in `lib/gnuboy/`. Because every image links it, **the firmware
+is GPL-2.0-or-later** and anyone given a unit is entitled to the corresponding source; see
+[`LICENSE`](LICENSE).
 
 Every `cyd` build stamps a version from `git describe --tags --always --dirty` and a UTC build time into
 the firmware, and names the copy in `builds/` from the same two values. Both show on the diagnostic
@@ -136,10 +126,7 @@ pytest tools/tests                                      # the host test suite
 
 ## Credits
 
-- [Peanut-GB](https://github.com/deltabeard/Peanut-GB) — emulator core by Mahyar Koshkouei. Vendored at
-  `include/peanut_gb.h`, pinned to an upstream commit recorded in that file's header; refresh it with
-  `scripts/update_peanut_gb.sh <sha>`.
-- [gnuboy](https://github.com/ducalex/retro-go) — the second emulator core, taken from retro-go's
+- [gnuboy](https://github.com/ducalex/retro-go) — the emulator core, taken from retro-go's
   `retro-core/components/gnuboy`. Vendored at `lib/gnuboy/`, pinned to an upstream commit recorded in
   `lib/gnuboy/gnuboy.h`; refresh it with `scripts/update_gnuboy.sh <sha>`. Authorship is in
   `lib/gnuboy/CREDITS`. Only the core is vendored — retro-go's launcher and system layer are not.
@@ -150,6 +137,5 @@ pytest tools/tests                                      # the host test suite
 
 ## License
 
-The first-party code is MIT, and Peanut-GB is also MIT, copyright 2018-2023 Mahyar Koshkouei, so a
-`cyd` image is MIT. gnuboy is GPL-2.0-or-later, so a `cyd-gnuboy` image is GPL-2.0-or-later. Full
-terms and the exact boundary are in [`LICENSE`](LICENSE).
+The first-party code is MIT. gnuboy is GPL-2.0-or-later, so a built firmware image is
+GPL-2.0-or-later. Full terms and the exact boundary are in [`LICENSE`](LICENSE).

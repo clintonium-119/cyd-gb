@@ -78,23 +78,16 @@ static inline size_t gnuboy_audio_samples() { return GB.audio.pos; }
 #include <string.h>
 
 /*
- * The gnuboy core behind the same interface as the Peanut-GB bridge, selected
- * per environment by build_src_filter so exactly one of the two is ever
- * linked. Everything outside this file — main, the menu, saves, the scaler,
- * the push task's consumers — is untouched and cannot tell which core it has.
- *
- * The pipeline is deliberately identical to the other bridge's, block for
- * block, so that an A/B between the two images has the core as its only
- * variable. Where the code below reads as a copy of src/emulator_bridge.cpp,
- * that is the point, not an oversight.
+ * The gnuboy core behind include/emulator_bridge.h. Everything outside this
+ * file — main, the menu, saves, the scaler, the push task's consumers — talks
+ * to the emulator only through that header.
  */
 
 // ─── ROM ────────────────────────────────────────────────────────────────────
 // A pointer into memory-mapped flash, owned by rom_store and valid for the
 // whole session. gnuboy_load_rom() points its bank table straight at it — it
-// stores `data + pos` per bank and copies nothing — so this is the same
-// direct-read shape the other core gets from its rom_direct pointer, and the
-// mapped ROM is read exactly as the interpreter needs it.
+// stores `data + pos` per bank and copies nothing — so the mapped ROM is read
+// exactly as the interpreter needs it.
 static const uint8_t* rom = nullptr;
 static uint32_t romlen = 0;
 // The caller's boot ROM bytes, read only inside emu_init(). NULL: none.
@@ -117,11 +110,10 @@ static uint32_t fpsc = 0, fpst = 0, cfps = 0;
 static uint8_t jpad = 0;
 
 // ─── Palette ────────────────────────────────────────────────────────────────
-// The tables live in gbcore, as they do for the other core, but the fill rule
-// is the gnuboy one: that core writes the tile's raw two bits and identifies
-// the source in the high bits, applying BGP / OBP0 / OBP1 when it builds its
-// own colour table rather than when it draws the pixel. Peanut-GB bakes the
-// register into the pixel byte instead. So the LUT here is a function of the
+// The tables live in gbcore, but the fill rule is the gnuboy one: the core
+// writes the tile's raw two bits and identifies the source in the high bits,
+// applying BGP / OBP0 / OBP1 when it builds its own colour table rather than
+// when it draws the pixel. So the LUT here is a function of the
 // three palette registers as well as the chosen palette, and it is rebuilt
 // whenever any of them moves — otherwise every fade and every inverted screen
 // would simply not happen.
@@ -215,11 +207,9 @@ const char* emu_get_palette_name(uint8_t idx)
 // are the same allocation. That is the whole reason the per-line hook carries
 // no copy: by the time it fires, gnuboy has already written the line into fb,
 // and the hook's only job is to notice which block the frame has reached and
-// commit the finished one. The other bridge copies each line because its core
-// hands over a transient line buffer instead.
+// commit the finished one.
 //
-// Everything downstream of fb is shared with the other bridge: a block is
-// BLOCK_LINES raw lines plus room for the lookahead line the 26/16 geometry
+// Downstream of fb, a block is BLOCK_LINES raw lines plus room for the lookahead line the 26/16 geometry
 // reads, blocks are committed in order into the two-slot queue, and colour
 // never enters a slot.
 //
@@ -252,12 +242,9 @@ static int16_t vp_x = GAME_X;
 static int16_t vp_y = GAME_Y;
 
 // ─── Pipeline ───────────────────────────────────────────────────────────────
-// Same two-core split as the other bridge, and the same reasons: core 1 runs
-// emulation and the block copies, core 0 runs the LUT, the scaler and the DMA
-// push. See include/emulator_bridge.h's Pipeline section for the contract and
-// src/emulator_bridge.cpp for the long-form rationale; nothing here diverges
-// from it, because an A/B whose pipeline also changed would measure two
-// things at once.
+// Core 1 runs emulation and the block copies, core 0 runs the LUT, the scaler
+// and the DMA push. See include/emulator_bridge.h's Pipeline section for the
+// contract.
 //
 // A packed buffer is bytes rather than pixels, and three quarters the size.
 // DMA_ELEMS() turns a pixel count into the buffer's own units so the walks
@@ -328,12 +315,10 @@ static uint32_t q_stall_us = 0;
 static uint32_t q_stall_acc = 0;
 
 // ─── Audio ──────────────────────────────────────────────────────────────────
-// gnuboy's sound unit is bound to its own hardware state and cannot be swapped
-// for MiniGB APU, so this core generates its own samples. Everything after
-// that is the other bridge's path unchanged: gnuboy is asked for interleaved
+// gnuboy's sound unit generates the samples. It is asked for interleaved
 // stereo int16, which is exactly what mix_mono() takes, so the volume table,
-// the rounding and the mid-scale bias are the same tested code on both cores
-// rather than a second conversion written here. The alternative — gnuboy's
+// the rounding and the mid-scale bias are tested gbcore code rather than a
+// conversion written here. The alternative — gnuboy's
 // mono format and a hand-rolled shift and bias — would have had to re-derive
 // the volume encoding and the silence rule that mix_mono already pins.
 //
@@ -381,10 +366,8 @@ static uint32_t ff2c = 0, cff2 = 0;
 // Off until main() applies the stored setting, so a unit is never loud before
 // its own volume is read.
 static uint8_t vol_idx = MIX_VOL_OFF;
-// The mix, for the [PERF] line. NOT the same quantity the other bridge reports
-// under this name: there the APU runs after the frame and is timed with the
-// mix, here it runs inside gnuboy_run() and its cost is inside emu_us. The
-// sum of the two is what compares across cores; neither half does.
+// The mix, for the [PERF] line. The sound unit itself runs inside
+// gnuboy_run(), so its cost is inside emu_us, not here.
 static uint32_t apu_us = 0;
 
 void emu_get_frame_times(uint32_t* out_emu_us, uint32_t* out_scale_us,
@@ -603,8 +586,7 @@ static void frame_end()
 }
 
 /*
- * Consumer half, pinned to core 0. Identical to the other bridge's: the raw
- * lines are LUT'd, the block is scaled unit by unit into whichever DMA buffer
+ * Consumer half, pinned to core 0. The raw lines are LUT'd, the block is scaled unit by unit into whichever DMA buffer
  * the bus is not reading, and queued. Frame bracketing comes from the
  * metadata the producer committed — block 0 opens the address window,
  * last_in_frame closes it — and a slot is released as soon as its raw lines
@@ -865,8 +847,7 @@ static void emu_push_task(void* arg)
  * are where the block copy will look for them. The parameter stays in the
  * hook's signature because the hook is the vendored core's, not this file's.
  *
- * Not IRAM_ATTR: it calls straight into flash-resident gbcore, exactly as the
- * other bridge's line callback does.
+ * Not IRAM_ATTR: it calls straight into flash-resident gbcore.
  */
 #ifdef TEAR_DEMO
 // ─── Tear demo (bench only) ─────────────────────────────────────────────────
@@ -900,7 +881,7 @@ static void emu_push_task(void* arg)
 // impossible to miss.
 //
 //   PLATFORMIO_BUILD_FLAGS="-DDEV_ROM_PATH='\"Black Castle.gb\"' -DTEAR_DEMO" \
-//     pio run -e cyd-gnuboy -t upload
+//     pio run -e cyd -t upload
 #define DEMO_RATE_MAX 6
 
 static int16_t demo_sx = 0;
@@ -1171,7 +1152,7 @@ void emu_gnuboy_line(const unsigned char* line, int index)
 // ─── API ────────────────────────────────────────────────────────────────────
 /*
  * The cartridge title out of the mapped header bytes — the ROM's, not the
- * core's, so this is the other bridge's rule verbatim. A byte outside the
+ * core's. A byte outside the
  * printable range is padding or part of the manufacturer and CGB fields that
  * overlap the tail of the field, never part of a name, so it terminates the
  * string. out_sz wants to be 17 for the whole field.
@@ -1233,8 +1214,7 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     /* The speaker's rate, not a number of this file's own: gnuboy derives its
      * sample counter from it, and a zero there leaves the counter unable to
      * advance and hangs the core outright. No audio callback is passed —
-     * gnuboy fills the buffer and this bridge reads it at frame end, which is
-     * where the other core's mix happens too. */
+     * gnuboy fills the buffer and this bridge reads it at frame end. */
     if (gnuboy_init(SPEAKER_SAMPLE_RATE, GB_AUDIO_STEREO_S16,
                     GB_PIXEL_PALETTED, nullptr, nullptr) != 0) {
         Serial.println("[EMU] gnuboy init failed");
@@ -1332,9 +1312,9 @@ void emu_run_frame()
     bool twice = ffwd && ff_ahead;
     int64_t t;
 
-    /* The two cores' pad bits happen to agree exactly — right, left, up,
-     * down, A, B, select, start from bit 0 up — so the byte goes straight
-     * across with no translation. */
+    /* The bridge's pad bits are gnuboy's exactly — right, left, up, down, A,
+     * B, select, start from bit 0 up — so the byte goes straight across with
+     * no translation. */
     gnuboy_set_pad(jpad);
 
     /* gnuboy has no interlace and none is added: skipping alternate
@@ -1441,9 +1421,7 @@ void emu_run_frame()
         fpst = n;
         uint32_t aunder = 0, aover = 0, await_us = 0;
         speaker_get_stats(&aunder, &aover, &await_us);
-        /* Same key and same field names as the other bridge's line, so one
-         * capture tool reads both cores. core=gnuboy is what tells the two
-         * captures apart. */
+        /* tools/perf_capture.py parses these field names; keep them. */
 #ifndef QUIET_PERF
         Serial.printf("[PERF] emu=%uus scale=%uus push=%uus qstall=%uus "
                       "qovf=%u apu=%uus await=%uus aunder=%u aover=%u "
@@ -1493,15 +1471,14 @@ void emu_set_joypad(uint8_t b) { jpad = b; }
 // whole 8 KB banks and gives a cartridge that declares no RAM a bank anyway,
 // so its allocation is 8192 where the header says 0 or 2048. Writing that to
 // the card would change the .sav length and break every file already on the
-// cards. The header is the core-independent answer and it is the one the
-// other bridge writes, so both cores produce the same file for the same ROM.
+// cards. The header is the core-independent answer, so it is the one written.
 //
 // The allocation is always at least the header size — 8 KB banks rounded up —
 // so handing out the smaller number can never run off the end.
 
 /*
- * The cartridge's save size from the mapped header, by the same rule the
- * other core applies: byte 0x149 into the standard table, with MBC2 as the
+ * The cartridge's save size from the mapped header: byte 0x149 into the
+ * standard table, with MBC2 as the
  * exception it always is. An unrecognised code is 0 — autosave off — rather
  * than a guess at how much RAM to write to a card.
  */
@@ -1563,8 +1540,7 @@ void emu_clear_cart_ram_dirty()
 
 void emu_autosave_tick(uint32_t now_ms)
 {
-    /* The other core notes each write from its IRAM-resident RAM callback.
-     * gnuboy has no such callback to hand out; it sets a per-bank bit in
+    /* gnuboy has no cartridge-RAM write callback to hand out; it sets a per-bank bit in
      * cart.sram_dirty instead, and only when the byte actually changed. So
      * the notice is collected here, once a frame, and the bits are consumed
      * the way gnuboy's own save path consumes them.
@@ -1663,8 +1639,6 @@ static void state_log(const char* what, const char* path, int r, int64_t t0)
                   (unsigned)ESP.getFreeHeap(),
                   (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
 }
-
-bool emu_state_available() { return true; }
 
 bool emu_state_save(const char* path_vfs)
 {

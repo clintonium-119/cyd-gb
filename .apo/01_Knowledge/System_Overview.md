@@ -8,7 +8,7 @@ title: "System Overview"
 status: in_progress
 owner: ""
 created: '2026-08-27'
-updated: '2026-08-27'
+updated: '2026-09-23'
 reviewed_on: ""
 related_notes: ["[[01_Knowledge/Code_Map]]", "[[01_Knowledge/Domain_Model]]", "[[01_Knowledge/Integration_Map]]"]
 tags: [apovault, knowledge, architecture]
@@ -61,7 +61,7 @@ Concurrency in the current code is one pinned FreeRTOS task: `input_task` on cor
 buttons every 12 ms, with the emulation loop running on the main Arduino task.
 **Source:** `src/main.cpp:19-43` (read 2026-08-27).
 
-`reference/ORIGINAL_ROADMAP.md` §3.3 specifies a different target split — Peanut-GB on core 1, display push on core 0 behind a
+`reference/ORIGINAL_ROADMAP.md` §3.3 specifies a different target split — the emulator core on core 1, display push on core 0 behind a
 queue — which is not yet implemented. **Source:** `reference/ORIGINAL_ROADMAP.md:331-336` (read 2026-08-27).
 
 ## Key Components
@@ -69,7 +69,7 @@ queue — which is not yet implemented. **Source:** `reference/ORIGINAL_ROADMAP.
 | Path | Role |
 |---|---|
 | `src/main.cpp` | Boot, ROM selection, emulation loop, save/load orchestration, input task |
-| `src/emulator_bridge.cpp` | Peanut-GB callbacks, ROM page cache, palette table, frame pacing |
+| `src/emulator_bridge_gnuboy.cpp` | gnuboy front end behind `include/emulator_bridge.h`: ROM mapping, palette LUT, frame pacing, audio hand-off (2026-09-23) |
 | `src/display.cpp` | TFT_eSPI init, backlight PWM, per-scanline scale and push |
 | `src/sd_manager.cpp` | SD mount, ROM directory scan, `.sav` battery-save read/write |
 | `src/ui_launcher.cpp` | ROM browser, in-game menu, settings submenu |
@@ -77,7 +77,7 @@ queue — which is not yet implemented. **Source:** `reference/ORIGINAL_ROADMAP.
 | `src/button_input.cpp` | I²C GPIO-expander button read |
 | `src/bt_scanner.cpp` | Bluetooth LE beacon scanner |
 | `include/hw_config.h` | Pin map, screen geometry, touch-zone constants |
-| `include/peanut_gb.h` | Vendored Peanut-GB emulator core (4044 lines) |
+| `lib/gnuboy/` | Vendored gnuboy emulator core (retro-go), including its sound unit (2026-09-23) |
 
 **Source:** `ls -F src/ include/`, `wc -l src/*.cpp include/*.h` (read 2026-08-27).
 
@@ -87,22 +87,20 @@ queue — which is not yet implemented. **Source:** `reference/ORIGINAL_ROADMAP.
 |---|---|---|
 | Platform | `espressif32@6.5.0`, board `esp32dev`, framework `arduino` | `platformio.ini:7-9` |
 | Language | C++ (Arduino), plus one Python build script | `src/*.cpp`, `scripts/post_build_timestamp.py` |
-| Emulator core | Peanut-GB, vendored at `include/peanut_gb.h`; MIT, by Mahyar Koshkouei | `README.md` Credits, `include/peanut_gb.h` |
+| Emulator core | gnuboy as carried by retro-go, vendored at `lib/gnuboy/`; GPL-2.0-or-later, so a built image is GPL-2.0-or-later | `lib/gnuboy/gnuboy.h:1-12`, `LICENSE` (read 2026-09-23) |
 | Display driver | `bodmer/TFT_eSPI@^2.5.43` | `platformio.ini:74` |
 | Touch driver | `PaulStoffregen/XPT2046_Touchscreen` pinned at tag `v1.4` | `platformio.ini:75` |
 | Build tool | PlatformIO, with a post-build timestamp script | `platformio.ini:10-11`, `scripts/post_build_timestamp.py` |
-| Persistence | Arduino `Preferences` (NVS) for settings; SD FAT32 for ROMs and saves; SPIFFS as ROM cache | `src/touch_input.cpp:5,19`, `src/sd_manager.cpp`, `src/emulator_bridge.cpp:117-150` |
+| Persistence | Arduino `Preferences` (NVS) for settings; SD FAT32 for ROMs and saves; raw `romdata` partition, `esp_partition_mmap`ed, holds the running ROM | `src/settings.cpp:5-7`, `src/sd_manager.cpp`, `src/rom_store.cpp:163-184`, `partitions.csv` (read 2026-09-23) |
 | Test framework | **None present.** No test files, no `test/` directory, no CI workflow. | `find` for `*test*`/`*spec*` returned nothing; no `.github/` (read 2026-08-27) |
-
-Note the README claims Peanut-GB "is **not included** in this repo — you must download it," but
-`include/peanut_gb.h` is committed and tracked (last touched 2026-08-02). The README instruction is stale for
-this fork. **Source:** `README.md` step 3, `git log -1 -- include/peanut_gb.h` (read 2026-08-27).
 
 ## Memory and performance shape
 
 The board has no PSRAM. The fork's answer is a paged ROM cache in SPIFFS: 16 pages of 4096 bytes with a
 32-entry hash index and LRU eviction, plus bank 0 (first 32 KB) permanently resident in a `malloc`'d buffer.
 **Source:** `src/emulator_bridge.cpp:14-46, 152-163` (read 2026-08-27).
+*Correction 2026-09-23:* that cache and `src/emulator_bridge.cpp` are gone. The ROM is written raw into the
+`romdata` partition and mapped with `esp_partition_mmap` (`src/rom_store.cpp:163-184`, `partitions.csv`).
 
 `reference/ORIGINAL_ROADMAP.md` §3.2 names this cache "the biggest risk": the hit path is ~15 cycles but a miss is a 4 KB SPIFFS
 read estimated at 1.5–4 ms against a 16.75 ms frame budget, so a bank-switch storm stutters. The proposed fix

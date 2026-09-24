@@ -30,10 +30,9 @@ them. The candidates below are drawn from the recurring shapes visible in this r
 >       definitions, and `SD_CS` is declared in both under different names
 >       ([[01_Knowledge/Prompt_Standards]] § Hardware constants). What is the checklist that keeps them in
 >       sync, and does the change need re-flashing all ten units?
-> - [ ] **Adding a palette.** Three parallel declarations must stay in agreement: `NUM_PALETTES`
->       (`include/emulator_bridge.h:22`), `pals[]` and `palnames[]` (`src/emulator_bridge.cpp:61, 83`). Note
->       `reference/ORIGINAL_ROADMAP.md:230-266` is about to reshape all three to `[N][3][4]` — write this playbook after that
->       lands, not before.
+> - [ ] **Adding a palette.** Three parallel declarations must stay in agreement: `PALETTE_COUNT`
+>       (`lib/gbcore/render/palette.h`), `pals[]` and `palnames[]` (`lib/gbcore/render/palette.c:26, 99`,
+>       read 2026-09-23).
 > - [ ] **Making a rendering change.** `reference/ORIGINAL_ROADMAP.md` §10 requires re-measuring after Phases 3, 4, 5 and 6.
 >       What is the standard measurement procedure — which ROM, which scene, how many frames, recorded where?
 > - [ ] **Deleting a fork subsystem.** `reference/ORIGINAL_ROADMAP.md` §9 lists files to delete. `button_input.cpp:2` includes

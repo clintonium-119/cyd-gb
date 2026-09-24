@@ -32,7 +32,7 @@ static const uint16_t BAR_COLORS[8] = {
 
 #define BAR_COUNT 8
 
-/* Peanut-GB's 12-colour pixel byte: bits 5-4 pick the ramp (BG is 0x20) and
+/* palette_build_lut()'s pixel byte: bits 5-4 pick the ramp (BG is 0x20) and
  * bits 1-0 pick the shade, which is what palette_build_lut() indexes by. The
  * checkerboard wants the background ramp's two ends. */
 #define LUT_BG_DARKEST 0x20

@@ -122,7 +122,7 @@
 //
 // Select the other order per invocation:
 //
-//   PLATFORMIO_BUILD_FLAGS=-DPUSH_ORDER=PUSH_COL pio run -e cyd-gnuboy
+//   PLATFORMIO_BUILD_FLAGS=-DPUSH_ORDER=PUSH_COL pio run -e cyd
 #define PUSH_ROW 0
 #define PUSH_COL 1
 
@@ -162,18 +162,18 @@
 // diagnostic screen and the splash all draw through `tft` in 16 bits, and
 // display_bus_acquire() is where the panel is put back for them.
 //
-// Only the gnuboy bridge packs. The Peanut-GB bridge next to it pushes 16-bit
-// and is not this phase's scope, and [env:cyd-gnuboy] is documented as
-// differing from [env:cyd] in exactly two things — so the packed path is a
-// flag on an invocation rather than a flag in an environment, and the default
-// stays 16-bit until the bench says the packing earns its core-0 time:
+// PIXEL_444 is the default. Measured on the bench of 2026-09-22 against the
+// 16-bit build, one board, one sitting: core 0 falls from 13,988 us to
+// 10,802 us. The packed store costs scale 2,740 us and the shorter write gives
+// push back 5,926 us, for a net 3,186 us. fps 60 and aover 0 on both arms;
+// banding judged clean across all twenty palettes. Roll back per invocation:
 //
-//   PLATFORMIO_BUILD_FLAGS=-DPIXEL_FORMAT=PIXEL_444 pio run -e cyd-gnuboy
+//   PLATFORMIO_BUILD_FLAGS=-DPIXEL_FORMAT=PIXEL_565 pio run -e cyd
 #define PIXEL_565 16
 #define PIXEL_444 12
 
 #ifndef PIXEL_FORMAT
-#define PIXEL_FORMAT PIXEL_565
+#define PIXEL_FORMAT PIXEL_444
 #endif
 
 #if PIXEL_FORMAT != PIXEL_565 && PIXEL_FORMAT != PIXEL_444

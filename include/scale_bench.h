@@ -33,7 +33,7 @@
 // so a frame of varied indices measures what dmg-acid2 measures, without
 // needing a card in the slot.
 //
-//   PLATFORMIO_BUILD_FLAGS='-DSCALE_BENCH' pio run -e cyd-gnuboy -t upload
+//   PLATFORMIO_BUILD_FLAGS='-DSCALE_BENCH' pio run -e cyd -t upload
 #ifdef SCALE_BENCH
 void scale_bench_run();
 #endif

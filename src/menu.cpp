@@ -164,14 +164,12 @@ static void draw_row(const settings_t* s, uint16_t first, uint8_t row,
 {
     char buf[16];
     const char* value = row_value(s, row, buf, sizeof(buf));
-    const bool off = (row == ROW_MANUAL && !manual_available)
-                     || (row == ROW_STATE && !emu_state_available());
+    const bool off = row == ROW_MANUAL && !manual_available;
     int16_t y = (int16_t)(s->game_y + MENU_TOP + (row - first) * MENU_ROW_H);
     const char* label = ROW_LABELS[row];
 
     if (off) {
-        label = row == ROW_MANUAL ? "Game Manual (Unavailable)"
-                                  : "Save State (Unavailable)";
+        label = "Game Manual (Unavailable)";
     }
     draw_bar(s, y, label, value, highlighted, off);
 }
@@ -808,7 +806,7 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
                 wait_release();
                 return MENU_RESET;
             }
-            if (cursor == ROW_STATE && emu_state_available()) {
+            if (cursor == ROW_STATE) {
                 if (state_screen(s, info)) {
                     return MENU_RESUME;
                 }

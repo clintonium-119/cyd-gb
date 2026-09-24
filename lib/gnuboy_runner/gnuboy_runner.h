@@ -42,8 +42,7 @@ const uint8_t* gnuboy_runner_frame(void);
  *
  * These are not a convenience: gnuboy applies BGP / OBP0 / OBP1 when it
  * builds its colour table, not when it draws the pixel, so the index buffer
- * above cannot be resolved to a shade without them. The other core's buffer
- * needs no equivalent because it bakes the register into the pixel byte.
+ * above cannot be resolved to a shade without them.
  */
 uint8_t gnuboy_runner_bgp(void);
 uint8_t gnuboy_runner_obp0(void);
@@ -55,8 +54,7 @@ uint8_t gnuboy_runner_obp1(void);
 const int16_t* gnuboy_runner_audio(void);
 
 /*
- * Samples per channel in the LAST emulated frame. Unlike the Peanut-GB
- * runner's, this varies: gnuboy emits a sample every snd.rate cycles, so the
+ * Samples per channel in the LAST emulated frame. This varies: gnuboy emits a sample every snd.rate cycles, so the
  * count follows the frame's real emulated length.
  */
 unsigned gnuboy_runner_audio_samples(void);
@@ -68,7 +66,7 @@ const uint8_t* gnuboy_runner_cart_ram(size_t* len);
 
 /*
  * Failures the runner itself saw: a rejected ROM, or a frame run before boot.
- * gnuboy has no error callback to register, unlike the other core, so this
+ * gnuboy has no error callback to register, so this
  * counts what is observable here rather than pretending to more.
  */
 unsigned gnuboy_runner_error_count(void);

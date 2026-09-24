@@ -202,15 +202,13 @@
                             // channel (§1.6, confirmed rev C). The I2S API
                             // selects the channel, not the pin, so this is
                             // documentation plus an init-time check.
-// Must equal AUDIO_SAMPLE_RATE in platformio.ini — the same two-places rule
-// as SD_PIN_CS / -DSD_CS. The bridge static-asserts the pair.
+// gnuboy is initialised at this rate and derives its sample counter from it.
 #define SPEAKER_SAMPLE_RATE 32768
-// One Game Boy frame at that rate (§4). Static-asserted in the bridge against
-// the APU's own AUDIO_SAMPLES, which derives it from the vertical-sync rate.
+// One Game Boy frame at that rate (§4), truncated.
 #define SPEAKER_SAMPLES_PER_FRAME 548
 // The same figure undivided, in ten-thousandths: 32768 / (4194304 / 70224) =
-// 548.6197 samples a frame. The constant above is that truncated, which is all
-// a core emitting a fixed count per frame can use — but a caller that paces
+// 548.6197 samples a frame. The constant above is that truncated, which is what
+// the speaker's DMA buffers are sized to — but a caller that paces
 // ITSELF off the speaker's DMA queue is choosing its own frame rate when it
 // chooses a sample count, and 548 is 32768/548 = 59.7956 Hz, a full 0.068 Hz
 // above the cadence gnuboy's cycle-derived count produces.
@@ -225,8 +223,6 @@
 #define SPEAKER_SAMPLES_X10000 5486197
 // The most one write may hand over, which is deliberately more than nominal.
 //
-// MiniGB APU emits exactly SPEAKER_SAMPLES_PER_FRAME whatever the frame did,
-// so for that core the two are the same number and this changes nothing.
 // gnuboy's count is cycle-derived and follows the frame's real emulated
 // length: 548 or 549 at this rate, averaging 548.62. Truncating to nominal
 // discarded the surplus — about 37 samples a second, each one a discontinuity

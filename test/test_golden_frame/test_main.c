@@ -2,25 +2,25 @@
 
 #include <stdio.h>
 
-#include "gb_runner.h"
+#include "gnuboy_runner.h"
 
 /*
  * Golden-frame regression pin.
  *
  * GOLDEN_FRAME_HASH is FNV-1a 64 over the raw 160x144 index buffer after
- * running dmg-acid2 for GOLDEN_FRAME_COUNT frames. It pins Peanut-GB's OWN
- * output under the firmware's emulator flags (ENABLE_LCD=1, ENABLE_SOUND=1,
- * PEANUT_GB_HIGH_LCD_ACCURACY=0, PEANUT_GB_USE_DOUBLE_WIDTH_PALETTE=0) — it
- * is NOT the official dmg-acid2 reference image, and it is only meaningful
- * while [env:native]'s flags mirror [env:cyd]'s.
+ * running dmg-acid2 for GOLDEN_FRAME_COUNT frames, followed by the three DMG
+ * palette registers. gnuboy's pixel byte carries the tile's raw two bits and
+ * applies BGP / OBP0 / OBP1 only when the colour table is built, so the
+ * buffer alone does not say what the frame looks like; the registers do. It
+ * pins gnuboy's OWN output — it is NOT the official dmg-acid2 reference
+ * image.
  *
  * An intentional rendering change updates the constant in the same commit,
- * with the reason in the commit body. dmg-acid2's output stabilises at
- * frame 10 (measured 2026-08-31, constant through frame 180); 60 leaves a
- * wide margin.
+ * with the reason in the commit body. The picture is checked to have settled
+ * by frame 60 in test_gnuboy_core.
  */
 #define GOLDEN_FRAME_COUNT 60u
-#define GOLDEN_FRAME_HASH 0xd6473e074b948ceaULL
+#define GOLDEN_FRAME_HASH 0x0fc5b5c4ee79097aULL
 
 #define ROM_PATH "test/roms/dmg-acid2.gb"
 #define ROM_MAX (1024 * 1024)
@@ -35,9 +35,8 @@ void tearDown(void)
 {
 }
 
-static uint64_t fnv1a64(const uint8_t* buf, size_t len)
+static uint64_t fnv1a64(uint64_t h, const uint8_t* buf, size_t len)
 {
-    uint64_t h = 0xcbf29ce484222325ULL;
     size_t i;
     for (i = 0; i < len; i++) {
         h ^= buf[i];
@@ -50,6 +49,8 @@ static void test_golden_frame_hash_matches(void)
 {
     FILE* f;
     size_t rom_len;
+    uint8_t regs[3];
+    uint64_t h;
 
     f = fopen(ROM_PATH, "rb");
     TEST_ASSERT_NOT_NULL_MESSAGE(f, "could not open " ROM_PATH
@@ -57,17 +58,22 @@ static void test_golden_frame_hash_matches(void)
     rom_len = fread(rom, 1, sizeof(rom), f);
     fclose(f);
 
-    TEST_ASSERT_EQUAL_INT(GB_RUNNER_OK, gb_runner_init(rom, rom_len));
-    TEST_ASSERT_EQUAL_INT(GB_RUNNER_OK,
-        gb_runner_run_frames(GOLDEN_FRAME_COUNT));
-    TEST_ASSERT_EQUAL_UINT(0, gb_runner_error_count());
+    TEST_ASSERT_EQUAL_INT(GNUBOY_RUNNER_OK, gnuboy_runner_init(rom, rom_len));
+    TEST_ASSERT_EQUAL_INT(GNUBOY_RUNNER_OK,
+        gnuboy_runner_run_frames(GOLDEN_FRAME_COUNT));
+    TEST_ASSERT_EQUAL_UINT(0, gnuboy_runner_error_count());
 
-    TEST_ASSERT_EQUAL_HEX64_MESSAGE(GOLDEN_FRAME_HASH,
-        fnv1a64(gb_runner_frame(), (size_t)GB_RUNNER_W * GB_RUNNER_H),
-        "Peanut-GB's dmg-acid2 output changed. If the rendering change is "
+    regs[0] = gnuboy_runner_bgp();
+    regs[1] = gnuboy_runner_obp0();
+    regs[2] = gnuboy_runner_obp1();
+    h = fnv1a64(0xcbf29ce484222325ULL, gnuboy_runner_frame(),
+                (size_t)GNUBOY_RUNNER_W * GNUBOY_RUNNER_H);
+    h = fnv1a64(h, regs, sizeof(regs));
+
+    TEST_ASSERT_EQUAL_HEX64_MESSAGE(GOLDEN_FRAME_HASH, h,
+        "gnuboy's dmg-acid2 output changed. If the rendering change is "
         "intentional, update GOLDEN_FRAME_HASH in the same commit and say "
-        "why in the commit body; otherwise this is a regression. Check "
-        "first that [env:native]'s emulator flags still mirror [env:cyd]'s.");
+        "why in the commit body; otherwise this is a regression.");
 }
 
 int main(void)

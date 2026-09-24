@@ -2,14 +2,14 @@
 
 #include <stdio.h>
 
-#include "gb_runner.h"
+#include "gnuboy_runner.h"
 #include "render/palette.h"
 #include "render/scaler.h"
 
 /*
  * Scaled golden-frame regression pins.
  *
- * The index-buffer suite next door pins Peanut-GB's own output. These two
+ * The index-buffer suite next door pins gnuboy's own output. These two
  * pins cover everything downstream of it: the palette LUT, the scaler's
  * pattern table, and the blend. Each hash is FNV-1a 64 over the whole scaled
  * RGB565 frame after running dmg-acid2 for GOLDEN_FRAME_COUNT frames and
@@ -22,7 +22,7 @@
  *   - regenerating the palette OBJ ramps (scripts/gen_palettes.py) — palette
  *     0's BG ramp is pinned verbatim by the palette suite, but dmg-acid2 draws
  *     sprites, so OBJ values reach these hashes too
- *   - a change in Peanut-GB's output, which the index-buffer pin catches first
+ *   - a change in gnuboy's output, which the index-buffer pin catches first
  *
  * In every case: update the constant in the SAME commit as the change, with
  * the reason in the commit body. Otherwise a failure here is a regression.
@@ -32,8 +32,8 @@
  */
 #define GOLDEN_FRAME_COUNT 60u
 
-#define GOLDEN_5_3_NEAREST   0x3581CC78334307FAULL
-#define GOLDEN_5_3_BLEND     0x86BB57B59F29EB3FULL
+#define GOLDEN_5_3_NEAREST   0x228DB1E3E6526FD9ULL
+#define GOLDEN_5_3_BLEND     0x765C902F73876220ULL
 
 #define GOLDEN_PALETTE 0 /* "DMG Green" */
 
@@ -41,8 +41,8 @@
 #define ROM_MAX (1024 * 1024)
 
 static uint8_t rom[ROM_MAX];
-static uint16_t lines[GB_RUNNER_H][SCALER_SRC_W];
-static const uint16_t* line_ptrs[GB_RUNNER_H];
+static uint16_t lines[GNUBOY_RUNNER_H][SCALER_SRC_W];
+static const uint16_t* line_ptrs[GNUBOY_RUNNER_H];
 /* The panel is 240 rows and 5/3's output row is SCALER_DST_W_MAX wide, so
  * this is the frame exactly. */
 #define FRAME_MAX_PX (SCALER_DST_W_MAX * 240)
@@ -53,7 +53,7 @@ static uint16_t lut[PALETTE_LUT_SIZE];
 
 /* The same source frame as columns, which is the shape the column walk reads
  * and the shape the producer will hand it on target. */
-static uint16_t cols[SCALER_SRC_W][GB_RUNNER_H];
+static uint16_t cols[SCALER_SRC_W][GNUBOY_RUNNER_H];
 static const uint16_t* col_ptrs[SCALER_SRC_W];
 static uint16_t col_frame[FRAME_MAX_PX];
 
@@ -101,18 +101,19 @@ static void render_source_lines(void)
     rom_len = fread(rom, 1, sizeof(rom), f);
     fclose(f);
 
-    TEST_ASSERT_EQUAL_INT(GB_RUNNER_OK, gb_runner_init(rom, rom_len));
-    TEST_ASSERT_EQUAL_INT(GB_RUNNER_OK,
-        gb_runner_run_frames(GOLDEN_FRAME_COUNT));
-    TEST_ASSERT_EQUAL_UINT(0, gb_runner_error_count());
+    TEST_ASSERT_EQUAL_INT(GNUBOY_RUNNER_OK, gnuboy_runner_init(rom, rom_len));
+    TEST_ASSERT_EQUAL_INT(GNUBOY_RUNNER_OK,
+        gnuboy_runner_run_frames(GOLDEN_FRAME_COUNT));
+    TEST_ASSERT_EQUAL_UINT(0, gnuboy_runner_error_count());
 
-    px = gb_runner_frame();
+    px = gnuboy_runner_frame();
     TEST_ASSERT_NOT_NULL(px);
 
-    palette_build_lut(GOLDEN_PALETTE, lut);
-    for (y = 0; y < GB_RUNNER_H; y++) {
+    palette_build_lut_gnuboy(GOLDEN_PALETTE, gnuboy_runner_bgp(),
+                             gnuboy_runner_obp0(), gnuboy_runner_obp1(), lut);
+    for (y = 0; y < GNUBOY_RUNNER_H; y++) {
         for (x = 0; x < SCALER_SRC_W; x++) {
-            lines[y][x] = lut[px[y * GB_RUNNER_W + x]];
+            lines[y][x] = lut[px[y * GNUBOY_RUNNER_W + x]];
             cols[x][y] = lines[y][x];
         }
         line_ptrs[y] = lines[y];
@@ -135,9 +136,9 @@ static uint64_t scale_frame_and_hash(enum scaler_geom_e geom,
     unsigned b;
 
     TEST_ASSERT_NOT_NULL(gi);
-    TEST_ASSERT_EQUAL_UINT_MESSAGE(0, GB_RUNNER_H % gi->src_lines_per_block,
+    TEST_ASSERT_EQUAL_UINT_MESSAGE(0, GNUBOY_RUNNER_H % gi->src_lines_per_block,
         "the frame height must divide into whole blocks");
-    blocks = GB_RUNNER_H / gi->src_lines_per_block;
+    blocks = GNUBOY_RUNNER_H / gi->src_lines_per_block;
     dst_h = blocks * gi->dst_rows_per_block;
 
     /* Frame dimensions come from the geometry table, and must land on the
@@ -186,7 +187,7 @@ static unsigned scale_frame_col(enum scaler_geom_e geom,
     TEST_ASSERT_NOT_NULL(gi);
     src_units = gi->src_lines_per_block;
     dst_units = gi->dst_rows_per_block;
-    dst_h = GB_RUNNER_H / src_units * dst_units;
+    dst_h = GNUBOY_RUNNER_H / src_units * dst_units;
     blocks = SCALER_SRC_W / src_units;
     TEST_ASSERT_TRUE((size_t)dst_h * gi->dst_w
                      <= sizeof(col_frame) / sizeof(col_frame[0]));
@@ -215,7 +216,7 @@ static unsigned scale_frame_col(enum scaler_geom_e geom,
 static void scale_frame_packed(enum scaler_geom_e geom)
 {
     const scaler_geom_info_t* gi = scaler_geom_info(geom);
-    unsigned blocks = GB_RUNNER_H / gi->src_lines_per_block;
+    unsigned blocks = GNUBOY_RUNNER_H / gi->src_lines_per_block;
     unsigned b;
 
     for (b = 0; b < sizeof(packed_frame); b++) {
@@ -241,7 +242,7 @@ static unsigned scale_frame_col_packed(enum scaler_geom_e geom)
     const scaler_geom_info_t* gi = scaler_geom_info(geom);
     unsigned src_units = gi->src_lines_per_block;
     unsigned dst_units = gi->dst_rows_per_block;
-    unsigned dst_h = GB_RUNNER_H / src_units * dst_units;
+    unsigned dst_h = GNUBOY_RUNNER_H / src_units * dst_units;
     unsigned blocks = SCALER_SRC_W / src_units;
     unsigned b;
 
@@ -503,7 +504,7 @@ static void test_5_3_tail_column_is_the_last_source_column(void)
     /* And it is the scale of source column 159 alone, not a blend reaching
      * toward a column that does not exist: its pure rows are source pixels. */
     TEST_ASSERT_EQUAL_HEX16(cols[159][0], col_frame[(size_t)265u * dst_h]);
-    TEST_ASSERT_EQUAL_HEX16(cols[159][GB_RUNNER_H - 1],
+    TEST_ASSERT_EQUAL_HEX16(cols[159][GNUBOY_RUNNER_H - 1],
                             col_frame[(size_t)265u * dst_h + dst_h - 1u]);
 }
 

@@ -8,7 +8,7 @@ title: "Integration Map"
 status: in_progress
 owner: ""
 created: '2026-08-27'
-updated: '2026-08-27'
+updated: '2026-09-23'
 reviewed_on: ""
 related_notes: ["[[01_Knowledge/System_Overview]]", "[[01_Knowledge/Domain_Model]]"]
 tags: [apovault, knowledge, architecture]
@@ -27,20 +27,20 @@ no HTTP clients, no API keys and no `.env` in the repository.
 |---|---|---|
 | `bodmer/TFT_eSPI` | `^2.5.43` (caret — floats within 2.x) | Display driver; also owns the `tft` global |
 | `PaulStoffregen/XPT2046_Touchscreen` | git tag `v1.4` (pinned) | Touch controller. Fetched from GitHub at build time |
-| Peanut-GB | **vendored**, no version marker | Emulator core, `include/peanut_gb.h` |
+| gnuboy (via retro-go) | **vendored**, pinned to upstream commit `4ced120` (2026-01-19) in its pin comment | Emulator core and APU, `lib/gnuboy/`; GPL-2.0-or-later |
 | Arduino-ESP32 core | via `platform = espressif32@6.5.0` | `SD`, `SPIFFS`, `SPI`, `Wire`, `Preferences`, FreeRTOS |
 
-**Sources:** `platformio.ini:7, 73-76`, `include/peanut_gb.h` (read 2026-08-27).
+**Sources:** `platformio.ini:7, 73-76` (read 2026-08-27); `lib/gnuboy/gnuboy.h:1-12` (read 2026-09-23).
 
 Two supply-chain notes worth carrying into planning:
 
 - **The touch library is fetched from a GitHub URL, not the PlatformIO registry** (`platformio.ini:75`). It is
   tag-pinned, but an offline or GitHub-unavailable build fails. `reference/ORIGINAL_ROADMAP.md:556` deletes the touch subsystem,
   which removes this dependency.
-- **Peanut-GB has no pinned version.** `README.md` step 3 tells the user to `curl` it from `master`, while the
-  file is in fact committed here. `reference/ORIGINAL_ROADMAP.md:587-588` requires Phase 1 to "fetch `peanut_gb.h` from upstream
-  and pin the version" — so the pinning is an open action, not a solved problem.
-  **Sources:** `README.md` step 3, `reference/ORIGINAL_ROADMAP.md:587-588` (read 2026-08-27).
+- **The gnuboy core is pinned by commit, not fetched.** The pin comment at `lib/gnuboy/gnuboy.h:1-12` records
+  the upstream sha and the local modifications; `scripts/update_gnuboy.sh <sha>` refreshes the files and resets
+  that list, so local modifications must be re-applied by hand after an update.
+  **Sources:** `lib/gnuboy/gnuboy.h:1-12`, `scripts/update_gnuboy.sh:1-7` (read 2026-09-23).
 
 ## Buses and peripherals (as currently coded)
 
@@ -70,7 +70,7 @@ above is the fork's history, kept for the record.
 | Store | Medium | What lives there | Source |
 |---|---|---|---|
 | SD (FAT32) | external card | `/roms/gb`, `/roms/gbc`, `/saves/<base>.sav` | `include/sd_manager.h:6-9`; `src/sd_manager.cpp:15-18` |
-| SPIFFS | `spiffs` partition, 0x1F0000 (~1.98 MB) | `/rom.gb` — single-slot ROM cache | `partitions.csv:5`; `src/emulator_bridge.cpp:120-136` |
+| Raw flash | `romdata` partition (type `data`, subtype 0x40), 0x350000 (~3.3 MB) | The running ROM, written raw and read through `esp_partition_mmap` | `partitions.csv:19`; `src/rom_store.cpp:163-184` (read 2026-09-23) |
 | NVS | `nvs` partition, 0x5000 (20 KB) | Touch calibration; palette, frame-skip, brightness, overlay flags | `partitions.csv:2`; `include/touch_input.h:26-30`; `src/touch_input.cpp:5,19` |
 
 Directories are created on first boot if absent (`src/sd_manager.cpp:15-18`). `SPIFFS.begin(true)` formats on
@@ -79,6 +79,8 @@ mount failure, and the code degrades to reading the ROM straight off SD when SPI
 
 `reference/ORIGINAL_ROADMAP.md:320-329` proposes replacing the SPIFFS cache with a raw flash partition read via
 `esp_partition_mmap`, which requires editing `partitions.csv` (currently app0 2 MB / SPIFFS 1.98 MB).
+*Correction 2026-09-23:* done. SPIFFS and `src/emulator_bridge.cpp` are gone; `partitions.csv` is nvs /
+app0 (0xA0000) / `romdata` (0x350000) and the ROM is mapped by `src/rom_store.cpp`.
 
 ## Data flow — ROM read path
 
@@ -95,6 +97,10 @@ gb_rom_read(addr)                       emulator_bridge.cpp:96
 `romf` is whichever handle `emu_open_rom()` settled on: the SPIFFS cache if the copy succeeded and its size
 matches the SD original, otherwise the SD file directly.
 **Sources:** `src/emulator_bridge.cpp:32-46, 96-97, 117-150` (read 2026-08-27).
+*Correction 2026-09-23:* the diagram above is the removed Peanut-GB bridge. Now `main.cpp` passes the
+`rom_store_mmap()` pointer to the bridge and gnuboy points its bank table straight into the mapped ROM — no
+page cache. **Sources:** `src/main.cpp:446`, `src/emulator_bridge_gnuboy.cpp:1186`,
+`lib/gnuboy_runner/gnuboy_runner.h:7-9` (read 2026-09-23).
 
 ## Data flow — display path
 
@@ -102,6 +108,9 @@ matches the SD original, otherwise the SD file directly.
 through `pals[curpal][px & 3]`, and calls `display_push_gb_line()`, which scales 160→240 horizontally by
 duplicating every even pixel and calls `tft.pushImage()` once per destination row.
 **Sources:** `src/emulator_bridge.cpp:109-115`, `src/display.cpp:29-46` (read 2026-08-27).
+*Correction 2026-09-23:* `lcd_line()` went with the Peanut-GB bridge. gnuboy's per-line hand-off is
+`GNUBOY_DRAW_LINE()` at the tail of `lcd_renderline` (a local modification, `lib/gnuboy/lcd.c:714`), mapped to
+`emu_gnuboy_line()` by `include/gnuboy_hook.h:24`.
 
 `reference/ORIGINAL_ROADMAP.md` targets a materially different path — §2.4 replaces `px[x] & 3` with a 64-entry LUT, §2.3 adds
 `avg565` blending, §2.5 replaces per-line `pushImage` with one address window per frame and then
@@ -115,7 +124,7 @@ Named in `reference/ORIGINAL_ROADMAP.md`, with no implementation in `src/` as of
 |---|---|---|
 | PN532 NFC reader | I²C `0x24`, `ntag2xx_ReadPage()`, boot-time read only | §6.2–6.3 |
 | MCP23017 expander | I²C `0x20`, polled once per frame | §1.4, §5 |
-| MiniGB APU | Compile-time companion to Peanut-GB; `ENABLE_SOUND 1` | §4 |
+| APU | Roadmap named MiniGB APU; audio now comes from gnuboy's own sound unit (`lib/gnuboy/sound.c`) | §4 |
 | Internal DAC audio | IO26, timer-fed; no hardware mute exists — "off" holds the DAC at 128 (rev C) | §1.6, §4 |
 | Battery sense | IO34 ADC, divider ratio undocumented | §1.2, §11 item 6 |
 | Phone tag-writing web app | GitHub Pages + Web NFC (`NDEFReader`); off-device only | §6.6 |

@@ -1,8 +1,8 @@
 #pragma once
 // 12-colour palette tables and the flat LUT that colourizes a Game Boy line.
 //
-// Peanut-GB is DMG-only, but its 12-colour output packs the palette source
-// into each output pixel byte: bits 1-0 are the shade and bits 5-4 identify
+// palette_build_lut()'s pixel byte packs the palette source alongside the
+// shade: bits 1-0 are the shade and bits 5-4 identify
 // the palette (OBJ0 0x00, OBJ1 0x10, BG 0x20), so the byte's largest real
 // value is 0x23. Three palettes x four shades = 12 simultaneous colours, the
 // same mechanism a Game Boy Color uses to colourise DMG cartridges.
@@ -67,8 +67,8 @@ void palette_build_lut(uint8_t idx, uint16_t lut[PALETTE_LUT_SIZE]);
  * gnuboy writes the tile's RAW two bits and identifies the source in the high
  * bits — background 0-3, window 4-7, OBP0 32-35, OBP1 36-39 — and applies the
  * DMG palette registers when it builds its own colour table, not when it draws
- * the pixel. Peanut-GB does the opposite: its byte already holds the shade the
- * register selected. So a straight reordering of the table would drop BGP,
+ * the pixel. palette_build_lut()'s byte already holds the shade the register
+ * selected, so a straight reordering of the table would drop BGP,
  * OBP0 and OBP1 entirely and every fade, flash and inverted screen would stop
  * happening.
  *

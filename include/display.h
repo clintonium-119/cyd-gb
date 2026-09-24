@@ -166,7 +166,7 @@ void display_fill_probe();
 // know where the refresh is? Prints its findings and returns; the boot carries
 // on, so the same image can be built with DEV_ROM_PATH and played afterwards.
 //
-//   PLATFORMIO_BUILD_FLAGS='-DPANEL_PROBE -DDEV_ROM_PATH="..."' pio run -e cyd-gnuboy
+//   PLATFORMIO_BUILD_FLAGS='-DPANEL_PROBE -DDEV_ROM_PATH="..."' pio run -e cyd
 #ifdef PANEL_PROBE
 void display_panel_probe();
 #endif

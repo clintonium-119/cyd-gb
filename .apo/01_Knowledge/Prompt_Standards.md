@@ -57,9 +57,7 @@ calls itself "the settled design." **Source:** `README.md`; `reference/ORIGINAL_
 
 - **Do treat `reference/ORIGINAL_ROADMAP.md` as authoritative for intent**, and the current `src/` tree plus `README.md` as the
   starting point being replaced.
-- **Do not "fix" code to match `README.md`.** Several README statements are already stale for this fork — for
-  example step 3 says `peanut_gb.h` "is **not included** in this repo", but it is committed and tracked.
-  **Source:** `README.md` step 3 vs `git log -1 -- include/peanut_gb.h` (read 2026-08-27).
+- **Do not "fix" code to match `README.md`.** README statements can lag the code; check the tree.
 - **Do expect current code to contradict the roadmap**, and say so rather than silently picking a side. Known
   divergences are catalogued in [[01_Knowledge/Integration_Map]] and [[01_Knowledge/Code_Map]] — the button
   expander part (PCF8574 in code vs MCP23017 in the roadmap), the display driver define, `LED_R_PIN` on IO4,
@@ -71,8 +69,8 @@ calls itself "the settled design." **Source:** `README.md`; `reference/ORIGINAL_
   spaces around operators, descriptive parameter names. Match `src/main.cpp:19-43` and
   `src/sd_manager.cpp:70-82` (both from commit `3dd6145`, 2026-08-04). **Confirmed during /apo:init on
   2026-08-27.**
-- **Do not add new compressed one-liner code** in the inherited fork style (`emulator_bridge.cpp` 44
-  multi-statement lines, `ui_launcher.cpp` 50, `touch_input.cpp` 35). It is legacy, and `reference/ORIGINAL_ROADMAP.md` §9
+- **Do not add new compressed one-liner code** in the inherited fork style (`ui_launcher.cpp` 50
+  multi-statement lines, `touch_input.cpp` 35). It is legacy, and `reference/ORIGINAL_ROADMAP.md` §9
   marks most of those files for deletion or replacement anyway. **Confirmed during /apo:init on 2026-08-27.**
 - Reformatting untouched legacy code is not required and creates review noise — expand as you rewrite, not
   as a separate sweep.
@@ -85,7 +83,7 @@ calls itself "the settled design." **Source:** `README.md`; `reference/ORIGINAL_
   **Source:** `include/*.h` prefix counts (read 2026-08-27); see [[01_Knowledge/Coding_Standards]].
 - **Do keep module state file-scope `static`** and expose only functions. The one existing global is
   `extern TFT_eSPI tft` (`include/display.h:3`).
-- **Do use `#pragma once`** in new headers — 8 of 9 headers do; the exception is vendored.
+- **Do use `#pragma once`** in new headers — all 20 under `include/` do (read 2026-09-23).
 - **Do not introduce classes, namespaces, `enum class`, `constexpr`, STL containers, smart pointers or
   exceptions without asking.** None appear anywhere in first-party code, and the target has 520 KB of SRAM
   and no PSRAM. **Source:** `src/`, `include/` as read 2026-08-27.
@@ -93,14 +91,15 @@ calls itself "the settled design." **Source:** `README.md`; `reference/ORIGINAL_
 
 ## Hot-path constraints
 
-- **Do not add work to `gb_rom_read`, `gb_cram_r`, `gb_cram_w`, `cget` or `lcd_line` without accounting for
-  it in the frame budget.** All five are `IRAM_ATTR` and run per-access or per-scanline.
-  **Source:** `src/emulator_bridge.cpp:32, 96, 99, 102, 109` (read 2026-08-27).
+- **Do not add work to `emu_gnuboy_line()` without accounting for it in the frame budget.** gnuboy calls it
+  once per scanline through `GNUBOY_DRAW_LINE()` at the tail of `lcd_renderline`.
+  **Source:** `src/emulator_bridge_gnuboy.cpp:1072`, `include/gnuboy_hook.h:24`, `lib/gnuboy/lcd.c:714`
+  (read 2026-09-23).
 - **Do state the per-frame cost of a rendering change in the step note.** `reference/ORIGINAL_ROADMAP.md` does this throughout
   (§2.3 "~29k blends/frame, roughly 0.5 ms"; §2.4 "23,040 ANDs/frame"); match that standard.
   **Source:** `reference/ORIGINAL_ROADMAP.md:225-228, 254-258` (read 2026-08-27).
 - **Do not allocate in a frame loop.** Allocation happens once in `emu_init()` via `malloc` with null checks
-  (`src/emulator_bridge.cpp:160-166`); `String` and heap churn belong in setup paths only.
+  (`src/emulator_bridge_gnuboy.cpp:1188-1193`, read 2026-09-23); `String` and heap churn belong in setup paths only.
 - **Do not** validate a design against a proxy metric alone; when a design is tuned against a countable stand-in for a property a person judges (pixels changed, underrun count, peak frame time), assert the bound that proxy was standing in for too, on the other side. A proxy driven to its extreme is often the point where the real property it stood for is gone — check what that extreme looks like before trusting a one-sided assertion on it.
 - **Do:** treat a tear as a count of write-order pairs — spatially adjacent regions written far apart in time — not as a size to shrink; a monotonic sweep minimizes that count (fewest possible boundaries) while any interleaved, scattered, or tiled write order maximizes it, and a shorter boundary from splitting the write does not compensate for having more of them, since boundary count dominates boundary length. **Do not:** redistribute or reorder a display write to "spread out" a visible artifact — check the pair count analytically before spending a bench window on a candidate order.
 - **Do:** before predicting what fraction of boots will be tear-free, establish the direction a frame write runs relative to the panel's refresh sweep — writing against the sweep crosses the scan exactly once per frame (phase sets only _where_ the seam lands, every boot has one), while writing with the sweep can stay ahead for a whole frame (phase then sets _whether_, which is what makes a fraction meaningful). **Do not** assume the rotation that orients the image also fixes the sweep direction: MY/MX/MV remap the frame onto the panel, while separate ML (0x10) and MH (0x04) bits set the refresh order, so a rotation library exposing only some MADCTL combinations can leave the sweep direction unresolved. Settle it by pushing a pattern of known order at the panel and observing, not by reasoning from the datasheet.
@@ -127,10 +126,10 @@ calls itself "the settled design." **Source:** `README.md`; `reference/ORIGINAL_
 There is no design-token system in this project — `apo mine theme-sources` found no sources. The analogous
 rail concerns the palette table:
 
-- **Do read `src/emulator_bridge.cpp:61-88` before referencing a palette.** Colours are raw RGB565 hex
+- **Do read `lib/gbcore/render/palette.c` before referencing a palette.** Colours are raw RGB565 hex
   literals with no named constants; there is nothing to guess correctly.
-- **Do keep `NUM_PALETTES` (`include/emulator_bridge.h:22`), `pals[]` (`:61`) and `palnames[]` (`:83`) in
-  agreement.** They are three parallel declarations with no compile-time link between them.
+- **Do keep `PALETTE_COUNT` (`lib/gbcore/render/palette.h:32`), `pals[]` (`palette.c:26`) and `palnames[]`
+  (`palette.c:99`) in agreement.** They are three parallel declarations with no compile-time link between them.
 - **Do not assume the palette shape is stable.** `reference/ORIGINAL_ROADMAP.md:230-266` widens it from `[N][4]` to `[N][3][4]`
   and replaces the lookup with a flat 64-entry LUT; `reference/ORIGINAL_ROADMAP.md:216-223` warns that byte-swap ordering
   interacts with blending. **Source:** `reference/ORIGINAL_ROADMAP.md:206-266` (read 2026-08-27).

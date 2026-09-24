@@ -12,7 +12,7 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size);
 // The 256-byte DMG boot ROM, run before the cartridge like a real power-on.
 // Call before emu_init(); the bytes are copied there, so they need only live
 // until it returns. Never called, or called with NULL, starts the cartridge
-// at 0x100 as before. The Peanut-GB core ignores it.
+// at 0x100 as before.
 #define DMG_BOOT_ROM_SIZE 256
 void emu_set_boot_rom(const uint8_t* data);
 void emu_run_frame();
@@ -27,8 +27,8 @@ uint8_t emu_get_frame_skip();
 // Fast-forward: each emu_run_frame() runs two frames of game time and draws
 // the second, so the game runs at up to 2x while the display holds its rate;
 // a scene too heavy for that drops frames back to one run until it fits. The
-// audio keeps its pitch: the two frames are spliced into one frame's worth. Runtime only, off at start. The Peanut-GB
-// core stores the flag and ignores it.
+// audio keeps its pitch: the two frames are spliced into one frame's worth.
+// Runtime only, off at start.
 void emu_set_fast_forward(bool on);
 bool emu_get_fast_forward();
 uint32_t emu_get_fps();
@@ -79,10 +79,6 @@ bool emu_autosave_battery(uint16_t mv, uint16_t low_mv, uint16_t hyst_mv);
 //
 // A save is refused while the boot ROM is still running, because a load
 // always resumes with it unmapped.
-//
-// The Peanut-GB core has no save states: emu_state_available() is false
-// there, and so is everything else below.
-bool emu_state_available();
 bool emu_state_save(const char* path_vfs);
 bool emu_state_load(const char* path_vfs);
 
@@ -91,7 +87,7 @@ bool emu_state_load(const char* path_vfs);
 // written as raw little-endian RGB565, EMU_THUMB_W x EMU_THUMB_H with no
 // header — the same format as the card's .565 art, so it is read the same
 // way. A file that fails part way is removed. Pipeline paused, like the two
-// above; the Peanut-GB core returns false.
+// above.
 #define EMU_THUMB_W 80
 #define EMU_THUMB_H 72
 bool emu_state_thumb_save(const char* path_vfs);
@@ -105,11 +101,6 @@ bool emu_state_thumb_save(const char* path_vfs);
 // Slot buffers belong to this module, and each is the producer's or the
 // consumer's exclusively, never both — the queue is the arbiter and its rules
 // are host-tested.
-//
-// Which emulator that is, is not this header's business and no caller can
-// tell: two implementations of everything declared here live in the tree and
-// the build system links exactly one (see platformio.ini). Nothing below
-// changes with the core.
 //
 // Call once, after emu_init() succeeds and after anything that writes flash:
 // two cores executing from flash means a flash write stalls both.

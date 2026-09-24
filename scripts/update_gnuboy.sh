@@ -2,8 +2,7 @@
 # Refresh the vendored gnuboy core to a given upstream commit and rewrite the
 # pin comment that records it. Usage: scripts/update_gnuboy.sh <sha>
 #
-# Like scripts/update_peanut_gb.sh, this overwrites the vendored files and
-# resets the pin comment's modification list to "none". Re-applying the local
+# This overwrites the vendored files and resets the pin comment's modification list to "none". Re-applying the local
 # modifications is the caller's job: read them out of the pin comment (or
 # git history) before running this, and rewrite the list afterwards.
 set -euo pipefail
