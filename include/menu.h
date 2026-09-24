@@ -37,7 +37,7 @@ enum menu_result_e {
 // already at the loaded moment and its cartridge RAM marked dirty.
 //
 // Calling contract: pause the pipeline and take the display bus first, and
-// give them back afterwards; this draws through the driver directly for as
+// give them back afterwards; this draws through the display's canvas for as
 // long as it is open. It edits s->volume, s->brightness and s->palette in
 // place, and applies backlight and palette as they change so the effect is
 // visible while adjusting. It writes nothing to NVS and touches nothing else:

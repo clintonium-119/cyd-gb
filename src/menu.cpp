@@ -6,7 +6,7 @@
 #include "render_config.h"
 #include "input/combo.h"
 #include "ui/list.h"
-#include "ui/picker_draw.h"
+#include "ui/menu_draw.h"
 #include "sd_manager.h"
 #include "manual_view.h"
 #include "cart/catalog.h"
@@ -14,31 +14,16 @@
 #include <stdlib.h>
 
 // The in-game pause menu: a scrolling list inside the game window, worked
-// with the D-pad. The highlight is the pure list machine in gbcore; everything here is
-// drawing and the four side effects the rows have.
+// with the D-pad. The highlight is the pure list machine in gbcore and the
+// drawing is lib/gbcore/ui/menu_draw.c; everything here is the rows' side
+// effects, the card reads and the canvas the drawing goes through.
 //
 // One expander read every MENU_POLL_MS. That is longer than the input
 // module's debounce window, so two successive samples are already stable and
 // the edge detection below needs no filter of its own.
 #define MENU_POLL_MS 16
 
-// More entries than fit, so the list scrolls a window of MENU_VISIBLE of
-// them. 7 x 26 + 40 = 222, inside GAME_H (240).
 #define MENU_ENTRIES 9
-#define MENU_VISIBLE 7
-#define MENU_ROW_H 26
-#define MENU_TOP   40   /* the title band above the first row */
-
-// The fork's row colour, kept so this looks like the rest of the UI. The
-// highlighted row is inverted, bold black on a white bar, because the fork's
-// near-black highlight was hard to find at a glance. The dimmed grey is a
-// bench value, not derived.
-#define MENU_ROW_BG 0x1082
-#define MENU_HL_BG  TFT_WHITE
-#define MENU_HL_FG  TFT_BLACK
-#define MENU_HL_DIM 0x6B4D
-#define MENU_TITLE  0xFFE0
-#define MENU_DIM    0x7BEF
 
 enum menu_row_e {
     ROW_RESUME = 0,
@@ -126,73 +111,37 @@ static const char* row_value(const settings_t* s, uint8_t row, char* buf,
 
 // ─── Drawing ────────────────────────────────────────────────────────────────
 
-// One bar at y: the label left, the value (if any) right. A dimmed bar is
-// unavailable and stays thin even highlighted, so it still reads that way.
-static void draw_bar(const settings_t* s, int16_t y, const char* label,
-                     const char* value, bool highlighted, bool off)
+// The canvas at this unit's window origin and the layout for its size, set
+// when the menu opens.
+static const ui_canvas_t* cv;
+static menu_layout_t geom;
+
+// The rows as the drawing sees them, rebuilt from the settings before each
+// draw so a value that just changed is the one shown.
+static menu_item_t items[MENU_ENTRIES];
+static char bright_buf[8];
+
+static const menu_view_t* view(const settings_t* s, const list_state_t* ls)
 {
-    uint16_t bg = highlighted ? MENU_HL_BG : MENU_ROW_BG;
-    uint16_t fg;
+    static menu_view_t v;
 
-    if (highlighted) {
-        fg = off ? MENU_HL_DIM : MENU_HL_FG;
-    } else {
-        fg = off ? MENU_DIM : TFT_WHITE;
+    for (uint8_t row = 0; row < MENU_ENTRIES; row++) {
+        const bool off = row == ROW_MANUAL && !manual_available;
+
+        items[row].label = off ? "Game Manual (Unavailable)" : ROW_LABELS[row];
+        items[row].value = row_value(s, row, bright_buf, sizeof(bright_buf));
+        items[row].off = off;
     }
-
-    // Bold is the same glyphs struck twice a pixel apart, so the text is
-    // drawn transparent over the bar the fill already laid down; an opaque
-    // second pass would wipe the first one's edge.
-    const int16_t bold = (highlighted && !off) ? 1 : 0;
-    const int16_t text_y = y + MENU_ROW_H / 2;
-
-    tft.fillRect(s->game_x + 4, y, GAME_W - 8, MENU_ROW_H - 2, bg);
-    tft.setTextColor(fg);
-    for (int16_t dx = 0; dx <= bold; dx++) {
-        tft.setTextDatum(ML_DATUM);
-        tft.drawString(label, s->game_x + 8 + dx, text_y, 2);
-        if (value) {
-            tft.setTextDatum(MR_DATUM);
-            tft.drawString(value, s->game_x + GAME_W - 8 - dx, text_y, 2);
-        }
-    }
-}
-
-// first is the list window's top entry: rows are placed relative to it.
-static void draw_row(const settings_t* s, uint16_t first, uint8_t row,
-                     bool highlighted)
-{
-    char buf[16];
-    const char* value = row_value(s, row, buf, sizeof(buf));
-    const bool off = row == ROW_MANUAL && !manual_available;
-    int16_t y = (int16_t)(s->game_y + MENU_TOP + (row - first) * MENU_ROW_H);
-    const char* label = ROW_LABELS[row];
-
-    if (off) {
-        label = "Game Manual (Unavailable)";
-    }
-    draw_bar(s, y, label, value, highlighted, off);
-}
-
-// The rows in the window only; the title band is left alone, so a scroll
-// redraws without blanking the screen.
-static void draw_rows(const settings_t* s, const list_state_t* ls)
-{
-    uint16_t row;
-
-    for (row = list_first(ls); row < MENU_ENTRIES && list_visible(ls, row);
-         row++) {
-        draw_row(s, list_first(ls), (uint8_t)row, row == list_cursor(ls));
-    }
+    v.items = items;
+    v.n = MENU_ENTRIES;
+    v.first = list_first(ls);
+    v.cursor = list_cursor(ls);
+    return &v;
 }
 
 static void draw_menu(const settings_t* s, const list_state_t* ls)
 {
-    tft.fillRect(s->game_x, s->game_y, GAME_W, GAME_H, TFT_BLACK);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(MENU_TITLE, TFT_BLACK);
-    tft.drawString("PAUSED", s->game_x + GAME_W / 2, s->game_y + 18, 4);
-    draw_rows(s, ls);
+    menu_draw(cv, &geom, view(s, ls));
 }
 
 // The fixed combos, for reading only: nothing here is editable and nothing
@@ -205,36 +154,16 @@ static const char* const HOTKEYS[][2] = {
     { "Select + A + B", "Fast-forward" },
 };
 
-static void draw_hotkeys(const settings_t* s)
+static void draw_hotkeys()
 {
-    const int16_t x = (int16_t)(s->game_x + 8);
-    const int16_t right = (int16_t)(s->game_x + GAME_W - 8);
-    int16_t y = (int16_t)(s->game_y + MENU_TOP + MENU_ROW_H / 2);
-
-    tft.fillRect(s->game_x, s->game_y, GAME_W, GAME_H, TFT_BLACK);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(MENU_TITLE, TFT_BLACK);
-    tft.drawString("HOTKEYS", s->game_x + GAME_W / 2, s->game_y + 18, 4);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    for (size_t i = 0; i < sizeof(HOTKEYS) / sizeof(HOTKEYS[0]); i++) {
-        tft.setTextDatum(ML_DATUM);
-        tft.drawString(HOTKEYS[i][0], x, y, 2);
-        tft.setTextDatum(MR_DATUM);
-        tft.drawString(HOTKEYS[i][1], right, y, 2);
-        y = (int16_t)(y + MENU_ROW_H);
-    }
-    tft.setTextDatum(TL_DATUM);
-    tft.drawString("B: Back", x, (int16_t)(s->game_y + GAME_H - 18), 2);
+    menu_draw_hotkeys(cv, &geom, HOTKEYS,
+                      (uint8_t)(sizeof(HOTKEYS) / sizeof(HOTKEYS[0])));
 }
 
 /* Both media files are 96x96 raw RGB565, the same imaging run the writer's
  * detail page reads — one file per ROM under /art and /shot. */
 #define CART_ART_W  96
 #define CART_ART_H  96
-#define CART_ART_PX (CART_ART_W * CART_ART_H)
-
-/* Between the two images, and under the image band. */
-#define CART_ART_GAP 8
 
 /* Rows per band. 96 x 16 x 2 is 3,072 bytes, against a largest contiguous
  * block of about 15 KB at game time — the whole 18,432-byte image is refused
@@ -249,14 +178,16 @@ typedef struct cart_blit_s {
     int16_t w;
 } cart_blit_t;
 
-// setSwapBytes(true) is the resting state display_bus_acquire() leaves in
-// force and the .565 files are little-endian, so there is no swap to do.
+// Each band is its own small image at its own height, so the canvas never
+// needs the whole picture. setSwapBytes(true) is the resting state
+// display_bus_acquire() leaves in force and the .565 files are little-endian,
+// so there is no swap to do.
 static void blit_band(void* ctx, const uint16_t* px, size_t row0, size_t rows)
 {
     const cart_blit_t* at = (const cart_blit_t*)ctx;
 
-    tft.pushImage(at->x, (int16_t)(at->y + row0), at->w, (int16_t)rows,
-                  (uint16_t*)px);
+    cv->image(cv->ctx, at->x, (int16_t)(at->y + row0), at->w, (int16_t)rows,
+              px, 0, (int16_t)rows);
 }
 
 // The file name out of the stored path: /art, /shot and the catalog are all
@@ -268,36 +199,9 @@ static const char* rom_basename(const char* path)
     return slash ? slash + 1 : path;
 }
 
-// The description band under the cover: `rows` lines of font 1 starting at
-// wrapped line `first`. Cleared and redrawn alone on a scroll — the cover
-// above streams from the card and is never drawn twice.
-typedef struct cart_band_s {
-    const char* text;
-    int16_t x;
-    int16_t y;
-    int16_t w;
-    int16_t pitch;
-    uint8_t cols;
-    uint16_t rows;
-    uint16_t lines;
-    uint16_t first;
-} cart_band_t;
-
-static void draw_band(const cart_band_t* b)
-{
-    char line[PICKER_DESC_LINE_MAX];
-
-    tft.fillRect(b->x, b->y, b->w, (int16_t)(b->rows * b->pitch), TFT_BLACK);
-    tft.setTextDatum(TL_DATUM);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    for (uint16_t i = 0; i < b->rows; i++) {
-        if (!picker_desc_line(b->text, b->cols, (uint16_t)(b->first + i), line,
-                              sizeof(line))) {
-            break;
-        }
-        tft.drawString(line, b->x, (int16_t)(b->y + i * b->pitch), 1);
-    }
-}
+// The description band under the cover is menu_band_t: cleared and redrawn
+// alone on a scroll — the cover above streams from the card and is never
+// drawn twice.
 
 // Read-only, and B is the only way out. This is the running cartridge's own
 // page — its cover, its gameplay snapshot, its title and its description —
@@ -317,15 +221,13 @@ static void draw_band(const cart_band_t* b)
 // one DESC_MAX heap buffer that `*desc` hands back for the caller to free —
 // the band draws from it for as long as the page is up. `band` is filled in
 // with rows == 0 when there is nothing to scroll through.
-static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info,
-                           char** desc, cart_band_t* band)
+static void draw_cart_info(const menu_cart_info_t* info, char** desc,
+                           menu_band_t* band)
 {
     catalog_reader_t cat;
     catalog_entry_t entry;
-    const int16_t x = (int16_t)(s->game_x + 8);
-    const int16_t max_w = GAME_W - 16;
-    const int16_t foot_y = (int16_t)(s->game_y + GAME_H - 18);
-    int16_t y = (int16_t)(s->game_y + 8);
+    const int16_t x = MENU_CART_X;
+    int16_t y;
     const char* name;
     char* text = NULL;
     bool have_entry = false;
@@ -337,11 +239,9 @@ static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info,
     memset(band, 0, sizeof(*band));
     *desc = NULL;
 
-    tft.fillRect(s->game_x, s->game_y, GAME_W, GAME_H, TFT_BLACK);
-    tft.setTextDatum(TL_DATUM);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-
-    if (info) {
+    if (!info) {
+        menu_draw_cart_title(cv, &geom, NULL);
+    } else {
         name = rom_basename(info->path);
 
         have_entry = sd_catalog_reader(&cat)
@@ -364,12 +264,9 @@ static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info,
 
         // The catalog's title when the card knows this game, the cartridge
         // header's otherwise — the header is always answerable and is never
-        // the nicer of the two. Two rows because a catalog title runs to 47
-        // characters; display_draw_wrapped returns the rows it actually used,
-        // so a short title costs one and the description gets the other.
-        y = display_draw_wrapped(have_entry ? entry.title : info->title, x, y,
-                                 max_w, 2, 2);
-        y = (int16_t)(y + 2);
+        // the nicer of the two.
+        y = menu_draw_cart_title(cv, &geom,
+                                 have_entry ? entry.title : info->title);
 
         // One band buffer, both images through it in turn. The bands go
         // straight to the panel as they are read, so nothing here ever holds
@@ -384,14 +281,14 @@ static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info,
             art_ok = sd_media_stream(ART_PATH, name, px, CART_ART_W,
                                      CART_ART_H, CART_BAND_ROWS, blit_band,
                                      &at);
-            at.x = (int16_t)(x + CART_ART_W + CART_ART_GAP);
+            at.x = (int16_t)(x + CART_ART_W + MENU_CART_GAP);
             shot_ok = sd_media_stream(SHOT_PATH, name, px, CART_ART_W,
                                       CART_ART_H, CART_BAND_ROWS, blit_band,
                                       &at);
             free(px);
         }
         if (art_ok || shot_ok) {
-            y = (int16_t)(y + CART_ART_H + CART_ART_GAP);
+            y = (int16_t)(y + CART_ART_H + MENU_CART_GAP);
         }
 
         // What the card answered, one field per thing that can independently
@@ -416,28 +313,14 @@ static void draw_cart_info(const settings_t* s, const menu_cart_info_t* info,
         // Whatever is left between the art and the footer, as many lines as
         // fit. A taller geometry spends it on more of the description rather
         // than on gap.
-        if (text && text[0]) {
-            int16_t room = (int16_t)(foot_y - y - 2);
-
-            band->text = text;
-            band->x = x;
-            band->y = y;
-            band->w = max_w;
-            band->pitch = (int16_t)(tft.fontHeight(1) + 2);
-            band->cols = (uint8_t)(max_w / UI_FONT_SMALL_ADV);
-            band->rows = room > 0 ? (uint16_t)(room / band->pitch) : 0;
-            band->lines = picker_desc_lines(text, band->cols);
-            if (band->rows) {
-                draw_band(band);
-            }
-        }
+        menu_band_fit(&geom, text, y, band);
+        menu_draw_band(cv, band);
         *desc = text;
     }
 
     // Nothing about the tag or the file: this page is for the player, and
     // neither means anything to them. The serial log above carries both.
-    tft.setTextDatum(TL_DATUM);
-    tft.drawString("B: Back", x, foot_y, 2);
+    menu_draw_back(cv, &geom);
 }
 
 // ─── Input ──────────────────────────────────────────────────────────────────
@@ -496,7 +379,7 @@ static bool adjust(settings_t* s, uint8_t row, int8_t dir)
 // COMBO_REPEAT_DELAY_MS every COMBO_REPEAT_MS while held, the writer's detail
 // page's rule — and do nothing when the description fits or, as on the
 // Hotkeys page, there is no band at all.
-static void page_input(cart_band_t* band)
+static void page_input(menu_band_t* band)
 {
     uint16_t last = band->lines > band->rows
                         ? (uint16_t)(band->lines - band->rows)
@@ -541,7 +424,7 @@ static void page_input(cart_band_t* band)
             }
             if (first != band->first) {
                 band->first = first;
-                draw_band(band);
+                menu_draw_band(cv, band);
             }
         }
         delay(MENU_POLL_MS);
@@ -562,15 +445,15 @@ static void page_input(cart_band_t* band)
 // Returns the bar picked, or -1 for B. A dimmed bar can be highlighted but
 // not picked. Starts with every button up, so a press still held from the
 // screen before cannot pick anything here.
-static int choose(const settings_t* s, const char* const* labels,
-                  const bool* off, uint8_t n, uint8_t cursor)
+static int choose(const char* const* labels, const bool* off, uint8_t n,
+                  uint8_t cursor)
 {
-    const int16_t y0 = (int16_t)(s->game_y + STATE_BARS_Y);
+    const int16_t y0 = STATE_BARS_Y;
     uint16_t prev = 0;
 
     for (uint8_t i = 0; i < n; i++) {
-        draw_bar(s, (int16_t)(y0 + i * MENU_ROW_H), labels[i], NULL,
-                 i == cursor, off && off[i]);
+        menu_draw_bar(cv, &geom, (int16_t)(y0 + i * MENU_ROW_H), labels[i],
+                      NULL, i == cursor, off && off[i]);
     }
     wait_release();
     for (;;) {
@@ -597,50 +480,34 @@ static int choose(const settings_t* s, const char* const* labels,
             next = (uint8_t)(cursor + 1);
         }
         if (next != cursor) {
-            draw_bar(s, (int16_t)(y0 + cursor * MENU_ROW_H), labels[cursor],
-                     NULL, false, off && off[cursor]);
-            draw_bar(s, (int16_t)(y0 + next * MENU_ROW_H), labels[next],
-                     NULL, true, off && off[next]);
+            menu_draw_bar(cv, &geom, (int16_t)(y0 + cursor * MENU_ROW_H),
+                          labels[cursor], NULL, false, off && off[cursor]);
+            menu_draw_bar(cv, &geom, (int16_t)(y0 + next * MENU_ROW_H),
+                          labels[next], NULL, true, off && off[next]);
             cursor = next;
         }
         delay(MENU_POLL_MS);
     }
 }
 
-static void draw_title(const settings_t* s, const char* title)
-{
-    tft.fillRect(s->game_x, s->game_y, GAME_W, GAME_H, TFT_BLACK);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(MENU_TITLE, TFT_BLACK);
-    tft.drawString(title, s->game_x + GAME_W / 2, s->game_y + 18, 4);
-}
-
 // The question in the space the snapshot takes, then No and Yes. The cursor
 // starts on No, so nothing is lost to a press that was not meant for this.
-static bool confirm(const settings_t* s, const char* question)
+static bool confirm(const char* question)
 {
     static const char* const LABELS[2] = { "No", "Yes" };
 
-    draw_title(s, "SAVE STATE");
-    tft.setTextDatum(TC_DATUM);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    display_draw_wrapped(question, (int16_t)(s->game_x + GAME_W / 2),
-                         (int16_t)(s->game_y + MENU_TOP + 8), GAME_W - 32, 3,
-                         2);
-    return choose(s, LABELS, NULL, 2, 0) == 1;
+    menu_draw_title(cv, &geom, "SAVE STATE");
+    menu_draw_question(cv, &geom, question);
+    return choose(LABELS, NULL, 2, 0) == 1;
 }
 
-static void notice(const settings_t* s, const char* msg)
+static void notice(const char* msg)
 {
-    cart_band_t none = {};
+    menu_band_t none = {};
 
-    draw_title(s, "SAVE STATE");
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.drawString(msg, s->game_x + GAME_W / 2,
-                   s->game_y + MENU_TOP + EMU_THUMB_H / 2, 2);
-    tft.setTextDatum(TL_DATUM);
-    tft.drawString("B: Back", s->game_x + 8, s->game_y + GAME_H - 18, 2);
+    menu_draw_title(cv, &geom, "SAVE STATE");
+    menu_draw_message(cv, &geom, msg, MENU_TOP + EMU_THUMB_H / 2, MENU_TEXT);
+    menu_draw_back(cv, &geom);
     page_input(&none);
 }
 
@@ -683,13 +550,13 @@ static bool state_load(const char* rom_path)
 }
 
 // The snapshot centred under the title, or a line saying there is none.
-static void draw_state(const settings_t* s, const char* rom_path, bool have)
+static void draw_state(const char* rom_path, bool have)
 {
-    const int16_t x = (int16_t)(s->game_x + (GAME_W - EMU_THUMB_W) / 2);
-    const int16_t y = (int16_t)(s->game_y + MENU_TOP);
+    const int16_t x = (int16_t)((geom.w - EMU_THUMB_W) / 2);
+    const int16_t y = MENU_TOP;
     bool shown = false;
 
-    draw_title(s, "SAVE STATE");
+    menu_draw_title(cv, &geom, "SAVE STATE");
     if (have) {
         uint16_t* px = (uint16_t*)malloc(EMU_THUMB_W * STATE_BAND_ROWS
                                          * sizeof(uint16_t));
@@ -702,16 +569,15 @@ static void draw_state(const settings_t* s, const char* rom_path, bool have)
         }
     }
     if (!shown) {
-        tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(have ? TFT_WHITE : MENU_DIM, TFT_BLACK);
-        tft.drawString(have ? "No snapshot" : "No saved state",
-                       s->game_x + GAME_W / 2, y + EMU_THUMB_H / 2, 2);
+        menu_draw_message(cv, &geom, have ? "No snapshot" : "No saved state",
+                          (int16_t)(y + EMU_THUMB_H / 2),
+                          have ? MENU_TEXT : MENU_DIM);
     }
 }
 
 // Returns true when a state was loaded, which ends the menu: the game is
 // where the state left it and the only thing left to do is play it.
-static bool state_screen(const settings_t* s, const menu_cart_info_t* info)
+static bool state_screen(const menu_cart_info_t* info)
 {
     static const char* const LABELS[3] = { "Save", "Load", "Back" };
     uint8_t cursor = 0;
@@ -724,28 +590,28 @@ static bool state_screen(const settings_t* s, const menu_cart_info_t* info)
         const bool off[3] = { false, !have, false };
         int pick;
 
-        draw_state(s, info->path, have);
-        pick = choose(s, LABELS, off, 3, cursor);
+        draw_state(info->path, have);
+        pick = choose(LABELS, off, 3, cursor);
         if (pick < 0 || pick == 2) {
             return false;
         }
         cursor = (uint8_t)pick;
         if (pick == 0) {
-            if (have && !confirm(s, "Replace saved state?")) {
+            if (have && !confirm("Replace saved state?")) {
                 continue;
             }
             if (!state_save(info->path)) {
-                notice(s, "Save failed.");
+                notice("Save failed.");
             }
         } else {
-            if (!confirm(s, "Load state? Progress since it was saved will "
-                            "be lost.")) {
+            if (!confirm("Load state? Progress since it was saved will "
+                         "be lost.")) {
                 continue;
             }
             if (state_load(info->path)) {
                 return true;
             }
-            notice(s, "Load failed.");
+            notice("Load failed.");
         }
     }
 }
@@ -761,6 +627,8 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
         return MENU_RESUME;
     }
     manual_available = name && sd_manual_path(name, path, sizeof(path));
+    cv = display_canvas(s->game_x, s->game_y);
+    menu_layout(GAME_W, GAME_H, &geom);
     list_init(&ls, MENU_ENTRIES, MENU_VISIBLE);
     draw_menu(s, &ls);
     wait_release();
@@ -781,11 +649,13 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
         // instead of adjusting anything.
         if (list_input(&ls, (uint8_t)(word & (COMBO_BTN_UP | COMBO_BTN_DOWN)),
                        now) == LIST_EVENT_MOVED) {
+            const menu_view_t* v = view(s, &ls);
+
             if (list_first(&ls) != first) {
-                draw_rows(s, &ls);
+                menu_draw_rows(cv, &geom, v);
             } else {
-                draw_row(s, first, cursor, false);
-                draw_row(s, first, (uint8_t)list_cursor(&ls), true);
+                menu_draw_row(cv, &geom, v, cursor);
+                menu_draw_row(cv, &geom, v, list_cursor(&ls));
             }
             cursor = (uint8_t)list_cursor(&ls);
             first = list_first(&ls);
@@ -794,7 +664,7 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
         left = (word & GB_BTN_LEFT) && !(prev & GB_BTN_LEFT);
         right = (word & GB_BTN_RIGHT) && !(prev & GB_BTN_RIGHT);
         if ((left || right) && adjust(s, cursor, right ? +1 : -1)) {
-            draw_row(s, first, cursor, true);
+            menu_draw_row(cv, &geom, view(s, &ls), cursor);
         }
 
         if ((word & GB_BTN_A) && !(prev & GB_BTN_A)) {
@@ -807,24 +677,24 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
                 return MENU_RESET;
             }
             if (cursor == ROW_STATE) {
-                if (state_screen(s, info)) {
+                if (state_screen(info)) {
                     return MENU_RESUME;
                 }
                 draw_menu(s, &ls);
             }
             if (cursor == ROW_INFO) {
                 char* desc;
-                cart_band_t band;
+                menu_band_t band;
 
-                draw_cart_info(s, info, &desc, &band);
+                draw_cart_info(info, &desc, &band);
                 page_input(&band);
                 free(desc);
                 draw_menu(s, &ls);
             }
             if (cursor == ROW_HOTKEYS) {
-                cart_band_t none = {};
+                menu_band_t none = {};
 
-                draw_hotkeys(s);
+                draw_hotkeys();
                 page_input(&none);
                 draw_menu(s, &ls);
             }

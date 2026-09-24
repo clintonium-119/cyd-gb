@@ -419,6 +419,8 @@ static void test_the_menu_references_no_writer_or_tag_symbol(void)
         PROJECT_DIR "/include/menu.h",
         PROJECT_DIR "/src/manual_view.cpp",
         PROJECT_DIR "/include/manual_view.h",
+        PROJECT_DIR "/lib/gbcore/ui/menu_draw.h",
+        PROJECT_DIR "/lib/gbcore/ui/menu_draw.c",
         PROJECT_DIR "/lib/gbcore/ui/theme.h",
         PROJECT_DIR "/lib/gbcore/ui/theme_draw.h",
         PROJECT_DIR "/lib/gbcore/ui/theme_draw.c",
