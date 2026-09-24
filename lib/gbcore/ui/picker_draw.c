@@ -96,20 +96,22 @@ int picker_layout(int16_t w, int16_t h, picker_layout_t* out)
     out->list_shot_y = (int16_t)(out->list_art_y + PICKER_ART_H + PICKER_ART_GAP);
     out->list_w = (int16_t)(out->list_art_x - 4 - 4);
 
-    out->band_y = (int16_t)(PICKER_DETAIL_HEAD_H + PICKER_BAND_GAP);
-    out->band_h = (int16_t)(h - out->band_y - PICKER_DETAIL_FOOT_H);
+    /* Cart Info's page: title, then the images, then the band, each 8 px
+     * from the next except the title's own 2 px row gap. */
+    out->detail_x = PICKER_DETAIL_X;
+    out->detail_w = (int16_t)(w - 2 * PICKER_DETAIL_X);
+    out->title_y = PICKER_DETAIL_X;
+    out->media_y = (int16_t)(out->title_y +
+                             PICKER_TITLE_ROWS * UI_ROW_PITCH(
+                                 ui_font_height(UI_FONT_ROW)) + 2);
+    out->shot_x = (int16_t)(out->detail_x + PICKER_ART_W + PICKER_DETAIL_GAP);
+    out->band_y = (int16_t)(out->media_y + PICKER_ART_H + PICKER_DETAIL_GAP);
+    out->band_h = (int16_t)(h - PICKER_DETAIL_FOOT_H - 2 - out->band_y);
     if (out->band_h < (int16_t)pitch) {
         return PICKER_ERR_ARGS;
     }
     out->band_rows = (uint8_t)(out->band_h / pitch);
-
-    out->art_x = 4;
-    out->desc_x = (int16_t)(out->art_x + PICKER_ART_W + 4);
-    out->desc_w = (int16_t)(w - out->desc_x - 4);
-    out->desc_cols = (uint8_t)(out->desc_w / UI_FONT_SMALL_ADV);
-
-    out->shot_page_y = (int16_t)(PICKER_ART_H + 4);
-    out->page_h = (int16_t)(out->shot_page_y + PICKER_ART_H);
+    out->desc_cols = (uint8_t)(out->detail_w / UI_FONT_SMALL_ADV);
 
     if (out->rows < PICKER_MIN_ROWS || out->band_rows < 1 ||
         out->desc_cols < PICKER_DESC_MIN_COLS) {
@@ -233,34 +235,13 @@ bool picker_desc_line(const char* s, uint8_t cols, uint16_t line, char* out,
 
 uint16_t picker_page_lines(const picker_layout_t* g, const char* desc)
 {
-    uint8_t pitch = small_pitch();
-    int16_t content_h;
-    int16_t desc_h;
-    int16_t over;
+    uint16_t lines;
 
-    if (g == NULL || pitch == 0) {
+    if (g == NULL) {
         return 0;
     }
-    /*
-     * The tallest of the two stacked images and the wrapped description, in
-     * pixels — then expressed so that subtracting band_rows gives the exact
-     * scroll span in lines.
-     *
-     * Pixels first, and only then lines, because the band is rarely a whole
-     * number of lines: 118 px is 11.8 of them. Rounding the band down to 11
-     * and the page up to 20 would allow a ninth step that scrolls 90 px of a
-     * page needing only 78, leaving a strip of nothing at the bottom.
-     */
-    content_h = g->page_h;
-    desc_h = (int16_t)(picker_desc_lines(desc, g->desc_cols) * pitch);
-    if (desc_h > content_h) {
-        content_h = desc_h;
-    }
-    over = (int16_t)(content_h - g->band_h);
-    if (over <= 0) {
-        return g->band_rows;
-    }
-    return (uint16_t)(g->band_rows + (over + pitch - 1) / pitch);
+    lines = picker_desc_lines(desc, g->desc_cols);
+    return (lines > g->band_rows) ? lines : g->band_rows;
 }
 
 /* ─── drawing ─────────────────────────────────────────────────────────────── */
@@ -440,54 +421,100 @@ static uint8_t detail_target(const picker_t* p)
     }
 }
 
-/*
- * One image slot inside the scrolling band.
- *
- * `page_y` is the slot's top within the page; `scroll_px` is how far the page
- * has moved up. Only the rows that fall inside the band are drawn, and they
- * are drawn as a row range so the driver never touches a pixel outside it.
- */
-static void draw_slot(const picker_layout_t* g, const ui_canvas_t* cv,
-                      int16_t page_y, int16_t scroll_px, uint8_t state,
-                      const uint16_t* px, const char* missing)
+/* The open row's title: the catalog's for a game, the action's wording
+ * otherwise. */
+static const char* detail_title(const picker_t* p)
 {
-    int16_t top = (int16_t)(page_y - scroll_px);
-    int16_t row0 = 0;
-    int16_t rows = PICKER_ART_H;
-    int16_t y;
+    const picker_row_t* row = &p->rows[p->detail_row];
 
-    /* Clip to the band at both edges. */
-    if (top < 0) {
-        row0 = (int16_t)-top;
-        rows = (int16_t)(PICKER_ART_H - row0);
-        top = 0;
+    return (row->kind == PICKER_ROW_GAME) ? p->cat->e[row->cat].title
+                                          : ACTION_LABEL[row->kind];
+}
+
+/* How far a one-row title lets everything under it move up: one font-2 row
+ * pitch, the way Cart Info spends the row display_draw_wrapped() did not
+ * use. 0 when the canvas cannot say. */
+static int16_t detail_lift(const picker_t* p, const picker_layout_t* g,
+                           const ui_canvas_t* cv)
+{
+    if (cv->measure == NULL ||
+        cv->measure(cv->ctx, detail_title(p), UI_FONT_ROW) > g->detail_w) {
+        return 0;
     }
-    if (top + rows > g->band_h) {
-        rows = (int16_t)(g->band_h - top);
+    return (int16_t)UI_ROW_PITCH(ui_font_height(UI_FONT_ROW));
+}
+
+uint8_t picker_band_rows(const picker_t* p, const picker_layout_t* g,
+                         const ui_canvas_t* cv)
+{
+    uint8_t pitch = small_pitch();
+
+    if (g == NULL) {
+        return 0;
     }
-    if (rows <= 0) {
+    if (p == NULL || cv == NULL || p->screen != PICKER_SCREEN_DETAIL ||
+        p->detail_row >= p->row_count || p->cat == NULL || pitch == 0) {
+        return g->band_rows;
+    }
+    return (uint8_t)((g->band_h + detail_lift(p, g, cv)) / pitch);
+}
+
+/*
+ * The description band, cleared and redrawn on its own the way Cart Info's
+ * is, so a scroll repaints nothing else. It runs the window's full width so
+ * the scroll marks at its right edge are cleared with it.
+ */
+static void draw_band(const picker_t* p, const picker_layout_t* g,
+                      const char* desc, const ui_canvas_t* cv)
+{
+    char line[PICKER_DESC_LINE_MAX];
+    uint8_t pitch = small_pitch();
+    int16_t lift = detail_lift(p, g, cv);
+    int16_t y = (int16_t)(g->band_y - lift);
+    int16_t h = (int16_t)(g->band_h + lift);
+    uint8_t rows = (uint8_t)(h / pitch);
+    int16_t mark_x = (int16_t)(g->detail_x + g->detail_w);
+    uint8_t i;
+
+    cv->fill(cv->ctx, 0, y, g->w, h, COL_BG);
+    if (p->rows[p->detail_row].kind != PICKER_ROW_GAME) {
         return;
     }
-    y = (int16_t)(g->band_y + top);
-
-    if (state == PICKER_MEDIA_READY && px != NULL) {
-        cv->image(cv->ctx, g->art_x, y, PICKER_ART_W, rows, px, row0, rows);
-        return;
-    }
-    cv->fill(cv->ctx, g->art_x, y, PICKER_ART_W, rows, COL_ROW_BG);
-    if (state != PICKER_MEDIA_MISSING) {
-        return;
-    }
-    /* The word sits at the slot's middle row; draw it only when that row is
-     * one of the ones on screen. */
-    {
-        int16_t mid = (int16_t)(PICKER_ART_H / 2 - ui_font_height(UI_FONT_SMALL) / 2);
-
-        if (mid >= row0 && mid < row0 + rows) {
-            cv->text(cv->ctx, missing, g->art_x,
-                     (int16_t)(y + (mid - row0)), PICKER_ART_W, 1,
-                     UI_FONT_SMALL, UI_ALIGN_CENTER, COL_DIM, COL_ROW_BG);
+    if (desc != NULL && desc[0] != '\0') {
+        for (i = 0; i < rows; i++) {
+            if (!picker_desc_line(desc, g->desc_cols,
+                                  (uint16_t)(p->scroll + i), line,
+                                  sizeof(line))) {
+                break;
+            }
+            cv->text(cv->ctx, line, g->detail_x, (int16_t)(y + i * pitch),
+                     g->detail_w, 1, UI_FONT_SMALL, UI_ALIGN_LEFT, COL_TEXT,
+                     COL_BG);
         }
+    }
+    if (p->scroll > 0) {
+        cv->text(cv->ctx, SCROLL_BACK, mark_x, y, UI_FONT_SMALL_ADV, 1,
+                 UI_FONT_SMALL, UI_ALIGN_RIGHT, COL_DIM, COL_BG);
+    }
+    if (p->scroll < p->scroll_max) {
+        cv->text(cv->ctx, SCROLL_MORE, mark_x,
+                 (int16_t)(y + (rows - 1) * pitch), UI_FONT_SMALL_ADV, 1,
+                 UI_FONT_SMALL, UI_ALIGN_RIGHT, COL_DIM, COL_BG);
+    }
+}
+
+/* The hold bar: its track, and the part filled so far. */
+static void draw_bar(const picker_t* p, const picker_layout_t* g,
+                     const ui_canvas_t* cv)
+{
+    uint8_t pct = picker_hold_pct(p);
+    int16_t y = (int16_t)(g->h - 4 - PICKER_BAR_H);
+
+    cv->fill(cv->ctx, g->detail_x, y, g->detail_w, PICKER_BAR_H, COL_ROW_BG);
+    if (pct > 0) {
+        cv->fill(cv->ctx, g->detail_x, y,
+                 (int16_t)(g->detail_w * pct / PCT_FULL), PICKER_BAR_H,
+                 COL_BAR);
     }
 }
 
@@ -495,77 +522,31 @@ static void draw_detail(const picker_t* p, const picker_layout_t* g,
                         const char* desc, const uint16_t* art,
                         const uint16_t* shot, const ui_canvas_t* cv)
 {
-    char line[PICKER_DESC_LINE_MAX];
-    const picker_row_t* row = &p->rows[p->detail_row];
-    uint8_t pitch = small_pitch();
-    int16_t scroll_px = (int16_t)(p->scroll * pitch);
-    uint8_t pct = picker_hold_pct(p);
-    const char* title;
-    const char* file;
-    uint8_t i;
+    int16_t lift = detail_lift(p, g, cv);
+    int16_t foot_y = (int16_t)(g->h - PICKER_DETAIL_FOOT_H);
 
     cv->fill(cv->ctx, 0, 0, g->w, g->h, COL_BG);
 
-    /* Fixed header: what this is, and what confirming it does. */
-    title = (row->kind == PICKER_ROW_GAME) ? p->cat->e[row->cat].title
-                                           : ACTION_LABEL[row->kind];
-    cv->text(cv->ctx, title, 4, 0, (int16_t)(g->w - 8), PICKER_TITLE_ROWS,
-             UI_FONT_ROW, UI_ALIGN_LEFT, COL_TITLE, COL_BG);
-    cv->text(cv->ctx, DETAIL_TARGET[detail_target(p)], 4, 38,
-             (int16_t)(g->w - 8), 1, UI_FONT_SMALL, UI_ALIGN_LEFT, COL_DIM,
-             COL_BG);
+    /* White, as Cart Info draws its title. */
+    cv->text(cv->ctx, detail_title(p), g->detail_x, g->title_y, g->detail_w,
+             PICKER_TITLE_ROWS, UI_FONT_ROW, UI_ALIGN_LEFT, COL_TEXT, COL_BG);
 
-    /* The scrolling band. Both images and every description line are clipped
-     * to it, so nothing here can paint over the chrome. */
-    if (row->kind == PICKER_ROW_GAME) {
-        draw_slot(g, cv, 0, scroll_px, p->art_state, art, ART_MISSING);
-        draw_slot(g, cv, g->shot_page_y, scroll_px, p->shot_state, shot,
-                  SHOT_MISSING);
-
-        if (desc != NULL && desc[0] != '\0') {
-            for (i = 0; i < g->band_rows; i++) {
-                uint16_t at = (uint16_t)(p->scroll + i);
-
-                if (!picker_desc_line(desc, g->desc_cols, at, line,
-                                      sizeof(line))) {
-                    break;
-                }
-                cv->text(cv->ctx, line, g->desc_x,
-                         (int16_t)(g->band_y + i * pitch), g->desc_w, 1,
-                         UI_FONT_SMALL, UI_ALIGN_LEFT, COL_TEXT, COL_BG);
-            }
-        }
-        if (p->scroll > 0) {
-            cv->text(cv->ctx, SCROLL_BACK,
-                     (int16_t)(g->w - 4 - UI_FONT_SMALL_ADV), g->band_y,
-                     UI_FONT_SMALL_ADV, 1, UI_FONT_SMALL, UI_ALIGN_RIGHT,
-                     COL_DIM, COL_BG);
-        }
-        if (p->scroll < p->scroll_max) {
-            cv->text(cv->ctx, SCROLL_MORE,
-                     (int16_t)(g->w - 4 - UI_FONT_SMALL_ADV),
-                     (int16_t)(g->band_y + g->band_h - pitch),
-                     UI_FONT_SMALL_ADV, 1, UI_FONT_SMALL, UI_ALIGN_RIGHT,
-                     COL_DIM, COL_BG);
-        }
+    /* Side by side and fixed: only the band under them scrolls. */
+    if (p->rows[p->detail_row].kind == PICKER_ROW_GAME) {
+        draw_media(cv, g->detail_x, (int16_t)(g->media_y - lift), p->art_state,
+                   art, ART_MISSING);
+        draw_media(cv, g->shot_x, (int16_t)(g->media_y - lift), p->shot_state,
+                   shot, SHOT_MISSING);
     }
+    draw_band(p, g, desc, cv);
 
-    /* Fixed footer: the exact filename, the prompt, and the hold bar. */
-    file = (row->kind == PICKER_ROW_GAME) ? p->cat->e[row->cat].filename : "";
-    if (file[0] != '\0') {
-        cv->text(cv->ctx, file, 4, (int16_t)(g->h - 46), (int16_t)(g->w - 8), 1,
-                 UI_FONT_SMALL, UI_ALIGN_LEFT, COL_DIM, COL_BG);
-    }
-    cv->text(cv->ctx, FOOTER_PROMPT, 4, (int16_t)(g->h - 34),
-             (int16_t)(g->w - 8), 1, UI_FONT_ROW, UI_ALIGN_CENTER, COL_DIM,
-             COL_BG);
-    cv->fill(cv->ctx, 8, (int16_t)(g->h - 14), (int16_t)(g->w - 16),
-             PICKER_BAR_H, COL_ROW_BG);
-    if (pct > 0) {
-        cv->fill(cv->ctx, 8, (int16_t)(g->h - 14),
-                 (int16_t)((g->w - 16) * pct / PCT_FULL), PICKER_BAR_H,
-                 COL_BAR);
-    }
+    /* What confirming does, how to confirm it, and how far the hold has got.
+     * No filename: the title already names the game. */
+    cv->text(cv->ctx, DETAIL_TARGET[detail_target(p)], g->detail_x, foot_y,
+             g->detail_w, 1, UI_FONT_SMALL, UI_ALIGN_LEFT, COL_DIM, COL_BG);
+    cv->text(cv->ctx, FOOTER_PROMPT, g->detail_x, (int16_t)(foot_y + 12),
+             g->detail_w, 1, UI_FONT_ROW, UI_ALIGN_CENTER, COL_DIM, COL_BG);
+    draw_bar(p, g, cv);
 }
 
 void picker_draw(const picker_t* p, const picker_layout_t* g, const char* desc,

@@ -13,10 +13,11 @@
 // the highlighted title's cover with its snapshot stacked under it on the
 // right, so it fits 12 rows of about 19 characters at 266x240. A title too
 // wide for its row scrolls inside it, drawn offscreen so the scroll never
-// blanks the row. A title's detail page carries its cover, its gameplay snapshot and
-// its description in a band that scrolls, with the title and target above it
-// and the filename, the hold prompt and the hold bar below, none of which
-// scroll away.
+// blanks the row. A title's detail page is laid out like the in-game Cart Info
+// page: the title on top over up to two rows, the cover and the snapshot side
+// by side under it, and the description below them in a band that is the only
+// thing that scrolls. The target line, the hold prompt and the hold bar sit
+// under the band.
 //
 // Pure C, no Arduino/ESP-IDF headers, no allocation, no framebuffer of its own.
 
@@ -44,22 +45,22 @@ extern "C" {
 #define PICKER_DESC_MIN_COLS 8
 
 /*
- * The detail page's fixed chrome, spelled out so the arithmetic is checkable.
+ * The detail page, mirroring Cart Info's numbers: an 8 px margin, the images
+ * 8 px apart with 8 px under them.
  *
- * Two title rows because 232 px at about 8 px per glyph is 29 characters a
- * row, and 2 x 29 = 58 is past CATALOG_TITLE_MAX - 1 (47) — so a title is
- * never clipped on the page whose job is to name the game.
+ * Two title rows because 250 px at about 8 px per glyph is 31 characters a
+ * row, and 2 x 31 = 62 is past CATALOG_TITLE_MAX - 1 (47) — so a title is
+ * never clipped on the page whose job is to name the game. A title that fits
+ * one row gives the other to the description.
  */
 #define PICKER_TITLE_ROWS 2
+#define PICKER_DETAIL_X   8
+#define PICKER_DETAIL_GAP 8
 
-/* Title 36 + gap 2 + target line 10. */
-#define PICKER_DETAIL_HEAD_H 48
-
-/* Filename 10 + gap 2 + footer 18 + gap 2 + bar 10 + bottom margin 4. */
+/* Target line 10 + gap 2 + prompt 18 + gap 2 + bar 10 + bottom margin 4. */
 #define PICKER_DETAIL_FOOT_H 46
 
-#define PICKER_BAND_GAP 4
-#define PICKER_BAR_H    10
+#define PICKER_BAR_H 10
 
 /* The longest wrapped line this module will hand back. */
 #define PICKER_DESC_LINE_MAX 64
@@ -72,17 +73,17 @@ typedef struct picker_layout_s {
     int16_t list_art_y;  /* the cover's top                       */
     int16_t list_shot_y; /* the snapshot's top, under the cover   */
 
-    int16_t band_y;     /* the detail band's top, window-relative */
+    /* The detail page, for a two-row title; a one-row title lifts media_y
+     * and band_y by a font-2 row pitch and gives the band that much more. */
+    int16_t detail_x;   /* left margin of everything on the page  */
+    int16_t detail_w;   /* the title's, the band's and the bar's width */
+    int16_t title_y;
+    int16_t media_y;    /* both images' top                       */
+    int16_t shot_x;     /* the snapshot's left edge, beside the cover */
+    int16_t band_y;     /* the description band's top             */
     int16_t band_h;
     uint8_t band_rows;  /* font-1 lines that fit in the band      */
-
-    int16_t art_x;      /* both images' left edge, band-relative  */
-    int16_t desc_x;
-    int16_t desc_w;
     uint8_t desc_cols;  /* characters per wrapped line            */
-
-    int16_t shot_page_y; /* the snapshot's top within the page    */
-    int16_t page_h;      /* the scrolling page's height in pixels */
 } picker_layout_t;
 
 /*
@@ -103,11 +104,19 @@ int picker_layout(int16_t w, int16_t h, picker_layout_t* out);
 uint16_t picker_desc_lines(const char* s, uint8_t cols);
 
 /*
- * The scrolling page's height in font-1 lines — what picker_set_scroll_span()
- * takes. The two stacked images dominate for any ordinary description, which
- * is why the band scrolls at all.
+ * The description's height in font-1 lines, never less than band_rows — what
+ * picker_set_scroll_span() takes as page_lines. Only the description scrolls.
  */
 uint16_t picker_page_lines(const picker_layout_t* g, const char* desc);
+
+/*
+ * How many description lines the open detail page's band shows: band_rows,
+ * plus what a one-row title frees, measured with the canvas. What
+ * picker_set_scroll_span() takes as band_rows. g->band_rows when any argument
+ * is NULL, the canvas cannot measure, or no page is open.
+ */
+uint8_t picker_band_rows(const picker_t* p, const picker_layout_t* g,
+                         const ui_canvas_t* cv);
 
 /*
  * The text of one wrapped line, NUL-terminated. A newline is a hard break and

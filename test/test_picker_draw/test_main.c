@@ -376,21 +376,30 @@ static void test_the_layout_at_266_by_240(void)
     TEST_ASSERT_LESS_OR_EQUAL_INT16(GEOM_53_H, g.list_shot_y + PICKER_ART_H);
     TEST_ASSERT_GREATER_OR_EQUAL_INT16(150, g.list_w);
 
-    TEST_ASSERT_EQUAL_INT16(142, g.band_h);     /* 240 - 52 - 46        */
-    TEST_ASSERT_EQUAL_UINT8(14, g.band_rows);   /* 142 / 10             */
-    TEST_ASSERT_EQUAL_INT16(158, g.desc_w);     /* 266 - 104 - 4        */
-    TEST_ASSERT_EQUAL_UINT8(26, g.desc_cols);   /* 158 / 6              */
-
-    TEST_ASSERT_GREATER_OR_EQUAL_UINT(CATALOG_DESC_MAX - 1,
-                                      (unsigned)(g.desc_cols * g.band_rows));
+    /* The detail page, Cart Info's numbers, for a two-row title. */
+    TEST_ASSERT_EQUAL_INT16(8, g.detail_x);
+    TEST_ASSERT_EQUAL_INT16(250, g.detail_w);    /* 266 - 16             */
+    TEST_ASSERT_EQUAL_INT16(8, g.title_y);
+    TEST_ASSERT_EQUAL_INT16(46, g.media_y);      /* 8 + 2 * 18 + 2       */
+    TEST_ASSERT_EQUAL_INT16(112, g.shot_x);      /* 8 + 96 + 8           */
+    TEST_ASSERT_EQUAL_INT16(150, g.band_y);      /* 46 + 96 + 8          */
+    TEST_ASSERT_EQUAL_INT16(42, g.band_h);       /* 240 - 46 - 2 - 150   */
+    TEST_ASSERT_EQUAL_UINT8(4, g.band_rows);     /* 42 / 10              */
+    TEST_ASSERT_EQUAL_UINT8(41, g.desc_cols);    /* 250 / 6              */
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT8(3, g.band_rows);
+    /* The band ends above the footer's target line. */
+    TEST_ASSERT_LESS_OR_EQUAL_INT16(GEOM_53_H - PICKER_DETAIL_FOOT_H,
+                                    g.band_y + g.band_h);
 }
 
 static void test_the_layout_refuses_a_window_it_cannot_compose(void)
 {
     picker_layout_t g;
 
-    /* 100 - 52 - 46 leaves the band nothing. */
+    /* 100 leaves the band nothing. */
     TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout(200, 100, &g));
+    /* 213 + ... the list's images fit but 150 + 46 + 2 leaves no band line. */
+    TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout(266, 205, &g));
     /* 150 < 96 + 16 + 48: an image and no usable column beside it. */
     TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout(150, 216, &g));
     /* 213 < 18 + 96 + 4 + 96: the list's images do not stack. */
@@ -586,13 +595,20 @@ static void test_every_detail_combination_stays_inside_the_window(void)
                                false, 0, states[si][0], states[si][1],
                                pcts[pi], scrolls[sc], DESC_200);
                     assert_sane();
+                    /* And a one-row title, which lifts everything below. */
+                    snprintf(lib.e[0].title, sizeof(lib.e[0].title), "Tetris");
+                    run_detail(geo[gi].w, geo[gi].h, PICKER_MODE_PENDING, true,
+                               false, 0, states[si][0], states[si][1],
+                               pcts[pi], scrolls[sc], DESC_200);
+                    assert_sane();
+                    fill_library(LIB_COUNT);
                 }
             }
         }
     }
 }
 
-static void test_both_images_are_drawn_at_the_top_of_the_band(void)
+static void test_both_images_sit_side_by_side_under_the_title(void)
 {
     picker_layout_t g;
 
@@ -603,15 +619,54 @@ static void test_both_images_are_drawn_at_the_top_of_the_band(void)
                PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, DESC_200);
     assert_sane();
 
-    /* The cover and the snapshot: two slots, one push each. */
+    /* The cover and the snapshot: two whole images, one push each. The last
+     * is the snapshot, 8 px right of the cover at the same height. */
     TEST_ASSERT_EQUAL_UINT(2, fk.images);
     TEST_ASSERT_EQUAL_INT16(PICKER_ART_W, fk.last_img_w);
+    TEST_ASSERT_EQUAL_INT16(PICKER_ART_H, fk.last_img_rows);
+    TEST_ASSERT_EQUAL_INT16(8 + PICKER_ART_W + 8, fk.last_img_x);
+    TEST_ASSERT_EQUAL_INT16(g.media_y, fk.last_img_y);
 }
 
-static void test_a_scrolled_band_clips_its_images_rather_than_moving_them(void)
+static void test_a_one_row_title_lifts_the_images_a_row(void)
+{
+    picker_layout_t g;
+
+    fill_library(LIB_COUNT);
+    picker_layout(GEOM_53_W, GEOM_53_H, &g);
+    snprintf(lib.e[0].title, sizeof(lib.e[0].title), "Tetris");
+
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, false, 0,
+               PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, DESC_200);
+    assert_sane();
+    TEST_ASSERT_EQUAL_INT16(g.media_y - UI_ROW_PITCH(ui_font_height(UI_FONT_ROW)),
+                            fk.last_img_y);
+}
+
+static void test_a_one_row_title_gives_its_row_to_the_band(void)
+{
+    picker_t p;
+    picker_layout_t g;
+    ui_canvas_t cv = canvas_over(&fk, GEOM_53_W, GEOM_53_H);
+
+    fill_library(LIB_COUNT);
+    picker_layout(GEOM_53_W, GEOM_53_H, &g);
+    picker_init(&p, PICKER_MODE_PENDING, &lib, true, false, NULL, g.rows);
+    /* No page open: the layout's own figure. */
+    TEST_ASSERT_EQUAL_UINT8(g.band_rows, picker_band_rows(&p, &g, &cv));
+
+    picker_input(&p, B_A, 0);
+    TEST_ASSERT_EQUAL_UINT8(g.band_rows, picker_band_rows(&p, &g, &cv));
+    snprintf(lib.e[0].title, sizeof(lib.e[0].title), "Tetris");
+    /* (42 + 18) / 10 */
+    TEST_ASSERT_EQUAL_UINT8(6, picker_band_rows(&p, &g, &cv));
+}
+
+static void test_the_images_stay_put_while_the_band_scrolls(void)
 {
     picker_layout_t g;
     uint16_t span;
+    int16_t x0, y0;
 
     fill_library(LIB_COUNT);
     picker_layout(GEOM_53_W, GEOM_53_H, &g);
@@ -619,15 +674,39 @@ static void test_a_scrolled_band_clips_its_images_rather_than_moving_them(void)
     TEST_ASSERT_GREATER_THAN_UINT(0, span);
 
     run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, false, 0,
+               PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, DESC_200);
+    x0 = fk.last_img_x;
+    y0 = fk.last_img_y;
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, false, 0,
                PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, span, DESC_200);
     assert_sane();
+    TEST_ASSERT_EQUAL_UINT(2, fk.images);
+    TEST_ASSERT_EQUAL_INT16(x0, fk.last_img_x);
+    TEST_ASSERT_EQUAL_INT16(y0, fk.last_img_y);
+    TEST_ASSERT_EQUAL_INT16(PICKER_ART_H, fk.last_img_rows);
+}
 
-    /* At the bottom of the travel the snapshot is on screen and the cover has
-     * been clipped away or down to a strip; either way nothing left the band
-     * and no row range left the source. */
-    TEST_ASSERT_GREATER_OR_EQUAL_UINT(1, fk.images);
-    TEST_ASSERT_GREATER_THAN_INT16(0, fk.last_img_rows);
-    TEST_ASSERT_LESS_OR_EQUAL_INT16(PICKER_ART_H, fk.last_img_rows);
+static void test_no_detail_page_draws_the_filename(void)
+{
+    struct { enum picker_mode_e mode; bool wild, pending; } pages[] = {
+        { PICKER_MODE_PENDING, true, false },   /* a game          */
+        { PICKER_MODE_PENDING, true, true },    /* Cancel pending  */
+        { PICKER_MODE_IMMEDIATE, true, false }, /* Finish setup    */
+        { PICKER_MODE_IMMEDIATE, false, false },/* a starter game  */
+    };
+    size_t i;
+    unsigned t;
+
+    fill_library(LIB_COUNT);
+    for (i = 0; i < sizeof(pages) / sizeof(pages[0]); i++) {
+        run_detail(GEOM_53_W, GEOM_53_H, pages[i].mode, pages[i].wild,
+                   pages[i].pending, 0, PICKER_MEDIA_READY,
+                   PICKER_MEDIA_READY, 0, 0, DESC_200);
+        assert_sane();
+        for (t = 0; t < fk.logged; t++) {
+            TEST_ASSERT_NULL(strstr(fk.log[t].s, ".gb"));
+        }
+    }
 }
 
 static void test_missing_media_draws_two_placeholders_and_no_image(void)
@@ -661,53 +740,31 @@ static void test_the_hold_bar_appears_only_once_the_hold_starts(void)
     TEST_ASSERT_EQUAL_INT16(GEOM_53_H - 14, fk.bar_y);
 }
 
-static void test_an_action_rows_detail_page_names_no_file(void)
-{
-    fill_library(LIB_COUNT);
-
-    /* Cancel pending write, at row 0 in pending mode with a pending write. */
-    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, true, 0,
-               PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, DESC_200);
-    assert_sane();
-    TEST_ASSERT_EQUAL_UINT(0, fk.images);
-
-    /* Finish setup, at row 0 in immediate mode once the wildcard is done. */
-    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_IMMEDIATE, true, false, 0,
-               PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, DESC_200);
-    assert_sane();
-    TEST_ASSERT_EQUAL_UINT(0, fk.images);
-}
-
 /* ─── the description ─────────────────────────────────────────────────────── */
 
-static void test_a_full_description_is_visible_without_scrolling(void)
+static void test_the_page_is_the_description_and_never_less_than_the_band(void)
 {
-    char worst[CATALOG_DESC_MAX];
+    static char text[2001];
     picker_layout_t g;
-    uint16_t lines;
     size_t i;
 
-    TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(240, 216, &g));
-    TEST_ASSERT_EQUAL_size_t(CATALOG_DESC_MAX - 1, strlen(DESC_200));
+    TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(GEOM_53_W, GEOM_53_H, &g));
+    TEST_ASSERT_EQUAL_UINT16(g.band_rows, picker_page_lines(&g, NULL));
+    TEST_ASSERT_EQUAL_UINT16(g.band_rows, picker_page_lines(&g, "Short."));
 
-    lines = picker_desc_lines(DESC_200, g.desc_cols);
-    /* 200 characters at 22 columns, broken at spaces. */
-    TEST_ASSERT_LESS_OR_EQUAL_UINT16(g.band_rows, lines);
-
-    /*
-     * And the worst case too, not just this sentence: short words waste the
-     * most of each line to the break. Three-character words at the cap are
-     * the most lines 200 bytes can occupy.
-     */
-    for (i = 0; i < CATALOG_DESC_MAX - 1; i++) {
-        worst[i] = (i % 4 == 3) ? ' ' : 'w';
+    /* 2,000 characters in three paragraphs of short words: the images play no
+     * part, only the text's own lines. */
+    for (i = 0; i < 2000; i++) {
+        text[i] = (i % 6 == 5) ? ' ' : 'w';
     }
-    worst[CATALOG_DESC_MAX - 1] = '\0';
-    TEST_ASSERT_LESS_OR_EQUAL_UINT16(g.band_rows,
-                                     picker_desc_lines(worst, g.desc_cols));
-
-    /* And so the images, not the text, set how far the band travels. */
-    TEST_ASSERT_EQUAL_UINT16(picker_page_lines(&g, NULL),
+    text[666] = '\n';
+    text[667] = '\n';
+    text[1333] = '\n';
+    text[1334] = '\n';
+    text[2000] = '\0';
+    TEST_ASSERT_EQUAL_UINT16(picker_desc_lines(text, g.desc_cols),
+                             picker_page_lines(&g, text));
+    TEST_ASSERT_EQUAL_UINT16(picker_desc_lines(DESC_200, g.desc_cols),
                              picker_page_lines(&g, DESC_200));
 }
 
@@ -718,7 +775,7 @@ static void test_every_wrapped_line_fits_the_column_in_pixels(void)
     uint16_t i;
     char line[PICKER_DESC_LINE_MAX];
 
-    TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(240, 216, &g));
+    TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(GEOM_53_W, GEOM_53_H, &g));
     lines = picker_desc_lines(DESC_200, g.desc_cols);
     TEST_ASSERT_GREATER_THAN_UINT16(0, lines);
 
@@ -729,7 +786,7 @@ static void test_every_wrapped_line_fits_the_column_in_pixels(void)
          * display_draw_wrapped's pixel breaking the same: font 1's advance is
          * fixed, so a line of n characters is exactly n * 6 pixels wide. */
         TEST_ASSERT_LESS_OR_EQUAL_INT16(
-            g.desc_w, (int16_t)(strlen(line) * UI_FONT_SMALL_ADV));
+            g.detail_w, (int16_t)(strlen(line) * UI_FONT_SMALL_ADV));
     }
     /* One past the end is not a line. */
     TEST_ASSERT_FALSE(
@@ -803,38 +860,6 @@ static void test_three_paragraphs_wrap_with_a_blank_line_between(void)
     TEST_ASSERT_TRUE(picker_desc_line(text, 41, 6, line, sizeof(line)));
     TEST_ASSERT_EQUAL_STRING("Only together can they reach the tower.", line);
     TEST_ASSERT_FALSE(picker_desc_line(text, 41, 7, line, sizeof(line)));
-}
-
-static void test_a_full_description_scrolls_the_page_past_the_images(void)
-{
-    static char text[2001];
-    picker_layout_t g;
-    uint8_t pitch = (uint8_t)UI_ROW_PITCH(ui_font_height(UI_FONT_SMALL));
-    uint16_t lines;
-    int16_t over;
-    size_t i;
-
-    /* 2,000 characters in three paragraphs of short words. */
-    for (i = 0; i < 2000; i++) {
-        text[i] = (i % 6 == 5) ? ' ' : 'w';
-    }
-    text[666] = '\n';
-    text[667] = '\n';
-    text[1333] = '\n';
-    text[1334] = '\n';
-    text[2000] = '\0';
-
-    TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(GEOM_53_W, GEOM_53_H, &g));
-    lines = picker_desc_lines(text, g.desc_cols);
-
-    /* The text column, not the stacked images, is now the tall one, so the
-     * page is the band plus however much of the text runs past it. */
-    TEST_ASSERT_GREATER_THAN_INT16(g.page_h, (int16_t)(lines * pitch));
-    over = (int16_t)(lines * pitch - g.band_h);
-    TEST_ASSERT_EQUAL_UINT16(g.band_rows + (over + pitch - 1) / pitch,
-                             picker_page_lines(&g, text));
-    TEST_ASSERT_GREATER_THAN_UINT16(picker_page_lines(&g, NULL),
-                                    picker_page_lines(&g, text));
 }
 
 /* ─── argument safety ─────────────────────────────────────────────────────── */
@@ -945,17 +970,18 @@ int main(void)
     RUN_TEST(test_the_marquee_row_stays_inside_the_title_column);
     RUN_TEST(test_a_long_title_overflows_its_row_and_a_short_one_does_not);
     RUN_TEST(test_every_detail_combination_stays_inside_the_window);
-    RUN_TEST(test_both_images_are_drawn_at_the_top_of_the_band);
-    RUN_TEST(test_a_scrolled_band_clips_its_images_rather_than_moving_them);
+    RUN_TEST(test_both_images_sit_side_by_side_under_the_title);
+    RUN_TEST(test_a_one_row_title_lifts_the_images_a_row);
+    RUN_TEST(test_a_one_row_title_gives_its_row_to_the_band);
+    RUN_TEST(test_the_images_stay_put_while_the_band_scrolls);
+    RUN_TEST(test_no_detail_page_draws_the_filename);
+    RUN_TEST(test_the_page_is_the_description_and_never_less_than_the_band);
     RUN_TEST(test_missing_media_draws_two_placeholders_and_no_image);
     RUN_TEST(test_the_hold_bar_appears_only_once_the_hold_starts);
-    RUN_TEST(test_an_action_rows_detail_page_names_no_file);
-    RUN_TEST(test_a_full_description_is_visible_without_scrolling);
     RUN_TEST(test_every_wrapped_line_fits_the_column_in_pixels);
     RUN_TEST(test_the_wrap_breaks_at_spaces_and_hard_breaks_long_words);
     RUN_TEST(test_a_newline_ends_the_line_and_a_blank_one_is_empty);
     RUN_TEST(test_three_paragraphs_wrap_with_a_blank_line_between);
-    RUN_TEST(test_a_full_description_scrolls_the_page_past_the_images);
     RUN_TEST(test_draw_paints_nothing_when_it_is_handed_nothing);
     RUN_TEST(test_the_pending_list_header_reads_choose_a_game);
     RUN_TEST(test_the_cursor_row_is_bold_black_on_a_white_bar);

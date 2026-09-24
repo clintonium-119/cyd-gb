@@ -146,7 +146,8 @@ static enum boot_pick_e writer_run(enum writer_mode_e mode,
             picker_set_scroll_span(
                 &picker,
                 picker_page_lines(&geom, desc && desc[0] ? desc : NULL),
-                geom.band_rows);
+                picker_band_rows(&picker, &geom,
+                                 display_canvas(cfg.game_x, cfg.game_y)));
             ev |= PICKER_EVENT_BAND;
         }
 
