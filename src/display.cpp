@@ -796,12 +796,12 @@ static int16_t cv_measure(void* ctx, const char* s, uint8_t font) {
 }
 
 // Allocated here and freed in cv_end, never kept: the writer's heap also holds
-// its 56 KB of buffers. A refused allocation draws straight to the panel
-// instead, which may flicker but still draws.
-static void cv_begin(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h) {
+// its 56 KB of buffers. A refused allocation says so, and the layout draws
+// straight to the panel instead, which may flicker but still draws.
+static bool cv_begin(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h) {
     (void)ctx;
     if (spr) {
-        return;
+        return false;
     }
     spr = new TFT_eSprite(&tft);
     spr->setColorDepth(16);
@@ -810,11 +810,12 @@ static void cv_begin(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h) {
                       w * h * 2, w, h);
         delete spr;
         spr = NULL;
-        return;
+        return false;
     }
     spr->setSwapBytes(true);
     sx = x;
     sy = y;
+    return true;
 }
 
 static void cv_end(void* ctx) {

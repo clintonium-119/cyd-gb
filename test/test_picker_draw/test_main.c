@@ -25,15 +25,12 @@
  * not a literal copied from a run.
  */
 
-/* The windows render_config.h's geometries give. */
-#define GEOM_24_W 240
-#define GEOM_24_H 216
-#define GEOM_26_W 260
-#define GEOM_26_H 234
+/* The window render_config.h's one legal geometry gives. The 4/3-ish 240x216
+ * and 260x234 windows were retired with their geometries, and the split list
+ * and Cart-Info detail page are laid out for this one. */
 #define GEOM_53_W 266
 #define GEOM_53_H 240
 
-/* 5/3 is both the widest and the tallest, so its window bounds the canvas. */
 #define FB_MAX (GEOM_53_W * GEOM_53_H)
 
 /* The catalog shape: the library's 132 titles, every tenth one a starter. */
@@ -150,6 +147,17 @@ static void fk_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
     }
     /* The box the driver will clip into: rows lines at the font's pitch. */
     h = (int16_t)(rows * UI_ROW_PITCH(ui_font_height(font)));
+    /* Offscreen, the sprite clips a label sideways, which is how a marquee
+     * scrolls one through a fixed box. It never clips a fill, an image, or a
+     * text row taller than itself: those are still layout faults. */
+    if (f->off) {
+        int16_t l = (x > f->off_x) ? x : f->off_x;
+        int16_t r = (x + w < f->off_x + f->off_w) ? (int16_t)(x + w)
+                                                  : (int16_t)(f->off_x + f->off_w);
+
+        x = l;
+        w = (int16_t)((r > l) ? r - l : 0);
+    }
     put_rect(f, x, y, w, h);
 }
 
@@ -187,16 +195,19 @@ static int16_t fk_measure(void* ctx, const char* s, uint8_t font)
     return (s == NULL) ? 0 : (int16_t)(strlen(s) * fk_advance(font));
 }
 
-static void fk_begin(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h)
+static bool fk_begin(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h)
 {
     fake_t* f = (fake_t*)ctx;
 
     f->begins++;
+    /* The buffer itself has to land inside the window. */
+    put_rect(f, x, y, w, h);
     f->off = true;
     f->off_x = x;
     f->off_y = y;
     f->off_w = w;
     f->off_h = h;
+    return true;
 }
 
 static void fk_end(void* ctx)
@@ -349,56 +360,22 @@ static void assert_sane(void)
 
 /* ─── the layout table ───────────────────────────────────────────────────── */
 
-static void test_the_layout_at_240_by_216(void)
-{
-    picker_layout_t g;
-
-    TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(240, 216, &g));
-    TEST_ASSERT_EQUAL_UINT8(11, g.rows);        /* (216 - 18) / 18      */
-    TEST_ASSERT_EQUAL_INT16(232, g.list_w);     /* 240 - 8              */
-    TEST_ASSERT_EQUAL_INT16(52, g.band_y);      /* 48 + 4               */
-    TEST_ASSERT_EQUAL_INT16(118, g.band_h);     /* 216 - 52 - 46        */
-    TEST_ASSERT_EQUAL_UINT8(11, g.band_rows);   /* 118 / 10             */
-    TEST_ASSERT_EQUAL_INT16(4, g.art_x);
-    TEST_ASSERT_EQUAL_INT16(104, g.desc_x);     /* 4 + 96 + 4           */
-    TEST_ASSERT_EQUAL_INT16(132, g.desc_w);     /* 240 - 104 - 4        */
-    TEST_ASSERT_EQUAL_UINT8(22, g.desc_cols);   /* 132 / 6              */
-    TEST_ASSERT_EQUAL_INT16(100, g.shot_page_y); /* 96 + 4              */
-    TEST_ASSERT_EQUAL_INT16(196, g.page_h);     /* 100 + 96             */
-
-    /* 22 x 11 = 242 characters on screen at once, against the catalog's
-     * 200-byte cap — the whole description arrives visible. */
-    TEST_ASSERT_GREATER_OR_EQUAL_UINT(CATALOG_DESC_MAX - 1,
-                                      (unsigned)(g.desc_cols * g.band_rows));
-}
-
-static void test_the_layout_at_260_by_234(void)
-{
-    picker_layout_t g;
-
-    TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(260, 234, &g));
-    TEST_ASSERT_EQUAL_UINT8(12, g.rows);        /* (234 - 18) / 18      */
-    TEST_ASSERT_EQUAL_INT16(252, g.list_w);     /* 260 - 8              */
-    TEST_ASSERT_EQUAL_INT16(136, g.band_h);     /* 234 - 52 - 46        */
-    TEST_ASSERT_EQUAL_UINT8(13, g.band_rows);   /* 136 / 10             */
-    TEST_ASSERT_EQUAL_INT16(152, g.desc_w);     /* 260 - 104 - 4        */
-    TEST_ASSERT_EQUAL_UINT8(25, g.desc_cols);   /* 152 / 6              */
-    TEST_ASSERT_EQUAL_INT16(196, g.page_h);
-
-    TEST_ASSERT_GREATER_OR_EQUAL_UINT(CATALOG_DESC_MAX - 1,
-                                      (unsigned)(g.desc_cols * g.band_rows));
-}
-
-/* The writer logs "cannot happen" on a refused layout, so the third geometry
- * has to compose too. It is the widest and tallest window, so it only gains
- * room — but the claim is asserted rather than assumed. */
+/* The writer logs "cannot happen" on a refused layout, so the one geometry
+ * has to compose. */
 static void test_the_layout_at_266_by_240(void)
 {
     picker_layout_t g;
 
     TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(GEOM_53_W, GEOM_53_H, &g));
-    TEST_ASSERT_EQUAL_UINT8(12, g.rows);        /* (240 - 18) / 18      */
-    TEST_ASSERT_EQUAL_INT16(258, g.list_w);     /* 266 - 8              */
+    TEST_ASSERT_EQUAL_UINT8(12, g.rows);         /* (240 - 18) / 18      */
+    TEST_ASSERT_EQUAL_INT16(166, g.list_art_x);  /* 266 - 4 - 96         */
+    TEST_ASSERT_EQUAL_INT16(158, g.list_w);      /* 166 - 4 - 4          */
+    TEST_ASSERT_EQUAL_INT16(18, g.list_art_y);   /* under the header     */
+    TEST_ASSERT_EQUAL_INT16(118, g.list_shot_y); /* 18 + 96 + 4          */
+    /* Both images stacked, inside the window. */
+    TEST_ASSERT_LESS_OR_EQUAL_INT16(GEOM_53_H, g.list_shot_y + PICKER_ART_H);
+    TEST_ASSERT_GREATER_OR_EQUAL_INT16(150, g.list_w);
+
     TEST_ASSERT_EQUAL_INT16(142, g.band_h);     /* 240 - 52 - 46        */
     TEST_ASSERT_EQUAL_UINT8(14, g.band_rows);   /* 142 / 10             */
     TEST_ASSERT_EQUAL_INT16(158, g.desc_w);     /* 266 - 104 - 4        */
@@ -416,6 +393,8 @@ static void test_the_layout_refuses_a_window_it_cannot_compose(void)
     TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout(200, 100, &g));
     /* 150 < 96 + 16 + 48: an image and no usable column beside it. */
     TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout(150, 216, &g));
+    /* 213 < 18 + 96 + 4 + 96: the list's images do not stack. */
+    TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout(266, 213, &g));
     TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout(240, 216, NULL));
 }
 
@@ -423,9 +402,7 @@ static void test_the_layout_refuses_a_window_it_cannot_compose(void)
 
 static void test_the_list_stays_inside_the_window_in_every_mode(void)
 {
-    struct { int16_t w, h; } geo[] = { { GEOM_24_W, GEOM_24_H },
-                                       { GEOM_26_W, GEOM_26_H },
-                                       { GEOM_53_W, GEOM_53_H } };
+    struct { int16_t w, h; } geo[] = { { GEOM_53_W, GEOM_53_H } };
     size_t i;
 
     fill_library(LIB_COUNT);
@@ -437,14 +414,17 @@ static void test_the_list_stays_inside_the_window_in_every_mode(void)
 
         run_list(geo[i].w, geo[i].h, PICKER_MODE_PENDING, true, false, NULL);
         assert_sane();
-        /* The list has no image slot at all now. */
+        /* Still loading: two plain slots, no image yet. */
         TEST_ASSERT_EQUAL_UINT(0, fk.images);
+        TEST_ASSERT_EQUAL_UINT(2, fk.art_fills);
         /* One label per visible row, plus the header. */
         TEST_ASSERT_GREATER_OR_EQUAL_UINT(g.rows + 1u, fk.texts);
 
+        /* Cancel pending write is highlighted: no images for an action. */
         run_list(geo[i].w, geo[i].h, PICKER_MODE_PENDING, true, true, NULL);
         assert_sane();
         TEST_ASSERT_EQUAL_UINT(0, fk.images);
+        TEST_ASSERT_EQUAL_UINT(0, fk.art_fills);
 
         run_list(geo[i].w, geo[i].h, PICKER_MODE_IMMEDIATE, false, false, NULL);
         assert_sane();
@@ -463,17 +443,123 @@ static void test_a_marked_row_still_fits_its_box(void)
     /* Row 0 in immediate mode, so the marked label is on screen. */
     TEST_ASSERT_EQUAL_INT(BOOT_MADE_OK, boot_made_add(&made, "Game 000.gb"));
 
-    run_list(GEOM_24_W, GEOM_24_H, PICKER_MODE_IMMEDIATE, false, false, &made);
+    run_list(GEOM_53_W, GEOM_53_H, PICKER_MODE_IMMEDIATE, false, false, &made);
     assert_sane();
+}
+
+/*
+ * The list with the first title's media in the given states and its label
+ * scrolled `px` of a `span`-pixel overflow.
+ */
+static void run_list_media(uint8_t art_state, uint8_t shot_state, int16_t span,
+                           int16_t px)
+{
+    picker_t p;
+    picker_layout_t g;
+    ui_canvas_t cv = canvas_over(&fk, GEOM_53_W, GEOM_53_H);
+    uint16_t idx = 0;
+
+    TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(GEOM_53_W, GEOM_53_H, &g));
+    TEST_ASSERT_EQUAL_INT(PICKER_OK,
+                          picker_init(&p, PICKER_MODE_PENDING, &lib, true,
+                                      false, NULL, g.rows));
+    TEST_ASSERT_TRUE(picker_media_due(&p, 100, &idx));
+    picker_media_loaded(&p, idx, art_state == PICKER_MEDIA_READY,
+                        shot_state == PICKER_MEDIA_READY);
+    if (art_state == PICKER_MEDIA_LOADING) {
+        p.art_state = PICKER_MEDIA_LOADING;
+    }
+    if (shot_state == PICKER_MEDIA_LOADING) {
+        p.shot_state = PICKER_MEDIA_LOADING;
+    }
+    picker_set_marquee_span(&p, span);
+    p.marquee_px = px;
+    picker_draw(&p, &g, NULL, (const uint16_t*)&lib, (const uint16_t*)&lib,
+                &cv);
+}
+
+static void test_the_list_stays_inside_the_window_in_every_media_state(void)
+{
+    uint8_t states[][2] = {
+        { PICKER_MEDIA_READY, PICKER_MEDIA_READY },
+        { PICKER_MEDIA_READY, PICKER_MEDIA_MISSING },
+        { PICKER_MEDIA_MISSING, PICKER_MEDIA_MISSING },
+        { PICKER_MEDIA_LOADING, PICKER_MEDIA_LOADING },
+    };
+    size_t i;
+
+    fill_library(LIB_COUNT);
+    for (i = 0; i < sizeof(states) / sizeof(states[0]); i++) {
+        run_list_media(states[i][0], states[i][1], 0, 0);
+        assert_sane();
+        TEST_ASSERT_EQUAL_UINT((states[i][0] == PICKER_MEDIA_READY) +
+                                   (states[i][1] == PICKER_MEDIA_READY),
+                               fk.images);
+    }
+}
+
+static void test_the_images_stack_in_the_right_column(void)
+{
+    picker_layout_t g;
+
+    fill_library(LIB_COUNT);
+    picker_layout(GEOM_53_W, GEOM_53_H, &g);
+    run_list_media(PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0);
+    assert_sane();
+    TEST_ASSERT_EQUAL_UINT(2, fk.images);
+    /* The last push is the snapshot, under the cover. */
+    TEST_ASSERT_EQUAL_INT16(g.list_art_x, fk.last_img_x);
+    TEST_ASSERT_EQUAL_INT16(g.list_shot_y, fk.last_img_y);
+    TEST_ASSERT_GREATER_OR_EQUAL_INT16(4 + g.list_w + 4, g.list_art_x);
+}
+
+static void test_the_marquee_row_stays_inside_the_title_column(void)
+{
+    picker_layout_t g;
+    const int16_t span = 60;
+    int16_t pxs[] = { 0, span / 2, span };
+    size_t i;
+
+    fill_library(LIB_COUNT);
+    picker_layout(GEOM_53_W, GEOM_53_H, &g);
+    for (i = 0; i < sizeof(pxs) / sizeof(pxs[0]); i++) {
+        run_list_media(PICKER_MEDIA_READY, PICKER_MEDIA_READY, span, pxs[i]);
+        assert_sane();
+        /* The highlighted row, built offscreen, and only it. */
+        TEST_ASSERT_EQUAL_UINT(1, fk.begins);
+        TEST_ASSERT_LESS_OR_EQUAL_INT16(g.list_art_x,
+                                        fk.off_x + fk.off_w);
+        TEST_ASSERT_EQUAL_INT16(PICKER_HEADER_H, fk.off_y);
+        TEST_ASSERT_EQUAL_INT16(PICKER_ROW_H, fk.off_h);
+    }
+}
+
+static void test_a_long_title_overflows_its_row_and_a_short_one_does_not(void)
+{
+    picker_t p;
+    picker_layout_t g;
+    ui_canvas_t cv = canvas_over(&fk, GEOM_53_W, GEOM_53_H);
+
+    fill_library(LIB_COUNT);
+    picker_layout(GEOM_53_W, GEOM_53_H, &g);
+    picker_init(&p, PICKER_MODE_PENDING, &lib, true, false, NULL, g.rows);
+
+    snprintf(lib.e[0].title, sizeof(lib.e[0].title), "Tetris");
+    TEST_ASSERT_EQUAL_INT16(0, picker_row_overflow(&p, &g, &cv));
+
+    /* 47 characters, the catalog's longest: 47 * 8 + 1 - 158. */
+    memset(lib.e[0].title, 'W', CATALOG_TITLE_MAX - 1);
+    lib.e[0].title[CATALOG_TITLE_MAX - 1] = '\0';
+    TEST_ASSERT_EQUAL_INT16((CATALOG_TITLE_MAX - 1) * 8 + 1 - g.list_w,
+                            picker_row_overflow(&p, &g, &cv));
+    TEST_ASSERT_GREATER_THAN_INT16(0, picker_row_overflow(&p, &g, &cv));
 }
 
 /* ─── the detail page ─────────────────────────────────────────────────────── */
 
 static void test_every_detail_combination_stays_inside_the_window(void)
 {
-    struct { int16_t w, h; } geo[] = { { GEOM_24_W, GEOM_24_H },
-                                       { GEOM_26_W, GEOM_26_H },
-                                       { GEOM_53_W, GEOM_53_H } };
+    struct { int16_t w, h; } geo[] = { { GEOM_53_W, GEOM_53_H } };
     uint8_t states[][2] = {
         { PICKER_MEDIA_READY, PICKER_MEDIA_READY },
         { PICKER_MEDIA_READY, PICKER_MEDIA_MISSING },
@@ -511,9 +597,9 @@ static void test_both_images_are_drawn_at_the_top_of_the_band(void)
     picker_layout_t g;
 
     fill_library(LIB_COUNT);
-    picker_layout(GEOM_24_W, GEOM_24_H, &g);
+    picker_layout(GEOM_53_W, GEOM_53_H, &g);
 
-    run_detail(GEOM_24_W, GEOM_24_H, PICKER_MODE_PENDING, true, false, 0,
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, false, 0,
                PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, DESC_200);
     assert_sane();
 
@@ -528,11 +614,11 @@ static void test_a_scrolled_band_clips_its_images_rather_than_moving_them(void)
     uint16_t span;
 
     fill_library(LIB_COUNT);
-    picker_layout(GEOM_24_W, GEOM_24_H, &g);
+    picker_layout(GEOM_53_W, GEOM_53_H, &g);
     span = (uint16_t)(picker_page_lines(&g, DESC_200) - g.band_rows);
     TEST_ASSERT_GREATER_THAN_UINT(0, span);
 
-    run_detail(GEOM_24_W, GEOM_24_H, PICKER_MODE_PENDING, true, false, 0,
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, false, 0,
                PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, span, DESC_200);
     assert_sane();
 
@@ -548,7 +634,7 @@ static void test_missing_media_draws_two_placeholders_and_no_image(void)
 {
     fill_library(LIB_COUNT);
 
-    run_detail(GEOM_24_W, GEOM_24_H, PICKER_MODE_PENDING, true, false, 0,
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, false, 0,
                PICKER_MEDIA_MISSING, PICKER_MEDIA_MISSING, 0, 0, DESC_200);
     assert_sane();
 
@@ -561,18 +647,18 @@ static void test_the_hold_bar_appears_only_once_the_hold_starts(void)
 {
     fill_library(LIB_COUNT);
 
-    run_detail(GEOM_24_W, GEOM_24_H, PICKER_MODE_PENDING, true, false, 0,
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, false, 0,
                PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, DESC_200);
     assert_sane();
     TEST_ASSERT_EQUAL_UINT(0, fk.bar_fills);
 
-    run_detail(GEOM_24_W, GEOM_24_H, PICKER_MODE_PENDING, true, false, 0,
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, false, 0,
                PICKER_MEDIA_READY, PICKER_MEDIA_READY, 100, 0, DESC_200);
     assert_sane();
     TEST_ASSERT_EQUAL_UINT(1, fk.bar_fills);
     /* A hold one tick short of done is a bar one pixel-step short of full. */
-    TEST_ASSERT_GREATER_THAN_INT16((GEOM_24_W - 16) * 9 / 10, fk.bar_w);
-    TEST_ASSERT_EQUAL_INT16(GEOM_24_H - 14, fk.bar_y);
+    TEST_ASSERT_GREATER_THAN_INT16((GEOM_53_W - 16) * 9 / 10, fk.bar_w);
+    TEST_ASSERT_EQUAL_INT16(GEOM_53_H - 14, fk.bar_y);
 }
 
 static void test_an_action_rows_detail_page_names_no_file(void)
@@ -580,13 +666,13 @@ static void test_an_action_rows_detail_page_names_no_file(void)
     fill_library(LIB_COUNT);
 
     /* Cancel pending write, at row 0 in pending mode with a pending write. */
-    run_detail(GEOM_24_W, GEOM_24_H, PICKER_MODE_PENDING, true, true, 0,
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, true, 0,
                PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, DESC_200);
     assert_sane();
     TEST_ASSERT_EQUAL_UINT(0, fk.images);
 
     /* Finish setup, at row 0 in immediate mode once the wildcard is done. */
-    run_detail(GEOM_24_W, GEOM_24_H, PICKER_MODE_IMMEDIATE, true, false, 0,
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_IMMEDIATE, true, false, 0,
                PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, DESC_200);
     assert_sane();
     TEST_ASSERT_EQUAL_UINT(0, fk.images);
@@ -738,7 +824,7 @@ static void test_a_full_description_scrolls_the_page_past_the_images(void)
     text[1334] = '\n';
     text[2000] = '\0';
 
-    TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(GEOM_24_W, GEOM_24_H, &g));
+    TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(GEOM_53_W, GEOM_53_H, &g));
     lines = picker_desc_lines(text, g.desc_cols);
 
     /* The text column, not the stacked images, is now the tall one, so the
@@ -757,11 +843,11 @@ static void test_draw_paints_nothing_when_it_is_handed_nothing(void)
 {
     picker_t p;
     picker_layout_t g;
-    ui_canvas_t cv = canvas_over(&fk, GEOM_24_W, GEOM_24_H);
+    ui_canvas_t cv = canvas_over(&fk, GEOM_53_W, GEOM_53_H);
     ui_canvas_t broken = cv;
 
     fill_library(LIB_COUNT);
-    picker_layout(GEOM_24_W, GEOM_24_H, &g);
+    picker_layout(GEOM_53_W, GEOM_53_H, &g);
     picker_init(&p, PICKER_MODE_PENDING, &lib, true, false, NULL, g.rows);
 
     picker_draw(NULL, &g, NULL, NULL, NULL, &cv);
@@ -831,25 +917,33 @@ static void test_the_fake_rejects_a_draw_outside_its_offscreen_row(void)
 {
     ui_canvas_t cv = canvas_over(&fk, GEOM_53_W, GEOM_53_H);
 
-    cv.begin(cv.ctx, 4, 36, 158, PICKER_ROW_H);
+    TEST_ASSERT_TRUE(cv.begin(cv.ctx, 4, 36, 158, PICKER_ROW_H));
     cv.fill(cv.ctx, 4, 36, 158, PICKER_ROW_H, 0);
     TEST_ASSERT_EQUAL_UINT(0, fk.off_violations);
-    cv.text(cv.ctx, "x", 4, 36, 159, 1, UI_FONT_ROW, UI_ALIGN_LEFT, 0, 0);
+    /* A label wider than the row is clipped, as the sprite clips it... */
+    cv.text(cv.ctx, "x", -20, 36, 300, 1, UI_FONT_ROW, UI_ALIGN_LEFT, 0, 0);
+    TEST_ASSERT_EQUAL_UINT(0, fk.off_violations);
+    /* ...but a fill a pixel too wide, or a text box a row too tall, is not. */
+    cv.fill(cv.ctx, 4, 36, 159, PICKER_ROW_H, 0);
     TEST_ASSERT_EQUAL_UINT(1, fk.off_violations);
+    cv.text(cv.ctx, "x", 4, 36, 158, 2, UI_FONT_ROW, UI_ALIGN_LEFT, 0, 0);
+    TEST_ASSERT_EQUAL_UINT(2, fk.off_violations);
     cv.end(cv.ctx);
     cv.fill(cv.ctx, 0, 0, 1, 1, 0);
-    TEST_ASSERT_EQUAL_UINT(1, fk.off_violations);
+    TEST_ASSERT_EQUAL_UINT(2, fk.off_violations);
 }
 
 int main(void)
 {
     UNITY_BEGIN();
-    RUN_TEST(test_the_layout_at_240_by_216);
-    RUN_TEST(test_the_layout_at_260_by_234);
     RUN_TEST(test_the_layout_at_266_by_240);
     RUN_TEST(test_the_layout_refuses_a_window_it_cannot_compose);
     RUN_TEST(test_the_list_stays_inside_the_window_in_every_mode);
     RUN_TEST(test_a_marked_row_still_fits_its_box);
+    RUN_TEST(test_the_list_stays_inside_the_window_in_every_media_state);
+    RUN_TEST(test_the_images_stack_in_the_right_column);
+    RUN_TEST(test_the_marquee_row_stays_inside_the_title_column);
+    RUN_TEST(test_a_long_title_overflows_its_row_and_a_short_one_does_not);
     RUN_TEST(test_every_detail_combination_stays_inside_the_window);
     RUN_TEST(test_both_images_are_drawn_at_the_top_of_the_band);
     RUN_TEST(test_a_scrolled_band_clips_its_images_rather_than_moving_them);

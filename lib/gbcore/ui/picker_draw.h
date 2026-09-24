@@ -2,16 +2,18 @@
 // The cartridge writer's layout — everything the writer draws, with nothing it
 // decides (design §8.2).
 //
-// A three-call canvas the caller injects, a geometry derived from the window's
+// A canvas the caller injects, a geometry derived from the window's
 // w/h, a word wrap for the description, and one picker_draw() that turns a
 // picker_t into fills, text boxes and up to two clipped images. Every
 // coordinate is window-relative: the host test paints a w x h buffer and the
 // Arduino binding adds the per-unit game_x / game_y origin, and the same code
 // serves both.
 //
-// The writer has two screens. The list uses the whole window width — no art
-// slot, no description band — so it fits 11 rows of about 29 characters at
-// 240x216. A title's detail page carries its cover, its gameplay snapshot and
+// The writer has two screens. The list is a split: titles down the left, and
+// the highlighted title's cover with its snapshot stacked under it on the
+// right, so it fits 12 rows of about 19 characters at 266x240. A title too
+// wide for its row scrolls inside it, drawn offscreen so the scroll never
+// blanks the row. A title's detail page carries its cover, its gameplay snapshot and
 // its description in a band that scrolls, with the title and target above it
 // and the filename, the hold prompt and the hold bar below, none of which
 // scroll away.
@@ -64,8 +66,11 @@ extern "C" {
 
 typedef struct picker_layout_s {
     int16_t w, h;
-    uint8_t rows;    /* list rows that fit under the header */
-    int16_t list_w;  /* width of a row's text box          */
+    uint8_t rows;    /* list rows that fit under the header        */
+    int16_t list_w;  /* width of a row's text box, left of the art */
+    int16_t list_art_x;  /* the list's image column, left edge     */
+    int16_t list_art_y;  /* the cover's top                       */
+    int16_t list_shot_y; /* the snapshot's top, under the cover   */
 
     int16_t band_y;     /* the detail band's top, window-relative */
     int16_t band_h;
@@ -85,8 +90,9 @@ typedef struct picker_layout_s {
  * three render geometries are the same code with different inputs.
  *
  * PICKER_ERR_ARGS for a NULL out, a list shorter than PICKER_MIN_ROWS, a band
- * with no room for a line, a description column under PICKER_DESC_MIN_COLS, or
- * a window too narrow to hold an image and a column beside it.
+ * with no room for a line, a description column under PICKER_DESC_MIN_COLS, a
+ * window too narrow to hold an image and a column beside it, or one too short
+ * to stack both images under the list header.
  */
 int picker_layout(int16_t w, int16_t h, picker_layout_t* out);
 
@@ -112,6 +118,14 @@ uint16_t picker_page_lines(const picker_layout_t* g, const char* desc);
  */
 bool picker_desc_line(const char* s, uint8_t cols, uint16_t line, char* out,
                       size_t out_sz);
+
+/*
+ * How many pixels the highlighted list label runs past list_w, measured with
+ * the canvas, or 0 when it fits. What picker_set_marquee_span() takes. 0 when
+ * any argument is NULL or the canvas cannot measure.
+ */
+int16_t picker_row_overflow(const picker_t* p, const picker_layout_t* g,
+                            const ui_canvas_t* cv);
 
 /*
  * Redraw the current screen in full. `desc` is NULL until the description has

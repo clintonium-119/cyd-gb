@@ -13,6 +13,7 @@
 //
 // Pure C, no Arduino/ESP-IDF headers, no allocation.
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -47,7 +48,9 @@ enum ui_align_e {
  * `begin` and `end` are optional; NULL means "draw straight to the panel".
  * Between them, every fill, text and image lands in an offscreen w x h buffer
  * whose top-left is window position x, y, clipped to that buffer, and `end`
- * pushes the buffer to the panel in one go. That is how one row repaints
+ * pushes the buffer to the panel in one go. `begin` returns false when it has
+ * no buffer to give, and then nothing is redirected: the caller must draw as
+ * if there were no clip, and need not call `end`. That is how one row repaints
  * without the panel ever showing it blank between its fill and its text.
  * Coordinates stay window-relative throughout.
  */
@@ -61,7 +64,7 @@ typedef struct ui_canvas_s {
     void (*image)(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
                   const uint16_t* px, int16_t row0, int16_t rows);
     int16_t (*measure)(void* ctx, const char* s, uint8_t font);
-    void (*begin)(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h);
+    bool (*begin)(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h);
     void (*end)(void* ctx);
 } ui_canvas_t;
 
