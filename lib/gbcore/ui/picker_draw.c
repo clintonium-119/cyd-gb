@@ -503,14 +503,25 @@ static void draw_band(const picker_t* p, const picker_layout_t* g,
     }
 }
 
-/* The hold bar: its track, and the part filled so far. */
+/*
+ * The hold bar: its track, and the part filled so far.
+ *
+ * `grow` is a hold tick's repaint: the fill only ever gets longer while A is
+ * held, so the filled part is painted over what is already there and the
+ * track is left alone. Blanking the track first on every 16 ms tick, under the
+ * panel's own refresh, was the flicker. A release, or a full draw, lays the
+ * track down again.
+ */
 static void draw_bar(const picker_t* p, const picker_layout_t* g,
-                     const ui_canvas_t* cv)
+                     const ui_canvas_t* cv, bool grow)
 {
     uint8_t pct = picker_hold_pct(p);
     int16_t y = (int16_t)(g->h - 4 - PICKER_BAR_H);
 
-    cv->fill(cv->ctx, g->detail_x, y, g->detail_w, PICKER_BAR_H, COL_ROW_BG);
+    if (!grow || pct == 0) {
+        cv->fill(cv->ctx, g->detail_x, y, g->detail_w, PICKER_BAR_H,
+                 COL_ROW_BG);
+    }
     if (pct > 0) {
         cv->fill(cv->ctx, g->detail_x, y,
                  (int16_t)(g->detail_w * pct / PCT_FULL), PICKER_BAR_H,
@@ -518,11 +529,25 @@ static void draw_bar(const picker_t* p, const picker_layout_t* g,
     }
 }
 
+/* Side by side and fixed: only the band under them scrolls. An action row
+ * has neither. */
+static void draw_detail_media(const picker_t* p, const picker_layout_t* g,
+                              const uint16_t* art, const uint16_t* shot,
+                              const ui_canvas_t* cv)
+{
+    int16_t y = (int16_t)(g->media_y - detail_lift(p, g, cv));
+
+    if (p->rows[p->detail_row].kind != PICKER_ROW_GAME) {
+        return;
+    }
+    draw_media(cv, g->detail_x, y, p->art_state, art, ART_MISSING);
+    draw_media(cv, g->shot_x, y, p->shot_state, shot, SHOT_MISSING);
+}
+
 static void draw_detail(const picker_t* p, const picker_layout_t* g,
                         const char* desc, const uint16_t* art,
                         const uint16_t* shot, const ui_canvas_t* cv)
 {
-    int16_t lift = detail_lift(p, g, cv);
     int16_t foot_y = (int16_t)(g->h - PICKER_DETAIL_FOOT_H);
 
     cv->fill(cv->ctx, 0, 0, g->w, g->h, COL_BG);
@@ -531,13 +556,7 @@ static void draw_detail(const picker_t* p, const picker_layout_t* g,
     cv->text(cv->ctx, detail_title(p), g->detail_x, g->title_y, g->detail_w,
              PICKER_TITLE_ROWS, UI_FONT_ROW, UI_ALIGN_LEFT, COL_TEXT, COL_BG);
 
-    /* Side by side and fixed: only the band under them scrolls. */
-    if (p->rows[p->detail_row].kind == PICKER_ROW_GAME) {
-        draw_media(cv, g->detail_x, (int16_t)(g->media_y - lift), p->art_state,
-                   art, ART_MISSING);
-        draw_media(cv, g->shot_x, (int16_t)(g->media_y - lift), p->shot_state,
-                   shot, SHOT_MISSING);
-    }
+    draw_detail_media(p, g, art, shot, cv);
     draw_band(p, g, desc, cv);
 
     /* What confirming does, how to confirm it, and how far the hold has got.
@@ -546,20 +565,27 @@ static void draw_detail(const picker_t* p, const picker_layout_t* g,
              g->detail_w, 1, UI_FONT_SMALL, UI_ALIGN_LEFT, COL_DIM, COL_BG);
     cv->text(cv->ctx, FOOTER_PROMPT, g->detail_x, (int16_t)(foot_y + 12),
              g->detail_w, 1, UI_FONT_ROW, UI_ALIGN_CENTER, COL_DIM, COL_BG);
-    draw_bar(p, g, cv);
+    draw_bar(p, g, cv, false);
+}
+
+/* Whether there is anything to draw, and a canvas to draw it with. */
+static bool drawable(const picker_t* p, const picker_layout_t* g,
+                     const ui_canvas_t* cv)
+{
+    if (p == NULL || g == NULL || cv == NULL) {
+        return false;
+    }
+    if (cv->fill == NULL || cv->text == NULL || cv->image == NULL) {
+        return false;
+    }
+    return p->row_count != 0 && p->cat != NULL;
 }
 
 void picker_draw(const picker_t* p, const picker_layout_t* g, const char* desc,
                  const uint16_t* art, const uint16_t* shot,
                  const ui_canvas_t* cv)
 {
-    if (p == NULL || g == NULL || cv == NULL) {
-        return;
-    }
-    if (cv->fill == NULL || cv->text == NULL || cv->image == NULL) {
-        return;
-    }
-    if (p->row_count == 0 || p->cat == NULL) {
+    if (!drawable(p, g, cv)) {
         return;
     }
     switch (p->screen) {
@@ -575,5 +601,42 @@ void picker_draw(const picker_t* p, const picker_layout_t* g, const char* desc,
         /* PICKER_SCREEN_DONE draws nothing: the binding returns and the
          * caller's halt screen takes over. */
         break;
+    }
+}
+
+void picker_draw_events(const picker_t* p, const picker_layout_t* g,
+                        uint8_t events, const char* desc, const uint16_t* art,
+                        const uint16_t* shot, const ui_canvas_t* cv)
+{
+    if (!drawable(p, g, cv)) {
+        return;
+    }
+    if (events & PICKER_EVENT_REDRAW) {
+        picker_draw(p, g, desc, art, shot, cv);
+        return;
+    }
+    if (p->screen == PICKER_SCREEN_LIST) {
+        if (events & PICKER_EVENT_ROWS) {
+            draw_row(p, g, cv, p->prev_cursor);
+        }
+        if (events & (PICKER_EVENT_ROWS | PICKER_EVENT_MARQUEE)) {
+            draw_row(p, g, cv, list_cursor(&p->list));
+        }
+        if (events & PICKER_EVENT_MEDIA) {
+            draw_list_media(p, g, cv, art, shot);
+        }
+        return;
+    }
+    if (p->screen != PICKER_SCREEN_DETAIL || p->detail_row >= p->row_count) {
+        return;
+    }
+    if (events & PICKER_EVENT_MEDIA) {
+        draw_detail_media(p, g, art, shot, cv);
+    }
+    if (events & PICKER_EVENT_BAND) {
+        draw_band(p, g, desc, cv);
+    }
+    if (events & PICKER_EVENT_BAR) {
+        draw_bar(p, g, cv, true);
     }
 }

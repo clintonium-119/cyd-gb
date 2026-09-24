@@ -145,6 +145,18 @@ void picker_draw(const picker_t* p, const picker_layout_t* g, const char* desc,
                  const uint16_t* art, const uint16_t* shot,
                  const ui_canvas_t* cv);
 
+/*
+ * Repaint only what `events` (picker_event_e bits from picker_input() or
+ * picker_media_loaded()) names: the two rows a move touched, the highlighted
+ * row alone for a marquee step, the image slots, the description band, or the
+ * hold bar — where a rising bar paints only its filled part, never its track.
+ * PICKER_EVENT_REDRAW is picker_draw(). The screen must already show the state
+ * before these events, as the last draw left it. Same arguments otherwise.
+ */
+void picker_draw_events(const picker_t* p, const picker_layout_t* g,
+                        uint8_t events, const char* desc, const uint16_t* art,
+                        const uint16_t* shot, const ui_canvas_t* cv);
+
 #ifdef __cplusplus
 }
 #endif

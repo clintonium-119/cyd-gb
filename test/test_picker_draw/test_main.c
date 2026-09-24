@@ -1,6 +1,7 @@
 #include <unity.h>
 
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -40,6 +41,8 @@
 
 #define B_NONE  0x00u
 #define B_A     ((uint8_t)COMBO_BTN_A)
+#define B_B     ((uint8_t)COMBO_BTN_B)
+#define B_UP    ((uint8_t)COMBO_BTN_UP)
 #define B_DOWN  ((uint8_t)COMBO_BTN_DOWN)
 
 /* A description at exactly the catalog's 200-byte cap, in real words. */
@@ -76,12 +79,45 @@ typedef struct {
         uint16_t fg, bg;
     } log[64];
     unsigned logged;
+    /* The bounding box of everything painted since paint_reset(), and fills
+     * in the bar's track colour at the bar's height. */
+    int16_t px0, py0, px1, py1;
+    unsigned track_fills;
 } fake_t;
 
+/* The second is the reference a partial draw is compared against. */
 static fake_t fk;
+static fake_t fk_ref;
 
-/* Paint the rect, or count it as a violation. One rule, three callers. */
-static void put_rect(fake_t* f, int16_t x, int16_t y, int16_t w, int16_t h)
+/* How a primitive lands in the buffer: a fill or opaque text sets its pixels,
+ * transparent text marks over whatever is there. Each value is a function of
+ * the call alone, so two draws that make the same calls in the same place
+ * leave the same pixels — which is what "partial equals full" compares. */
+enum { PAINT_SET, PAINT_OVER, PAINT_NONE };
+
+static uint16_t hash_call(const char* s, uint16_t fg, uint16_t bg, int16_t x,
+                          int16_t y)
+{
+    uint32_t h = 2166136261u;
+
+    while (s != NULL && *s) {
+        h = (h ^ (uint8_t)*s++) * 16777619u;
+    }
+    h ^= (uint32_t)fg * 31u ^ (uint32_t)bg * 7u ^ (uint32_t)x * 131u ^
+         (uint32_t)y;
+    return (uint16_t)(h ^ (h >> 16));
+}
+
+static void paint_reset(fake_t* f)
+{
+    f->px0 = f->py0 = 0x7FFF;
+    f->px1 = f->py1 = -1;
+    f->track_fills = 0;
+}
+
+/* Paint the rect, or count it as a violation. One rule, every caller. */
+static void put_rect(fake_t* f, int16_t x, int16_t y, int16_t w, int16_t h,
+                     int mode, uint16_t v)
 {
     int16_t iy, ix;
 
@@ -95,9 +131,18 @@ static void put_rect(fake_t* f, int16_t x, int16_t y, int16_t w, int16_t h)
         f->off_violations++;
         return;
     }
+    if (mode == PAINT_NONE || w == 0 || h == 0) {
+        return;
+    }
+    if (x < f->px0) f->px0 = x;
+    if (y < f->py0) f->py0 = y;
+    if (x + w > f->px1) f->px1 = (int16_t)(x + w);
+    if (y + h > f->py1) f->py1 = (int16_t)(y + h);
     for (iy = y; iy < y + h; iy++) {
         for (ix = x; ix < x + w; ix++) {
-            f->fb[iy * f->w + ix] = 1;
+            uint16_t* px = &f->fb[iy * f->w + ix];
+
+            *px = (mode == PAINT_SET) ? v : (uint16_t)(*px ^ (v | 1u));
         }
     }
 }
@@ -118,7 +163,10 @@ static void fk_fill(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
         f->bar_w = w;
         f->bar_y = y;
     }
-    put_rect(f, x, y, w, h);
+    if (color == 0x1082 && h == PICKER_BAR_H) {
+        f->track_fills++;
+    }
+    put_rect(f, x, y, w, h, PAINT_SET, color);
 }
 
 static void fk_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
@@ -158,7 +206,8 @@ static void fk_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
         x = l;
         w = (int16_t)((r > l) ? r - l : 0);
     }
-    put_rect(f, x, y, w, h);
+    put_rect(f, x, y, w, h, (fg == bg) ? PAINT_OVER : PAINT_SET,
+             hash_call(s, fg, bg, x, y));
 }
 
 static void fk_image(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
@@ -179,7 +228,8 @@ static void fk_image(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
     if (row0 < 0 || rows < 0 || row0 + rows > PICKER_ART_H) {
         f->range_faults++;
     }
-    put_rect(f, x, y, w, h);
+    put_rect(f, x, y, w, h, PAINT_SET,
+             hash_call(NULL, (uint16_t)(uintptr_t)px, (uint16_t)row0, x, y));
 }
 
 /* A fixed advance per glyph, 8 px at font 2 and 6 at font 1: close enough to
@@ -201,7 +251,7 @@ static bool fk_begin(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h)
 
     f->begins++;
     /* The buffer itself has to land inside the window. */
-    put_rect(f, x, y, w, h);
+    put_rect(f, x, y, w, h, PAINT_NONE, 0);
     f->off = true;
     f->off_x = x;
     f->off_y = y;
@@ -219,9 +269,11 @@ static ui_canvas_t canvas_over(fake_t* f, int16_t w, int16_t h)
 {
     ui_canvas_t cv;
 
+    memset(&cv, 0, sizeof(cv));
     memset(f, 0, sizeof(*f));
     f->w = w;
     f->h = h;
+    paint_reset(f);
     cv.ctx = f;
     cv.fill = fk_fill;
     cv.text = fk_text;
@@ -927,6 +979,195 @@ static void test_the_cursor_row_is_bold_black_on_a_white_bar(void)
     TEST_ASSERT_EQUAL_UINT(2, black);
 }
 
+/* ─── partial redraws ─────────────────────────────────────────────────────── */
+
+static picker_t sp;
+static picker_layout_t sg;
+static ui_canvas_t scv;
+static const char* sdesc;
+
+#define ART ((const uint16_t*)&lib)
+
+/* A list on screen, drawn in full, the way the binding starts. */
+static void seq_begin(void)
+{
+    fill_library(LIB_COUNT);
+    TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(GEOM_53_W, GEOM_53_H, &sg));
+    TEST_ASSERT_EQUAL_INT(PICKER_OK,
+                          picker_init(&sp, PICKER_MODE_PENDING, &lib, true,
+                                      false, NULL, sg.rows));
+    sdesc = NULL;
+    scv = canvas_over(&fk, GEOM_53_W, GEOM_53_H);
+    picker_draw(&sp, &sg, sdesc, ART, ART, &scv);
+}
+
+/* Paint `ev` over what is on screen, and check that it leaves exactly what a
+ * fresh full draw of the same state would. */
+static void seq_step(uint8_t ev)
+{
+    ui_canvas_t ref;
+
+    TEST_ASSERT_NOT_EQUAL_UINT8(PICKER_EVENT_NONE, ev);
+    paint_reset(&fk);
+    picker_draw_events(&sp, &sg, ev, sdesc, ART, ART, &scv);
+    assert_sane();
+
+    ref = canvas_over(&fk_ref, GEOM_53_W, GEOM_53_H);
+    picker_draw(&sp, &sg, sdesc, ART, ART, &ref);
+    TEST_ASSERT_EQUAL_MEMORY_MESSAGE(fk_ref.fb, fk.fb,
+                                     sizeof(uint16_t) * GEOM_53_W * GEOM_53_H,
+                                     "a partial draw left a different screen");
+}
+
+/* The painted box sits inside x0..x1, y0..y1. */
+static void assert_painted_within(int16_t x0, int16_t y0, int16_t x1,
+                                  int16_t y1)
+{
+    TEST_ASSERT_GREATER_THAN_INT16_MESSAGE(fk.px0, fk.px1, "nothing was painted");
+    TEST_ASSERT_GREATER_OR_EQUAL_INT16(x0, fk.px0);
+    TEST_ASSERT_GREATER_OR_EQUAL_INT16(y0, fk.py0);
+    TEST_ASSERT_LESS_OR_EQUAL_INT16(x1, fk.px1);
+    TEST_ASSERT_LESS_OR_EQUAL_INT16(y1, fk.py1);
+}
+
+/* Open the first title with its images and description in. */
+static void seq_open(void)
+{
+    uint16_t idx = 0;
+
+    TEST_ASSERT_TRUE(picker_media_due(&sp, 100, &idx));
+    seq_step(picker_media_loaded(&sp, idx, true, true));
+    seq_step(picker_input(&sp, B_A, 200));
+    picker_input(&sp, B_NONE, 210);
+    TEST_ASSERT_TRUE(picker_desc_due(&sp, &idx));
+    sdesc = DESC_200;
+    picker_set_scroll_span(&sp, picker_page_lines(&sg, sdesc),
+                           picker_band_rows(&sp, &sg, &scv));
+    seq_step(PICKER_EVENT_BAND);
+}
+
+static void test_a_hold_tick_paints_only_the_bar_and_never_its_track(void)
+{
+    int16_t bar_y = (int16_t)(GEOM_53_H - 4 - PICKER_BAR_H);
+
+    seq_begin();
+    seq_open();
+    seq_step(picker_input(&sp, B_A, 300));
+    seq_step(picker_input(&sp, B_A, 500));
+    assert_painted_within(sg.detail_x, bar_y, sg.detail_x + sg.detail_w,
+                          bar_y + PICKER_BAR_H);
+    TEST_ASSERT_EQUAL_UINT(0, fk.track_fills);
+    TEST_ASSERT_EQUAL_UINT(1, fk.bar_fills);
+
+    /* Letting go lays the track back down, and only the track. */
+    seq_step(picker_input(&sp, B_NONE, 600));
+    assert_painted_within(sg.detail_x, bar_y, sg.detail_x + sg.detail_w,
+                          bar_y + PICKER_BAR_H);
+    TEST_ASSERT_EQUAL_UINT(1, fk.track_fills);
+}
+
+static void test_a_scroll_paints_only_the_band(void)
+{
+    seq_begin();
+    seq_open();
+    TEST_ASSERT_GREATER_THAN_UINT16(0, sp.scroll_max);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_BAND,
+                            picker_input(&sp, B_DOWN, 300));
+    seq_step(PICKER_EVENT_BAND);
+    assert_painted_within(0, sg.band_y, GEOM_53_W, sg.band_y + sg.band_h);
+}
+
+static void test_a_move_paints_only_its_two_rows_and_the_image_column(void)
+{
+    uint8_t ev;
+
+    seq_begin();
+    ev = picker_input(&sp, B_DOWN, 100);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_ROWS | PICKER_EVENT_MEDIA, ev);
+
+    seq_step(PICKER_EVENT_ROWS);
+    assert_painted_within(0, PICKER_HEADER_H, sg.list_art_x - 4,
+                          PICKER_HEADER_H + 2 * PICKER_ROW_H);
+    seq_step(PICKER_EVENT_MEDIA);
+    assert_painted_within(sg.list_art_x - 4, PICKER_HEADER_H, GEOM_53_W,
+                          GEOM_53_H);
+}
+
+static void test_a_marquee_step_paints_only_the_highlighted_row_offscreen(void)
+{
+    uint32_t t;
+    uint8_t ev = PICKER_EVENT_NONE;
+
+    seq_begin();
+    picker_set_marquee_span(&sp, picker_row_overflow(&sp, &sg, &scv));
+    TEST_ASSERT_GREATER_THAN_INT16(0, sp.marquee_span);
+    for (t = 0; t < 5000 && ev == PICKER_EVENT_NONE; t += 16) {
+        ev = picker_input(&sp, B_NONE, t);
+    }
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_MARQUEE, ev);
+
+    fk.begins = 0;
+    seq_step(ev);
+    TEST_ASSERT_EQUAL_UINT(1, fk.begins);
+    assert_painted_within(0, PICKER_HEADER_H, sg.list_art_x - 4,
+                          PICKER_HEADER_H + PICKER_ROW_H);
+}
+
+static void test_partial_draws_add_up_to_a_full_draw(void)
+{
+    uint16_t idx = 0;
+    uint32_t t;
+    uint8_t ev;
+
+    seq_begin();
+    /* Moves, and the images landing. */
+    seq_step(picker_input(&sp, B_DOWN, 100));
+    picker_input(&sp, B_NONE, 110);
+    TEST_ASSERT_TRUE(picker_media_due(&sp, 200, &idx));
+    seq_step(picker_media_loaded(&sp, idx, true, false));
+    seq_step(picker_input(&sp, B_DOWN, 300));
+    picker_input(&sp, B_NONE, 310);
+    seq_step(picker_input(&sp, B_UP, 400));
+    picker_input(&sp, B_NONE, 410);
+    /* Each move dropped the images; back on this title they load again. */
+    TEST_ASSERT_TRUE(picker_media_due(&sp, 460, &idx));
+    seq_step(picker_media_loaded(&sp, idx, false, true));
+
+    /* The marquee, a few steps in. */
+    picker_set_marquee_span(&sp, picker_row_overflow(&sp, &sg, &scv));
+    for (t = 420; t < 420 + PICKER_MARQUEE_DELAY_MS + 200; t += 16) {
+        ev = picker_input(&sp, B_NONE, t);
+        if (ev != PICKER_EVENT_NONE) {
+            seq_step(ev);
+        }
+    }
+    TEST_ASSERT_GREATER_THAN_INT16(0, sp.marquee_px);
+
+    /* Open, the images already in; the description; a scroll. */
+    seq_step(picker_input(&sp, B_A, 2000));
+    picker_input(&sp, B_NONE, 2010);
+    TEST_ASSERT_FALSE(picker_media_due(&sp, 2020, &idx));
+    TEST_ASSERT_TRUE(picker_desc_due(&sp, &idx));
+    sdesc = DESC_200;
+    picker_set_scroll_span(&sp, picker_page_lines(&sg, sdesc),
+                           picker_band_rows(&sp, &sg, &scv));
+    seq_step(PICKER_EVENT_BAND);
+    seq_step(picker_input(&sp, B_DOWN, 2100));
+    picker_input(&sp, B_NONE, 2110);
+
+    /* A hold, part way, and let go. */
+    seq_step(picker_input(&sp, B_A, 2200));
+    for (t = 2216; t < 2700; t += 16) {
+        seq_step(picker_input(&sp, B_A, t));
+    }
+    seq_step(picker_input(&sp, B_NONE, 2700));
+
+    /* Back to the list, and one more move. */
+    seq_step(picker_input(&sp, B_B, 2800));
+    picker_input(&sp, B_NONE, 2810);
+    seq_step(picker_input(&sp, B_DOWN, 2900));
+}
+
 /* ─── the fake itself ────────────────────────────────────────────────────── */
 
 static void test_the_fake_measures_a_fixed_advance_per_glyph(void)
@@ -985,6 +1226,11 @@ int main(void)
     RUN_TEST(test_draw_paints_nothing_when_it_is_handed_nothing);
     RUN_TEST(test_the_pending_list_header_reads_choose_a_game);
     RUN_TEST(test_the_cursor_row_is_bold_black_on_a_white_bar);
+    RUN_TEST(test_a_hold_tick_paints_only_the_bar_and_never_its_track);
+    RUN_TEST(test_a_scroll_paints_only_the_band);
+    RUN_TEST(test_a_move_paints_only_its_two_rows_and_the_image_column);
+    RUN_TEST(test_a_marquee_step_paints_only_the_highlighted_row_offscreen);
+    RUN_TEST(test_partial_draws_add_up_to_a_full_draw);
     RUN_TEST(test_the_fake_measures_a_fixed_advance_per_glyph);
     RUN_TEST(test_the_fake_rejects_a_draw_outside_its_offscreen_row);
     return UNITY_END();
