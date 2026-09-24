@@ -55,6 +55,7 @@ typedef struct {
     int16_t w, h;
     uint16_t fb[FB_MAX];
     unsigned violations, fills, texts, images;
+    unsigned round_fills;
     unsigned null_strings;
     unsigned range_faults;   /* image row ranges outside the source block */
 
@@ -157,6 +158,18 @@ static void fk_fill(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
     put_rect(f, x, y, w, h);
 }
 
+static void fk_round_fill(void* ctx, int16_t x, int16_t y, int16_t w,
+                          int16_t h, int16_t r, uint16_t color, uint16_t bg)
+{
+    fake_t* f = (fake_t*)ctx;
+
+    (void)r;
+    (void)color;
+    (void)bg;
+    f->round_fills++;
+    put_rect(f, x, y, w, h);
+}
+
 static void fk_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
                     uint8_t rows, uint8_t font, uint8_t align, uint16_t fg,
                     uint16_t bg)
@@ -238,6 +251,7 @@ static ui_canvas_t canvas_over(fake_t* f, const diag_layout_t* g)
     f->bar_w = g->bar_w;
     cv.ctx = f;
     cv.fill = fk_fill;
+    cv.round_fill = fk_round_fill;
     cv.text = fk_text;
     cv.image = fk_image;
     return cv;

@@ -750,6 +750,12 @@ static void cv_fill(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
     target(&x, &y).fillRect(x, y, w, h, color);
 }
 
+static void cv_round_fill(void* ctx, int16_t x, int16_t y, int16_t w,
+                          int16_t h, int16_t r, uint16_t color, uint16_t bg) {
+    (void)ctx;
+    target(&x, &y).fillSmoothRoundRect(x, y, w, h, r, color, bg);
+}
+
 static void cv_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
                     uint8_t rows, uint8_t font, uint8_t align, uint16_t fg,
                     uint16_t bg) {
@@ -829,8 +835,9 @@ static void cv_end(void* ctx) {
     spr = NULL;
 }
 
-static const ui_canvas_t canvas = { NULL,       cv_fill,  cv_text, cv_image,
-                                    cv_measure, cv_begin, cv_end };
+static const ui_canvas_t canvas = { NULL,     cv_fill,    cv_round_fill,
+                                    cv_text,  cv_image,   cv_measure,
+                                    cv_begin, cv_end };
 
 const ui_canvas_t* display_canvas(int16_t x, int16_t y)
 {

@@ -419,6 +419,7 @@ static void test_the_menu_references_no_writer_or_tag_symbol(void)
         PROJECT_DIR "/include/menu.h",
         PROJECT_DIR "/src/manual_view.cpp",
         PROJECT_DIR "/include/manual_view.h",
+        PROJECT_DIR "/lib/gbcore/ui/theme.h",
     };
     char msg[512];
 
@@ -479,7 +480,7 @@ static void test_no_exit_path_symbol_under_src(void)
 
 static void test_the_diagnostics_reference_no_forbidden_layer(void)
 {
-    /* Six explicit paths rather than a directory walk: lib/ holds the modules
+    /* Explicit paths rather than a directory walk: lib/ holds the modules
      * that define these names, and only the diagnostic ones are in scope. */
     static const char* const paths[] = {
         PROJECT_DIR "/src/diag.cpp",
@@ -488,6 +489,7 @@ static void test_the_diagnostics_reference_no_forbidden_layer(void)
         PROJECT_DIR "/lib/gbcore/ui/diag.h",
         PROJECT_DIR "/lib/gbcore/ui/diag_draw.c",
         PROJECT_DIR "/lib/gbcore/ui/diag_draw.h",
+        PROJECT_DIR "/lib/gbcore/ui/theme.h",
     };
     char msg[512];
 

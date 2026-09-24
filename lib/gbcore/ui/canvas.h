@@ -42,6 +42,10 @@ enum ui_align_e {
  * background alone. That is how a label is struck twice, one pixel apart, for
  * bold: an opaque second pass would wipe the first pass's right edge.
  *
+ * `round_fill` is `fill` with corners of radius r, anti-aliased toward bg:
+ * the colour the rectangle sits on, which the edge pixels blend into. It is
+ * what the selected row's pill and the button glyphs are drawn with.
+ *
  * `measure` is the pixel width `s` takes in `font` on one row. It is required,
  * because a layout that scrolls an overflowing label has to know it overflows.
  *
@@ -58,6 +62,8 @@ typedef struct ui_canvas_s {
     void* ctx;
     void (*fill)(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
                  uint16_t color);
+    void (*round_fill)(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
+                       int16_t r, uint16_t color, uint16_t bg);
     void (*text)(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
                  uint8_t rows, uint8_t font, uint8_t align, uint16_t fg,
                  uint16_t bg);

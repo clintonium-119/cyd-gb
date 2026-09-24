@@ -59,6 +59,8 @@ typedef struct {
     int16_t w, h;
     uint16_t fb[FB_MAX];
     unsigned violations, fills, texts, images;
+    unsigned round_fills;
+    int16_t last_round_r;
     int16_t last_img_x, last_img_y, last_img_w, last_img_rows;
     unsigned art_fills;   /* fills exactly PICKER_ART_W wide            */
     unsigned bar_fills;   /* fills in the hold-bar colour               */
@@ -169,6 +171,19 @@ static void fk_fill(void* ctx, int16_t x, int16_t y, int16_t w, int16_t h,
     put_rect(f, x, y, w, h, PAINT_SET, color);
 }
 
+/* The corners are the driver's business; the fake paints the whole
+ * rectangle and remembers the radius it was asked for. */
+static void fk_round_fill(void* ctx, int16_t x, int16_t y, int16_t w,
+                          int16_t h, int16_t r, uint16_t color, uint16_t bg)
+{
+    fake_t* f = (fake_t*)ctx;
+
+    (void)bg;
+    f->round_fills++;
+    f->last_round_r = r;
+    put_rect(f, x, y, w, h, PAINT_SET, color);
+}
+
 static void fk_text(void* ctx, const char* s, int16_t x, int16_t y, int16_t w,
                     uint8_t rows, uint8_t font, uint8_t align, uint16_t fg,
                     uint16_t bg)
@@ -276,6 +291,7 @@ static ui_canvas_t canvas_over(fake_t* f, int16_t w, int16_t h)
     paint_reset(f);
     cv.ctx = f;
     cv.fill = fk_fill;
+    cv.round_fill = fk_round_fill;
     cv.text = fk_text;
     cv.image = fk_image;
     cv.measure = fk_measure;
@@ -1197,6 +1213,22 @@ static void test_the_fake_measures_a_fixed_advance_per_glyph(void)
                             cv.measure(cv.ctx, "Tetris", UI_FONT_SMALL));
 }
 
+static void test_the_fake_paints_a_round_fill_inside_its_bounds(void)
+{
+    ui_canvas_t cv = canvas_over(&fk, GEOM_53_W, GEOM_53_H);
+
+    cv.round_fill(cv.ctx, 10, 20, 60, 18, 9, 0xFFFF, 0x0000);
+    TEST_ASSERT_EQUAL_UINT(1, fk.round_fills);
+    TEST_ASSERT_EQUAL_INT16(9, fk.last_round_r);
+    TEST_ASSERT_EQUAL_UINT(0, fk.violations);
+    TEST_ASSERT_EQUAL_HEX16(0xFFFF, fk.fb[20 * GEOM_53_W + 10]);
+    TEST_ASSERT_EQUAL_HEX16(0xFFFF, fk.fb[37 * GEOM_53_W + 69]);
+    TEST_ASSERT_EQUAL_HEX16(0x0000, fk.fb[38 * GEOM_53_W + 70]);
+    /* A pixel past the window is a violation, as it is for fill. */
+    cv.round_fill(cv.ctx, GEOM_53_W - 10, 0, 11, 18, 9, 0xFFFF, 0x0000);
+    TEST_ASSERT_EQUAL_UINT(1, fk.violations);
+}
+
 static void test_the_fake_rejects_a_draw_outside_its_offscreen_row(void)
 {
     ui_canvas_t cv = canvas_over(&fk, GEOM_53_W, GEOM_53_H);
@@ -1251,6 +1283,7 @@ int main(void)
     RUN_TEST(test_images_landing_on_a_detail_page_paint_only_the_images);
     RUN_TEST(test_partial_draws_add_up_to_a_full_draw);
     RUN_TEST(test_the_fake_measures_a_fixed_advance_per_glyph);
+    RUN_TEST(test_the_fake_paints_a_round_fill_inside_its_bounds);
     RUN_TEST(test_the_fake_rejects_a_draw_outside_its_offscreen_row);
     return UNITY_END();
 }
