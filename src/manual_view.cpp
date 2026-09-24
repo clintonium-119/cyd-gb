@@ -4,6 +4,7 @@
 #include "render_config.h"
 #include "sd_manager.h"
 #include "ui/manual.h"
+#include "ui/theme_draw.h"
 #include <Arduino.h>
 #include <stdlib.h>
 
@@ -22,21 +23,24 @@
 #define MANUAL_BAND_ROWS 16
 #define MANUAL_MAX_STRIDE ((2 * GAME_W + 7) / 8)
 
-// The overview's footer strip, sized and placed like Cart Info's so the
-// navigation hints read the same on both. A page drawn the full window tall
-// loses its bottom 18 rows under it; most pages are shorter at half size and
-// clear it.
-#define MANUAL_FOOT_H 18
+// The overview's chrome is the theme's: a header naming the page, the help
+// line and the hint footer, when the half-size page fits between them. A
+// portrait page is 240 rows at half size and does not, so it keeps the whole
+// window and only the footer goes over its bottom rows, with the page number
+// at the footer's left.
+#define MANUAL_ROOM_H (GAME_H - UI_HEADER_H - UI_HELP_H - UI_FOOT_H)
 
 // Black ink on white paper, not the emulator palette. Both values read the
 // same in either byte order, so the resting setSwapBytes(true) is moot.
-#define MANUAL_INK   0x0000
-#define MANUAL_PAPER 0xFFFF
+#define MANUAL_INK   UI_COL_BG
+#define MANUAL_PAPER UI_COL_TEXT
+
+static const ui_hint_t HINTS[] = { { "A", "Zoom" }, { "B", "Back" } };
 
 // Everything one open reader holds, all of it heap and all of it freed on
 // the way out.
 typedef struct view_s {
-    const settings_t* s;
+    const ui_canvas_t* cv;
     manual_reader_t rd;
     manual_page_t* pages;
     uint16_t count;
@@ -81,14 +85,14 @@ static bool draw_tile(const view_t* v, const manual_nav_t* nav)
     const uint32_t stride = (p->w + 7u) / 8u;
     const uint16_t vw = p->w < GAME_W ? p->w : GAME_W;
     const uint16_t vh = p->h < GAME_H ? p->h : GAME_H;
-    const int16_t x = (int16_t)(v->s->game_x + (GAME_W - vw) / 2);
-    const int16_t y = (int16_t)(v->s->game_y + (GAME_H - vh) / 2);
+    const int16_t x = (int16_t)((GAME_W - vw) / 2);
+    const int16_t y = (int16_t)((GAME_H - vh) / 2);
     uint16_t x0;
     uint16_t y0;
 
     manual_tile_origin(p, GAME_W, GAME_H, nav->tx, nav->ty, &x0, &y0);
     if (vw < GAME_W || vh < GAME_H) {
-        tft.fillRect(v->s->game_x, v->s->game_y, GAME_W, GAME_H, TFT_BLACK);
+        v->cv->fill(v->cv->ctx, 0, 0, GAME_W, GAME_H, UI_COL_BG);
     }
     for (uint16_t r = 0; r < vh; r += MANUAL_BAND_ROWS) {
         uint16_t n = (uint16_t)(vh - r);
@@ -103,26 +107,37 @@ static bool draw_tile(const view_t* v, const manual_nav_t* nav)
         for (uint16_t i = 0; i < n; i++) {
             manual_expand_row(v->band + i * stride, x0, vw, MANUAL_INK,
                               MANUAL_PAPER, v->row);
-            tft.pushImage(x, (int16_t)(y + r + i), vw, 1, v->row);
+            v->cv->image(v->cv->ctx, x, (int16_t)(y + r + i), vw, 1, v->row,
+                         0, 1);
         }
     }
     return true;
 }
 
-// The whole page at half size, centred, over a footer of hints and the
-// page number.
+// The whole page at half size, centred, with rounded corners, under the
+// theme's chrome or, for a page too tall for it, over the hint footer alone.
 // Two page rows in, one screen row out: no page-sized buffer anywhere.
 static bool draw_overview(const view_t* v, const manual_nav_t* nav)
 {
+    const ui_canvas_t* cv = v->cv;
     const manual_page_t* p = &v->pages[nav->page];
     const uint32_t stride = (p->w + 7u) / 8u;
     const uint16_t hw = (uint16_t)((p->w + 1u) / 2u);
     const uint16_t hh = (uint16_t)((p->h + 1u) / 2u);
-    const int16_t x = (int16_t)(v->s->game_x + (GAME_W - hw) / 2);
-    const int16_t y = (int16_t)(v->s->game_y + (GAME_H - hh) / 2);
+    const bool chrome = hh <= MANUAL_ROOM_H;
+    const int16_t x = (int16_t)((GAME_W - hw) / 2);
+    const int16_t y = chrome ? (int16_t)(UI_HEADER_H + (MANUAL_ROOM_H - hh) / 2)
+                             : (int16_t)((GAME_H - hh) / 2);
     char label[12];
 
-    tft.fillRect(v->s->game_x, v->s->game_y, GAME_W, GAME_H, TFT_BLACK);
+    snprintf(label, sizeof(label), "%u/%u", (unsigned)(nav->page + 1),
+             (unsigned)v->count);
+    cv->fill(cv->ctx, 0, 0, GAME_W, GAME_H, UI_COL_BG);
+    if (chrome) {
+        ui_header(cv, GAME_W, "Manual", label);
+        ui_help_line(cv, GAME_W, GAME_H - UI_FOOT_H - UI_HELP_H,
+                     "Left and Right turn the page.");
+    }
     for (uint16_t r = 0; r < p->h; r += MANUAL_BAND_ROWS) {
         uint16_t n = (uint16_t)(p->h - r);
 
@@ -139,19 +154,25 @@ static bool draw_overview(const view_t* v, const manual_nav_t* nav)
             manual_decimate_row(v->band + i * stride, b, p->w, v->half);
             manual_expand_row(v->half, 0, hw, MANUAL_INK, MANUAL_PAPER,
                               v->row);
-            tft.pushImage(x, (int16_t)(y + (r + i) / 2), hw, 1, v->row);
+            ui_round_corners_565(v->row, (int16_t)hw, (int16_t)hh,
+                                 (int16_t)((r + i) / 2), 1, UI_IMG_R,
+                                 UI_COL_BG);
+            cv->image(cv->ctx, x, (int16_t)(y + (r + i) / 2), hw, 1, v->row,
+                      0, 1);
         }
     }
 
-    snprintf(label, sizeof(label), "%u/%u", (unsigned)(nav->page + 1),
-             (unsigned)v->count);
-    const int16_t fy = (int16_t)(v->s->game_y + GAME_H - MANUAL_FOOT_H);
-    tft.fillRect(v->s->game_x, fy, GAME_W, MANUAL_FOOT_H, TFT_BLACK);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.setTextDatum(TL_DATUM);
-    tft.drawString("A: Zoom  B: Back", v->s->game_x + 8, fy, 2);
-    tft.setTextDatum(TR_DATUM);
-    tft.drawString(label, v->s->game_x + GAME_W - 8, fy, 2);
+    ui_hint_bar(cv, GAME_W, GAME_H - UI_FOOT_H, HINTS,
+                (uint8_t)(sizeof(HINTS) / sizeof(HINTS[0])));
+    if (!chrome) {
+        cv->text(cv->ctx, label, UI_PAD,
+                 (int16_t)(GAME_H - UI_FOOT_H +
+                           (UI_FOOT_H - UI_ROW_PITCH(ui_font_height(
+                                            UI_FONT_HINT))) /
+                               2),
+                 (int16_t)(GAME_W / 2), 1, UI_FONT_HINT, UI_ALIGN_LEFT,
+                 UI_COL_TEXT, UI_COL_BG);
+    }
     return true;
 }
 
@@ -207,8 +228,8 @@ bool manual_view_open(const settings_t* s, const char* rom_filename)
     manual_nav_t nav;
     bool opened = false;
 
-    v.s = s;
     if (s && rom_filename && view_setup(&v, rom_filename)) {
+        v.cv = display_canvas(s->game_x, s->game_y);
         opened = true;
         manual_nav_init(&nav, v.count);
         if (draw(&v, &nav)) {

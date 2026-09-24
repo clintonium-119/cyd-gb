@@ -559,6 +559,35 @@ static void test_a_one_row_band_masks_only_its_own_corner_run(void)
     }
 }
 
+/* The manual's overview rounds one expanded row at a time. */
+static void test_one_row_bands_round_an_overview_row_by_row(void)
+{
+    enum { OW = 168, OH = 240 };
+    static uint16_t row[OW];
+    int16_t ys[] = { 0, UI_IMG_R, OH - 1 };
+    unsigned want[] = { 2 * UI_IMG_R, 0, 2 * UI_IMG_R };
+    size_t k;
+    size_t i;
+
+    for (k = 0; k < 3; k++) {
+        unsigned masked = 0;
+
+        for (i = 0; i < OW; i++) {
+            row[i] = 0xABCD;
+        }
+        ui_round_corners_565(row, OW, OH, ys[k], 1, UI_IMG_R, 0);
+        for (i = 0; i < OW; i++) {
+            masked += (row[i] == 0);
+        }
+        TEST_ASSERT_EQUAL_UINT(want[k], masked);
+        if (want[k]) {
+            TEST_ASSERT_EQUAL_HEX16(0, row[UI_IMG_R - 1]);
+            TEST_ASSERT_EQUAL_HEX16(0xABCD, row[UI_IMG_R]);
+            TEST_ASSERT_EQUAL_HEX16(0, row[OW - UI_IMG_R]);
+        }
+    }
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -586,5 +615,6 @@ int main(void)
     RUN_TEST(test_a_middle_band_is_untouched);
     RUN_TEST(test_the_bottom_band_rounds_the_last_corner);
     RUN_TEST(test_a_one_row_band_masks_only_its_own_corner_run);
+    RUN_TEST(test_one_row_bands_round_an_overview_row_by_row);
     return UNITY_END();
 }
