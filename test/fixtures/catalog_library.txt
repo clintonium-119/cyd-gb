@@ -23,7 +23,7 @@ Bubble Ghost.gb	Bubble Ghost		Bubble Ghost needs to blow a bubble out of his cre
 BurgerTime Deluxe.gb	BurgerTime Deluxe		BurgerTime Deluxe is a new version of the classic arcade game from 1982, developed for the casual market.
 Buster Bros.gb	Buster Bros.		Pang is a platform game which consists of 50 levels in total. It can be played with one or two players on the same screen, and the other player can join anytime within the game.
 Castlevania - Adventure.gb	Castlevania : The Adventure		A challenge you can't walk away from! After getting his wings clipped in Castlevania and Simon's Quest, the death defying Count has risen again.
-Castlevania II - Revenge.gb	Castlevania II : Belmont's Revenge	starter	The curse of the Belmont family has struck again in the second Castlevania adventure for the Game Boy. This game takes place 15 years after the first monochrome adventure.
+Castlevania II - Revenge.gb	Castlevania II : Belmont's Revenge		The curse of the Belmont family has struck again in the second Castlevania adventure for the Game Boy. This game takes place 15 years after the first monochrome adventure.
 Castlevania Legends.gb	Castlevania Legends		Take a journey to the very beginning, when Dracula first rose up to terrorize the good people of Transylvania.
 Catrap.gb	Catrap		Banished to a mysterious underground labyrinth of complex mazes, two explorers are faced with one chance to reverse the curse: solve all 100 puzzles set out in mazes before them. But watch it!
 Contra - The Alien Wars.gb	Contra : The Alien Wars		Welcome to 2636 the year the notorious Red Falcon gets even-with an unprecedented alien onslaught orchestrated to push the Contra forces to their ultimate reaches.
@@ -57,7 +57,7 @@ Jetpak DX.gb	Jetpak DX		Lost, stranded on a strange planet. Light years away fro
 Joe & Mac - Caveman Ninja.gb	Joe & Mac : Caveman Ninja		Play Joe and Mac as cavemen ninjas in a multi-level platform area where the player has to jump and club incoming enemies.
 Kid Dracula.gb	Kid Dracula		Kid Dracula is a side-scroller and a parody of the Castlevania series. The difference is you play as a young vampire rather than a vampire killer.
 Kid Icarus.gb	Kid Icarus : Of Myths and Monsters		An evil force is threatening to invade the Angel Land. Palutena, the ruler-goddess, sends a warrior named Pit on a quest to prepare for the upcoming attack.
-Kirby's Block Ball.gb	Kirby's Block Ball		Kirby takes on a new challenge, blockball.
+Kirby's Block Ball.gb	Kirby's Block Ball	starter	Kirby takes on a new challenge, blockball.
 Kirby's Dream Land.gb	Kirby's Dream Land		Dedede, King of Dream Land, is a penguin-like creature who is too gluttonous for his own good.
 Kirby's Dream Land 2.gb	Kirby's Dream Land 2	starter	The lovable Kirby returns to the Game Boy! This time the bridges connecting the rainbow bridges have disappeared and King Dedede is to blame as always...or is he?
 Kirby's Pinball Land.gb	Kirby's Pinball Land		Kirby's Pinball Land is a game of pinball based on the Kirby series of games, with Kirby as the ball.
@@ -73,7 +73,7 @@ Mega Man III.gb	Mega Man III		Mega Man 3 is a traditional side-scrolling platfor
 Mega Man IV.gb	Mega Man IV		In the year 20XX... Dr. Wily has broken into the local Robot Museum and has stolen the bodies of his previously destroyed Robot Masters, and now has brought them back for revenge against Mega Man!
 Mercenary Force.gb	Mercenary Force		Mercenary Force is an unconventional shoot'em up set in Japan's Edo period and inspired by Japanese history and mythology.
 Metroid II.gb	Metroid II : Return of Samus		This is the sequel to the very popular Metroid for the NES. In Metroid 2, you control Samus Aran in her quest to rid the planet SR388 of the Metroid parasites.
-Mole Mania.gb	Mole Mania	starter	Muddy Mole's wife and seven kids have been kidnapped by the evil farmer, Jinbei! It's up to you to help Muddy solve the many puzzles of Jinbei Land.
+Mole Mania.gb	Mole Mania		Muddy Mole's wife and seven kids have been kidnapped by the evil farmer, Jinbei! It's up to you to help Muddy solve the many puzzles of Jinbei Land.
 Monster Max.gb	Monster Max		A powerful human called Krond conquers the Monster Planet, bans all music and declares himself king. Max, a monster rock musician decides to fight back.
 Motocross Maniacs.gb	Motocross Maniacs		Motocross Maniacs is a side-scrolling racing game with extremely perilous courses. You maneuver your rider through many jumps, loops, and mud hazards to achieve a record time.
 Mr. Do!.gb	Mr. Do!		You control Mr. Do has he tries to harvest all of the cherries on the screen. However, there are numerous bad guys out to get him! Mr.
@@ -84,7 +84,7 @@ NBA Jam - TE.gb	NBA Jam Tournament Edition		NBA JAM Tournament Edition brings yo
 Nemesis.gb	Nemesis		Nemesis is the first entry in the long-running Gradius series on the Game Boy. Its side-scrolling shoot'em up gameplay follows the series template closely.
 Ninja Taro.gb	Ninja Taro		High Adventure in the Far East! It's the era of feudal war in Japan. One Shogun struggles to unite the provinces, but he needs help.
 Nintendo World Cup.gb	Nintendo World Cup		Soccer game that takes up to 4 players with the adapter and allows you to choose between many different ground surfaces, such as ice, grass and stone, which add to the replayability.
-Operation C.gb	Operation C	starter	Operation C is a Game Boy sequel to the popular NES titles Contra and Super C and is, essentially, a side-scrolling shooter.
+Operation C.gb	Operation C		Operation C is a Game Boy sequel to the popular NES titles Contra and Super C and is, essentially, a side-scrolling shooter.
 Parodius.gb	Parodius		This is mostly the parody of Gradius (Nemesis on some systems), with some flavor from other shoot-em-ups, like Twinbee. The series is available on numerous platforms.
 Pokemon - Yellow Version.gb	Pokemon - Yellow Version	starter	In Pokemon Yellow, you've finally received your Pokemon trainer's licence, and the journey to become the world's greatest Pokemon trainer begins!
 Pokemon - Blue Version.gb	Pokemon Blue Version		After venturing alone into tall grass, a voice warns the player to stop, which is revealed to be Professor Oak, a famous Pokemon researcher.
