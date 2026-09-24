@@ -150,6 +150,48 @@ static int file_count(const char* path, const char* needle)
     return count;
 }
 
+/*
+ * file_count, but skipping every block opened by a line that is exactly
+ * `#ifdef <macro>` up to its matching #endif, nested #if lines included.
+ * Only a bench flag gets this treatment: code inside it is never in an image
+ * built from platformio.ini (guard (e) keeps it that way).
+ */
+static int file_count_outside_ifdef(const char* path, const char* needle,
+                                    const char* macro)
+{
+    char open_line[64];
+    size_t len = strlen(needle);
+    int count = 0;
+    int depth = 0;
+    const char* line;
+
+    if (!slurp(path)) {
+        return -1;
+    }
+    snprintf(open_line, sizeof(open_line), "#ifdef %s\n", macro);
+    for (line = slurp_buf; *line != '\0';) {
+        const char* end = strchr(line, '\n');
+        size_t n = end ? (size_t)(end - line) + 1u : strlen(line);
+
+        if (depth == 0 && strncmp(line, open_line, strlen(open_line)) == 0) {
+            depth = 1;
+        } else if (depth > 0 && strncmp(line, "#if", 3) == 0) {
+            depth++;
+        } else if (depth > 0 && strncmp(line, "#endif", 6) == 0) {
+            depth--;
+        } else if (depth == 0) {
+            const char* at = line;
+
+            while ((at = strstr(at, needle)) != NULL && at < line + n) {
+                count++;
+                at += len;
+            }
+        }
+        line += n;
+    }
+    return count;
+}
+
 static int has_suffix(const char* name, const char* suffix)
 {
     size_t n = strlen(name);
@@ -267,7 +309,9 @@ static void count_writer_open(const char* dir, const char* name)
         return;
     }
     const char* path = join(dir, name);
-    int n = file_count(path, "writer_open(");
+    /* The bench writer build (see its #ifdef in main.cpp) is a second call
+     * that halts without writing, and never reaches a shipped image. */
+    int n = file_count_outside_ifdef(path, "writer_open(", "DEV_WRITER");
     if (n > 0) {
         b_call_sites += n;
         snprintf(b_files + strlen(b_files), sizeof(b_files) - strlen(b_files),
@@ -284,7 +328,8 @@ static void test_writer_open_has_exactly_one_call_site(void)
         0, visit_dir(PROJECT_DIR "/src", ".cpp", count_writer_open));
     TEST_ASSERT_EQUAL_INT_MESSAGE(1, b_call_sites, b_files);
     TEST_ASSERT_EQUAL_INT_MESSAGE(
-        1, file_count(PROJECT_DIR "/src/main.cpp", "writer_open("),
+        1, file_count_outside_ifdef(PROJECT_DIR "/src/main.cpp",
+                                    "writer_open(", "DEV_WRITER"),
         "the single writer_open call site is not in src/main.cpp");
 }
 
@@ -346,6 +391,21 @@ static void test_platformio_ini_does_not_mention_the_rom_bypass(void)
     TEST_ASSERT_FALSE_MESSAGE(
         file_contains(PROJECT_DIR "/platformio.ini", needle),
         "platformio.ini mentions the bench ROM bypass flag; it must stay an "
+        "environment-variable-only build flag so no default build can "
+        "acquire it");
+}
+
+static void test_platformio_ini_does_not_mention_the_writer_bypass(void)
+{
+    /* The same rule for the bench writer build: it skips the tag read and
+     * opens the writer on any boot, so it must never be one line away from
+     * a default build. */
+    char needle[32];
+    snprintf(needle, sizeof(needle), "%s_%s", "DEV", "WRITER");
+
+    TEST_ASSERT_FALSE_MESSAGE(
+        file_contains(PROJECT_DIR "/platformio.ini", needle),
+        "platformio.ini mentions the bench writer flag; it must stay an "
         "environment-variable-only build flag so no default build can "
         "acquire it");
 }
@@ -517,6 +577,7 @@ int main(void)
     RUN_TEST(test_the_writer_references_no_lower_layer);
     RUN_TEST(test_the_writer_drives_the_pure_picker);
     RUN_TEST(test_platformio_ini_does_not_mention_the_rom_bypass);
+    RUN_TEST(test_platformio_ini_does_not_mention_the_writer_bypass);
     RUN_TEST(test_the_menu_references_no_writer_or_tag_symbol);
     RUN_TEST(test_the_menu_defines_menu_open);
     RUN_TEST(test_no_exit_path_symbol_under_src);

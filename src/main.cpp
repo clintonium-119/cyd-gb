@@ -566,7 +566,11 @@ void setup() {
     scale_bench_run();
 #endif
 
-#ifndef DEV_ROM_PATH
+#if defined(DEV_ROM_PATH) && defined(DEV_WRITER)
+#error "DEV_ROM_PATH and DEV_WRITER are separate bench builds"
+#endif
+
+#if !defined(DEV_ROM_PATH) && !defined(DEV_WRITER)
     if (!nfc_init()) {
         Serial.println("[BOOT] NFC reader did not answer");
     }
@@ -613,7 +617,7 @@ void setup() {
                   settings.frameskip, settings.brightness,
                   settings.volume, settings.game_x, settings.game_y);
 
-#ifndef DEV_ROM_PATH
+#if !defined(DEV_ROM_PATH) && !defined(DEV_WRITER)
     // Exactly one retry, and only now that there is a screen to report the
     // outcome on. One, not a loop: a tag that does not read twice is a halt.
     if (in.tag != BOOT_TAG_OK) {
@@ -656,6 +660,25 @@ void loop() {
     //
     load_and_run(DEV_ROM_PATH);
     return;
+#endif
+
+#ifdef DEV_WRITER
+    // Bench only: the MENU cart's writer screen with no reader wired. The tag
+    // read is guarded out in setup(), and the pick is logged and dropped: no
+    // pending record, no tag command, so the build cannot make a cart.
+    //
+    //   PLATFORMIO_BUILD_FLAGS=-DDEV_WRITER pio run -e cyd
+    //
+    {
+        boot_selection_t dev_sel = {};
+        enum boot_pick_e dev_pick = writer_open(WRITER_MODE_PENDING,
+                                                cat_ok ? &cat : NULL,
+                                                &in.flags, in.pending_set,
+                                                &dev_sel);
+        Serial.printf("[DEV] writer pick=%d rom=%s target=%u\n",
+                      (int)dev_pick, dev_sel.rom, (unsigned)dev_sel.target);
+        halt_screen("Dev writer", "Nothing written. Power off.");
+    }
 #endif
 
     enum boot_action_e action = boot_decide(&in);
