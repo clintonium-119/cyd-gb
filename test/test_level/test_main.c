@@ -132,11 +132,93 @@ static void test_four_hours_of_writes_do_not_overflow_the_estimate(void)
     TEST_ASSERT_EQUAL_UINT32(0, level_queued(&lvl, now + four_hours_us));
 }
 
+/*
+ * The speaker's underflow rule, run over a write sequence: one count per write
+ * that finds the estimate empty.
+ */
+static unsigned count_underflow(int64_t now)
+{
+    return (level_running(&lvl) && level_queued(&lvl, now) == 0) ? 1u : 0u;
+}
+
+static void test_one_shortfall_is_counted_once_not_every_frame_after(void)
+{
+    int64_t now = 0;
+    unsigned under = 0;
+    unsigned i;
+
+    level_note_write(&lvl, CAPACITY, now);
+
+    /* A 0.4 s stall — the board between flashing and play — then 90 s of a
+     * core that runs a little ahead of the DAC, 549 samples every 16,723 us.
+     * Before the balance was bounded, the stall's 13,000-sample deficit took
+     * minutes to repay and every one of these writes counted (BUG-0016). */
+    now += 400000;
+    under += count_underflow(now);
+    level_note_write(&lvl, 549u, now);
+    for (i = 0; i < 90u * 60u; i++) {
+        now += FRAME_US;
+        under += count_underflow(now);
+        level_note_write(&lvl, 549u, now);
+    }
+    TEST_ASSERT_EQUAL_UINT(1u, under);
+    TEST_ASSERT_GREATER_THAN_UINT32(0, level_queued(&lvl, now));
+}
+
+static void test_a_core_that_keeps_starving_counts_every_starved_write(void)
+{
+    int64_t now = 0;
+    unsigned under = 0;
+    unsigned i;
+
+    /* Half a frame per frame: the queue is genuinely dry at every write, and
+     * forgiving the deficit must not hide that. */
+    level_note_write(&lvl, FRAME / 2u, now);
+    for (i = 0; i < 100u; i++) {
+        now += FRAME_US;
+        under += count_underflow(now);
+        level_note_write(&lvl, FRAME / 2u, now);
+    }
+    TEST_ASSERT_EQUAL_UINT(100u, under);
+}
+
+static void test_a_blocked_write_pins_the_estimate_full(void)
+{
+    level_note_full(&lvl, 0);
+    TEST_ASSERT_FALSE(level_running(&lvl));
+
+    level_note_write(&lvl, FRAME, 0);
+    level_note_full(&lvl, 5000);
+    TEST_ASSERT_EQUAL_UINT32(CAPACITY, level_queued(&lvl, 5000));
+    TEST_ASSERT_EQUAL_UINT32(CAPACITY - FRAME,
+                             level_queued(&lvl, 5000 + FRAME_DRAINED_US));
+}
+
+static void test_a_dac_slower_than_nominal_never_reads_dry(void)
+{
+    int64_t now = 0;
+    unsigned under = 0;
+    unsigned i;
+
+    /* The estimate drains at 32,768 Hz; this DAC takes a frame every
+     * 17,000 us, so the writer blocks on every frame. Each block pins the
+     * estimate full, and ten minutes of it never reads empty. */
+    level_note_write(&lvl, CAPACITY, now);
+    for (i = 0; i < 10u * 60u * 59u; i++) {
+        now += 17000;
+        under += count_underflow(now);
+        level_note_write(&lvl, FRAME, now);
+        level_note_full(&lvl, now + 300);
+    }
+    TEST_ASSERT_EQUAL_UINT(0u, under);
+}
+
 static void test_null_state_is_inert(void)
 {
     level_init(NULL, RATE_HZ, CAPACITY);
     level_reset(NULL);
     level_note_write(NULL, FRAME, 0);
+    level_note_full(NULL, 0);
     TEST_ASSERT_FALSE(level_running(NULL));
     TEST_ASSERT_EQUAL_UINT32(0, level_queued(NULL, 0));
 }
@@ -153,6 +235,10 @@ int main(void)
     RUN_TEST(test_reset_stops_the_clock_and_the_next_write_restarts_it);
     RUN_TEST(test_a_timestamp_before_the_start_counts_as_no_elapsed_time);
     RUN_TEST(test_four_hours_of_writes_do_not_overflow_the_estimate);
+    RUN_TEST(test_one_shortfall_is_counted_once_not_every_frame_after);
+    RUN_TEST(test_a_core_that_keeps_starving_counts_every_starved_write);
+    RUN_TEST(test_a_blocked_write_pins_the_estimate_full);
+    RUN_TEST(test_a_dac_slower_than_nominal_never_reads_dry);
     RUN_TEST(test_null_state_is_inert);
     return UNITY_END();
 }

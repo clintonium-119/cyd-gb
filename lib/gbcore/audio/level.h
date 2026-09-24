@@ -9,9 +9,18 @@
 // and answers how many of them are likely still queued at a given instant.
 //
 // The estimate is written minus rate x elapsed, clamped to [0, capacity]. It
-// is an estimate, not an observation: it assumes the DAC drains at exactly
-// the nominal rate from the moment of the first write. The bench cross-check
-// is a scope on the DAC pin.
+// is an estimate, not an observation: it assumes the DAC drains at the
+// nominal rate. The bench cross-check is a scope on the DAC pin.
+//
+// The clamp is applied to the stored balance, not only to the answer, because
+// the real queue is bounded at both ends. A starved DAC repeats its last
+// buffer and then plays the next write late; it does not owe the samples it
+// missed, so a write forgives any deficit. A write that blocked proves the
+// queue full, so level_note_full() pins the balance there, which is the one
+// observation the driver offers and what keeps a DAC clocked a little off
+// nominal from walking the estimate to empty. Without both, one early
+// shortfall reads as empty on every later write, and the underflow count
+// becomes a latch sampled once a frame (BUG-0016).
 //
 // The speaker counts one underflow when level_running() is true and
 // level_queued() is 0 immediately before a write — the queue ran dry while
@@ -60,8 +69,18 @@ bool level_running(const level_t* l);
  */
 uint32_t level_queued(const level_t* l, int64_t now_us);
 
-/* Record a write of n_samples at now_us, starting the clock if it is stopped. */
+/*
+ * Record a write of n_samples at now_us, starting the clock if it is stopped.
+ * If the estimate had run dry before now_us, the deficit is dropped first:
+ * the queue holds n_samples afterwards, not n_samples minus what it missed.
+ */
 void level_note_write(level_t* l, uint32_t n_samples, int64_t now_us);
+
+/*
+ * The queue was observed full at now_us — a write had to wait for room. Sets
+ * the estimate to capacity at that instant. No effect while stopped.
+ */
+void level_note_full(level_t* l, int64_t now_us);
 
 #ifdef __cplusplus
 }

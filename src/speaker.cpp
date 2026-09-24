@@ -29,6 +29,11 @@ static bool ready = false;
 // One 16-bit word per channel, two channels.
 #define SPEAKER_BYTES_PER_SAMPLE 4
 
+// A write that took this long waited for a DMA buffer to come free, so the
+// queue was full when it returned. Copying a frame into a free buffer takes
+// tens of microseconds; a wait for one is up to a frame, 16.7 ms.
+#define SPEAKER_BLOCKED_US 1000u
+
 // Mid-scale in the DAC's own encoding: 128 in the high byte.
 #define SPEAKER_SILENCE_WORD ((uint16_t)(128u << 8))
 
@@ -144,6 +149,9 @@ void speaker_write_frame(const uint8_t* mono, size_t n_samples) {
 
     level_note_write(&lvl, (uint32_t)(written / SPEAKER_BYTES_PER_SAMPLE),
                      now_us);
+    if (last_wait_us >= SPEAKER_BLOCKED_US) {
+        level_note_full(&lvl, now_us + (int64_t)last_wait_us);
+    }
 }
 
 void speaker_silence() {

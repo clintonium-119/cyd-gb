@@ -55,7 +55,9 @@ void speaker_silence();
 // Any pointer may be NULL, like emu_get_frame_times().
 //
 // underflows: the queue was estimated empty at the moment a frame arrived —
-// the emulator fell behind. overflows: a write placed fewer bytes than it was
+// the emulator fell behind. One count per starved write: a shortfall is not
+// carried forward, so the count is a number of events, not a latch.
+// overflows: a write placed fewer bytes than it was
 // given before its timeout expired.
 void speaker_get_stats(uint32_t* underflows, uint32_t* overflows,
                        uint32_t* last_wait_us);
