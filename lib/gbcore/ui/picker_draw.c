@@ -24,17 +24,6 @@ static const char* const ACTION_LABEL[] = {
     "Finish setup",         /* PICKER_ROW_FINISH                    */
 };
 
-/* What confirming this row will do, in one line under the title. */
-static const char* const DETAIL_TARGET[] = {
-    "Writes it to your wildcard",
-    "Writes it to this blank cart",
-    "Drops the write you lined up",
-    "Ends setup. MENU reopens it",
-};
-#define TARGET_WILD   0
-#define TARGET_BLANK  1
-#define TARGET_CANCEL 2
-#define TARGET_FINISH 3
 
 /* The footer's buttons: A opens a title, and on its page A is held to
  * confirm and B goes back. B does nothing on the list. */
@@ -43,15 +32,13 @@ static const ui_hint_t LIST_HINTS[] = {
 };
 static const ui_hint_t DETAIL_HINTS[] = {
     { "B", "Back" },
-    { "A", "Hold to confirm" },
+    { "A", "Hold to install to cart" },
 };
 #define N_HINTS(a) ((uint8_t)(sizeof(a) / sizeof((a)[0])))
 
 #define ART_MISSING   "no art"
 #define SHOT_MISSING  "no snapshot"
 #define MARK_PREFIX   "* "
-#define SCROLL_MORE   "v"
-#define SCROLL_BACK   "^"
 
 /* ─── fonts ───────────────────────────────────────────────────────────────── */
 
@@ -90,7 +77,8 @@ int picker_layout(int16_t w, int16_t h, picker_layout_t* out)
     out->foot_y = (int16_t)(h - UI_FOOT_H);
     out->help_y = (int16_t)(out->foot_y - UI_HELP_H);
 
-    out->rows = (uint8_t)((out->help_y - PICKER_LIST_TOP) / PICKER_ROW_H);
+    /* The list has no help line: its rows run down to the hints. */
+    out->rows = (uint8_t)((out->foot_y - PICKER_LIST_TOP) / PICKER_ROW_H);
     /* The image column hugs the right edge; the titles get the rest, and a
      * title's text sits the pill's padding inside it. */
     out->list_art_x = (int16_t)(w - 4 - PICKER_ART_W);
@@ -354,14 +342,6 @@ static void draw_media(const ui_canvas_t* cv, int16_t x, int16_t y,
     }
 }
 
-/* The list's help line: the hovered game's blurb, first row only. */
-static void draw_list_help(const picker_layout_t* g, const char* desc,
-                           const ui_canvas_t* cv)
-{
-    ui_help_line(cv, g->w, g->help_y,
-                 (desc != NULL && desc[0] != '\0') ? desc : NULL);
-}
-
 /* The highlighted title's cover, and its snapshot under it. An action row has
  * neither, and leaves the column empty. */
 static void draw_list_media(const picker_t* p, const picker_layout_t* g,
@@ -373,7 +353,7 @@ static void draw_list_media(const picker_t* p, const picker_layout_t* g,
     if (cursor >= p->row_count || p->rows[cursor].kind != PICKER_ROW_GAME) {
         cv->fill(cv->ctx, TITLE_COL_W(g), PICKER_LIST_TOP,
                  (int16_t)(g->w - TITLE_COL_W(g)),
-                 (int16_t)(g->help_y - PICKER_LIST_TOP), UI_COL_BG);
+                 (int16_t)(g->foot_y - PICKER_LIST_TOP), UI_COL_BG);
         return;
     }
     draw_media(cv, g->list_art_x, g->list_art_y, p->art_state, art,
@@ -424,7 +404,6 @@ static void draw_list(const picker_t* p, const picker_layout_t* g,
         draw_row(p, g, cv, (uint16_t)(first + i));
     }
     draw_list_media(p, g, cv, art, shot);
-    draw_list_help(g, desc, cv);
     ui_hint_bar(cv, g->w, g->foot_y, LIST_HINTS, N_HINTS(LIST_HINTS));
 }
 
@@ -448,20 +427,6 @@ int16_t picker_row_overflow(const picker_t* p, const picker_layout_t* g,
                                  UI_FONT_LIST) -
                      g->list_w);
     return (over > 0) ? over : 0;
-}
-
-/* Which target wording the open row confirms. */
-static uint8_t detail_target(const picker_t* p)
-{
-    switch (p->rows[p->detail_row].kind) {
-    case PICKER_ROW_CANCEL_PENDING:
-        return TARGET_CANCEL;
-    case PICKER_ROW_FINISH:
-        return TARGET_FINISH;
-    default:
-        return (p->mode == PICKER_MODE_IMMEDIATE) ? TARGET_BLANK
-                                                  : TARGET_WILD;
-    }
 }
 
 /* The open row's title: the catalog's for a game, the action's wording
@@ -516,7 +481,7 @@ static void draw_band(const picker_t* p, const picker_layout_t* g,
     int16_t y = (int16_t)(g->band_y - lift);
     int16_t h = (int16_t)(g->band_h + lift);
     uint8_t rows = (uint8_t)(h / pitch);
-    int16_t mark_x = (int16_t)(g->detail_x + g->detail_w);
+    int16_t mark_x = (int16_t)(g->detail_x + g->detail_w + 1);
     uint8_t i;
 
     cv->fill(cv->ctx, 0, y, g->w, h, UI_COL_BG);
@@ -535,27 +500,28 @@ static void draw_band(const picker_t* p, const picker_layout_t* g,
                      UI_COL_BG);
         }
     }
+    /* More above on the first line, more below on the last, in the margin
+     * right of the text. */
     if (p->scroll > 0) {
-        cv->text(cv->ctx, SCROLL_BACK, mark_x, y, UI_FONT_SMALL_ADV, 1,
-                 UI_FONT_SMALL, UI_ALIGN_RIGHT, UI_COL_DIM, UI_COL_BG);
+        ui_caret(cv, mark_x, (int16_t)(y + ui_caret_dy(UI_FONT_DESC)), true,
+                 UI_COL_DIM);
     }
     if (p->scroll < p->scroll_max) {
-        cv->text(cv->ctx, SCROLL_MORE, mark_x,
-                 (int16_t)(y + (rows - 1) * pitch), UI_FONT_SMALL_ADV, 1,
-                 UI_FONT_SMALL, UI_ALIGN_RIGHT, UI_COL_DIM, UI_COL_BG);
+        ui_caret(cv, mark_x,
+                 (int16_t)(y + (rows - 1) * pitch + ui_caret_dy(UI_FONT_DESC)),
+                 false, UI_COL_DIM);
     }
 }
 
 /*
- * The help line's band: what confirming does, or while A is held the hold
- * bar in its place — rounded like the pill, its track and the part filled so
- * far.
+ * The help line's band: empty, or while A is held the hold bar — rounded
+ * like the pill, its track and the part filled so far.
  *
  * `grow` is a hold tick's repaint: the fill only ever gets longer while A is
  * held, so the filled part is painted over what is already there and the
  * track is left alone. Blanking the track first on every 16 ms tick, under the
  * panel's own refresh, was the flicker. The press that starts a hold lays the
- * track down, and letting go puts the words back.
+ * track down, and letting go clears it.
  */
 static void draw_bar(const picker_t* p, const picker_layout_t* g,
                      const ui_canvas_t* cv, bool grow)
@@ -566,7 +532,7 @@ static void draw_bar(const picker_t* p, const picker_layout_t* g,
     int16_t y = (int16_t)(g->help_y + 2);
 
     if (!p->hold_active) {
-        ui_help_line(cv, g->w, g->help_y, DETAIL_TARGET[detail_target(p)]);
+        ui_help_line(cv, g->w, g->help_y, NULL);
         return;
     }
     if (!grow || pct == 0) {
@@ -673,9 +639,6 @@ void picker_draw_events(const picker_t* p, const picker_layout_t* g,
         }
         if (events & PICKER_EVENT_MEDIA) {
             draw_list_media(p, g, cv, art, shot);
-        }
-        if (events & PICKER_EVENT_HELP) {
-            draw_list_help(g, desc, cv);
         }
         return;
     }

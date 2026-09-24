@@ -513,7 +513,7 @@ static void test_left_and_right_page_the_list(void)
     uint32_t t;
     int n;
 
-    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW | PICKER_EVENT_HELP,
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW,
                             press(&p, B_RIGHT, 0));
     TEST_ASSERT_EQUAL_UINT16(LIB_ROWS, list_cursor(&p.list));
     TEST_ASSERT_EQUAL_UINT16(LIB_ROWS, list_first(&p.list));
@@ -709,8 +709,7 @@ static void test_a_move_within_the_window_names_its_rows_and_media(void)
     fill_library(LIB_COUNT);
     picker_t p = fresh(PICKER_MODE_PENDING, true, false, NULL);
 
-    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_ROWS | PICKER_EVENT_MEDIA |
-                                PICKER_EVENT_HELP,
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_ROWS | PICKER_EVENT_MEDIA,
                             press(&p, B_DOWN, 0));
     TEST_ASSERT_EQUAL_UINT16(0, p.prev_cursor);
     TEST_ASSERT_EQUAL_UINT16(1, list_cursor(&p.list));
@@ -722,7 +721,7 @@ static void test_a_move_that_scrolls_the_window_redraws_it(void)
     picker_t p = fresh(PICKER_MODE_PENDING, true, false, NULL);
 
     /* Up from the top wraps to the last page. */
-    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW | PICKER_EVENT_HELP,
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW,
                             press(&p, B_UP, 0));
 }
 
@@ -731,7 +730,7 @@ static void test_opening_leaving_and_paging_redraw_the_screen(void)
     fill_library(LIB_COUNT);
     picker_t p = fresh(PICKER_MODE_PENDING, true, false, NULL);
 
-    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW | PICKER_EVENT_HELP,
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW,
                             press(&p, B_RIGHT, 0));
     press(&p, B_NONE, 10);
     TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW, press(&p, B_A, 20));

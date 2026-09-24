@@ -114,7 +114,6 @@ enum picker_event_e {
     PICKER_EVENT_BAR = 0x10,     /* the hold bar                          */
     PICKER_EVENT_MARQUEE = 0x20, /* the highlighted row only              */
     PICKER_EVENT_DONE = 0x40,
-    PICKER_EVENT_HELP = 0x80,    /* the help line: the hovered game changed */
 };
 
 /* `cat` indexes catalog_index_t.e[] and is meaningful only for
@@ -196,9 +195,9 @@ int picker_init(picker_t* p, enum picker_mode_e mode,
  * On the list, a highlighted title wider than its row (see
  * picker_set_marquee_span()) scrolls on the PICKER_MARQUEE_* timeline.
  *
- * Returns the picker_event_e bits for what changed on screen: ROWS | MEDIA |
- * HELP for a move within the window, REDRAW | HELP for one that scrolls it or
- * a page jump, REDRAW for a screen change, BAND for a scroll, BAR for any change to the hold, and
+ * Returns the picker_event_e bits for what changed on screen: ROWS | MEDIA
+ * for a move within the window, REDRAW for one that scrolls it, a page jump
+ * or a screen change, BAND for a scroll, BAR for any change to the hold, and
  * MARQUEE when the label moved. PICKER_EVENT_DONE alone once the selection
  * is final, PICKER_EVENT_NONE when nothing changed.
  */

@@ -614,6 +614,39 @@ static void test_text_is_centred_on_its_capitals_and_kept_in_its_box(void)
     TEST_ASSERT_EQUAL_INT16(2, ui_text_dy(UI_GLYPH_D, UI_FONT_HINT));
 }
 
+/* ─── scroll marks ───────────────────────────────────────────────────────── */
+
+/* The fill whose top-left is x, y, if one was made. */
+static bool filled_at(int16_t x, int16_t y)
+{
+    unsigned i;
+
+    for (i = 0; i < fk.n; i++) {
+        if (fk.log[i].op == OP_FILL && fk.log[i].x == x && fk.log[i].y == y) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void test_a_caret_points_up_or_down_from_its_apex(void)
+{
+    ui_caret(&cv, 100, 50, true, UI_COL_DIM);
+    /* Apex on the centre column at the top; the arms reach the corners at
+     * the bottom. */
+    TEST_ASSERT_TRUE(filled_at(100 + UI_CARET_W / 2, 50));
+    TEST_ASSERT_TRUE(filled_at(100, 50 + UI_CARET_H - 1));
+    TEST_ASSERT_TRUE(filled_at(100 + UI_CARET_W - 1, 50 + UI_CARET_H - 1));
+    TEST_ASSERT_FALSE(filled_at(100, 50));
+    setUp();
+    ui_caret(&cv, 100, 50, false, UI_COL_DIM);
+    TEST_ASSERT_TRUE(filled_at(100 + UI_CARET_W / 2, 50 + UI_CARET_H - 1));
+    TEST_ASSERT_TRUE(filled_at(100, 50));
+    TEST_ASSERT_TRUE(filled_at(100 + UI_CARET_W - 1, 50));
+    TEST_ASSERT_FALSE(filled_at(100, 50 + UI_CARET_H - 1));
+    TEST_ASSERT_EQUAL_UINT(0, fk.violations);
+}
+
 /* ─── letterboxed corners ────────────────────────────────────────────────── */
 
 /* A 96-square file holding an 86-row picture 5 rows down, black around it,
@@ -690,6 +723,7 @@ int main(void)
     RUN_TEST(test_a_one_row_band_masks_only_its_own_corner_run);
     RUN_TEST(test_one_row_bands_round_an_overview_row_by_row);
     RUN_TEST(test_text_is_centred_on_its_capitals_and_kept_in_its_box);
+    RUN_TEST(test_a_caret_points_up_or_down_from_its_apex);
     RUN_TEST(test_a_letterboxed_picture_is_rounded_at_its_own_corners);
     RUN_TEST(test_an_all_black_image_is_left_alone);
     return UNITY_END();

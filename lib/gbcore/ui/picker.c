@@ -264,9 +264,8 @@ uint8_t picker_input(picker_t* p, uint8_t buttons, uint32_t now_ms)
             hover(p, now_ms);
             /* A move that scrolled the window changed every row. */
             ev = (list_first(&p->list) == first)
-                     ? (uint8_t)(PICKER_EVENT_ROWS | PICKER_EVENT_MEDIA |
-                                 PICKER_EVENT_HELP)
-                     : (uint8_t)(PICKER_EVENT_REDRAW | PICKER_EVENT_HELP);
+                     ? (uint8_t)(PICKER_EVENT_ROWS | PICKER_EVENT_MEDIA)
+                     : (uint8_t)PICKER_EVENT_REDRAW;
         } else if (marquee_step(p, now_ms)) {
             ev = PICKER_EVENT_MARQUEE;
         }

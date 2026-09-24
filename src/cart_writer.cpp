@@ -23,9 +23,8 @@
 //             button word and a millis() timestamp
 //   * draw  — the display module's canvas, asked for at the per-unit
 //             game_x / game_y so the writer renders inside the game window
-//   * read  — the catalog index, the highlighted title's two images and its
-//             blurb once the highlight has settled on it, and an opened
-//             title's description
+//   * read  — the catalog index, the highlighted title's two images once the
+//             highlight has settled on it, and an opened title's description
 //
 // It reaches for nothing below itself. The names it must not mention are the
 // guard test's list, not repeated here, because that test scans this file's
@@ -50,9 +49,7 @@ static uint16_t* art;                       // 18,432 B — the box art
 static uint16_t* shot;                      // 18,432 B — the gameplay snapshot
 // The title's full description, DESC_MAX on the heap while the writer is up:
 // this translation unit links into every image, and a 4 KB static would come
-// out of DRAM that has about 15 KB to spare. NULL when it was refused. On the
-// list it holds the hovered title's catalog blurb instead, for the help line,
-// and is emptied the moment the highlight moves off that title.
+// out of DRAM that has about 15 KB to spare. NULL when it was refused.
 static char* desc;
 static picker_t picker;
 static boot_made_t made;
@@ -132,11 +129,6 @@ static enum boot_pick_e writer_run(enum writer_mode_e mode,
             break;
         }
 
-        // The highlight moved: the old title's blurb is not this one's.
-        if ((ev & PICKER_EVENT_HELP) && desc) {
-            desc[0] = '\0';
-        }
-
         // A new highlight: how far its label overflows, so the marquee
         // knows whether to run and how far.
         if (picker.screen == PICKER_SCREEN_LIST &&
@@ -179,16 +171,6 @@ static enum boot_pick_e writer_run(enum writer_mode_e mode,
                 media_logged = true;
             }
             ev |= picker_media_loaded(&picker, ci, have_art, have_shot);
-
-            // On the list, the same settle brings the help line its blurb:
-            // one catalog line, never read while Down is held.
-            if (picker.screen == PICKER_SCREEN_LIST && desc) {
-                if (catalog_read_desc(cat, idx->e[ci].offset, desc,
-                                      CATALOG_DESC_MAX) != CATALOG_OK) {
-                    desc[0] = '\0';
-                }
-                ev |= PICKER_EVENT_HELP;
-            }
         }
 
         // A title was opened: its description, once, behind the screen

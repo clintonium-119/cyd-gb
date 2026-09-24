@@ -180,13 +180,15 @@ void menu_draw_band(const ui_canvas_t* cv, const menu_band_t* b)
 {
     char line[PICKER_DESC_LINE_MAX];
     const int16_t pitch = font_pitch(UI_FONT_DESC);
+    const int16_t mark_x = (int16_t)(b->x + b->w + 1);
     uint16_t i;
 
     if (b->rows == 0) {
         return;
     }
-    cv->fill(cv->ctx, b->x, b->y, b->w, (int16_t)(b->rows * pitch),
-             UI_COL_BG);
+    /* The margin too, where the scroll marks go. */
+    cv->fill(cv->ctx, b->x, b->y, (int16_t)(b->w + 1 + UI_CARET_W),
+             (int16_t)(b->rows * pitch), UI_COL_BG);
     for (i = 0; i < b->rows; i++) {
         if (!picker_desc_line_px(b->text, &b->adv, b->w,
                                  (uint16_t)(b->first + i), line,
@@ -195,6 +197,18 @@ void menu_draw_band(const ui_canvas_t* cv, const menu_band_t* b)
         }
         cv->text(cv->ctx, line, b->x, (int16_t)(b->y + i * pitch), b->w, 1,
                  UI_FONT_DESC, UI_ALIGN_LEFT, UI_COL_TEXT, UI_COL_BG);
+    }
+    /* More above on the first line, more below on the last, as on the
+     * writer's page for a title. */
+    if (b->first > 0) {
+        ui_caret(cv, mark_x, (int16_t)(b->y + ui_caret_dy(UI_FONT_DESC)), true,
+                 UI_COL_DIM);
+    }
+    if (b->first + b->rows < b->lines) {
+        ui_caret(cv, mark_x,
+                 (int16_t)(b->y + (b->rows - 1) * pitch +
+                           ui_caret_dy(UI_FONT_DESC)),
+                 false, UI_COL_DIM);
     }
 }
 

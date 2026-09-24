@@ -453,8 +453,8 @@ static void test_the_layout_at_266_by_240(void)
     TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout(GEOM_53_W, GEOM_53_H, &g));
     TEST_ASSERT_EQUAL_INT16(220, g.foot_y);      /* 240 - 20             */
     TEST_ASSERT_EQUAL_INT16(202, g.help_y);      /* 220 - 18             */
-    TEST_ASSERT_EQUAL_UINT8(9, g.rows);          /* (202 - 4) / 20       */
-    TEST_ASSERT_EQUAL_UINT8((g.help_y - PICKER_LIST_TOP) / UI_PILL_H_LIST,
+    TEST_ASSERT_EQUAL_UINT8(10, g.rows);         /* (220 - 4) / 20       */
+    TEST_ASSERT_EQUAL_UINT8((g.foot_y - PICKER_LIST_TOP) / UI_PILL_H_LIST,
                             g.rows);
     TEST_ASSERT_EQUAL_INT16(166, g.list_art_x);  /* 266 - 4 - 96         */
     TEST_ASSERT_EQUAL_INT16(142, g.list_w);      /* 166 - 4 - 4 - 2 * 8  */
@@ -1050,13 +1050,12 @@ static void test_the_pill_hugs_a_short_title_and_stops_at_the_column(void)
     TEST_ASSERT_EQUAL_INT16(g.list_art_x - 4 - UI_PAD, fk.rlog[0].w);
 }
 
-static void test_the_list_ends_in_a_help_line_and_a_hint_bar(void)
+static void test_the_list_ends_in_a_hint_bar_and_no_help_line(void)
 {
     picker_t p;
     picker_layout_t g;
     ui_canvas_t cv = canvas_over(&fk, GEOM_53_W, GEOM_53_H);
     unsigned i;
-    bool help = false;
     bool hint = false;
 
     fill_library(LIB_COUNT);
@@ -1065,17 +1064,12 @@ static void test_the_list_ends_in_a_help_line_and_a_hint_bar(void)
     picker_draw(&p, &g, DESC_200, NULL, NULL, &cv);
     assert_sane();
     for (i = 0; i < fk.logged; i++) {
-        if (fk.log[i].y >= g.help_y && fk.log[i].y < g.foot_y) {
-            /* The blurb, from its start, in the help line's grey. */
-            TEST_ASSERT_EQUAL_INT(0, strncmp(fk.log[i].s, DESC_200, 20));
-            TEST_ASSERT_EQUAL_HEX16(UI_COL_TEXT, fk.log[i].fg);
-            help = true;
-        }
+        /* Nothing of the description on the list. */
+        TEST_ASSERT_TRUE(strncmp(fk.log[i].s, DESC_200, 20) != 0);
         if (fk.log[i].y >= g.foot_y && strcmp(fk.log[i].s, "Select") == 0) {
             hint = true;
         }
     }
-    TEST_ASSERT_TRUE(help);
     TEST_ASSERT_TRUE(hint);
     /* The hint bar's pill ends at the window's inset. */
     for (i = 0; i < fk.rlogged; i++) {
@@ -1193,14 +1187,6 @@ static void test_a_hold_tick_paints_only_the_bar_and_never_its_track(void)
     TEST_ASSERT_EQUAL_UINT(0, fk.track_fills);
 }
 
-static void test_a_help_event_paints_only_the_help_line(void)
-{
-    seq_begin();
-    sdesc = DESC_200;
-    seq_step(PICKER_EVENT_HELP);
-    assert_painted_within(0, sg.help_y, GEOM_53_W, sg.help_y + UI_HELP_H);
-}
-
 static void test_a_scroll_paints_only_the_band(void)
 {
     seq_begin();
@@ -1218,8 +1204,7 @@ static void test_a_move_paints_only_its_two_rows_and_the_image_column(void)
 
     seq_begin();
     ev = picker_input(&sp, B_DOWN, 100);
-    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_ROWS | PICKER_EVENT_MEDIA |
-                                PICKER_EVENT_HELP,
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_ROWS | PICKER_EVENT_MEDIA,
                             ev);
 
     seq_step(PICKER_EVENT_ROWS);
@@ -1394,9 +1379,8 @@ int main(void)
     RUN_TEST(test_the_list_opens_on_its_first_title);
     RUN_TEST(test_the_cursor_row_is_bold_black_on_a_white_pill);
     RUN_TEST(test_the_pill_hugs_a_short_title_and_stops_at_the_column);
-    RUN_TEST(test_the_list_ends_in_a_help_line_and_a_hint_bar);
+    RUN_TEST(test_the_list_ends_in_a_hint_bar_and_no_help_line);
     RUN_TEST(test_the_detail_page_has_hints_and_no_prompt_line);
-    RUN_TEST(test_a_help_event_paints_only_the_help_line);
     RUN_TEST(test_a_hold_tick_paints_only_the_bar_and_never_its_track);
     RUN_TEST(test_a_scroll_paints_only_the_band);
     RUN_TEST(test_a_move_paints_only_its_two_rows_and_the_image_column);

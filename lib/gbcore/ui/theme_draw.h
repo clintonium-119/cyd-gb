@@ -90,6 +90,22 @@ void ui_notice(const ui_canvas_t* cv, int16_t w, int16_t h, const char* title,
                uint8_t n);
 
 /*
+ * A scroll mark: a 7 x 4 chevron whose top-left is x, y, pointing up when
+ * `up`, else down — a band's "more above" and "more below". The 8 px font has
+ * no downward caret, so both are drawn.
+ */
+#define UI_CARET_W 7
+#define UI_CARET_H 4
+void ui_caret(const ui_canvas_t* cv, int16_t x, int16_t y, bool up,
+              uint16_t color);
+
+/*
+ * Down from the top of a line of `font` to where a caret sits on its
+ * capitals' middle.
+ */
+int16_t ui_caret_dy(uint8_t font);
+
+/*
  * Round a w x img_h image's corners, for the band of image rows
  * [row0, row0 + rows) held in px (px's first row is image row row0): every
  * pixel in the four r x r corners outside the quarter circle of radius r

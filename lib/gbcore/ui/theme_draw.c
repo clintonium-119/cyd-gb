@@ -204,6 +204,27 @@ void ui_notice(const ui_canvas_t* cv, int16_t w, int16_t h, const char* title,
     }
 }
 
+void ui_caret(const ui_canvas_t* cv, int16_t x, int16_t y, bool up,
+              uint16_t color)
+{
+    int16_t i;
+
+    /* Apex first when it points up: one pixel each side of the centre
+     * column, a row further out each row. */
+    for (i = 0; i < UI_CARET_H; i++) {
+        int16_t row = (int16_t)(y + (up ? i : UI_CARET_H - 1 - i));
+
+        cv->fill(cv->ctx, (int16_t)(x + UI_CARET_W / 2 - i), row, 1, 1, color);
+        cv->fill(cv->ctx, (int16_t)(x + UI_CARET_W / 2 + i), row, 1, 1, color);
+    }
+}
+
+int16_t ui_caret_dy(uint8_t font)
+{
+    return (int16_t)(ui_font_lead(font) +
+                     (ui_font_cap(font) - UI_CARET_H) / 2);
+}
+
 /* The corner pixels of one row of a cw-wide box starting at x0, dy rows from
  * its arc centres, that lie outside the radius. */
 static void mask_row(uint16_t* line, int16_t x0, int16_t cw, int32_t dy,
