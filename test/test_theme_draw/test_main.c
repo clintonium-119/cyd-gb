@@ -482,6 +482,20 @@ static void test_a_long_notice_title_wraps_in_font_2(void)
     TEST_ASSERT_EQUAL_UINT(0, fk.violations);
 }
 
+static void test_a_notice_without_hints_has_no_footer_and_a_four_row_body(void)
+{
+    ui_notice(&cv, W, H, "Write failed", "code -3 and a detail line long enough "
+              "to wrap over more rows than the notice will give it", true,
+              NULL, 0);
+    /* The window's fill, and nothing round: no hint bar. */
+    TEST_ASSERT_EQUAL_UINT(1, count(OP_FILL));
+    TEST_ASSERT_EQUAL_UINT(0, count(OP_ROUND));
+    TEST_ASSERT_EQUAL_UINT8(4, nth(OP_TEXT, 1)->rows);
+    TEST_ASSERT_EQUAL_UINT8(UI_FONT_ROW, nth(OP_TEXT, 1)->font);
+    TEST_ASSERT_TRUE(nth(OP_TEXT, 1)->y + nth(OP_TEXT, 1)->h <= H);
+    TEST_ASSERT_EQUAL_UINT(0, fk.violations);
+}
+
 static void test_a_notice_with_hints_ends_in_the_footer(void)
 {
     static const ui_hint_t hints[] = { { "A", "Continue" } };
@@ -610,6 +624,7 @@ int main(void)
     RUN_TEST(test_hints_that_do_not_fit_are_dropped_from_the_end);
     RUN_TEST(test_the_notice_title_is_red_only_for_an_error);
     RUN_TEST(test_a_long_notice_title_wraps_in_font_2);
+    RUN_TEST(test_a_notice_without_hints_has_no_footer_and_a_four_row_body);
     RUN_TEST(test_a_notice_with_hints_ends_in_the_footer);
     RUN_TEST(test_the_top_band_loses_its_corner_pixels_only);
     RUN_TEST(test_a_middle_band_is_untouched);

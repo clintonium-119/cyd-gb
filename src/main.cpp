@@ -22,6 +22,7 @@
 #include "cart/catalog.h"
 #include "cart/ndef.h"
 #include "cart/ntag.h"
+#include "ui/theme_draw.h"
 #include <SD.h>
 
 // The stored volume index IS the mixer's index; the two lists are declared in
@@ -67,38 +68,34 @@ static menu_cart_info_t cart_info;
 // store accepts even in all-wide glyphs, and still ends above the window's
 // bottom edge — which is what the arguments to the shared helper say below.
 
-// l1 is the condition, l2 the detail. l1 drops from font 4 to the wrapped
-// small font when the large one would not fit the window.
-static void draw_boot_screen(const char* l1, uint16_t c1, const char* l2) {
-    int16_t cx = settings.game_x + GAME_W / 2;
-    int16_t cy = settings.game_y + GAME_H / 2;
-
-    tft.fillScreen(TFT_BLACK);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(c1, TFT_BLACK);
-
-    int16_t l2_top = cy + 10;
-    if (tft.textWidth(l1, 4) <= GAME_W - 8) {
-        tft.drawString(l1, cx, cy - 20, 4);
-    } else {
-        l2_top = display_draw_wrapped(l1, cx, cy - 28, GAME_W - 8, 4, 2) + 6;
-    }
-
-    if (l2 && l2[0]) {
-        tft.setTextColor(0x7BEF, TFT_BLACK);
-        display_draw_wrapped(l2, cx, l2_top, GAME_W - 8, 4, 2);
-    }
+// l1 is the condition, l2 the detail: the theme's notice, white on black
+// with a grey detail, and red only when it is an error. l1 drops from font 4
+// to the wrapped small font when the large one would not fit the window.
+static void notice(const char* l1, const char* l2, bool is_error) {
+    display_clear(UI_COL_BG);
+    ui_notice(display_canvas(settings.game_x, settings.game_y), GAME_W, GAME_H,
+              l1, l2, is_error, NULL, 0);
 }
 
 // Halt means halt: no retry loop and no fallback browser. The DMG's
 // mechanical interlock already forces a power-off to change carts, so the
 // power cycle is the retry.
-static void halt_screen(const char* l1, const char* l2) {
+static void halt(const char* l1, const char* l2, bool is_error) {
     Serial.printf("[BOOT] halt: %s %s\n", l1, l2 ? l2 : "");
-    draw_boot_screen(l1, TFT_RED, l2);
+    notice(l1, l2, is_error);
     for (;;) {
         delay(1000);
     }
+}
+
+// Something went wrong: the card, the tag, the file or a write.
+static void halt_screen(const char* l1, const char* l2) {
+    halt(l1, l2, true);
+}
+
+// Nothing went wrong: a write that worked, or what to insert next.
+static void halt_notice(const char* l1, const char* l2) {
+    halt(l1, l2, false);
 }
 
 // ─── Tag read ───────────────────────────────────────────────────────────────
@@ -191,7 +188,7 @@ static void show_pending_banner() {
         l2 = "insert the cart to rewrite";
     }
 
-    draw_boot_screen(l1, 0x07E0, l2);
+    notice(l1, l2, false);
     delay(PENDING_BANNER_MS);
 }
 
@@ -420,7 +417,7 @@ static void load_and_run(const char* name) {
         halt_screen("Not found:", tag_payload[0] ? tag_payload : name);
     }
 
-    draw_boot_screen("Loading...", 0x07E0, "");
+    notice("Loading...", "", false);
 
     // Basename, not the path: it is what the store records and compares, and
     // deriving it here keeps it in step with cur_path instead of repeating the
@@ -677,7 +674,7 @@ void loop() {
                                                 &dev_sel);
         Serial.printf("[DEV] writer pick=%d rom=%s target=%u\n",
                       (int)dev_pick, dev_sel.rom, (unsigned)dev_sel.target);
-        halt_screen("Dev writer", "Nothing written. Power off.");
+        halt_notice("Dev writer", "Nothing written. Power off.");
     }
 #endif
 
@@ -707,19 +704,19 @@ void loop() {
             halt_screen("Unreadable tag", tag_payload);
             break;
         case BOOT_HALT_BLANK:
-            halt_screen("Blank cart. Use your MENU cart.", "");
+            halt_notice("Blank cart. Use your MENU cart.", "");
             break;
         case BOOT_HALT_INSERT_WILDCARD:
-            halt_screen("Insert your wildcard", "");
+            halt_notice("Insert your wildcard", "");
             break;
         case BOOT_HALT_INSERT_BLANK:
-            halt_screen("Insert a blank cart", "");
+            halt_notice("Insert a blank cart", "");
             break;
         case BOOT_HALT_INSERT_GAME_CART:
-            halt_screen("Insert a game cart", "");
+            halt_notice("Insert a game cart", "");
             break;
         case BOOT_HALT_SETUP_INSERT_BLANK:
-            halt_screen("Setup: insert a blank cart", "");
+            halt_notice("Setup: insert a blank cart", "");
             break;
 
         // Re-entry already happened above; a second request means the tag
@@ -734,7 +731,7 @@ void loop() {
                 snprintf(detail, sizeof(detail), "code %d", rc);
                 halt_screen("Write failed", detail);
             }
-            halt_screen("MENU cart made. Power off.", "");
+            halt_notice("MENU cart made. Power off.", "");
             break;
         case BOOT_WIZARD_ADOPT_MENU:
             rc = provision_wizard_adopt(BOOT_CLASS_MENU, &in.flags);
@@ -742,7 +739,7 @@ void loop() {
                 snprintf(detail, sizeof(detail), "code %d", rc);
                 halt_screen("Write failed", detail);
             }
-            halt_screen("Menu cart adopted. Power off.", "");
+            halt_notice("Menu cart adopted. Power off.", "");
             break;
         case BOOT_WIZARD_ADOPT_WILD:
             rc = provision_wizard_adopt(BOOT_CLASS_WILD, &in.flags);
@@ -750,7 +747,7 @@ void loop() {
                 snprintf(detail, sizeof(detail), "code %d", rc);
                 halt_screen("Write failed", detail);
             }
-            halt_screen("Wildcard adopted. Power off.", "");
+            halt_notice("Wildcard adopted. Power off.", "");
             break;
 
         // One call site for the writer, all three actions that open it.
@@ -773,7 +770,7 @@ void loop() {
                         snprintf(detail, sizeof(detail), "code %d", rc);
                         halt_screen("Write failed", detail);
                     }
-                    halt_screen(pa == BOOT_PICK_WRITE_WILD
+                    halt_notice(pa == BOOT_PICK_WRITE_WILD
                                     ? "Wildcard made. Power off."
                                     : "Game cart made. Power off.", "");
                     break;
@@ -783,21 +780,21 @@ void loop() {
                         snprintf(detail, sizeof(detail), "code %d", rc);
                         halt_screen("Write failed", detail);
                     }
-                    halt_screen("Setup finished. Power off.", "");
+                    halt_notice("Setup finished. Power off.", "");
                     break;
                 case BOOT_PICK_RECORD_PENDING:
                     settings_pending_save(&sel);
-                    halt_screen("Power off, insert your wildcard, power on.", "");
+                    halt_notice("Power off, insert your wildcard, power on.", "");
                     break;
                 case BOOT_PICK_CLEAR_PENDING:
                     settings_pending_clear();
-                    halt_screen("Pending write cancelled. Power off.", "");
+                    halt_notice("Pending write cancelled. Power off.", "");
                     break;
                 case BOOT_PICK_HALT_MENU_CART:
-                    halt_screen("Menu cart", "");
+                    halt_notice("Menu cart", "");
                     break;
                 case BOOT_PICK_HALT_NO_SELECTION:
-                    halt_screen("Setup: insert a blank cart", "");
+                    halt_notice("Setup: insert a blank cart", "");
                     break;
                 case BOOT_PICK_INVALID:
                     halt_screen("Write failed", "");
@@ -806,11 +803,11 @@ void loop() {
             break;
 
         case BOOT_EXECUTE_PENDING:
-            draw_boot_screen("Writing cart...", 0x07E0, "");
+            notice("Writing cart...", "", false);
             rc = provision_execute_pending(&in.pending, in.cls);
             if (rc == NTAG_ERR_AUTH) {
                 // Someone else's tag. The record stays for the right one.
-                halt_screen("Insert your wildcard", "");
+                halt_notice("Insert your wildcard", "");
             }
             if (rc != 0) {
                 snprintf(detail, sizeof(detail), "code %d", rc);
