@@ -666,9 +666,18 @@ void loop() {
     //
     //   PLATFORMIO_BUILD_FLAGS=-DDEV_WRITER pio run -e cyd
     //
+    // Add -DDEV_WRITER_SETUP for the first-boot wizard's view of it instead:
+    // the starters only, with the wildcard counted as done so Finish setup is
+    // on the list too.
     {
         boot_selection_t dev_sel = {};
-        enum boot_pick_e dev_pick = writer_open(WRITER_MODE_PENDING,
+#ifdef DEV_WRITER_SETUP
+        const enum writer_mode_e dev_mode = WRITER_MODE_IMMEDIATE;
+        in.flags.wild_done = true;
+#else
+        const enum writer_mode_e dev_mode = WRITER_MODE_PENDING;
+#endif
+        enum boot_pick_e dev_pick = writer_open(dev_mode,
                                                 cat_ok ? &cat : NULL,
                                                 &in.flags, in.pending_set,
                                                 &dev_sel);
