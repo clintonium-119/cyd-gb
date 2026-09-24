@@ -122,14 +122,22 @@ static enum boot_pick_e writer_run(enum writer_mode_e mode,
             break;
         }
 
-        // A title was opened: its cover, its snapshot and its description are
-        // wanted once, behind the screen transition rather than mid-scroll.
-        if (picker_media_due(&picker, &ci)) {
+        // The highlight settled on a title: its cover and snapshot.
+        if (picker_media_due(&picker, now, &ci)) {
             bool have_art =
                 sd_media_read(ART_PATH, idx->e[ci].filename, art, PICKER_ART_PX);
             bool have_shot = sd_media_read(SHOT_PATH, idx->e[ci].filename, shot,
                                            PICKER_ART_PX);
 
+            if (picker_media_loaded(&picker, ci, have_art, have_shot) ==
+                PICKER_EVENT_REDRAW) {
+                ev = PICKER_EVENT_REDRAW;
+            }
+        }
+
+        // A title was opened: its description, once, behind the screen
+        // transition rather than mid-scroll.
+        if (picker_desc_due(&picker, &ci)) {
             // The full text from /desc, else the catalog's blurb.
             if (desc && !sd_desc_read(idx->e[ci].filename, desc, DESC_MAX)
                 && catalog_read_desc(cat, idx->e[ci].offset, desc, DESC_MAX) !=
@@ -142,11 +150,7 @@ static enum boot_pick_e writer_run(enum writer_mode_e mode,
                 &picker,
                 picker_page_lines(&geom, desc && desc[0] ? desc : NULL),
                 geom.band_rows);
-
-            if (picker_media_loaded(&picker, ci, have_art, have_shot) ==
-                PICKER_EVENT_REDRAW) {
-                ev = PICKER_EVENT_REDRAW;
-            }
+            ev = PICKER_EVENT_REDRAW;
         }
 
         if (ev == PICKER_EVENT_REDRAW) {

@@ -542,12 +542,13 @@ static void test_opening_a_title_requests_its_media_exactly_once(void)
     fill_library(LIB_COUNT);
     picker_t p = fresh(PICKER_MODE_PENDING, true, false, NULL);
 
+    /* Opened before the settle ran out, so the page asks straight away. */
     open_row(&p, 2, 0);
-    TEST_ASSERT_TRUE(picker_media_due(&p, &idx));
+    TEST_ASSERT_TRUE(picker_media_due(&p, 10, &idx));
     TEST_ASSERT_EQUAL_UINT16(2, idx);
 
-    /* An edge, not a timer: asked once and not again. */
-    TEST_ASSERT_FALSE(picker_media_due(&p, &idx));
+    /* Asked once and not again. */
+    TEST_ASSERT_FALSE(picker_media_due(&p, 1000, &idx));
 }
 
 static void test_a_media_report_sets_each_image_state(void)
@@ -558,9 +559,10 @@ static void test_a_media_report_sets_each_image_state(void)
     picker_t p = fresh(PICKER_MODE_PENDING, true, false, NULL);
 
     open_row(&p, 0, 0);
-    TEST_ASSERT_TRUE(picker_media_due(&p, &idx));
+    TEST_ASSERT_TRUE(picker_media_due(&p, 10, &idx));
 
-    /* A report for a title the page has left is stale and changes nothing. */
+    /* A report for a title the highlight has left is stale and changes
+     * nothing. */
     TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_NONE,
                             picker_media_loaded(&p, 99, true, true));
     TEST_ASSERT_EQUAL_UINT8(PICKER_MEDIA_LOADING, p.art_state);
@@ -573,7 +575,7 @@ static void test_a_media_report_sets_each_image_state(void)
     TEST_ASSERT_EQUAL_UINT8(PICKER_MEDIA_MISSING, p.shot_state);
 }
 
-static void test_an_action_row_never_requests_media(void)
+static void test_an_action_row_never_requests_media_or_a_description(void)
 {
     uint16_t idx = 0;
 
@@ -581,30 +583,122 @@ static void test_an_action_row_never_requests_media(void)
     picker_t finish = fresh(PICKER_MODE_IMMEDIATE, true, false, NULL);
     picker_t cancel = fresh(PICKER_MODE_PENDING, true, true, NULL);
 
+    /* Highlighted long past the settle, on the list. */
+    TEST_ASSERT_FALSE(picker_media_due(&finish, 5000, &idx));
+    TEST_ASSERT_FALSE(picker_media_due(&cancel, 5000, &idx));
+
     open_row(&finish, 0, 0);
     TEST_ASSERT_EQUAL_UINT8(PICKER_ROW_FINISH, finish.rows[0].kind);
-    TEST_ASSERT_FALSE(picker_media_due(&finish, &idx));
+    TEST_ASSERT_FALSE(picker_media_due(&finish, 5000, &idx));
+    TEST_ASSERT_FALSE(picker_desc_due(&finish, &idx));
 
     open_row(&cancel, 0, 0);
-    TEST_ASSERT_FALSE(picker_media_due(&cancel, &idx));
+    TEST_ASSERT_FALSE(picker_media_due(&cancel, 5000, &idx));
+    TEST_ASSERT_FALSE(picker_desc_due(&cancel, &idx));
 }
 
-static void test_a_report_that_arrives_after_b_is_ignored(void)
+static void test_hovered_media_is_due_once_after_the_settle(void)
+{
+    uint16_t idx = 0xFFFF;
+
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_PENDING, true, false, NULL);
+
+    press(&p, B_DOWN, 1000);
+    press(&p, B_NONE, 1001);
+    TEST_ASSERT_FALSE(picker_media_due(&p, 1000 + PICKER_MEDIA_SETTLE_MS - 1,
+                                       &idx));
+    TEST_ASSERT_TRUE(picker_media_due(&p, 1000 + PICKER_MEDIA_SETTLE_MS,
+                                      &idx));
+    TEST_ASSERT_EQUAL_UINT16(1, idx);
+    TEST_ASSERT_FALSE(picker_media_due(&p, 5000, &idx));
+}
+
+static void test_a_move_inside_the_settle_restarts_it(void)
+{
+    uint16_t idx = 0xFFFF;
+
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_PENDING, true, false, NULL);
+
+    press(&p, B_DOWN, 1000);
+    press(&p, B_NONE, 1001);
+    press(&p, B_DOWN, 1040);
+    press(&p, B_NONE, 1041);
+    TEST_ASSERT_FALSE(picker_media_due(&p, 1000 + PICKER_MEDIA_SETTLE_MS,
+                                       &idx));
+    TEST_ASSERT_TRUE(picker_media_due(&p, 1040 + PICKER_MEDIA_SETTLE_MS,
+                                      &idx));
+    TEST_ASSERT_EQUAL_UINT16(2, idx);
+}
+
+static void test_a_move_resets_both_images_and_rearms_the_request(void)
 {
     uint16_t idx = 0;
 
     fill_library(LIB_COUNT);
     picker_t p = fresh(PICKER_MODE_PENDING, true, false, NULL);
 
-    open_row(&p, 0, 0);
-    TEST_ASSERT_TRUE(picker_media_due(&p, &idx));
-    press(&p, B_B, 100);
-    TEST_ASSERT_EQUAL_UINT8(PICKER_SCREEN_LIST, p.screen);
+    TEST_ASSERT_TRUE(picker_media_due(&p, 100, &idx));
+    picker_media_loaded(&p, idx, true, true);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_MEDIA_READY, p.art_state);
 
-    /* The load finished after the page closed. Taking it would paint the
-     * previous title's cover onto whatever opens next. */
+    press(&p, B_DOWN, 200);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_MEDIA_LOADING, p.art_state);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_MEDIA_LOADING, p.shot_state);
+    TEST_ASSERT_TRUE(picker_media_due(&p, 200 + PICKER_MEDIA_SETTLE_MS,
+                                      &idx));
+    TEST_ASSERT_EQUAL_UINT16(1, idx);
+}
+
+static void test_a_report_for_a_title_no_longer_highlighted_is_ignored(void)
+{
+    uint16_t idx = 0;
+
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_PENDING, true, false, NULL);
+
+    TEST_ASSERT_TRUE(picker_media_due(&p, 100, &idx));
+    press(&p, B_DOWN, 200);
+
+    /* The load finished after the highlight moved on. Taking it would paint
+     * the previous title's cover beside the current one. */
     TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_NONE,
                             picker_media_loaded(&p, idx, true, true));
+    TEST_ASSERT_EQUAL_UINT8(PICKER_MEDIA_LOADING, p.art_state);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_MEDIA_LOADING, p.shot_state);
+}
+
+static void test_opening_a_settled_title_keeps_its_images(void)
+{
+    uint16_t idx = 0;
+    uint16_t d = 0xFFFF;
+
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_PENDING, true, false, NULL);
+
+    TEST_ASSERT_TRUE(picker_media_due(&p, 100, &idx));
+    picker_media_loaded(&p, idx, true, false);
+    TEST_ASSERT_FALSE(picker_desc_due(&p, &d));
+
+    open_row(&p, 0, 200);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_MEDIA_READY, p.art_state);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_MEDIA_MISSING, p.shot_state);
+    TEST_ASSERT_FALSE(picker_media_due(&p, 300, &idx));
+
+    /* The description is wanted once per open. */
+    TEST_ASSERT_TRUE(picker_desc_due(&p, &d));
+    TEST_ASSERT_EQUAL_UINT16(0, d);
+    TEST_ASSERT_FALSE(picker_desc_due(&p, &d));
+
+    /* B keeps the images, because the highlight has not moved; opening again
+     * asks for the description again. */
+    press(&p, B_B, 400);
+    press(&p, B_NONE, 401);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_MEDIA_READY, p.art_state);
+    TEST_ASSERT_FALSE(picker_desc_due(&p, &d));
+    open_row(&p, 0, 500);
+    TEST_ASSERT_TRUE(picker_desc_due(&p, &d));
 }
 
 /* ─── argument and empty cases ────────────────────────────────────────────── */
@@ -667,8 +761,12 @@ int main(void)
     RUN_TEST(test_left_and_right_page_the_list);
     RUN_TEST(test_opening_a_title_requests_its_media_exactly_once);
     RUN_TEST(test_a_media_report_sets_each_image_state);
-    RUN_TEST(test_an_action_row_never_requests_media);
-    RUN_TEST(test_a_report_that_arrives_after_b_is_ignored);
+    RUN_TEST(test_an_action_row_never_requests_media_or_a_description);
+    RUN_TEST(test_hovered_media_is_due_once_after_the_settle);
+    RUN_TEST(test_a_move_inside_the_settle_restarts_it);
+    RUN_TEST(test_a_move_resets_both_images_and_rearms_the_request);
+    RUN_TEST(test_a_report_for_a_title_no_longer_highlighted_is_ignored);
+    RUN_TEST(test_opening_a_settled_title_keeps_its_images);
     RUN_TEST(test_a_wizard_with_no_starter_is_empty);
     RUN_TEST(test_init_rejects_bad_arguments);
     return UNITY_END();

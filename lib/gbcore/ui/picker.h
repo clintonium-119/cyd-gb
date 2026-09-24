@@ -4,9 +4,9 @@
 //
 // Which rows exist for a given mode, what the D-pad, A and B do on the list
 // and on a title's detail page, how far the detail page has scrolled, how long
-// A has to be held before an action counts as confirmed, when a title's cover,
-// snapshot and description are wanted, and the {rom, target} selection the boot
-// flow gets back. Plain values in — a joypad word and a millisecond timestamp —
+// A has to be held before an action counts as confirmed, when the highlighted
+// title's cover and snapshot and an opened title's description are wanted, and
+// the {rom, target} selection the boot flow gets back. Plain values in — a joypad word and a millisecond timestamp —
 // events out. The Arduino binding polls it and draws it; the host suite drives
 // it with literal timestamps.
 //
@@ -50,6 +50,12 @@ extern "C" {
  * make the band scroll off into nothing. Well above the roughly 8 lines a
  * 200-byte description and two stacked images actually need. */
 #define PICKER_SCROLL_MAX_LINES 64
+
+/* How long the highlight has to stay on a game before its cover and snapshot
+ * are read. Long enough that a held Down does not read the card at every step
+ * it passes; short enough that the images seem to follow the cursor. A bench
+ * figure. */
+#define PICKER_MEDIA_SETTLE_MS 50
 
 /* Cancel pending write, or Finish setup — one per mode, never both. */
 #define PICKER_ACTION_MAX 1
@@ -127,6 +133,8 @@ typedef struct picker_s {
     uint8_t shot_state;
     uint16_t media_cat;
     bool media_asked;
+    uint32_t moved_ms;    /* when the highlight last moved           */
+    bool desc_asked;
     uint8_t pick;
     boot_selection_t sel;
 } picker_t;
@@ -145,7 +153,8 @@ typedef struct picker_s {
  * consistent so every other call is a safe no-op. `made` may be NULL, in
  * which case no row is marked.
  *
- * There is no timestamp here: nothing is timed until a detail page opens.
+ * There is no timestamp here: the first highlight counts as having settled
+ * at time 0.
  */
 int picker_init(picker_t* p, enum picker_mode_e mode,
                 const catalog_index_t* cat, bool wild_done, bool pending_set,
@@ -181,17 +190,24 @@ int picker_set_scroll_span(picker_t* p, uint16_t page_lines,
                            uint8_t band_rows);
 
 /*
- * Whether the open title's cover, snapshot and description should be fetched
- * now. True exactly once per opened title — the caller loads all three and
- * reports back through picker_media_loaded() — and never for an action row.
- * It is an edge, not a timer: media is only ever wanted because someone
- * deliberately opened a title.
+ * Whether the highlighted title's cover and snapshot should be fetched now.
+ * True once per highlight on a game row, once it has been still for
+ * PICKER_MEDIA_SETTLE_MS — on the list, or straight away on the detail page of
+ * a title opened before that. Never for an action row. The caller loads both
+ * and reports back through picker_media_loaded(). A cursor move re-arms it.
  */
-bool picker_media_due(picker_t* p, uint16_t* cat_idx);
+bool picker_media_due(picker_t* p, uint32_t now_ms, uint16_t* cat_idx);
 
 /*
- * The answer to that request. A report for a catalog entry whose page has
- * already been left is stale and is ignored, so a slow load cannot paint the
+ * Whether the opened title's description should be fetched now. True once
+ * each time a game row's detail page opens, and never on the list: the
+ * description is only wanted because someone deliberately opened a title.
+ */
+bool picker_desc_due(picker_t* p, uint16_t* cat_idx);
+
+/*
+ * The answer to a media request. A report for a catalog entry that is no
+ * longer highlighted is stale and is ignored, so a slow load cannot paint the
  * wrong cover. Returns PICKER_EVENT_REDRAW when the report was taken.
  */
 uint8_t picker_media_loaded(picker_t* p, uint16_t cat_idx, bool art_ok,

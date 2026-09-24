@@ -155,21 +155,30 @@ static void settle(picker_t* p)
     p->hold_active = false;
 }
 
-/* Open the highlighted row's detail page. */
-static void open_detail(picker_t* p)
+/* A new highlight: its images are not loaded yet, and the settle before they
+ * are asked for starts now. */
+static void hover(picker_t* p, uint32_t now_ms)
 {
     const picker_row_t* row = cursor_row(p);
 
+    p->media_asked = false;
+    p->art_state = PICKER_MEDIA_LOADING;
+    p->shot_state = PICKER_MEDIA_LOADING;
+    p->media_cat = (row != NULL) ? row->cat : 0;
+    p->moved_ms = now_ms;
+}
+
+/* Open the highlighted row's detail page. Its images are the highlight's,
+ * already loaded or on their way, so only the description is asked for. */
+static void open_detail(picker_t* p)
+{
     p->detail_row = list_cursor(&p->list);
     p->screen = PICKER_SCREEN_DETAIL;
     p->hold_active = false;
     p->hold_elapsed_ms = 0;
     p->scroll = 0;
     p->scroll_dir = 0;
-    p->media_asked = false;
-    p->art_state = PICKER_MEDIA_LOADING;
-    p->shot_state = PICKER_MEDIA_LOADING;
-    p->media_cat = (row != NULL) ? row->cat : 0;
+    p->desc_asked = false;
 }
 
 int picker_init(picker_t* p, enum picker_mode_e mode,
@@ -192,6 +201,7 @@ int picker_init(picker_t* p, enum picker_mode_e mode,
 
     build_rows(p, wild_done, pending_set);
     list_init(&p->list, p->row_count, rows_visible);
+    hover(p, 0);
     if (p->row_count == 0) {
         return PICKER_ERR_EMPTY;
     }
@@ -215,6 +225,7 @@ uint8_t picker_input(picker_t* p, uint8_t buttons, uint32_t now_ms)
     if (p->screen == PICKER_SCREEN_LIST) {
         if (list_input(&p->list, (uint8_t)(buttons & PICKER_DPAD_MASK),
                        now_ms) == LIST_EVENT_MOVED) {
+            hover(p, now_ms);
             ev = PICKER_EVENT_REDRAW;
         }
         if ((pressed & COMBO_BTN_A) == 0 || cursor_row(p) == NULL) {
@@ -297,26 +308,46 @@ int picker_set_scroll_span(picker_t* p, uint16_t page_lines,
     return PICKER_OK;
 }
 
-bool picker_media_due(picker_t* p, uint16_t* cat_idx)
+bool picker_media_due(picker_t* p, uint32_t now_ms, uint16_t* cat_idx)
 {
     const picker_row_t* row;
 
-    if (p == NULL || cat_idx == NULL) {
+    if (p == NULL || cat_idx == NULL || p->media_asked) {
         return false;
     }
-    if (p->screen != PICKER_SCREEN_DETAIL || p->media_asked) {
+    /* The detail page is always the highlighted row's, because the cursor
+     * cannot move under it. */
+    row = cursor_row(p);
+    if (row == NULL || row->kind != PICKER_ROW_GAME) {
         return false;
     }
-    if (p->detail_row >= p->row_count) {
+    if (p->screen == PICKER_SCREEN_LIST) {
+        if (now_ms - p->moved_ms < (uint32_t)PICKER_MEDIA_SETTLE_MS) {
+            return false;
+        }
+    } else if (p->screen != PICKER_SCREEN_DETAIL) {
+        return false;
+    }
+    p->media_asked = true;
+    p->media_cat = row->cat;
+    *cat_idx = p->media_cat;
+    return true;
+}
+
+bool picker_desc_due(picker_t* p, uint16_t* cat_idx)
+{
+    const picker_row_t* row;
+
+    if (p == NULL || cat_idx == NULL || p->desc_asked ||
+        p->screen != PICKER_SCREEN_DETAIL || p->detail_row >= p->row_count) {
         return false;
     }
     row = &p->rows[p->detail_row];
     if (row->kind != PICKER_ROW_GAME) {
         return false;
     }
-    p->media_asked = true;
-    p->media_cat = row->cat;
-    *cat_idx = p->media_cat;
+    p->desc_asked = true;
+    *cat_idx = row->cat;
     return true;
 }
 
@@ -326,10 +357,11 @@ uint8_t picker_media_loaded(picker_t* p, uint16_t cat_idx, bool art_ok,
     if (p == NULL) {
         return PICKER_EVENT_NONE;
     }
-    /* A report for a page that has already been left is stale: taking it
-     * would paint the previous title's cover under the current one. */
-    if (p->screen != PICKER_SCREEN_DETAIL || !p->media_asked ||
-        cat_idx != p->media_cat) {
+    /* A report for a title the highlight has already left is stale: taking
+     * it would paint the previous title's cover beside the current one. A
+     * move clears media_asked, so this also covers a move onto an action
+     * row. */
+    if (!p->media_asked || cat_idx != p->media_cat) {
         return PICKER_EVENT_NONE;
     }
     p->art_state =

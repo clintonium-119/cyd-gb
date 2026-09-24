@@ -295,7 +295,7 @@ static void run_detail(int16_t w, int16_t h, enum picker_mode_e mode,
     picker_input(&p, B_NONE, t++);
     TEST_ASSERT_EQUAL_UINT8(PICKER_SCREEN_DETAIL, p.screen);
 
-    if (picker_media_due(&p, &idx)) {
+    if (picker_media_due(&p, t, &idx)) {
         picker_media_loaded(&p, idx, art_state == PICKER_MEDIA_READY,
                             shot_state == PICKER_MEDIA_READY);
         /* A state left LOADING is the window between the request and the
