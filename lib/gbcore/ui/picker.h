@@ -57,6 +57,13 @@ extern "C" {
  * figure. */
 #define PICKER_MEDIA_SETTLE_MS 50
 
+/* The highlighted title's marquee, when it is wider than its row: still for
+ * DELAY after the highlight lands, then one pixel every STEP (about 25 px/s)
+ * to the end, still for PAUSE, and back to the start. Bench figures. */
+#define PICKER_MARQUEE_DELAY_MS 1000
+#define PICKER_MARQUEE_STEP_MS  40
+#define PICKER_MARQUEE_PAUSE_MS 1000
+
 /* Cancel pending write, or Finish setup — one per mode, never both. */
 #define PICKER_ACTION_MAX 1
 
@@ -94,10 +101,19 @@ enum picker_media_e {
     PICKER_MEDIA_MISSING,
 };
 
+/*
+ * What changed, as bits, so the draw repaints only that part of the screen.
+ * REDRAW is the whole screen and subsumes the rest; DONE comes alone.
+ */
 enum picker_event_e {
     PICKER_EVENT_NONE = 0,
-    PICKER_EVENT_REDRAW,
-    PICKER_EVENT_DONE,
+    PICKER_EVENT_REDRAW = 0x01,  /* the whole screen                      */
+    PICKER_EVENT_ROWS = 0x02,    /* the rows at prev_cursor and the cursor */
+    PICKER_EVENT_MEDIA = 0x04,   /* the image slots                       */
+    PICKER_EVENT_BAND = 0x08,    /* the detail page's description band    */
+    PICKER_EVENT_BAR = 0x10,     /* the hold bar                          */
+    PICKER_EVENT_MARQUEE = 0x20, /* the highlighted row only              */
+    PICKER_EVENT_DONE = 0x40,
 };
 
 /* `cat` indexes catalog_index_t.e[] and is meaningful only for
@@ -119,6 +135,7 @@ typedef struct picker_s {
     picker_row_t rows[PICKER_ROWS_MAX];
     uint16_t row_count;
     list_state_t list;
+    uint16_t prev_cursor; /* the row the last move left             */
     uint8_t screen;
     uint16_t detail_row;
     uint16_t scroll;      /* the band's first visible line          */
@@ -135,6 +152,9 @@ typedef struct picker_s {
     bool media_asked;
     uint32_t moved_ms;    /* when the highlight last moved           */
     bool desc_asked;
+    int16_t marquee_px;   /* how far the highlighted label has moved */
+    int16_t marquee_span; /* how far it overflows its row, 0 = fits  */
+    uint32_t marquee_t0;  /* when the current cycle started          */
     uint8_t pick;
     boot_selection_t sel;
 } picker_t;
@@ -172,8 +192,14 @@ int picker_init(picker_t* p, enum picker_mode_e mode,
  * fresh press, so the A that opened the page cannot confirm it, and releasing
  * early resets it to zero.
  *
- * Returns PICKER_EVENT_REDRAW when something on screen changed,
- * PICKER_EVENT_DONE once the selection is final, PICKER_EVENT_NONE otherwise.
+ * On the list, a highlighted title wider than its row (see
+ * picker_set_marquee_span()) scrolls on the PICKER_MARQUEE_* timeline.
+ *
+ * Returns the picker_event_e bits for what changed on screen: ROWS | MEDIA
+ * for a move within the window, REDRAW for one that scrolls it, a page jump
+ * or a screen change, BAND for a scroll, BAR for any change to the hold, and
+ * MARQUEE when the label moved. PICKER_EVENT_DONE alone once the selection
+ * is final, PICKER_EVENT_NONE when nothing changed.
  */
 uint8_t picker_input(picker_t* p, uint8_t buttons, uint32_t now_ms);
 
@@ -188,6 +214,14 @@ uint8_t picker_hold_pct(const picker_t* p);
  */
 int picker_set_scroll_span(picker_t* p, uint16_t page_lines,
                            uint8_t band_rows);
+
+/*
+ * How many pixels the highlighted label runs past its row, 0 when it fits.
+ * The layout module measures it, because this module holds no geometry; the
+ * caller hands it over after each move. A move resets it to 0, so a short
+ * title never inherits a long one's scroll.
+ */
+int picker_set_marquee_span(picker_t* p, int16_t overflow_px);
 
 /*
  * Whether the highlighted title's cover and snapshot should be fetched now.
@@ -208,7 +242,7 @@ bool picker_desc_due(picker_t* p, uint16_t* cat_idx);
 /*
  * The answer to a media request. A report for a catalog entry that is no
  * longer highlighted is stale and is ignored, so a slow load cannot paint the
- * wrong cover. Returns PICKER_EVENT_REDRAW when the report was taken.
+ * wrong cover. Returns PICKER_EVENT_MEDIA when the report was taken.
  */
 uint8_t picker_media_loaded(picker_t* p, uint16_t cat_idx, bool art_ok,
                             bool shot_ok);

@@ -124,6 +124,34 @@ static bool scroll_step(picker_t* p, uint8_t dir_bits, uint32_t now_ms)
     return p->scroll != before;
 }
 
+/*
+ * Move the highlighted label along its timeline: still, scrolling, still at
+ * the end, then back to the start. Returns true when it moved.
+ */
+static bool marquee_step(picker_t* p, uint32_t now_ms)
+{
+    int16_t before = p->marquee_px;
+    uint32_t t = now_ms - p->marquee_t0;
+    uint32_t run = (uint32_t)p->marquee_span * PICKER_MARQUEE_STEP_MS;
+
+    if (p->marquee_span <= 0) {
+        return false;
+    }
+    if (t < (uint32_t)PICKER_MARQUEE_DELAY_MS) {
+        p->marquee_px = 0;
+    } else if (t < (uint32_t)PICKER_MARQUEE_DELAY_MS + run) {
+        p->marquee_px =
+            (int16_t)((t - PICKER_MARQUEE_DELAY_MS) / PICKER_MARQUEE_STEP_MS);
+    } else if (t < (uint32_t)PICKER_MARQUEE_DELAY_MS + run +
+                       PICKER_MARQUEE_PAUSE_MS) {
+        p->marquee_px = p->marquee_span;
+    } else {
+        p->marquee_px = 0;
+        p->marquee_t0 = now_ms;
+    }
+    return p->marquee_px != before;
+}
+
 /* Turn the open title into the selection the boot flow reads back. What the
  * selection means is the decision table's business; this only says what was
  * chosen. */
@@ -160,6 +188,10 @@ static void settle(picker_t* p)
 static void hover(picker_t* p, uint32_t now_ms)
 {
     const picker_row_t* row = cursor_row(p);
+
+    p->marquee_px = 0;
+    p->marquee_span = 0;
+    p->marquee_t0 = now_ms;
 
     p->media_asked = false;
     p->art_state = PICKER_MEDIA_LOADING;
@@ -223,10 +255,19 @@ uint8_t picker_input(picker_t* p, uint8_t buttons, uint32_t now_ms)
     }
 
     if (p->screen == PICKER_SCREEN_LIST) {
+        uint16_t was = list_cursor(&p->list);
+        uint16_t first = list_first(&p->list);
+
         if (list_input(&p->list, (uint8_t)(buttons & PICKER_DPAD_MASK),
                        now_ms) == LIST_EVENT_MOVED) {
+            p->prev_cursor = was;
             hover(p, now_ms);
-            ev = PICKER_EVENT_REDRAW;
+            /* A move that scrolled the window changed every row. */
+            ev = (list_first(&p->list) == first)
+                     ? (uint8_t)(PICKER_EVENT_ROWS | PICKER_EVENT_MEDIA)
+                     : (uint8_t)PICKER_EVENT_REDRAW;
+        } else if (marquee_step(p, now_ms)) {
+            ev = PICKER_EVENT_MARQUEE;
         }
         if ((pressed & COMBO_BTN_A) == 0 || cursor_row(p) == NULL) {
             return ev;
@@ -242,10 +283,13 @@ uint8_t picker_input(picker_t* p, uint8_t buttons, uint32_t now_ms)
         p->hold_active = false;
         p->hold_elapsed_ms = 0;
         p->scroll_dir = 0;
+        /* The label starts again from the left, after the usual delay. */
+        p->marquee_px = 0;
+        p->marquee_t0 = now_ms;
         return PICKER_EVENT_REDRAW;
     }
     if (scroll_step(p, (uint8_t)(buttons & PICKER_SCROLL_MASK), now_ms)) {
-        ev = PICKER_EVENT_REDRAW;
+        ev = PICKER_EVENT_BAND;
     }
     if (pressed & COMBO_BTN_A) {
         /* A fresh press, which is why the A that opened this page — still
@@ -253,7 +297,7 @@ uint8_t picker_input(picker_t* p, uint8_t buttons, uint32_t now_ms)
         p->hold_active = true;
         p->hold_start_ms = now_ms;
         p->hold_elapsed_ms = 0;
-        return PICKER_EVENT_REDRAW;
+        return (uint8_t)(ev | PICKER_EVENT_BAR);
     }
     if (buttons & COMBO_BTN_A) {
         if (!p->hold_active) {
@@ -264,14 +308,14 @@ uint8_t picker_input(picker_t* p, uint8_t buttons, uint32_t now_ms)
             settle(p);
             return PICKER_EVENT_DONE;
         }
-        return PICKER_EVENT_REDRAW;
+        return (uint8_t)(ev | PICKER_EVENT_BAR);
     }
     if (p->hold_active) {
         /* Let go early and the bar goes back to nothing: a part-finished hold
          * is not a part-finished write. */
         p->hold_active = false;
         p->hold_elapsed_ms = 0;
-        return PICKER_EVENT_REDRAW;
+        return (uint8_t)(ev | PICKER_EVENT_BAR);
     }
     return ev;
 }
@@ -304,6 +348,18 @@ int picker_set_scroll_span(picker_t* p, uint16_t page_lines,
     p->scroll_max = span;
     if (p->scroll > span) {
         p->scroll = span;
+    }
+    return PICKER_OK;
+}
+
+int picker_set_marquee_span(picker_t* p, int16_t overflow_px)
+{
+    if (p == NULL) {
+        return PICKER_ERR_ARGS;
+    }
+    p->marquee_span = (overflow_px > 0) ? overflow_px : 0;
+    if (p->marquee_px > p->marquee_span) {
+        p->marquee_px = p->marquee_span;
     }
     return PICKER_OK;
 }
@@ -368,7 +424,7 @@ uint8_t picker_media_loaded(picker_t* p, uint16_t cat_idx, bool art_ok,
         art_ok ? (uint8_t)PICKER_MEDIA_READY : (uint8_t)PICKER_MEDIA_MISSING;
     p->shot_state =
         shot_ok ? (uint8_t)PICKER_MEDIA_READY : (uint8_t)PICKER_MEDIA_MISSING;
-    return PICKER_EVENT_REDRAW;
+    return PICKER_EVENT_MEDIA;
 }
 
 bool picker_row_marked(const picker_t* p, uint16_t row)

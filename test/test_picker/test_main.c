@@ -245,10 +245,10 @@ static void test_a_fresh_hold_completes_at_the_hold_figure(void)
 
     open_row(&p, 0, 0);
     press(&p, B_NONE, 100);
-    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW, press(&p, B_A, 200));
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_BAR, press(&p, B_A, 200));
 
     /* One millisecond short: 999 * 100 / 1000 = 99 %. */
-    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW, press(&p, B_A, 1199));
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_BAR, press(&p, B_A, 1199));
     TEST_ASSERT_EQUAL_UINT8(99, picker_hold_pct(&p));
     TEST_ASSERT_EQUAL_UINT8(PICKER_SCREEN_DETAIL, p.screen);
 
@@ -264,13 +264,13 @@ static void test_letting_go_early_resets_the_hold(void)
     open_row(&p, 0, 0);
     press(&p, B_NONE, 100);
     press(&p, B_A, 200);
-    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW, press(&p, B_NONE, 1199));
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_BAR, press(&p, B_NONE, 1199));
     TEST_ASSERT_EQUAL_UINT8(0, picker_hold_pct(&p));
     TEST_ASSERT_EQUAL_UINT8(PICKER_SCREEN_DETAIL, p.screen);
 
     /* A new edge starts again from the time it was pressed. */
     press(&p, B_A, 1300);
-    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW, press(&p, B_A, 2299));
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_BAR, press(&p, B_A, 2299));
     TEST_ASSERT_EQUAL_UINT8(PICKER_SCREEN_DETAIL, p.screen);
     TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_DONE, press(&p, B_A, 2300));
 }
@@ -380,7 +380,7 @@ static void test_the_band_scrolls_a_line_at_the_shared_cadence(void)
     TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_set_scroll_span(&p, 19, LIB_ROWS));
     TEST_ASSERT_EQUAL_UINT16(8, p.scroll_max);
 
-    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW, press(&p, B_DOWN, 300));
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_BAND, press(&p, B_DOWN, 300));
     TEST_ASSERT_EQUAL_UINT16(1, p.scroll);
 
     /* Held, but one millisecond before the first repeat is due. */
@@ -569,7 +569,7 @@ static void test_a_media_report_sets_each_image_state(void)
     TEST_ASSERT_EQUAL_UINT8(PICKER_MEDIA_LOADING, p.shot_state);
 
     /* A cover with no snapshot is an ordinary case, not a failure. */
-    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW,
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_MEDIA,
                             picker_media_loaded(&p, idx, true, false));
     TEST_ASSERT_EQUAL_UINT8(PICKER_MEDIA_READY, p.art_state);
     TEST_ASSERT_EQUAL_UINT8(PICKER_MEDIA_MISSING, p.shot_state);
@@ -701,6 +701,136 @@ static void test_opening_a_settled_title_keeps_its_images(void)
     TEST_ASSERT_TRUE(picker_desc_due(&p, &d));
 }
 
+/* ─── events ──────────────────────────────────────────────────────────────── */
+
+static void test_a_move_within_the_window_names_its_rows_and_media(void)
+{
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_PENDING, true, false, NULL);
+
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_ROWS | PICKER_EVENT_MEDIA,
+                            press(&p, B_DOWN, 0));
+    TEST_ASSERT_EQUAL_UINT16(0, p.prev_cursor);
+    TEST_ASSERT_EQUAL_UINT16(1, list_cursor(&p.list));
+}
+
+static void test_a_move_that_scrolls_the_window_redraws_it(void)
+{
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_PENDING, true, false, NULL);
+
+    /* Up from the top wraps to the last page. */
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW, press(&p, B_UP, 0));
+}
+
+static void test_opening_leaving_and_paging_redraw_the_screen(void)
+{
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_PENDING, true, false, NULL);
+
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW, press(&p, B_RIGHT, 0));
+    press(&p, B_NONE, 10);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW, press(&p, B_A, 20));
+    press(&p, B_NONE, 30);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW, press(&p, B_B, 40));
+}
+
+static void test_the_hold_names_only_the_bar(void)
+{
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_PENDING, true, false, NULL);
+
+    open_row(&p, 0, 0);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_BAR, press(&p, B_A, 100));
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_BAR, press(&p, B_A, 116));
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_BAR, press(&p, B_NONE, 132));
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_NONE, press(&p, B_NONE, 148));
+}
+
+/* ─── the marquee ─────────────────────────────────────────────────────────── */
+
+/* Sample the list with nothing held at `at`, and return what it said. */
+static uint8_t idle(picker_t* p, uint32_t at)
+{
+    return picker_input(p, B_NONE, at);
+}
+
+static void test_the_marquee_runs_its_timeline(void)
+{
+    const int16_t span = 30;
+    const uint32_t run = span * PICKER_MARQUEE_STEP_MS;
+    const uint32_t t0 = 1000;
+
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_PENDING, true, false, NULL);
+
+    press(&p, B_DOWN, t0);
+    press(&p, B_NONE, t0 + 1);
+    TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_set_marquee_span(&p, span));
+
+    /* Still for the delay. */
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_NONE,
+                            idle(&p, t0 + PICKER_MARQUEE_DELAY_MS - 1));
+    TEST_ASSERT_EQUAL_INT16(0, p.marquee_px);
+
+    /* One pixel a step. */
+    TEST_ASSERT_EQUAL_UINT8(
+        PICKER_EVENT_MARQUEE,
+        idle(&p, t0 + PICKER_MARQUEE_DELAY_MS + PICKER_MARQUEE_STEP_MS));
+    TEST_ASSERT_EQUAL_INT16(1, p.marquee_px);
+    TEST_ASSERT_EQUAL_UINT8(
+        PICKER_EVENT_NONE,
+        idle(&p, t0 + PICKER_MARQUEE_DELAY_MS + PICKER_MARQUEE_STEP_MS + 1));
+
+    /* The end, and the pause there. */
+    idle(&p, t0 + PICKER_MARQUEE_DELAY_MS + run);
+    TEST_ASSERT_EQUAL_INT16(span, p.marquee_px);
+    TEST_ASSERT_EQUAL_UINT8(
+        PICKER_EVENT_NONE,
+        idle(&p, t0 + PICKER_MARQUEE_DELAY_MS + run + PICKER_MARQUEE_PAUSE_MS -
+                     1));
+    TEST_ASSERT_EQUAL_INT16(span, p.marquee_px);
+
+    /* Back to the start, and the delay again. */
+    TEST_ASSERT_EQUAL_UINT8(
+        PICKER_EVENT_MARQUEE,
+        idle(&p, t0 + PICKER_MARQUEE_DELAY_MS + run + PICKER_MARQUEE_PAUSE_MS));
+    TEST_ASSERT_EQUAL_INT16(0, p.marquee_px);
+    TEST_ASSERT_EQUAL_UINT8(
+        PICKER_EVENT_NONE,
+        idle(&p, t0 + 2 * PICKER_MARQUEE_DELAY_MS + run +
+                     PICKER_MARQUEE_PAUSE_MS - 1));
+}
+
+static void test_a_move_resets_the_marquee(void)
+{
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_PENDING, true, false, NULL);
+
+    picker_set_marquee_span(&p, 30);
+    idle(&p, PICKER_MARQUEE_DELAY_MS + 10 * PICKER_MARQUEE_STEP_MS);
+    TEST_ASSERT_EQUAL_INT16(10, p.marquee_px);
+
+    press(&p, B_DOWN, 5000);
+    TEST_ASSERT_EQUAL_INT16(0, p.marquee_px);
+    TEST_ASSERT_EQUAL_INT16(0, p.marquee_span);
+    TEST_ASSERT_EQUAL_UINT32(5000, p.marquee_t0);
+}
+
+static void test_a_title_that_fits_never_scrolls(void)
+{
+    uint32_t t;
+
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_PENDING, true, false, NULL);
+
+    picker_set_marquee_span(&p, 0);
+    for (t = 0; t < 10000; t += 16) {
+        TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_NONE, idle(&p, t));
+    }
+    TEST_ASSERT_EQUAL_INT16(0, p.marquee_px);
+}
+
 /* ─── argument and empty cases ────────────────────────────────────────────── */
 
 static void test_a_wizard_with_no_starter_is_empty(void)
@@ -767,6 +897,13 @@ int main(void)
     RUN_TEST(test_a_move_resets_both_images_and_rearms_the_request);
     RUN_TEST(test_a_report_for_a_title_no_longer_highlighted_is_ignored);
     RUN_TEST(test_opening_a_settled_title_keeps_its_images);
+    RUN_TEST(test_a_move_within_the_window_names_its_rows_and_media);
+    RUN_TEST(test_a_move_that_scrolls_the_window_redraws_it);
+    RUN_TEST(test_opening_leaving_and_paging_redraw_the_screen);
+    RUN_TEST(test_the_hold_names_only_the_bar);
+    RUN_TEST(test_the_marquee_runs_its_timeline);
+    RUN_TEST(test_a_move_resets_the_marquee);
+    RUN_TEST(test_a_title_that_fits_never_scrolls);
     RUN_TEST(test_a_wizard_with_no_starter_is_empty);
     RUN_TEST(test_init_rejects_bad_arguments);
     return UNITY_END();

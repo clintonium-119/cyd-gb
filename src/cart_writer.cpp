@@ -129,10 +129,7 @@ static enum boot_pick_e writer_run(enum writer_mode_e mode,
             bool have_shot = sd_media_read(SHOT_PATH, idx->e[ci].filename, shot,
                                            PICKER_ART_PX);
 
-            if (picker_media_loaded(&picker, ci, have_art, have_shot) ==
-                PICKER_EVENT_REDRAW) {
-                ev = PICKER_EVENT_REDRAW;
-            }
+            ev |= picker_media_loaded(&picker, ci, have_art, have_shot);
         }
 
         // A title was opened: its description, once, behind the screen
@@ -150,10 +147,10 @@ static enum boot_pick_e writer_run(enum writer_mode_e mode,
                 &picker,
                 picker_page_lines(&geom, desc && desc[0] ? desc : NULL),
                 geom.band_rows);
-            ev = PICKER_EVENT_REDRAW;
+            ev |= PICKER_EVENT_BAND;
         }
 
-        if (ev == PICKER_EVENT_REDRAW) {
+        if (ev != PICKER_EVENT_NONE) {
             uint32_t began = micros();
 
             picker_draw(&picker, &geom, desc && desc[0] ? desc : NULL, art,
