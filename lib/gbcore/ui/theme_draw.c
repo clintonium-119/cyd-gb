@@ -1,6 +1,36 @@
 #include "ui/theme_draw.h"
 
 #include <stddef.h>
+#include <string.h>
+
+/* The longest label a row cuts to fit: a catalog title and its mark. */
+#define ROW_LABEL_MAX 64
+
+/*
+ * `s` cut at the last character that fits in `w` pixels, into buf: as much of
+ * an overflowing label as the row can show. The driver breaks a one-line box
+ * at a word and drops the rest, which left three "Final Fantasy" rows that
+ * only a hover told apart. Returns s itself when it already fits.
+ */
+static const char* fit_label(const ui_canvas_t* cv, const char* s,
+                             uint8_t font, int16_t w, char* buf, size_t sz)
+{
+    size_t n;
+
+    if (cv->measure == NULL || cv->measure(cv->ctx, s, font) <= w) {
+        return s;
+    }
+    n = strlen(s);
+    if (n > sz - 1) {
+        n = sz - 1;
+    }
+    memcpy(buf, s, n);
+    buf[n] = '\0';
+    while (n > 0 && cv->measure(cv->ctx, buf, font) > w) {
+        buf[--n] = '\0';
+    }
+    return buf;
+}
 
 int16_t ui_text_dy(int16_t h, uint8_t font)
 {
@@ -37,12 +67,14 @@ void ui_header(const ui_canvas_t* cv, int16_t w, const char* title,
 void ui_row_text(const ui_canvas_t* cv, int16_t x, int16_t y, int16_t w,
                  int16_t h, const char* s, uint8_t font, uint16_t fg)
 {
+    char buf[ROW_LABEL_MAX];
     int16_t tw = (int16_t)(w - 2 * UI_PILL_PAD);
 
     cv->fill(cv->ctx, x, y, w, h, UI_COL_BG);
     if (s == NULL) {
         return;
     }
+    s = fit_label(cv, s, font, tw, buf, sizeof(buf));
     /* Boxed to the text itself when it fits, so the box lies wholly under
      * where the pill will go when this row is selected. */
     if (cv->measure != NULL && cv->measure(cv->ctx, s, font) < tw) {
@@ -57,6 +89,7 @@ int16_t ui_pill_row(const ui_canvas_t* cv, int16_t x, int16_t y,
                     int16_t max_w, int16_t h, const char* s, uint8_t font,
                     bool dim, int16_t marquee_px)
 {
+    char buf[ROW_LABEL_MAX];
     int16_t tw;
     int16_t pw;
     int16_t tx;
@@ -82,6 +115,8 @@ int16_t ui_pill_row(const ui_canvas_t* cv, int16_t x, int16_t y,
         /* The buffer is the pill, so it clips the label wherever it runs. */
         tx = (int16_t)(tx - marquee_px);
         txw = (int16_t)(tw + marquee_px + UI_PILL_PAD);
+    } else {
+        s = fit_label(cv, s, font, txw, buf, sizeof(buf));
     }
     /* The pill's corners blend toward black, so its box is black first. */
     cv->fill(cv->ctx, x, y, pw, h, UI_COL_BG);

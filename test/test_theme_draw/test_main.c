@@ -338,6 +338,24 @@ static void test_a_plain_row_and_a_pill_start_their_text_at_one_x(void)
     TEST_ASSERT_EQUAL_INT16(4 + UI_PILL_PAD, plain);
 }
 
+static void test_an_overflowing_row_shows_as_much_as_fits(void)
+{
+    /* 200 - 2 * 8 = 184 px at 8 a glyph: 23 characters, cut mid-word
+     * rather than back to "Final Fantasy". */
+    ui_row_text(&cv, 4, 40, 200, UI_PILL_H_LIST,
+                "Final Fantasy Legend II: The Warriors", UI_FONT_LIST,
+                UI_COL_TEXT);
+    TEST_ASSERT_EQUAL_STRING("Final Fantasy Legend II", nth(OP_TEXT, 0)->s);
+    TEST_ASSERT_TRUE(nth(OP_TEXT, 0)->x + nth(OP_TEXT, 0)->w <= 4 + 200);
+    /* The same cut in a pill that has no buffer to scroll in. */
+    setUp();
+    fk.refuse_begin = true;
+    ui_pill_row(&cv, 4, 40, 200, UI_PILL_H_LIST,
+                "Final Fantasy Legend II: The Warriors", UI_FONT_LIST, false,
+                0);
+    TEST_ASSERT_EQUAL_STRING("Final Fantasy Legend II", nth(OP_TEXT, 0)->s);
+}
+
 static void test_a_plain_row_is_cleared_to_black_with_no_bar(void)
 {
     ui_row_text(&cv, 4, 40, 200, UI_PILL_H_ROW, "Resume", UI_FONT_LIST,
@@ -706,6 +724,7 @@ int main(void)
     RUN_TEST(test_a_marquee_moves_the_text_and_not_the_pill);
     RUN_TEST(test_without_a_buffer_the_marquee_is_ignored_and_the_text_fits);
     RUN_TEST(test_a_plain_row_and_a_pill_start_their_text_at_one_x);
+    RUN_TEST(test_an_overflowing_row_shows_as_much_as_fits);
     RUN_TEST(test_a_plain_row_is_cleared_to_black_with_no_bar);
     RUN_TEST(test_the_header_is_white_left_and_grey_right_on_black);
     RUN_TEST(test_the_help_line_is_one_grey_row_inside_its_band);
