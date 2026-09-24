@@ -18,14 +18,14 @@
 /* RGB565 colours. */
 #define UI_COL_BG        0x0000 /* screen background */
 #define UI_COL_TEXT      0xFFFF /* primary text, hint labels */
-/* Prose at #DDDDDD and the hint pill at #555555, as chosen on glass; RGB565
- * holds them as #D8DCD8 and #505450, the nearest it has. */
+/* Prose at #DDDDDD and the hint pill at #4C4C4C, as chosen on glass; RGB565
+ * holds them as #D8DCD8 and #484C48, the nearest it has. */
 #define UI_COL_SUB       0xDEFB /* help lines, descriptions, secondary text */
 #define UI_COL_DIM       0x7BEF /* a disabled row */
 #define UI_COL_PILL      0xFFFF /* the selected row's pill */
 #define UI_COL_PILL_TEXT 0x0000 /* text on the pill */
 #define UI_COL_PILL_DIM  0x6B4D /* a disabled row's text on the pill */
-#define UI_COL_HINT_BG   0x52AA /* the hint footer's pill */
+#define UI_COL_HINT_BG   0x4A69 /* the hint footer's pill */
 #define UI_COL_GLYPH     0xFFFF /* a button's circle in the hint footer */
 #define UI_COL_GLYPH_FG  0x0000 /* the button's letter in it */
 #define UI_COL_OK        0x07E0 /* a check that passed */
