@@ -827,6 +827,28 @@ static void test_the_hold_bar_appears_only_once_the_hold_starts(void)
     TEST_ASSERT_EQUAL_INT16(GEOM_53_H - UI_FOOT_H - UI_HELP_H + 2, fk.bar_y);
 }
 
+/* An action row's page says what it does, and its A says so too. */
+static void test_an_action_page_explains_itself(void)
+{
+    unsigned t;
+    bool note = false;
+    bool hint = false;
+
+    fill_library(LIB_COUNT);
+    /* Immediate mode with the wildcard done: Finish setup is the first row. */
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_IMMEDIATE, true, false, 0,
+               PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, DESC_200);
+    assert_sane();
+    TEST_ASSERT_EQUAL_UINT(0, fk.images);
+    for (t = 0; t < fk.logged; t++) {
+        note = note || strncmp(fk.log[t].s, "Ends setup", 10) == 0;
+        hint = hint || strcmp(fk.log[t].s, "Hold to finish setup") == 0;
+        TEST_ASSERT_NULL(strstr(fk.log[t].s, "install"));
+    }
+    TEST_ASSERT_TRUE(note);
+    TEST_ASSERT_TRUE(hint);
+}
+
 /* ─── the description ─────────────────────────────────────────────────────── */
 
 static void test_the_page_is_the_description_and_never_less_than_the_band(void)
@@ -1370,6 +1392,7 @@ int main(void)
     RUN_TEST(test_no_detail_page_draws_the_filename);
     RUN_TEST(test_the_page_is_the_description_and_never_less_than_the_band);
     RUN_TEST(test_missing_media_draws_two_placeholders_and_no_image);
+    RUN_TEST(test_an_action_page_explains_itself);
     RUN_TEST(test_the_hold_bar_appears_only_once_the_hold_starts);
     RUN_TEST(test_every_wrapped_line_fits_the_column_in_pixels);
     RUN_TEST(test_the_wrap_breaks_at_spaces_and_hard_breaks_long_words);

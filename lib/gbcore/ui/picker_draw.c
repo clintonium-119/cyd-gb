@@ -25,14 +25,23 @@ static const char* const ACTION_LABEL[] = {
 };
 
 
-/* The footer's buttons: A opens a title, and on its page A is held to
- * confirm and B goes back. B does nothing on the list. */
+/* What an action row's page says it does, where a game's description
+ * goes. A game's page needs no such line: installing it is what A says. */
+static const char* const ACTION_NOTE[] = {
+    NULL,                                             /* PICKER_ROW_GAME  */
+    "Drops the game you lined up",                    /* CANCEL_PENDING   */
+    "Ends setup. Only a MENU cart reopens the writer", /* FINISH          */
+};
+
+/* The footer's buttons: A opens a title, and on its page A is held to do
+ * what that page is for and B goes back. B does nothing on the list. */
 static const ui_hint_t LIST_HINTS[] = {
     { "A", "Select" },
 };
-static const ui_hint_t DETAIL_HINTS[] = {
-    { "B", "Back" },
-    { "A", "Hold to install to cart" },
+static const ui_hint_t DETAIL_HINTS[][2] = {
+    { { "B", "Back" }, { "A", "Hold to install to cart" } }, /* a game  */
+    { { "B", "Back" }, { "A", "Hold to cancel write" } },    /* CANCEL  */
+    { { "B", "Back" }, { "A", "Hold to finish setup" } },    /* FINISH  */
 };
 #define N_HINTS(a) ((uint8_t)(sizeof(a) / sizeof((a)[0])))
 
@@ -486,6 +495,9 @@ static void draw_band(const picker_t* p, const picker_layout_t* g,
 
     cv->fill(cv->ctx, 0, y, g->w, h, UI_COL_BG);
     if (p->rows[p->detail_row].kind != PICKER_ROW_GAME) {
+        cv->text(cv->ctx, ACTION_NOTE[p->rows[p->detail_row].kind],
+                 g->detail_x, y, g->detail_w, rows, UI_FONT_DESC,
+                 UI_ALIGN_LEFT, UI_COL_TEXT, UI_COL_BG);
         return;
     }
     if (desc != NULL && desc[0] != '\0') {
@@ -579,7 +591,8 @@ static void draw_detail(const picker_t* p, const picker_layout_t* g,
     /* What confirming does, or how far the hold has got, and how to confirm
      * it. No filename: the title already names the game. */
     draw_bar(p, g, cv, false);
-    ui_hint_bar(cv, g->w, g->foot_y, DETAIL_HINTS, N_HINTS(DETAIL_HINTS));
+    ui_hint_bar(cv, g->w, g->foot_y, DETAIL_HINTS[p->rows[p->detail_row].kind],
+                N_HINTS(DETAIL_HINTS[0]));
 }
 
 /* Whether there is anything to draw, and a canvas to draw it with. */
