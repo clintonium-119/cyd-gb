@@ -779,13 +779,24 @@ static void test_a_reversal_is_what_the_save_would_store(void)
 static void test_a_run_too_long_to_correct_leaves_the_porch_alone(void)
 {
     int32_t before;
+    unsigned i;
 
     /* Past about 22,000 frames — six minutes — the correction rounds below
      * one 64th of a line, which is the floor the register sets and the end of
-     * what any calibration can do. */
+     * what any calibration can do. The page no longer waits that long: a run
+     * ends itself as settled at DIAG_TRIM_SETTLED_FRAMES, which is inside
+     * that floor, and leaves the porch alone. */
+    TEST_ASSERT_TRUE(DIAG_TRIM_SETTLED_FRAMES
+                     < (unsigned)DIAG_TRIM_BASE_LINES_X64);
     goto_page(DIAG_PAGE_TRIM);
     before = trim_x64_of();
-    trim_run(60000);
+    sample(COMBO_EVENT_NONE, COMBO_BTN_START, 0);
+    sample(COMBO_EVENT_NONE, 0, 0);
+    for (i = 0; i < 60000u; i++) {
+        diag_trim_frame(&d);
+    }
+    TEST_ASSERT_FALSE(diag_trim_running(&d));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_SETTLED, diag_trim_verdict(&d));
     TEST_ASSERT_EQUAL_INT32(before, trim_x64_of());
 }
 
@@ -918,6 +929,88 @@ static void test_a_thrown_away_run_clears_on_the_next_run(void)
     sample(COMBO_EVENT_NONE, 0, 5010);
     /* The warning belongs to the run that earned it, not to the page. */
     TEST_ASSERT_FALSE(diag_trim_rejected(&d));
+}
+
+static void test_a_run_that_lengthened_every_time_is_slowing_not_bad_marking(void)
+{
+    /* What a unit near its null shows (BUG-0018): the seam slows as the
+     * panel drifts, so each interval is longer than the one before and the
+     * spread passes 1.5 on honest marks. Still not averaged — the rate moved
+     * under the run — but the builder is not told they marked badly. */
+    static const unsigned slowing[] = { 600, 500, 700, 1000 };
+    int32_t before;
+
+    goto_page(DIAG_PAGE_TRIM);
+    before = trim_x64_of();
+    trim_run_intervals(slowing, 4);
+
+    TEST_ASSERT_FALSE(diag_trim_running(&d));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_SLOWING, diag_trim_verdict(&d));
+    TEST_ASSERT_TRUE(diag_trim_rejected(&d));
+    /* The reject path writes nothing, whichever message it shows. */
+    TEST_ASSERT_EQUAL_INT32(before, trim_x64_of());
+    TEST_ASSERT_EQUAL_UINT32(0, diag_trim_span(&d));
+    TEST_ASSERT_EQUAL_UINT32(0, d.trim_prev_span);
+    TEST_ASSERT_EQUAL_INT8(+1, diag_trim_dir(&d));
+    TEST_ASSERT_EQUAL_INT16(0, d.trim_step);
+}
+
+static void test_scattered_and_measured_runs_say_which_they_were(void)
+{
+    static const unsigned junk[] = { 600, 200, 1500, 400 };
+    static const unsigned missed_late[] = { 600, 600, 600, 1200 };
+
+    goto_page(DIAG_PAGE_TRIM);
+    trim_run_intervals(junk, 4);
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_SCATTERED, diag_trim_verdict(&d));
+
+    /* A missed crossing after two equal intervals did not lengthen at
+     * every step, so it is still called scattered. */
+    trim_run_intervals(missed_late, 4);
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_SCATTERED, diag_trim_verdict(&d));
+
+    trim_run(4000);
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_MEASURED, diag_trim_verdict(&d));
+    TEST_ASSERT_FALSE(diag_trim_rejected(&d));
+}
+
+static void test_a_run_with_no_crossing_for_the_settled_span_ends_itself(void)
+{
+    int32_t before;
+    unsigned i;
+
+    /* The fourth mark that never comes: a unit already at its null. The page
+     * must end the run and say so rather than leave the builder waiting. */
+    goto_page(DIAG_PAGE_TRIM);
+    before = trim_x64_of();
+    sample(COMBO_EVENT_NONE, COMBO_BTN_START, 0);
+    sample(COMBO_EVENT_NONE, 0, 0);
+    run_frames_then_mark(700);
+    run_frames_then_mark(900);
+
+    for (i = 1; i < DIAG_TRIM_SETTLED_FRAMES; i++) {
+        TEST_ASSERT_EQUAL_UINT16(0, diag_trim_frame(&d));
+    }
+    TEST_ASSERT_TRUE(diag_trim_running(&d));
+    TEST_ASSERT_EQUAL_UINT16(DIAG_EV_REDRAW | DIAG_EV_TRIM_STATE,
+                             diag_trim_frame(&d));
+
+    TEST_ASSERT_FALSE(diag_trim_running(&d));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_SETTLED, diag_trim_verdict(&d));
+    TEST_ASSERT_EQUAL_INT32(before, trim_x64_of());
+    TEST_ASSERT_EQUAL_UINT32(0, diag_trim_span(&d));
+    TEST_ASSERT_EQUAL_INT16(0, d.trim_step);
+
+    /* It counts from the run's start when there is no mark yet. */
+    sample(COMBO_EVENT_NONE, COMBO_BTN_START, 0);
+    sample(COMBO_EVENT_NONE, 0, 0);
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_NO_RUN, diag_trim_verdict(&d));
+    for (i = 1; i < DIAG_TRIM_SETTLED_FRAMES; i++) {
+        diag_trim_frame(&d);
+    }
+    TEST_ASSERT_TRUE(diag_trim_running(&d));
+    diag_trim_frame(&d);
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TRIM_SETTLED, diag_trim_verdict(&d));
 }
 
 static void test_leaving_the_page_ends_a_run(void)
@@ -1555,6 +1648,9 @@ int main(void)
     RUN_TEST(test_a_builders_reaction_spread_is_not_a_disagreement);
     RUN_TEST(test_a_thrown_away_run_cannot_steer_the_next_good_one);
     RUN_TEST(test_a_thrown_away_run_clears_on_the_next_run);
+    RUN_TEST(test_a_run_that_lengthened_every_time_is_slowing_not_bad_marking);
+    RUN_TEST(test_scattered_and_measured_runs_say_which_they_were);
+    RUN_TEST(test_a_run_with_no_crossing_for_the_settled_span_ends_itself);
     RUN_TEST(test_leaving_the_page_ends_a_run);
     RUN_TEST(test_a_abandons_a_run_and_saves_from_an_idle_page);
     RUN_TEST(test_b_restores_the_compile_time_porch_not_the_stored_one);

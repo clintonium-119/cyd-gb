@@ -155,7 +155,9 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
     d->trim_last_mark = 0;
     d->trim_int_min = 0;
     d->trim_int_max = 0;
-    d->trim_rejected = false;
+    d->trim_int_last = 0;
+    d->trim_lengthening = true;
+    d->trim_verdict = DIAG_TRIM_NO_RUN;
     d->trim_span = 0;
     d->trim_prev_span = 0;
     d->trim_step = 0;
@@ -309,7 +311,9 @@ static void trim_run_begin(diag_t* d)
     d->trim_last_mark = 0;
     d->trim_int_min = 0;
     d->trim_int_max = 0;
-    d->trim_rejected = false;
+    d->trim_int_last = 0;
+    d->trim_lengthening = true;
+    d->trim_verdict = DIAG_TRIM_NO_RUN;
     /* The pattern and the rates carry over between runs, because finding the
      * pair that shows a seam on this panel is the first thing a builder does
      * and having it reset every time would make that unbearable. The offset
@@ -443,6 +447,10 @@ static uint16_t trim_mark(diag_t* d)
     if (interval > d->trim_int_max) {
         d->trim_int_max = interval;
     }
+    if (d->trim_int_last != 0 && interval <= d->trim_int_last) {
+        d->trim_lengthening = false;
+    }
+    d->trim_int_last = interval;
 
     d->trim_marks++;
     if (d->trim_marks <= (uint8_t)DIAG_TRIM_MARKS) {
@@ -457,10 +465,14 @@ static uint16_t trim_mark(diag_t* d)
      * Nothing is written: not the span, not the previous span, not the
      * direction — a bad run that left any of those behind would go on to
      * decide the next good run's direction from a number that meant nothing.
+     * Intervals that grew every time are still not averaged, but they are the
+     * seam slowing down rather than the builder marking badly, and the page
+     * says which.
      */
     if (d->trim_int_max * (uint32_t)DIAG_TRIM_SPREAD_DEN
         > d->trim_int_min * (uint32_t)DIAG_TRIM_SPREAD_NUM) {
-        d->trim_rejected = true;
+        d->trim_verdict = d->trim_lengthening ? DIAG_TRIM_SLOWING
+                                              : DIAG_TRIM_SCATTERED;
         d->trim_step = 0;
         return DIAG_EV_REDRAW | DIAG_EV_TRIM_STATE;
     }
@@ -472,6 +484,7 @@ static uint16_t trim_mark(diag_t* d)
     d->span_pat = d->trim_pat;
     d->span_vx = d->trim_vx;
     d->span_vy = d->trim_vy;
+    d->trim_verdict = DIAG_TRIM_MEASURED;
     trim_apply(d);
 
     return DIAG_EV_REDRAW | DIAG_EV_TRIM_STATE;
@@ -584,6 +597,16 @@ uint16_t diag_trim_frame(diag_t* d)
      * had got to rather than teleporting it. */
     d->trim_ox += d->trim_vx;
     d->trim_oy += d->trim_vy;
+
+    /* Counted from the run's start until the first mark, then from the last
+     * one. Like a rejected run, a settled one writes nothing: there is no
+     * interval to correct from, and none is needed. */
+    if (d->trim_frames - d->trim_last_mark >= DIAG_TRIM_SETTLED_FRAMES) {
+        d->trim_state = DIAG_TRIM_IDLE;
+        d->trim_verdict = DIAG_TRIM_SETTLED;
+        d->trim_step = 0;
+        return DIAG_EV_REDRAW | DIAG_EV_TRIM_STATE;
+    }
     return 0;
 }
 
@@ -612,7 +635,14 @@ uint32_t diag_trim_span(const diag_t* d)
 
 bool diag_trim_rejected(const diag_t* d)
 {
-    return (d != NULL) && d->trim_rejected;
+    return (d != NULL) && (d->trim_verdict == DIAG_TRIM_SCATTERED
+                           || d->trim_verdict == DIAG_TRIM_SLOWING
+                           || d->trim_verdict == DIAG_TRIM_SETTLED);
+}
+
+uint8_t diag_trim_verdict(const diag_t* d)
+{
+    return (d != NULL) ? d->trim_verdict : (uint8_t)DIAG_TRIM_NO_RUN;
 }
 
 void diag_trim_stored(const diag_t* d, uint8_t* fpa, uint8_t* ratio)

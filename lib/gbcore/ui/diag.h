@@ -67,6 +67,18 @@ enum diag_trim_state_e {
     DIAG_TRIM_RUNNING,
 };
 
+/* How the last run ended. Only MEASURED moves the porch; the other three
+ * write nothing, and differ in what the page tells the builder. */
+enum diag_trim_verdict_e {
+    DIAG_TRIM_NO_RUN = 0,  /* nothing has ended since the run began        */
+    DIAG_TRIM_MEASURED,    /* the marks agreed and the correction applied  */
+    DIAG_TRIM_SCATTERED,   /* the marks were not a count of one event      */
+    DIAG_TRIM_SLOWING,     /* too spread to average, but each interval was
+                            * longer than the last: the seam is slowing
+                            * down, which is the null coming near          */
+    DIAG_TRIM_SETTLED,     /* no crossing came for DIAG_TRIM_SETTLED_FRAMES */
+};
+
 enum diag_pattern_e {
     DIAG_PATTERN_BARS = 0,
     DIAG_PATTERN_BORDER,
@@ -132,6 +144,14 @@ enum diag_nfc_state_e {
 /* How far the intervals in one run may disagree before the run is thrown
  * away rather than averaged: longest over shortest, as a fraction.
  *
+ * Kept although it tightens near the null. There, intervals are long and the
+ * panel's thermal drift moves the rate within one run, so an honest run can
+ * spread past 1.5 — but a run that did so by lengthening at every interval is
+ * reported as the seam slowing (DIAG_TRIM_SLOWING), not as bad marking, and a
+ * run that averaged such intervals would correct against a rate that no
+ * longer holds. So the rule still decides whether to write; it no longer
+ * decides what the builder is told.
+ *
  * This is the guard against a count that was never a count. A builder who
  * cannot make out the seam has no way to stop a run except by pressing the
  * mark button until it ends, and those presses are indistinguishable from
@@ -143,6 +163,14 @@ enum diag_nfc_state_e {
  */
 #define DIAG_TRIM_SPREAD_NUM 3
 #define DIAG_TRIM_SPREAD_DEN 2
+
+/* Frames with no crossing after which a run ends by itself as settled:
+ * about five and a half minutes at the emulator's cadence. One crossing in
+ * 20,000 frames is 50 parts in a million, which is as far as the panel's and
+ * the board's clocks drift apart with temperature while a builder sits there
+ * (docs/DIAGNOSTICS.md's finish line). Past it there is nothing to null, and
+ * a builder must not be left waiting on a mark that is not coming. */
+#define DIAG_TRIM_SETTLED_FRAMES 20000u
 
 /* The fixture's vertical scroll as the page enters a run, in output pixels per
  * frame. Signed: negative runs the field the other way, and the sign is part
@@ -412,10 +440,12 @@ typedef struct diag_s {
     uint32_t trim_last_mark;  /* frame count the last accepted mark landed on */
     uint32_t trim_int_min;    /* shortest and longest interval this run       */
     uint32_t trim_int_max;
-    /* The last run's marks disagreed too much to be a measurement, so no
-     * correction came out of it. Kept so the page can say so: silently
-     * declining to move would look like a page that had stopped working. */
-    bool trim_rejected;
+    uint32_t trim_int_last;   /* the previous interval, for the slowing test */
+    bool trim_lengthening;    /* every interval so far longer than the last  */
+    /* How the last run ended, enum diag_trim_verdict_e. Kept so the page can
+     * say why nothing moved: silently declining to move would look like a
+     * page that had stopped working. */
+    uint8_t trim_verdict;
     uint32_t trim_span;       /* mean frames per crossing, last GOOD run      */
     uint32_t trim_prev_span;  /* the run before, for the direction test     */
     int16_t trim_step;        /* 64ths the last correction moved, signed    */
@@ -496,8 +526,8 @@ bool diag_trim_running(const diag_t* d);
  * so a frame counted that was not pushed, or pushed and not counted, is an
  * error in the calibration rather than in the bookkeeping.
  *
- * Returns DIAG_EV_REDRAW on the frame that ends a run, which is the frame
- * after the last crossing the page needed; 0 otherwise.
+ * Returns DIAG_EV_REDRAW | DIAG_EV_TRIM_STATE on the frame that ends a run
+ * because no crossing came for DIAG_TRIM_SETTLED_FRAMES; 0 otherwise.
  */
 uint16_t diag_trim_frame(diag_t* d);
 
@@ -529,8 +559,12 @@ const char* diag_trim_pat_name(uint8_t pat);
  * that produced a measurement. */
 uint32_t diag_trim_span(const diag_t* d);
 
-/* True when the last run's marks disagreed too much to average. */
+/* True when the last run ended without a correction: scattered, slowing or
+ * settled. */
 bool diag_trim_rejected(const diag_t* d);
+
+/* How the last run ended, enum diag_trim_verdict_e. */
+uint8_t diag_trim_verdict(const diag_t* d);
 
 /* What the store held when the page opened, plus anything saved since. Both
  * pointers may be NULL. */

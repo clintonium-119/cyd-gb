@@ -411,6 +411,7 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
     uint32_t next_bat_ms = 0;
     uint8_t last_buttons = 0;
     bool logged = false;
+    uint16_t frame_flags = 0;
 
     // The eight expander bits behind the eight joypad bits, in joypad order,
     // so the buttons page can name the pin a dead switch is on.
@@ -478,6 +479,10 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
 
         flags = diag_input(&d, ev, combo_joypad(&combo), now);
         flags |= diag_tick(&d, now);
+        // A run that ended itself on last pass's frame, handled like one that
+        // ended on a mark.
+        flags |= frame_flags;
+        frame_flags = 0;
         page = diag_page(&d);
 
         // The raw word, not the masked one: the buttons page exists to show
@@ -516,9 +521,21 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
                           (name != nullptr) ? name : "?", (int)vx, (int)vy);
         }
         if (flags & DIAG_EV_TRIM_STATE) {
-            if (diag_trim_rejected(&d)) {
+            switch (diag_trim_verdict(&d)) {
+            case DIAG_TRIM_SCATTERED:
                 Serial.println("[DIAG] trim run thrown away: the marks "
                                "disagreed too much to average");
+                break;
+            case DIAG_TRIM_SLOWING:
+                Serial.println("[DIAG] trim run not averaged: every interval "
+                               "longer than the last, the seam is slowing");
+                break;
+            case DIAG_TRIM_SETTLED:
+                Serial.println("[DIAG] trim run settled: no crossing in "
+                               "20000 frames, nothing left to null");
+                break;
+            default:
+                break;
             }
             if (diag_trim_running(&d)) {
                 if (trim_buffers()) {
@@ -601,7 +618,7 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
             // Counted only once it is on the panel: the count IS the
             // measurement, and a frame counted that was not pushed would put
             // the calibration out by exactly its own error.
-            diag_trim_frame(&d);
+            frame_flags = diag_trim_frame(&d);
             // A frame of silence, for the pacing and nothing else. This is
             // the emulator's own pacer — the DMA queue — rather than an
             // interval this loop picks, which is the whole point: the beat

@@ -70,6 +70,13 @@ Work down the list. Write the result in the blank; a blank you cannot fill is th
     temperature by about as much as is left to correct — so which of them is ahead changes while you
     sit there. There is nothing further to null. Press **A** and write the porch down. Then press **A** to save.
 
+    The page recognises that finish line too. If a run goes about five and a half minutes without a
+    crossing, it ends by itself and **Crossing** reads `none in 5 min - settled`: the unit is trimmed,
+    nothing moved, and you do not need to wait for another press. If the crossings in a run each came
+    later than the one before, **Crossing** reads `slowing - near the null`. That is not a marking
+    mistake. The seam is slowing down as you close in, so the run is not averaged. Run once more or
+    stop there. Only `marks disagreed` means the presses themselves were off.
+
     **Watch the Stored row.** Every run ends by moving the porch itself, so what is on screen stops
     being what a power cycle brings back until you save it — the page says `A to save` and turns both
     rows amber while that is true. And note that **A only saves from the numbers screen**: pressed during
