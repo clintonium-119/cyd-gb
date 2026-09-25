@@ -204,8 +204,10 @@ void manual_expand_row(const uint8_t* row, uint16_t x0, uint16_t n,
 
 /*
  * Halve two 2 bpp rows of width w into one of ceil(w / 2) pixels, packed and
- * byte-padded the same way. An output pixel takes the darkest level of its
- * 2 x 2 cell, so thin text stays legible. b may be NULL for an odd last row.
+ * byte-padded the same way. An output pixel takes the mean level of its
+ * 2 x 2 cell, rounded half up: with four greys to land on, the mean keeps
+ * text thin where the darkest level would run its letters together. b may be
+ * NULL for an odd last row.
  */
 void manual_decimate_row(const uint8_t* a, const uint8_t* b, uint16_t w,
                          uint8_t* out);

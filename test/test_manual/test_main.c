@@ -979,19 +979,30 @@ static void test_expand_row_maps_each_level_from_an_unaligned_pixel(void)
     TEST_ASSERT_EQUAL_HEX16(0x1234, out[5]);
 }
 
-static void test_decimate_takes_the_darkest_level_of_each_cell(void)
+static void test_decimate_takes_the_rounded_mean_of_each_cell(void)
 {
     /*
      * Five pixels wide, so three cells, the last one only half on the page.
-     * a: 1 0 | 0 2 | 0 (3 in the padding)    b: 0 2 | 3 0 | 1 (3 in the padding)
-     * Cells are 2, 3 and 1: the padding is not page.
+     * a: 1 0 | 3 3 | 0 (3 in the padding)    b: 0 2 | 0 0 | 1 (3 in the padding)
+     * Means 0.75, 1.5 and 0.5 round to 1, 2 and 1: halves round up, and the
+     * padding is not page, or the last cell would be 1.75 and round to 2.
      */
-    static const uint8_t a[2] = { 0x42, 0x30 };
-    static const uint8_t b[2] = { 0x2C, 0x70 };
+    static const uint8_t a[2] = { 0x4F, 0x30 };
+    static const uint8_t b[2] = { 0x20, 0x70 };
     uint8_t out[1];
 
     manual_decimate_row(a, b, 5, out);
-    TEST_ASSERT_EQUAL_HEX8(0xB4, out[0]);
+    TEST_ASSERT_EQUAL_HEX8(0x64, out[0]);
+}
+
+static void test_decimate_keeps_solid_black_and_white_cells(void)
+{
+    static const uint8_t a[1] = { 0xF0 };
+    uint8_t out[1];
+
+    /* 3 3 | 0 0 over the same row: black and white stay themselves. */
+    manual_decimate_row(a, a, 4, out);
+    TEST_ASSERT_EQUAL_HEX8(0xC0, out[0]);
 }
 
 static void test_decimate_takes_a_null_second_row_for_an_odd_last_row(void)
@@ -999,20 +1010,22 @@ static void test_decimate_takes_a_null_second_row_for_an_odd_last_row(void)
     static const uint8_t a[2] = { 0x42, 0x30 };
     uint8_t out[1];
 
+    /* 1 0 | 0 2 | 0: means 0.5, 1 and 0. */
     manual_decimate_row(a, NULL, 5, out);
-    TEST_ASSERT_EQUAL_HEX8(0x60, out[0]);
+    TEST_ASSERT_EQUAL_HEX8(0x50, out[0]);
 }
 
 static void test_decimate_packs_a_wide_row_across_bytes(void)
 {
-    /* 18 pixels, black only at 16: output pixel 8, the first of byte 2. */
+    /* 18 pixels, black only at 16: output pixel 8, the first of byte 2,
+     * is the mean of black and white, 1.5, rounded to dark grey. */
     static const uint8_t a[5] = { 0x00, 0x00, 0x00, 0x00, 0xC0 };
     uint8_t out[3];
 
     manual_decimate_row(a, NULL, 18, out);
     TEST_ASSERT_EQUAL_HEX8(0x00, out[0]);
     TEST_ASSERT_EQUAL_HEX8(0x00, out[1]);
-    TEST_ASSERT_EQUAL_HEX8(0xC0, out[2]);
+    TEST_ASSERT_EQUAL_HEX8(0x80, out[2]);
 }
 
 int main(void)
@@ -1071,7 +1084,8 @@ int main(void)
     RUN_TEST(test_the_reader_opens_on_the_first_pages_overview);
     RUN_TEST(test_an_a_held_at_init_waits_for_release_and_a_new_press);
     RUN_TEST(test_expand_row_maps_each_level_from_an_unaligned_pixel);
-    RUN_TEST(test_decimate_takes_the_darkest_level_of_each_cell);
+    RUN_TEST(test_decimate_takes_the_rounded_mean_of_each_cell);
+    RUN_TEST(test_decimate_keeps_solid_black_and_white_cells);
     RUN_TEST(test_decimate_takes_a_null_second_row_for_an_odd_last_row);
     RUN_TEST(test_decimate_packs_a_wide_row_across_bytes);
     return UNITY_END();

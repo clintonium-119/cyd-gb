@@ -490,11 +490,6 @@ void manual_expand_row(const uint8_t* row, uint16_t x0, uint16_t n,
     }
 }
 
-static uint8_t darker(uint8_t a, uint8_t b)
-{
-    return a > b ? a : b;
-}
-
 void manual_decimate_row(const uint8_t* a, const uint8_t* b, uint16_t w,
                          uint8_t* out)
 {
@@ -509,17 +504,24 @@ void manual_decimate_row(const uint8_t* a, const uint8_t* b, uint16_t w,
         uint32_t x = (uint32_t)i * 2u;
         /* The odd column past the right edge is padding, not page. */
         bool two = x + 1u < w;
-        uint8_t v = level_at(a, x);
+        uint32_t sum = level_at(a, x);
+        uint32_t n = 1;
+        uint8_t v;
 
         if (two) {
-            v = darker(v, level_at(a, x + 1u));
+            sum += level_at(a, x + 1u);
+            n++;
         }
         if (b != NULL) {
-            v = darker(v, level_at(b, x));
+            sum += level_at(b, x);
+            n++;
             if (two) {
-                v = darker(v, level_at(b, x + 1u));
+                sum += level_at(b, x + 1u);
+                n++;
             }
         }
+        /* The cell's mean level, rounded half up. */
+        v = (uint8_t)((2u * sum + n) / (2u * n));
         out[i >> 2] |= (uint8_t)(v << (6u - 2u * (i & 3u)));
     }
 }
