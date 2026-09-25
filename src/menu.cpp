@@ -483,17 +483,15 @@ static void page_input(menu_band_t* band)
 // the cartridge RAM, loading one rewinds the battery save too, so a load
 // always asks first, and so does a save that would replace a state.
 
-// The snapshot is stored at half size and drawn at twice that, which is the
-// Game Boy's own screen size, right-aligned under the header; the choices
-// stand in a column to its left.
-#define STATE_SCALE   2
-#define STATE_SHOW_W  (EMU_THUMB_W * STATE_SCALE)
-#define STATE_SHOW_H  (EMU_THUMB_H * STATE_SCALE)
+// The snapshot is the Game Boy's whole screen, drawn 1:1 and right-aligned
+// under the header; the choices stand in a column to its left.
+#define STATE_SHOW_W  EMU_THUMB_W
+#define STATE_SHOW_H  EMU_THUMB_H
 #define STATE_TOP     (UI_HEADER_H + 4)
 #define STATE_SHOW_X  (GAME_W - 8 - STATE_SHOW_W)
 #define STATE_COL_W   (STATE_SHOW_X - 8 - UI_PAD)
-// 80 x 24 x 2 is 3,840 bytes; three bands make the snapshot.
-#define STATE_BAND_ROWS 24
+// 160 x 16 x 2 is 5,120 bytes; nine bands make the snapshot.
+#define STATE_BAND_ROWS 16
 
 // n choices from y0, w wide, the cursor's in a pill.
 static void draw_choices(const char* const* labels, const bool* off,
@@ -618,30 +616,17 @@ static bool state_load(const char* rom_path)
            && emu_state_load(vfs);
 }
 
-// One band of the half-size snapshot, drawn at STATE_SCALE: each source row
-// doubled across into one screen row's buffer, pushed STATE_SCALE times, and
-// each of those rounded as its own one-row band of the scaled picture.
-static uint16_t* show_row; // STATE_SHOW_W pixels, while the screen draws
-
+// One band of the snapshot, rounded in place and pushed as it stands. The band
+// buffer is the one draw_state() allocated and handed the stream; it is only
+// const on the way back.
 static void blit_thumb(void* ctx, const uint16_t* px, size_t row0,
                        size_t rows)
 {
     (void)ctx;
-    for (size_t r = 0; r < rows; r++) {
-        const uint16_t* src = px + r * EMU_THUMB_W;
-
-        for (int16_t k = 0; k < STATE_SCALE; k++) {
-            int16_t y = (int16_t)((row0 + r) * STATE_SCALE + k);
-
-            for (int16_t x = 0; x < STATE_SHOW_W; x++) {
-                show_row[x] = src[x / STATE_SCALE];
-            }
-            ui_round_corners_565(show_row, STATE_SHOW_W, STATE_SHOW_H, y, 1,
-                                 UI_IMG_R, UI_COL_BG);
-            cv->image(cv->ctx, STATE_SHOW_X, (int16_t)(STATE_TOP + y),
-                      STATE_SHOW_W, 1, show_row, 0, 1);
-        }
-    }
+    ui_round_corners_565((uint16_t*)px, STATE_SHOW_W, STATE_SHOW_H,
+                         (int16_t)row0, (int16_t)rows, UI_IMG_R, UI_COL_BG);
+    cv->image(cv->ctx, STATE_SHOW_X, (int16_t)(STATE_TOP + row0),
+              STATE_SHOW_W, (int16_t)rows, px, 0, (int16_t)rows);
 }
 
 // The snapshot at the right under the title, or a slot saying there is none.
@@ -654,13 +639,10 @@ static void draw_state(const char* rom_path, bool have)
         uint16_t* px = (uint16_t*)malloc(EMU_THUMB_W * STATE_BAND_ROWS
                                          * sizeof(uint16_t));
 
-        show_row = (uint16_t*)malloc(STATE_SHOW_W * sizeof(uint16_t));
-        if (px && show_row) {
+        if (px) {
             shown = sd_thumb_stream(rom_path, px, EMU_THUMB_W, EMU_THUMB_H,
                                     STATE_BAND_ROWS, blit_thumb, NULL);
         }
-        free(show_row);
-        show_row = NULL;
         free(px);
     }
     if (!shown) {
