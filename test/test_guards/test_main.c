@@ -46,12 +46,13 @@ static const char* const WRITE_SYMS[] = {
 /* The one translation unit allowed to reference them. */
 #define PROVISIONER "cart_provision.cpp"
 
-/* Layers the writer must not reach into. */
+/* Layers the writer and the shared picker screen must not reach into. */
 static const char* const WRITER_FORBIDDEN[] = {
     "ntag_",
     "nfc_",
     "emu_",
     "rom_store_",
+    "provision_",
 };
 #define N_WRITER_FORBIDDEN \
     (sizeof(WRITER_FORBIDDEN) / sizeof(WRITER_FORBIDDEN[0]))
@@ -347,6 +348,8 @@ static void test_the_writer_references_no_lower_layer(void)
     static const char* const paths[] = {
         PROJECT_DIR "/src/cart_writer.cpp",
         PROJECT_DIR "/include/cart_writer.h",
+        PROJECT_DIR "/src/picker_screen.cpp",
+        PROJECT_DIR "/include/picker_screen.h",
     };
     char msg[512];
 
@@ -363,19 +366,63 @@ static void test_the_writer_references_no_lower_layer(void)
 
 /* The same scan, proved non-vacuous: while the writer's body was a stub it
  * referenced nothing at all, so guard (c) would have passed over a file with
- * no writer in it. A revert to a stub now fails here instead. */
+ * no writer in it. A revert to a stub now fails here instead. The loop lives
+ * in the shared picker screen, and the writer has to reach it. */
 static void test_the_writer_drives_the_pure_picker(void)
 {
-    const char* path = PROJECT_DIR "/src/cart_writer.cpp";
+    const char* path = PROJECT_DIR "/src/picker_screen.cpp";
 
     TEST_ASSERT_GREATER_THAN_MESSAGE(
         0, file_count(path, "picker_init("),
-        "src/cart_writer.cpp does not build a picker, so guard (c) would pass "
-        "vacuously");
+        "src/picker_screen.cpp does not build a picker, so guard (c) would "
+        "pass vacuously");
     TEST_ASSERT_GREATER_THAN_MESSAGE(
         0, file_count(path, "picker_draw("),
-        "src/cart_writer.cpp does not draw a picker, so guard (c) would pass "
-        "vacuously");
+        "src/picker_screen.cpp does not draw a picker, so guard (c) would "
+        "pass vacuously");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(
+        1, file_count(PROJECT_DIR "/src/cart_writer.cpp", "picker_screen_run("),
+        "src/cart_writer.cpp does not open the shared picker screen");
+}
+
+/* The picker screen has two callers: the writer, and the boot executor's
+ * games list, which opens it in launch mode only. A third caller, or a list
+ * that could reach a writing mode, is a second route to the writer. */
+static int c_callers;
+static char c_files[512];
+
+static void count_picker_screen_run(const char* dir, const char* name)
+{
+    /* The definition is not a call site. */
+    if (strcmp(name, "picker_screen.cpp") == 0) {
+        return;
+    }
+    int n = file_count_outside_ifdef(join(dir, name), "picker_screen_run(",
+                                     "DEV_WRITER");
+    if (n > 0) {
+        c_callers += n;
+        snprintf(c_files + strlen(c_files), sizeof(c_files) - strlen(c_files),
+                 "%s(x%d) ", name, n);
+    }
+}
+
+static void test_the_picker_screen_has_two_callers(void)
+{
+    c_callers = 0;
+    c_files[0] = '\0';
+
+    TEST_ASSERT_GREATER_THAN(
+        0, visit_dir(PROJECT_DIR "/src", ".cpp", count_picker_screen_run));
+    TEST_ASSERT_EQUAL_INT_MESSAGE(2, c_callers, c_files);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(
+        1, file_count_outside_ifdef(PROJECT_DIR "/src/cart_writer.cpp",
+                                    "picker_screen_run(", "DEV_WRITER"),
+        "the writer does not open the picker screen exactly once");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(
+        1, file_count_outside_ifdef(PROJECT_DIR "/src/main.cpp",
+                                    "picker_screen_run(PICKER_MODE_LAUNCH",
+                                    "DEV_WRITER"),
+        "src/main.cpp does not open the picker screen once, in launch mode");
 }
 
 /* ─── (e) the bypass is not configurable ──────────────────────────────────── */
@@ -584,6 +631,7 @@ int main(void)
     RUN_TEST(test_writer_open_is_declared_once);
     RUN_TEST(test_the_writer_references_no_lower_layer);
     RUN_TEST(test_the_writer_drives_the_pure_picker);
+    RUN_TEST(test_the_picker_screen_has_two_callers);
     RUN_TEST(test_platformio_ini_does_not_mention_the_rom_bypass);
     RUN_TEST(test_platformio_ini_does_not_mention_the_writer_bypass);
     RUN_TEST(test_the_menu_references_no_writer_or_tag_symbol);
