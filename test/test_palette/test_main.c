@@ -228,6 +228,50 @@ static void test_out_of_range_and_null_leave_the_lut_alone(void)
     palette_build_lut(0, NULL); /* must not crash */
 }
 
+/* Every byte gnuboy's DMG path emits, in the order the pack codes them. */
+static const uint8_t gnuboy_raw[16] = {
+    0, 1, 2, 3, 4, 5, 6, 7, 32, 33, 34, 35, 36, 37, 38, 39,
+};
+
+static void test_every_emitted_raw_value_packs_and_unpacks_to_itself(void)
+{
+    uint8_t packed[8];
+    unsigned x;
+
+    palette_pack_raw_line(gnuboy_raw, 16, packed);
+    for (x = 0; x < 16u; x++) {
+        TEST_ASSERT_EQUAL_UINT8(gnuboy_raw[x], palette_packed_raw(packed, x));
+    }
+}
+
+static void test_first_pixel_is_the_high_nibble_and_odd_tails_pad_zero(void)
+{
+    const uint8_t raw[3] = { 1, 39, 5 };
+    uint8_t packed[2] = { 0xAA, 0xAA };
+
+    palette_pack_raw_line(raw, 3, packed);
+    TEST_ASSERT_EQUAL_HEX8(0x1F, packed[0]);
+    TEST_ASSERT_EQUAL_HEX8(0x50, packed[1]);
+}
+
+static void test_unpacked_raw_colours_the_same_as_the_raw_byte(void)
+{
+    uint8_t packed[8];
+    unsigned p;
+    unsigned x;
+
+    palette_pack_raw_line(gnuboy_raw, 16, packed);
+    for (p = 0; p < PALETTE_COUNT; p++) {
+        /* Registers that are not the identity, so each group's shades
+         * are reordered and a wrong unpack shows as a wrong colour. */
+        palette_build_lut_gnuboy((uint8_t)p, 0x1B, 0xD2, 0x8D, lut);
+        for (x = 0; x < 16u; x++) {
+            TEST_ASSERT_EQUAL_HEX16(lut[gnuboy_raw[x]],
+                                    lut[palette_packed_raw(packed, x)]);
+        }
+    }
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -241,5 +285,8 @@ int main(void)
     RUN_TEST(test_palette_names_match_the_list);
     RUN_TEST(test_palette_name_reports_unknown_out_of_range);
     RUN_TEST(test_out_of_range_and_null_leave_the_lut_alone);
+    RUN_TEST(test_every_emitted_raw_value_packs_and_unpacks_to_itself);
+    RUN_TEST(test_first_pixel_is_the_high_nibble_and_odd_tails_pad_zero);
+    RUN_TEST(test_unpacked_raw_colours_the_same_as_the_raw_byte);
     return UNITY_END();
 }
