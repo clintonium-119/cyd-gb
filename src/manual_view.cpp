@@ -24,6 +24,10 @@
 #define MANUAL_BAND_BYTES (MANUAL_BAND_ROWS * MANUAL_MAX_STRIDE)
 #define MANUAL_BLOCK_BYTES (MANUAL_BAND_BYTES + MANUAL_BAND_BYTES / 255 + 16)
 
+// A page at most 2 x GAME_H tall has at most this many band offsets: 31, a
+// 124-byte table read once per draw.
+#define MANUAL_MAX_OFFSETS ((2 * GAME_H + MANUAL_BAND_ROWS - 1) / MANUAL_BAND_ROWS + 1)
+
 // The overview's chrome is the theme's: a header naming the page, the help
 // line and the hint footer, when the half-size page fits between them. A
 // portrait page is 240 rows at half size and does not, so it keeps the whole
@@ -64,10 +68,20 @@ static void wait_release()
     delay(100);
 }
 
-// Band b of the current page, decoded into v->band.
-static bool decode_band(const view_t* v, const manual_page_t* p, uint16_t b)
+// The page's band table, read once per draw: re-reading it per band seeks
+// the card back to it every time, which made a draw four times slower.
+static bool read_offsets(const view_t* v, const manual_page_t* p,
+                         uint32_t* offsets)
 {
-    return manual_band(&v->rd, v->size, p, b, v->block, MANUAL_BLOCK_BYTES,
+    return manual_band_offsets(&v->rd, v->size, p, offsets,
+                               MANUAL_MAX_OFFSETS) == MANUAL_OK;
+}
+
+// Band b of the current page, decoded into v->band.
+static bool decode_band(const view_t* v, const manual_page_t* p,
+                        const uint32_t* offsets, uint16_t b)
+{
+    return manual_band(&v->rd, p, offsets, b, v->block, MANUAL_BLOCK_BYTES,
                        v->band, MANUAL_BAND_BYTES) == MANUAL_OK;
 }
 
@@ -82,9 +96,13 @@ static bool draw_tile(const view_t* v, const manual_nav_t* nav)
     const uint16_t vh = p->h < GAME_H ? p->h : GAME_H;
     const int16_t x = (int16_t)((GAME_W - vw) / 2);
     const int16_t y = (int16_t)((GAME_H - vh) / 2);
+    uint32_t offsets[MANUAL_MAX_OFFSETS];
     uint16_t x0;
     uint16_t y0;
 
+    if (!read_offsets(v, p, offsets)) {
+        return false;
+    }
     manual_tile_origin(p, GAME_W, GAME_H, nav->tx, nav->ty, &x0, &y0);
     if (vw < GAME_W || vh < GAME_H) {
         v->cv->fill(v->cv->ctx, 0, 0, GAME_W, GAME_H, UI_COL_BG);
@@ -96,7 +114,7 @@ static bool draw_tile(const view_t* v, const manual_nav_t* nav)
         if (end > y0 + vh) {
             end = (uint16_t)(y0 + vh);
         }
-        if (!decode_band(v, p, b)) {
+        if (!decode_band(v, p, offsets, b)) {
             return false;
         }
         for (; r < end; r++) {
@@ -123,8 +141,12 @@ static bool draw_overview(const view_t* v, const manual_nav_t* nav)
     const int16_t x = (int16_t)((GAME_W - hw) / 2);
     const int16_t y = chrome ? (int16_t)(UI_HEADER_H + (MANUAL_ROOM_H - hh) / 2)
                              : (int16_t)((GAME_H - hh) / 2);
+    uint32_t offsets[MANUAL_MAX_OFFSETS];
     char label[12];
 
+    if (!read_offsets(v, p, offsets)) {
+        return false;
+    }
     snprintf(label, sizeof(label), "%u/%u", (unsigned)(nav->page + 1),
              (unsigned)v->count);
     cv->fill(cv->ctx, 0, 0, GAME_W, GAME_H, UI_COL_BG);
@@ -139,7 +161,7 @@ static bool draw_overview(const view_t* v, const manual_nav_t* nav)
         if (n > MANUAL_BAND_ROWS) {
             n = MANUAL_BAND_ROWS;
         }
-        if (!decode_band(v, p, (uint16_t)(r / MANUAL_BAND_ROWS))) {
+        if (!decode_band(v, p, offsets, (uint16_t)(r / MANUAL_BAND_ROWS))) {
             return false;
         }
         for (uint16_t i = 0; i < n; i += 2) {

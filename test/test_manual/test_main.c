@@ -45,6 +45,7 @@ typedef struct mem_s {
     const uint8_t* data;
     size_t len;
     size_t chunk; /* the most one read hands back, to force short reads */
+    unsigned reads; /* calls made, to pin how often the card is seeked */
 } mem_t;
 
 static int mem_read(void* ctx, uint32_t off, void* dst, size_t cap,
@@ -53,6 +54,7 @@ static int mem_read(void* ctx, uint32_t off, void* dst, size_t cap,
     mem_t* m = (mem_t*)ctx;
     size_t n;
 
+    m->reads++;
     if (off >= m->len) {
         *got = 0;
         return 0;
@@ -76,6 +78,7 @@ static manual_reader_t reader_over(mem_t* m, const uint8_t* data, size_t len)
     m->data = data;
     m->len = len;
     m->chunk = len;
+    m->reads = 0;
     rd.ctx = m;
     rd.read = mem_read;
     return rd;
@@ -233,8 +236,11 @@ static void test_every_band_of_the_fixture_decodes_to_the_encoders_pixels(void)
                                                   WIN_H, pages, count));
     for (p = 0; p < count; p++) {
         uint16_t stride = (uint16_t)((pages[p].w + 3) / 4);
+        uint32_t offsets[3];
         uint16_t b;
 
+        TEST_ASSERT_EQUAL_INT(MANUAL_OK,
+            manual_band_offsets(&rd, (uint32_t)len, &pages[p], offsets, 3));
         for (b = 0; b < bands_of(pages[p].h); b++) {
             uint8_t scratch[64];
             uint8_t out[16 * 3 + 1];
@@ -258,7 +264,7 @@ static void test_every_band_of_the_fixture_decodes_to_the_encoders_pixels(void)
             /* One spare byte, which a band of exactly its size leaves. */
             memset(out, 0xEE, sizeof out);
             TEST_ASSERT_EQUAL_INT(MANUAL_OK,
-                manual_band(&rd, (uint32_t)len, &pages[p], b, scratch,
+                manual_band(&rd, &pages[p], offsets, b, scratch,
                             sizeof scratch, out, sizeof out));
             TEST_ASSERT_EQUAL_HEX8_ARRAY(want, out, rows * stride);
             TEST_ASSERT_EQUAL_HEX8(0xEE, out[rows * stride]);
@@ -287,13 +293,20 @@ static manual_reader_t parsed_fixture(mem_t* m)
     return rd;
 }
 
+/* The page's offsets, then the band: the first refusal of the two. */
 static int band_of_fixture(const manual_reader_t* rd, uint16_t page,
                            uint16_t band, size_t scratch_cap)
 {
+    uint32_t offsets[3];
     uint8_t scratch[64];
     uint8_t out[64];
+    int rc = manual_band_offsets(rd, (uint32_t)fx_len, &fx_pages[page],
+                                 offsets, 3);
 
-    return manual_band(rd, (uint32_t)fx_len, &fx_pages[page], band, scratch,
+    if (rc != MANUAL_OK) {
+        return rc;
+    }
+    return manual_band(rd, &fx_pages[page], offsets, band, scratch,
                        scratch_cap, out, sizeof out);
 }
 
@@ -322,15 +335,18 @@ static void test_a_block_bigger_than_the_scratch_is_refused_unwritten(void)
     manual_reader_t rd = parsed_fixture(&m);
     uint32_t start = get32(fx + fx_pages[0].offset);
     uint32_t end = get32(fx + fx_pages[0].offset + 4);
+    uint32_t offsets[3];
     uint8_t scratch[64];
     uint8_t out[64];
     uint8_t untouched[64];
 
+    TEST_ASSERT_EQUAL_INT(MANUAL_OK,
+        manual_band_offsets(&rd, (uint32_t)fx_len, &fx_pages[0], offsets, 3));
     memset(scratch, 0xEE, sizeof scratch);
     memset(out, 0xEE, sizeof out);
     memset(untouched, 0xEE, sizeof untouched);
     TEST_ASSERT_EQUAL_INT(MANUAL_ERR_FORMAT,
-        manual_band(&rd, (uint32_t)fx_len, &fx_pages[0], 0, scratch,
+        manual_band(&rd, &fx_pages[0], offsets, 0, scratch,
                     end - start - 1, out, sizeof out));
     TEST_ASSERT_EQUAL_HEX8_ARRAY(untouched, scratch, sizeof scratch);
     TEST_ASSERT_EQUAL_HEX8_ARRAY(untouched, out, sizeof out);
@@ -355,14 +371,57 @@ static void test_a_band_past_the_page_or_an_out_too_small_is_refused(void)
 {
     mem_t m;
     manual_reader_t rd = parsed_fixture(&m);
+    uint32_t offsets[3];
     uint8_t scratch[64];
     uint8_t out[64];
 
     TEST_ASSERT_EQUAL_INT(MANUAL_ERR_ARGS, band_of_fixture(&rd, 0, 2, 64));
+    TEST_ASSERT_EQUAL_INT(MANUAL_OK,
+        manual_band_offsets(&rd, (uint32_t)fx_len, &fx_pages[1], offsets, 3));
     /* The small page's band is 3 rows of 2 bytes. */
     TEST_ASSERT_EQUAL_INT(MANUAL_ERR_ARGS,
-        manual_band(&rd, (uint32_t)fx_len, &fx_pages[1], 0, scratch,
-                    sizeof scratch, out, 5));
+        manual_band(&rd, &fx_pages[1], offsets, 0, scratch, sizeof scratch,
+                    out, 5));
+}
+
+static void test_offsets_with_no_room_for_the_whole_table_are_refused(void)
+{
+    mem_t m;
+    manual_reader_t rd = parsed_fixture(&m);
+    uint32_t offsets[3];
+
+    /* The first page is two bands, so three offsets. */
+    TEST_ASSERT_EQUAL_UINT16(2, manual_bands(&fx_pages[0]));
+    TEST_ASSERT_EQUAL_INT(MANUAL_ERR_ARGS,
+        manual_band_offsets(&rd, (uint32_t)fx_len, &fx_pages[0], offsets, 2));
+}
+
+static void test_a_table_is_one_read_and_a_band_one_more(void)
+{
+    /* A seek on the card costs as much as a block, so the table must not be
+     * re-read per band. */
+    static const uint16_t s[1][2] = { { 2 * WIN_W, 2 * WIN_H } };
+    static uint8_t scratch[16 * 133 + 16];
+    static uint8_t out[16 * 133];
+    uint32_t offsets[31];
+    mem_t m;
+    size_t len = build(big, MANUAL_VERSION, 1, s, 1);
+    manual_reader_t rd = reader_over(&m, big, len);
+    manual_page_t pages[1];
+    uint16_t b;
+
+    TEST_ASSERT_EQUAL_INT(MANUAL_OK,
+        manual_table(&rd, (uint32_t)len, WIN_W, WIN_H, pages, 1));
+    m.reads = 0;
+    TEST_ASSERT_EQUAL_INT(MANUAL_OK,
+        manual_band_offsets(&rd, (uint32_t)len, &pages[0], offsets, 31));
+    TEST_ASSERT_EQUAL_UINT(1, m.reads);
+    for (b = 0; b < manual_bands(&pages[0]); b++) {
+        TEST_ASSERT_EQUAL_INT(MANUAL_OK,
+            manual_band(&rd, &pages[0], offsets, b, scratch, sizeof scratch,
+                        out, sizeof out));
+    }
+    TEST_ASSERT_EQUAL_UINT(1 + 30, m.reads);
 }
 
 static void test_a_reader_that_fails_mid_band_is_an_io_error(void)
@@ -639,11 +698,15 @@ static void test_every_band_of_a_full_size_page_decodes(void)
     manual_page_t pages[1];
     uint16_t b;
 
+    uint32_t offsets[31];
+
     TEST_ASSERT_EQUAL_INT(MANUAL_OK,
         manual_table(&rd, (uint32_t)len, WIN_W, WIN_H, pages, 1));
+    TEST_ASSERT_EQUAL_INT(MANUAL_OK,
+        manual_band_offsets(&rd, (uint32_t)len, &pages[0], offsets, 31));
     for (b = 0; b < bands_of(2 * WIN_H); b++) {
         TEST_ASSERT_EQUAL_INT(MANUAL_OK,
-            manual_band(&rd, (uint32_t)len, &pages[0], b, scratch,
+            manual_band(&rd, &pages[0], offsets, b, scratch,
                         sizeof scratch, out, sizeof out));
     }
 }
@@ -1039,6 +1102,8 @@ int main(void)
     RUN_TEST(test_a_block_that_decodes_short_is_a_format_error);
     RUN_TEST(test_a_band_past_the_page_or_an_out_too_small_is_refused);
     RUN_TEST(test_a_reader_that_fails_mid_band_is_an_io_error);
+    RUN_TEST(test_offsets_with_no_room_for_the_whole_table_are_refused);
+    RUN_TEST(test_a_table_is_one_read_and_a_band_one_more);
     RUN_TEST(test_lz4_decodes_a_literal_only_block);
     RUN_TEST(test_lz4_reads_a_literal_length_extension);
     RUN_TEST(test_lz4_copies_an_overlapping_match_byte_by_byte);

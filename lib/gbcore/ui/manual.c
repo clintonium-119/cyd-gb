@@ -10,6 +10,10 @@
 /* Table entries read per chunk: 16 of them is 64 bytes of stack. */
 #define MANUAL_TABLE_CHUNK 16
 
+/* Band offsets read per chunk: 32 of them, 128 bytes of stack, is a whole
+ * 480-row page's table in one read. */
+#define MANUAL_OFFSET_CHUNK 32
+
 static uint16_t le16(const uint8_t* p)
 {
     return (uint16_t)(p[0] | (p[1] << 8));
@@ -140,19 +144,63 @@ int manual_table(const manual_reader_t* rd, uint32_t file_size,
     return (le32(last) == file_size) ? MANUAL_OK : MANUAL_ERR_SIZE;
 }
 
-int manual_band(const manual_reader_t* rd, uint32_t file_size,
-                const manual_page_t* page, uint16_t band, uint8_t* scratch,
+uint16_t manual_bands(const manual_page_t* page)
+{
+    return page == NULL ? 0 : (uint16_t)bands_of(page->h);
+}
+
+int manual_band_offsets(const manual_reader_t* rd, uint32_t file_size,
+                        const manual_page_t* page, uint32_t* offsets,
+                        size_t cap)
+{
+    uint8_t buf[MANUAL_OFFSET_CHUNK * MANUAL_OFFSET_BYTES];
+    size_t n;
+    size_t i = 0;
+
+    if (!usable(rd) || page == NULL || offsets == NULL) {
+        return MANUAL_ERR_ARGS;
+    }
+    n = bands_of(page->h) + 1u;
+    if (cap < n) {
+        return MANUAL_ERR_ARGS;
+    }
+    while (i < n) {
+        size_t k = n - i;
+        size_t j;
+        int rc;
+
+        if (k > MANUAL_OFFSET_CHUNK) {
+            k = MANUAL_OFFSET_CHUNK;
+        }
+        rc = read_exact(rd,
+                        page->offset + (uint32_t)(i * MANUAL_OFFSET_BYTES),
+                        buf, k * MANUAL_OFFSET_BYTES);
+        if (rc != MANUAL_OK) {
+            return rc;
+        }
+        for (j = 0; j < k; j++, i++) {
+            offsets[i] = le32(buf + j * MANUAL_OFFSET_BYTES);
+            if ((i > 0 && offsets[i] < offsets[i - 1]) ||
+                offsets[i] > file_size) {
+                return MANUAL_ERR_FORMAT;
+            }
+        }
+    }
+    return MANUAL_OK;
+}
+
+int manual_band(const manual_reader_t* rd, const manual_page_t* page,
+                const uint32_t* offsets, uint16_t band, uint8_t* scratch,
                 size_t scratch_cap, uint8_t* out, size_t out_cap)
 {
-    uint8_t offs[2 * MANUAL_OFFSET_BYTES];
     uint32_t start;
     uint32_t end;
     uint32_t rows;
     size_t want;
     int rc;
 
-    if (!usable(rd) || page == NULL || scratch == NULL || out == NULL ||
-        band >= bands_of(page->h)) {
+    if (!usable(rd) || page == NULL || offsets == NULL || scratch == NULL ||
+        out == NULL || band >= bands_of(page->h)) {
         return MANUAL_ERR_ARGS;
     }
     rows = page->h - (uint32_t)band * MANUAL_BAND_ROWS;
@@ -164,14 +212,9 @@ int manual_band(const manual_reader_t* rd, uint32_t file_size,
         return MANUAL_ERR_ARGS;
     }
 
-    rc = read_exact(rd, page->offset + (uint32_t)band * MANUAL_OFFSET_BYTES,
-                    offs, sizeof offs);
-    if (rc != MANUAL_OK) {
-        return rc;
-    }
-    start = le32(offs);
-    end = le32(offs + MANUAL_OFFSET_BYTES);
-    if (end < start || end > file_size || end - start > scratch_cap) {
+    start = offsets[band];
+    end = offsets[band + 1u];
+    if (end < start || end - start > scratch_cap) {
         return MANUAL_ERR_FORMAT;
     }
     rc = read_exact(rd, start, scratch, end - start);

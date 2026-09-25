@@ -132,17 +132,32 @@ int manual_table(const manual_reader_t* rd, uint32_t file_size,
                  uint16_t win_w, uint16_t win_h, manual_page_t* pages,
                  uint16_t count);
 
+/* How many bands a page is: ceil(h / MANUAL_BAND_ROWS). Its table holds one
+ * more offset than that. */
+uint16_t manual_bands(const manual_page_t* page);
+
 /*
- * Decode one band of a page into out: its block is read into scratch, then
- * decompressed into exactly rows x ceil(w / 4) bytes of out. MANUAL_ERR_ARGS
- * for a band past the page or an out too small for it; MANUAL_ERR_FORMAT for
- * offsets that decrease or run past file_size, a block bigger than
- * scratch_cap, or a block that does not decode to exactly the band;
- * MANUAL_ERR_IO when the reader fails. Nothing is written to scratch or out
- * before the offsets have passed.
+ * Read a page's whole band table into offsets, room for `cap` of them — one
+ * read for any page up to 496 rows. Once per page drawn, not per band: on a
+ * card, every seek back to the table costs as much as reading a block. MANUAL_ERR_ARGS when cap is under
+ * manual_bands() + 1; MANUAL_ERR_FORMAT for offsets that decrease or run past
+ * file_size; MANUAL_ERR_IO when the reader fails.
  */
-int manual_band(const manual_reader_t* rd, uint32_t file_size,
-                const manual_page_t* page, uint16_t band, uint8_t* scratch,
+int manual_band_offsets(const manual_reader_t* rd, uint32_t file_size,
+                        const manual_page_t* page, uint32_t* offsets,
+                        size_t cap);
+
+/*
+ * Decode one band of a page into out, from the offsets manual_band_offsets()
+ * read: its block is read into scratch, then decompressed into exactly
+ * rows x ceil(w / 4) bytes of out. MANUAL_ERR_ARGS for a band past the page
+ * or an out too small for it; MANUAL_ERR_FORMAT for offsets that decrease, a
+ * block bigger than scratch_cap, or a block that does not decode to exactly
+ * the band; MANUAL_ERR_IO when the reader fails. Nothing is written to
+ * scratch or out before the offsets have passed.
+ */
+int manual_band(const manual_reader_t* rd, const manual_page_t* page,
+                const uint32_t* offsets, uint16_t band, uint8_t* scratch,
                 size_t scratch_cap, uint8_t* out, size_t out_cap);
 
 /*
