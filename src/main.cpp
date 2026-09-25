@@ -441,13 +441,23 @@ void run_emu() {
 }
 
 // ─── Load ───────────────────────────────────────────────────────────────────
+// A load that fails halts, as it always has. A game remembered from the games
+// list is forgotten first, so the next power-on opens the list again rather
+// than repeating the same failure at every boot.
+static void load_halt(const char* l1, const char* l2) {
+    if (list_launched) {
+        settings_list_game_clear();
+    }
+    halt_screen(l1, l2);
+}
+
 // `name` is a ROM file name, not a path: exact match is the rule, and the
 // legacy walk is the fallback for tags hand-written before the device could
 // write them.
 static void load_and_run(const char* name) {
     if (!sd_rom_path(name, cur_path, sizeof(cur_path))
         && !sd_rom_find_legacy(name, cur_path, sizeof(cur_path))) {
-        halt_screen("Not found:", tag_payload[0] ? tag_payload : name);
+        load_halt("Not found:", tag_payload[0] ? tag_payload : name);
     }
 
     notice("Loading...", "", false);
@@ -460,7 +470,7 @@ static void load_and_run(const char* name) {
 
     File rom_file = SD.open(cur_path, FILE_READ);
     if (!rom_file) {
-        halt_screen("Open failed", cur_path);
+        load_halt("Open failed", cur_path);
     }
 
     // Order is load-bearing, not incidental: a flash write stalls the other
@@ -469,13 +479,13 @@ static void load_and_run(const char* name) {
     bool in_flash = rom_store_init() && rom_store_write(rom_file, rom_name);
     rom_file.close();
     if (!in_flash) {
-        halt_screen("ROM store failed", "");
+        load_halt("ROM store failed", "");
     }
 
     uint32_t rom_len = 0;
     const uint8_t* rom = rom_store_mmap(&rom_len);
     if (!rom) {
-        halt_screen("Map failed", "");
+        load_halt("Map failed", "");
     }
     // Read on the stack: emu_init() copies it into gnuboy's own buffer.
     uint8_t boot_rom[DMG_BOOT_ROM_SIZE];
@@ -483,7 +493,7 @@ static void load_and_run(const char* name) {
         emu_set_boot_rom(boot_rom);
     }
     if (!emu_init(rom, rom_len)) {
-        halt_screen("Init failed", "");
+        load_halt("Init failed", "");
     }
 
     // The menu's snapshot: the path the tag's name matched, and the header
