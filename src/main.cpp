@@ -17,6 +17,7 @@
 #include "nfc_cart.h"
 #include "cart_provision.h"
 #include "cart_writer.h"
+#include "picker_screen.h"
 #include "diag.h"
 #include "cart/boot.h"
 #include "cart/catalog.h"
@@ -56,6 +57,8 @@ static const ntag_dev_t tag_dev = { NULL, nfc_transceive };
 // what it is. The UID lives in this struct for display and nowhere else — it
 // is not persisted, and nothing outside the menu reads it.
 static menu_cart_info_t cart_info;
+// Whether the running game was started from the games list rather than a tag.
+static bool list_launched = false;
 
 // ─── Boot screens ───────────────────────────────────────────────────────────
 // All boot drawing lands inside the game window. The printed bezel masks
@@ -422,6 +425,14 @@ void run_emu() {
     }
 }
 
+// The games list's one way out: settings parked for a coalesced write land
+// first, then the chip restarts into whatever the stored records now say.
+static void restart_now() {
+    settings_flush(millis(), true);
+    Serial.flush();
+    ESP.restart();
+}
+
 // ─── Load ───────────────────────────────────────────────────────────────────
 // `name` is a ROM file name, not a path: exact match is the rule, and the
 // legacy walk is the fallback for tags hand-written before the device could
@@ -594,6 +605,8 @@ void setup() {
     bool stored = settings_load(&settings);
     settings_wizard_load(&in.flags);
     in.pending_set = settings_pending_load(&in.pending);
+    in.list_mode = settings.list_mode;
+    in.list_set = settings_list_game_load(in.list_rom, sizeof in.list_rom);
 
     display_init();
 #ifdef PANEL_FILL_PROBE
@@ -637,11 +650,17 @@ void setup() {
         reader_ok = nfc_init();
     }
     // A reader that does not answer twice is the fault, not the tag: say so
-    // rather than let the tag read fail and blame the cartridge.
-    if (!reader_ok) {
+    // rather than let the tag read fail and blame the cartridge. With the
+    // games-list mode on it is treated as an empty slot instead, so the list
+    // or the remembered game still boots; the first read may have left
+    // UNREADABLE behind, so the outcome is set rather than read again.
+    if (!reader_ok && !settings.list_mode) {
         halt_screen("Reader not responding", "");
     }
-    if (in.tag != BOOT_TAG_OK) {
+    if (!reader_ok) {
+        Serial.println("[BOOT] reader down, games list mode: no tag");
+        in.tag = BOOT_TAG_NONE;
+    } else if (in.tag != BOOT_TAG_OK) {
         read_tag(&in);
     }
 #endif
@@ -829,10 +848,32 @@ void loop() {
                 case BOOT_PICK_HALT_NO_SELECTION:
                     halt_notice("Setup: insert a blank cart", "");
                     break;
+                case BOOT_PICK_RECORD_LIST_GAME:
                 case BOOT_PICK_INVALID:
                     halt_screen("Write failed", "");
                     break;
             }
+            break;
+
+        // The games list: the picker screen in launch mode, which writes no
+        // tag. A pick is recorded and the chip restarts, so the game boots
+        // with a heap the list never touched.
+        case BOOT_LIST_OPEN:
+            pick = picker_screen_run(PICKER_MODE_LAUNCH,
+                                     cat_ok ? &cat : NULL, &in.flags, false,
+                                     &sel);
+            pa = boot_after_pick(action, pick);
+            if (pa == BOOT_PICK_RECORD_LIST_GAME) {
+                Serial.printf("[BOOT] list pick %s\n", sel.rom);
+                settings_list_game_save(sel.rom);
+                restart_now();
+            }
+            halt_screen("No cartridge", "");
+            break;
+
+        case BOOT_LIST_LOAD:
+            list_launched = true;
+            load_and_run(in.list_rom);
             break;
 
         case BOOT_EXECUTE_PENDING:
