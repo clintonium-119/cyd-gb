@@ -138,9 +138,9 @@ typedef struct boot_input_s {
 } boot_input_t;
 
 enum boot_action_e {
-    /* Halts. Halt means halt: no retry loop, no fallback browser. The DMG's
-     * mechanical interlock already forces a power cycle to change carts, and
-     * the power cycle is the retry. */
+    /* Halts. Halt means halt: no retry loop, and no fallback browser unless
+     * the games-list mode is on. The DMG's mechanical interlock already forces
+     * a power cycle to change carts, and the power cycle is the retry. */
     BOOT_HALT_NO_CART = 0,
     BOOT_HALT_SHIELDING,
     BOOT_HALT_UNREADABLE,

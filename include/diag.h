@@ -22,6 +22,8 @@
 //   4. It reaches for nothing above or below itself: no writer, no
 //      provisioner, no ROM storage and no emulator symbol appears in its
 //      sources. It selects no game, and has no list of games to select from.
+//      It holds one stored toggle, the games-list fallback mode, which the
+//      boot path reads on a later power-on; diagnostics itself lists nothing.
 //   5. When it renders, it renders inside the game window, like every other
 //      screen on this device — which is what lets the nudge page move the
 //      whole window while a builder watches its border.

@@ -8,7 +8,7 @@ title: "Prompt Standards"
 status: in_progress
 owner: ""
 created: '2026-08-27'
-updated: '2026-09-23'
+updated: '2026-09-25'
 reviewed_on: ""
 related_notes: ["[[01_Knowledge/Coding_Standards]]", "[[01_Knowledge/System_Overview]]"]
 tags: [apovault, knowledge, standards]
@@ -28,6 +28,12 @@ them before proposing changes." These are therefore rails, not background.
   The cartridge system is the product. `reference/ORIGINAL_ROADMAP.md:404-415` goes further than a preference: "The firmware
   must be physically incapable of writing tags." Hiding such a feature behind a boot combo is explicitly
   rejected as insufficient. **Source:** `reference/ORIGINAL_ROADMAP.md:16-20, 404-415, 668` (read 2026-08-27).
+  **One narrow exception (user-confirmed 2026-09-25):** a games list may exist only while a builder has
+  switched the per-unit games-list fallback mode on from the diagnostics System page. It is off by default,
+  opens only where a boot would otherwise halt "No cartridge" or "Reader not responding", launches games,
+  and writes no tag. The in-game menu's Return to Games List row appears only for a game launched from that
+  list. The cart writer, its write path and its single entry are unchanged. Nothing else relaxes: no boot
+  combo, no list for tag-launched games, no history.
 - **Do not switch the emulator to Retro-Go.** It is a launcher; adapting it means suppressing its central
   feature. Borrow its techniques — core split, DMA, single framebuffer push — not its architecture.
   **Source:** `reference/ORIGINAL_ROADMAP.md:338-345, 669-670` (read 2026-08-27).
@@ -40,7 +46,8 @@ them before proposing changes." These are therefore rails, not background.
   are marked "estimated, not measured" and "could be off by 50% either way."
   **Source:** `reference/ORIGINAL_ROADMAP.md:26-29, 293-300, 679-696` (read 2026-09-01).
 - **Do read `reference/ORIGINAL_ROADMAP.md` §13 before proposing anything that looks like an obvious improvement.** It is a
-  list of things already considered and rejected, each with the reason: no ROM browser, no Retro-Go, no
+  list of things already considered and rejected, each with the reason: no ROM browser (bar the
+  diagnostics-toggled games-list fallback above), no Retro-Go, no
   driving IO4 (the bench proved it is not the amp enable and its real function is unknown), no building on
   the vendor datasheet without metering (it has been wrong twice: the header pinout and IO4), no stretching
   to 240 rows, no blending byte-swapped pixels, no per-pixel cross-palette branch, no manual Save/Load, no

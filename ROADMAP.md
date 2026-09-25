@@ -378,7 +378,8 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
 
 **Code-complete exit**
 - `ntag`, `ndef`, `catalog` and `match` tests pass; guard tests (a)–(d) pass.
-- `main.cpp` has no code path from a running game back to ROM selection.
+- `main.cpp` has no code path from a running game back to ROM selection, bar one: the in-game menu's Return
+  to Games List row, present only for a game launched from the diagnostics-enabled games-list fallback.
 - The wizard completes MENU → wildcard → game cart → Finish setup on host against the fake tag model.
 
 **Deferred verification**
@@ -661,6 +662,10 @@ state machine). **Serial position:** after WS-07, before WS-08 (§1). **Design:*
    the cart writer other than booting with a MENU cartridge (or the one-shot first-boot wizard, re-armed only
    by an NVS clear at the flashing station). Selecting a ROM in the writer must never load it in the same
    session. Re-read §6.1 and §13 before planning. WS-06's guard tests enforce the gating mechanically.
+   One exception: a builder can switch a unit into a games-list fallback mode from the diagnostics System
+   page. It is off by default. With it on, a boot that would halt "No cartridge" or "Reader not responding"
+   opens a launcher over the writer's game list instead; it launches games and writes no tag. A game it
+   launched shows Return to Games List as the in-game menu's last row. No other route reaches the list.
 2. **Bench-dependent values are constants**, named in one of two headers, defaulted to the design doc's value,
    with a comment citing the § and the §11 item that verifies it.
 3. **Host tests for anything pure.** If a function has no `Arduino.h` dependency, it goes in the core modules

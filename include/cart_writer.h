@@ -29,6 +29,9 @@
 //      are allocated on entry and freed on exit, not static: static storage
 //      is paid in every boot, including every boot that plays a game.
 //
+// The games list is a separate caller of the same shared picker screen, in a
+// launch mode that only reports a pick; it is not a second writer.
+//
 // `pending_set` drives whether a Cancel entry is offered; `flags` drives the
 // starter filter and whether Finish setup is available.
 

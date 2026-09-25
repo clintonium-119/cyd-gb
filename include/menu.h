@@ -16,8 +16,10 @@ typedef struct menu_cart_info_s {
 } menu_cart_info_t;
 
 // ─── In-game menu ───────────────────────────────────────────────────────────
-// What the caller has to do next. There is no third answer: the menu is a
-// pause screen with a restart on it, and it leads nowhere else.
+// What the caller has to do next: resume, restart, or — only for a game
+// launched from the games list — go back to that list. The menu is a pause
+// screen with a restart on it, and for a tag-launched game it leads nowhere
+// else.
 enum menu_result_e {
     MENU_RESUME = 0,
     MENU_RESET,

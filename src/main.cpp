@@ -77,9 +77,9 @@ static void notice(const char* l1, const char* l2, bool is_error) {
               l1, l2, is_error, NULL, 0);
 }
 
-// Halt means halt: no retry loop and no fallback browser. The DMG's
-// mechanical interlock already forces a power-off to change carts, so the
-// power cycle is the retry.
+// Halt means halt: no retry loop, and no fallback browser unless the
+// games-list mode is on. The DMG's mechanical interlock already forces a
+// power-off to change carts, so the power cycle is the retry.
 static void halt(const char* l1, const char* l2, bool is_error) {
     Serial.printf("[BOOT] halt: %s %s\n", l1, l2 ? l2 : "");
     notice(l1, l2, is_error);

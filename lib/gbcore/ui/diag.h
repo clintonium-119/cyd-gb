@@ -23,7 +23,9 @@
 //   2. It reaches for nothing below itself. No tag, reader, storage or
 //      emulator symbol appears here, in code or in prose.
 //   3. It writes no tag and offers no route to one.
-//   4. It selects no game, and has no list of games to select from.
+//   4. It selects no game, and has no list of games to select from. It holds
+//      one stored toggle, the games-list fallback mode, which another boot
+//      path reads; the list is never shown from here.
 //   5. When it renders, it renders inside the game window — every coordinate
 //      the layout module produces is window-relative.
 //
