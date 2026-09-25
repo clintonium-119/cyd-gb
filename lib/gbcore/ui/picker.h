@@ -81,6 +81,9 @@ enum picker_mode_e {
     PICKER_MODE_PENDING = 0,
     /* The first-boot wizard: the tag to write is the one in the field now. */
     PICKER_MODE_IMMEDIATE,
+    /* The games list: every game, no action row, and a pick starts the game
+     * rather than lining up a write. It writes no tag. */
+    PICKER_MODE_LAUNCH,
 };
 
 enum picker_screen_e {
@@ -166,7 +169,9 @@ typedef struct picker_s {
  * Pending mode offers Cancel pending write, only when one is set, then every
  * catalog entry in file order. Immediate mode — the wizard — offers Finish
  * setup, only once the wildcard is done, because before that the boot flow
- * treats a finish as invalid, and then the `starter` entries only.
+ * treats a finish as invalid, and then the `starter` entries only. Launch
+ * mode — the games list — offers every catalog entry and no action row;
+ * `pending_set` is ignored.
  *
  * PICKER_ERR_ARGS for a NULL picker or catalog or rows_visible == 0;
  * PICKER_ERR_EMPTY when the mode composed no rows, with the state left

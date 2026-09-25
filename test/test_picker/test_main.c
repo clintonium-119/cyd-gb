@@ -291,7 +291,53 @@ static void test_a_done_machine_ignores_every_further_sample(void)
     TEST_ASSERT_EQUAL_UINT8(PICKER_SCREEN_DONE, p.screen);
 }
 
+static void test_launch_mode_is_every_game_and_no_action_row(void)
+{
+    fill_library(LIB_COUNT);
+    /* pending_set and wild_done are both true: neither may add a row. */
+    picker_t p = fresh(PICKER_MODE_LAUNCH, true, true, NULL);
+    uint16_t i;
+
+    TEST_ASSERT_EQUAL_UINT16(LIB_COUNT, p.row_count);
+    for (i = 0; i < p.row_count; i++) {
+        TEST_ASSERT_EQUAL_UINT8(PICKER_ROW_GAME, p.rows[i].kind);
+        TEST_ASSERT_EQUAL_UINT16(i, p.rows[i].cat);
+    }
+}
+
 /* ─── the selection ───────────────────────────────────────────────────────── */
+
+static void test_a_held_launch_pick_returns_its_filename(void)
+{
+    boot_selection_t out;
+
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_LAUNCH, false, false, NULL);
+
+    /* Row 1 is not a starter: launch mode offers it anyway. */
+    open_row(&p, 1, 0);
+    press(&p, B_NONE, 100);
+    press(&p, B_A, 200);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_DONE, press(&p, B_A, 1200));
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_ROM, picker_result(&p, &out));
+    TEST_ASSERT_EQUAL_STRING("Game 001.gb", out.rom);
+}
+
+static void test_an_early_release_in_launch_mode_picks_nothing(void)
+{
+    boot_selection_t out;
+
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_LAUNCH, false, false, NULL);
+
+    open_row(&p, 0, 0);
+    press(&p, B_NONE, 100);
+    press(&p, B_A, 200);
+    press(&p, B_A, 1100);
+    press(&p, B_NONE, 1150);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_SCREEN_DETAIL, p.screen);
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_NONE, picker_result(&p, &out));
+}
 
 static void test_a_confirmed_game_row_returns_its_filename(void)
 {
@@ -881,6 +927,9 @@ int main(void)
     RUN_TEST(test_a_fresh_hold_completes_at_the_hold_figure);
     RUN_TEST(test_letting_go_early_resets_the_hold);
     RUN_TEST(test_a_done_machine_ignores_every_further_sample);
+    RUN_TEST(test_launch_mode_is_every_game_and_no_action_row);
+    RUN_TEST(test_a_held_launch_pick_returns_its_filename);
+    RUN_TEST(test_an_early_release_in_launch_mode_picks_nothing);
     RUN_TEST(test_a_confirmed_game_row_returns_its_filename);
     RUN_TEST(test_every_mode_returns_the_wildcard_target);
     RUN_TEST(test_the_cancel_row_returns_cancel_pending);

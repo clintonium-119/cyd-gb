@@ -41,8 +41,8 @@ static void build_rows(picker_t* p, bool wild_done, bool pending_set)
         return;
     }
 
-    if (p->mode == PICKER_MODE_PENDING) {
-        if (pending_set) {
+    if (p->mode == PICKER_MODE_PENDING || p->mode == PICKER_MODE_LAUNCH) {
+        if (pending_set && p->mode == PICKER_MODE_PENDING) {
             add_row(p, PICKER_ROW_CANCEL_PENDING, 0);
         }
         for (i = 0; i < (uint16_t)p->cat->count; i++) {

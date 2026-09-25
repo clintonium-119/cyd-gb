@@ -849,6 +849,34 @@ static void test_an_action_page_explains_itself(void)
     TEST_ASSERT_TRUE(hint);
 }
 
+/* The games list's game page says it plays; the writer's says it installs. */
+static void test_the_launch_page_says_hold_to_play(void)
+{
+    unsigned t;
+    bool play = false;
+    bool install = false;
+
+    fill_library(LIB_COUNT);
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_LAUNCH, false, false, 0,
+               PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, DESC_200);
+    assert_sane();
+    for (t = 0; t < fk.logged; t++) {
+        play = play || strcmp(fk.log[t].s, "Hold to play") == 0;
+        TEST_ASSERT_NULL(strstr(fk.log[t].s, "install"));
+    }
+    TEST_ASSERT_TRUE(play);
+
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, false, 0,
+               PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, DESC_200);
+    assert_sane();
+    for (t = 0; t < fk.logged; t++) {
+        install = install
+                  || strcmp(fk.log[t].s, "Hold to install to cart") == 0;
+        TEST_ASSERT_NULL(strstr(fk.log[t].s, "Hold to play"));
+    }
+    TEST_ASSERT_TRUE(install);
+}
+
 /* ─── the description ─────────────────────────────────────────────────────── */
 
 static void test_the_page_is_the_description_and_never_less_than_the_band(void)
@@ -1393,6 +1421,7 @@ int main(void)
     RUN_TEST(test_the_page_is_the_description_and_never_less_than_the_band);
     RUN_TEST(test_missing_media_draws_two_placeholders_and_no_image);
     RUN_TEST(test_an_action_page_explains_itself);
+    RUN_TEST(test_the_launch_page_says_hold_to_play);
     RUN_TEST(test_the_hold_bar_appears_only_once_the_hold_starts);
     RUN_TEST(test_every_wrapped_line_fits_the_column_in_pixels);
     RUN_TEST(test_the_wrap_breaks_at_spaces_and_hard_breaks_long_words);

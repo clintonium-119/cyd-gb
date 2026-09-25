@@ -43,6 +43,10 @@ static const ui_hint_t DETAIL_HINTS[][2] = {
     { { "B", "Back" }, { "A", "Hold to cancel write" } },    /* CANCEL  */
     { { "B", "Back" }, { "A", "Hold to finish setup" } },    /* FINISH  */
 };
+/* The games list's game page: the same hold starts the game. */
+static const ui_hint_t LAUNCH_HINTS[] = {
+    { "B", "Back" }, { "A", "Hold to play" },
+};
 #define N_HINTS(a) ((uint8_t)(sizeof(a) / sizeof((a)[0])))
 
 #define ART_MISSING   "no art"
@@ -591,7 +595,10 @@ static void draw_detail(const picker_t* p, const picker_layout_t* g,
     /* What confirming does, or how far the hold has got, and how to confirm
      * it. No filename: the title already names the game. */
     draw_bar(p, g, cv, false);
-    ui_hint_bar(cv, g->w, g->foot_y, DETAIL_HINTS[p->rows[p->detail_row].kind],
+    ui_hint_bar(cv, g->w, g->foot_y,
+                (p->mode == PICKER_MODE_LAUNCH)
+                    ? LAUNCH_HINTS
+                    : DETAIL_HINTS[p->rows[p->detail_row].kind],
                 N_HINTS(DETAIL_HINTS[0]));
 }
 
