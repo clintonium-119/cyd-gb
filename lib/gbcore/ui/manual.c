@@ -15,6 +15,22 @@ static uint16_t le16(const uint8_t* p)
     return (uint16_t)(p[0] | (p[1] << 8));
 }
 
+static uint32_t le32(const uint8_t* p)
+{
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
+           ((uint32_t)p[3] << 24);
+}
+
+static uint32_t bands_of(uint16_t h)
+{
+    return (h + MANUAL_BAND_ROWS - 1u) / MANUAL_BAND_ROWS;
+}
+
+static uint32_t stride_of(uint16_t w)
+{
+    return (w + 3u) / 4u;
+}
+
 /* Exactly n bytes from off, however the reader chooses to split them. */
 static int read_exact(const manual_reader_t* rd, uint32_t off, uint8_t* dst,
                       size_t n)
@@ -66,26 +82,27 @@ int manual_table(const manual_reader_t* rd, uint32_t file_size,
                  uint16_t count)
 {
     uint8_t buf[MANUAL_TABLE_CHUNK * MANUAL_ENTRY_BYTES];
-    uint32_t table_end;
+    uint8_t last[MANUAL_OFFSET_BYTES];
+    uint32_t sizes_end;
     uint64_t off;
     uint16_t i = 0;
+    int rc;
 
     if (!usable(rd) || pages == NULL || count == 0 || win_w == 0 ||
         win_h == 0) {
         return MANUAL_ERR_ARGS;
     }
-    table_end = MANUAL_HEADER_BYTES + (uint32_t)count * MANUAL_ENTRY_BYTES;
-    if (file_size < table_end) {
+    sizes_end = MANUAL_HEADER_BYTES + (uint32_t)count * MANUAL_ENTRY_BYTES;
+    if (file_size < sizes_end) {
         return MANUAL_ERR_SIZE;
     }
 
-    /* 64-bit so a hostile table cannot wrap the running offset back into
-     * range and pass the size check. */
-    off = table_end;
+    /* Every band table follows the size table, one after another. 64-bit so
+     * no count of pages can wrap the running offset back into range. */
+    off = sizes_end;
     while (i < count) {
         uint16_t n = (uint16_t)(count - i);
         uint16_t k;
-        int rc;
 
         if (n > MANUAL_TABLE_CHUNK) {
             n = MANUAL_TABLE_CHUNK;
@@ -105,16 +122,143 @@ int manual_table(const manual_reader_t* rd, uint32_t file_size,
                 (uint32_t)h > 2u * win_h) {
                 return MANUAL_ERR_FORMAT;
             }
-            if (off > file_size) {
-                return MANUAL_ERR_SIZE;
-            }
             pages[i].w = w;
             pages[i].h = h;
             pages[i].offset = (uint32_t)off;
-            off += (uint64_t)((w + 7u) / 8u) * h;
+            off += (uint64_t)(bands_of(h) + 1u) * MANUAL_OFFSET_BYTES;
+            if (off > file_size) {
+                return MANUAL_ERR_SIZE;
+            }
         }
     }
-    return (off == file_size) ? MANUAL_OK : MANUAL_ERR_SIZE;
+
+    /* The last page's last offset is where the last block ends. */
+    rc = read_exact(rd, (uint32_t)off - MANUAL_OFFSET_BYTES, last, sizeof last);
+    if (rc != MANUAL_OK) {
+        return rc;
+    }
+    return (le32(last) == file_size) ? MANUAL_OK : MANUAL_ERR_SIZE;
+}
+
+int manual_band(const manual_reader_t* rd, uint32_t file_size,
+                const manual_page_t* page, uint16_t band, uint8_t* scratch,
+                size_t scratch_cap, uint8_t* out, size_t out_cap)
+{
+    uint8_t offs[2 * MANUAL_OFFSET_BYTES];
+    uint32_t start;
+    uint32_t end;
+    uint32_t rows;
+    size_t want;
+    int rc;
+
+    if (!usable(rd) || page == NULL || scratch == NULL || out == NULL ||
+        band >= bands_of(page->h)) {
+        return MANUAL_ERR_ARGS;
+    }
+    rows = page->h - (uint32_t)band * MANUAL_BAND_ROWS;
+    if (rows > MANUAL_BAND_ROWS) {
+        rows = MANUAL_BAND_ROWS;
+    }
+    want = (size_t)rows * stride_of(page->w);
+    if (out_cap < want) {
+        return MANUAL_ERR_ARGS;
+    }
+
+    rc = read_exact(rd, page->offset + (uint32_t)band * MANUAL_OFFSET_BYTES,
+                    offs, sizeof offs);
+    if (rc != MANUAL_OK) {
+        return rc;
+    }
+    start = le32(offs);
+    end = le32(offs + MANUAL_OFFSET_BYTES);
+    if (end < start || end > file_size || end - start > scratch_cap) {
+        return MANUAL_ERR_FORMAT;
+    }
+    rc = read_exact(rd, start, scratch, end - start);
+    if (rc != MANUAL_OK) {
+        return rc;
+    }
+    /* A cap of exactly the band: a block that would run past it fails
+     * rather than write into the caller's spare room. */
+    if (manual_lz4_decode(scratch, end - start, out, want) != (int)want) {
+        return MANUAL_ERR_FORMAT;
+    }
+    return MANUAL_OK;
+}
+
+/* An LZ4 length: the token's nibble, then while it is 15, bytes added on
+ * until one is not 255. False when the input runs out first. */
+static bool lz4_length(const uint8_t* src, size_t n, size_t* ip, size_t* len)
+{
+    uint8_t b;
+
+    if (*len != 15u) {
+        return true;
+    }
+    do {
+        if (*ip >= n) {
+            return false;
+        }
+        b = src[(*ip)++];
+        *len += b;
+    } while (b == 255u);
+    return true;
+}
+
+int manual_lz4_decode(const uint8_t* src, size_t n, uint8_t* dst, size_t cap)
+{
+    size_t ip = 0;
+    size_t op = 0;
+
+    if (src == NULL || dst == NULL) {
+        return -1;
+    }
+    for (;;) {
+        uint8_t token;
+        size_t lit;
+        size_t off;
+        size_t len;
+
+        if (ip >= n) {
+            return -1;
+        }
+        token = src[ip++];
+        lit = token >> 4;
+        if (!lz4_length(src, n, &ip, &lit) || lit > n - ip ||
+            lit > cap - op) {
+            return -1;
+        }
+        memcpy(dst + op, src + ip, lit);
+        ip += lit;
+        op += lit;
+        /* The last sequence is literals alone, and it ends the block. */
+        if (ip == n) {
+            return (int)op;
+        }
+
+        if (n - ip < 2u) {
+            return -1;
+        }
+        off = (size_t)(src[ip] | (src[ip + 1] << 8));
+        ip += 2;
+        if (off == 0 || off > op) {
+            return -1;
+        }
+        len = token & 15u;
+        if (!lz4_length(src, n, &ip, &len)) {
+            return -1;
+        }
+        len += 4u;
+        if (len > cap - op) {
+            return -1;
+        }
+        /* Byte by byte: an offset shorter than the match repeats what this
+         * copy has just written, which is how LZ4 encodes a run. */
+        while (len-- > 0) {
+            dst[op] = dst[op - off];
+            op++;
+        }
+    }
 }
 
 static uint8_t tiles_along(uint16_t len, uint16_t win)
@@ -328,22 +472,27 @@ uint8_t manual_nav_input(manual_nav_t* nav, const manual_page_t* pages,
                                                : MANUAL_EVENT_NONE;
 }
 
-static bool bit_at(const uint8_t* row, uint32_t x)
+static uint8_t level_at(const uint8_t* row, uint32_t x)
 {
-    return (row[x >> 3] & (0x80u >> (x & 7u))) != 0;
+    return (uint8_t)((row[x >> 2] >> (6u - 2u * (x & 3u))) & 3u);
 }
 
-void manual_expand_row(const uint8_t* bits, uint16_t x0, uint16_t n,
-                       uint16_t ink, uint16_t paper, uint16_t* out)
+void manual_expand_row(const uint8_t* row, uint16_t x0, uint16_t n,
+                       const uint16_t levels[4], uint16_t* out)
 {
     uint16_t i;
 
-    if (bits == NULL || out == NULL) {
+    if (row == NULL || levels == NULL || out == NULL) {
         return;
     }
     for (i = 0; i < n; i++) {
-        out[i] = bit_at(bits, (uint32_t)x0 + i) ? ink : paper;
+        out[i] = levels[level_at(row, (uint32_t)x0 + i)];
     }
+}
+
+static uint8_t darker(uint8_t a, uint8_t b)
+{
+    return a > b ? a : b;
 }
 
 void manual_decimate_row(const uint8_t* a, const uint8_t* b, uint16_t w,
@@ -355,18 +504,22 @@ void manual_decimate_row(const uint8_t* a, const uint8_t* b, uint16_t w,
     if (a == NULL || out == NULL) {
         return;
     }
-    memset(out, 0, (half + 7u) / 8u);
+    memset(out, 0, (half + 3u) / 4u);
     for (i = 0; i < half; i++) {
         uint32_t x = (uint32_t)i * 2u;
         /* The odd column past the right edge is padding, not page. */
         bool two = x + 1u < w;
-        bool black = bit_at(a, x) || (two && bit_at(a, x + 1u));
+        uint8_t v = level_at(a, x);
 
-        if (!black && b != NULL) {
-            black = bit_at(b, x) || (two && bit_at(b, x + 1u));
+        if (two) {
+            v = darker(v, level_at(a, x + 1u));
         }
-        if (black) {
-            out[i >> 3] |= (uint8_t)(0x80u >> (i & 7u));
+        if (b != NULL) {
+            v = darker(v, level_at(b, x));
+            if (two) {
+                v = darker(v, level_at(b, x + 1u));
+            }
         }
+        out[i >> 2] |= (uint8_t)(v << (6u - 2u * (i & 3u)));
     }
 }
