@@ -90,17 +90,18 @@ bool sd_media_stream(const char* dir, const char* rom_filename, uint16_t* buf,
                      sd_media_band_fn fn, void* ctx);
 
 // ─── Manuals ────────────────────────────────────────────────────────────────
-// One scanned manual per game that has one, 1 bpp pages behind a page table;
-// the format is docs/CATALOG_FORMAT.md § Manuals, and ui/manual.h parses it.
+// One scanned manual per game that has one, 2 bpp pages in LZ4-compressed
+// bands behind per-page band tables; the format is docs/CATALOG_FORMAT.md
+// § Manuals, and ui/manual.h parses it.
 // Like the art, written only by the imaging tool: a game with no manual has
 // no file, and that is an ordinary case.
 //
-// "/manual" (7) + a 60-character stem + ".1bp" (4) + the NUL is 72, so a
+// "/manual" (7) + a 60-character stem + ".2bp" (4) + the NUL is 72, so a
 // manual path fits ART_PATH_MAX too.
 #define MANUAL_PATH     "/manual"
-#define MANUAL_SUFFIX   ".1bp"
+#define MANUAL_SUFFIX   ".2bp"
 
-// Build /manual/<stem>.1bp in out, by sd_media_path()'s rule: false when the
+// Build /manual/<stem>.2bp in out, by sd_media_path()'s rule: false when the
 // path does not fit out_sz or no such file exists, never a truncated path.
 bool sd_manual_path(const char* rom_filename, char* out, size_t out_sz);
 
