@@ -178,6 +178,19 @@ def test_no_port_flag_is_emitted_when_no_port_is_given(tmp_path, monkeypatch):
     assert "/dev/ttyUSB0" not in " ".join(command)
 
 
+def test_no_reset_leaves_the_board_in_its_bootloader(tmp_path, monkeypatch, capsys):
+    fake_platformio(tmp_path / "core")
+    monkeypatch.setenv("PLATFORMIO_CORE_DIR", str(tmp_path / "core"))
+    monkeypatch.setattr(flash.Path, "home", staticmethod(lambda: tmp_path / "home"))
+    build = build_dir_with_images(tmp_path / "build")
+
+    assert flash.main(["--build-dir", str(build), "--no-reset", "--dry-run"]) == 0
+    command = capsys.readouterr().out.split()
+    assert command[command.index("--after") + 1] == "no_reset"
+    # Only that: every other flag is the default's.
+    assert command.count("--after") == 1
+
+
 def test_a_build_dir_without_the_firmware_is_refused(tmp_path, monkeypatch):
     fake_platformio(tmp_path / "core")
     monkeypatch.setenv("PLATFORMIO_CORE_DIR", str(tmp_path / "core"))

@@ -13,6 +13,7 @@ parsing partitions.csv — so there is one copy of each.
 
     pio run -e cyd && python tools/flash.py --dry-run
     python tools/flash.py --port /dev/ttyUSB0
+    python tools/flash.py --port /dev/ttyUSB0 --no-reset   # a capture boots it
     python tools/flash.py --release v0.1.0
 
 A release is verified against its SHA256SUMS before anything is written; a
@@ -53,6 +54,11 @@ FLASH_FREQ = "80m"
 FLASH_SIZE = "4MB"
 BEFORE_RESET = "default_reset"
 AFTER_RESET = "hard_reset"
+
+# --no-reset's: the board stays in its bootloader after the write. For a bench
+# capture, whose opening of the port resets the board anyway — with a hard
+# reset as well, the board boots twice.
+AFTER_NO_RESET = "no_reset"
 
 # The asset names, which are the contract with the release workflow.
 BOOTLOADER_NAME = "bootloader.bin"
@@ -233,15 +239,18 @@ def resolve_release_images(directory):
     return resolved
 
 
-def flash_command(esptool, port, baud, images):
-    """The esptool argv, mirroring PlatformIO's UPLOADERFLAGS and UPLOADCMD."""
+def flash_command(esptool, port, baud, images, reset=True):
+    """The esptool argv, mirroring PlatformIO's UPLOADERFLAGS and UPLOADCMD.
+
+    reset=False leaves the board in its bootloader instead of booting it.
+    """
     command = [*esptool, "--chip", CHIP]
     if port:
         command += ["--port", str(port)]
     command += [
         "--baud", str(baud),
         "--before", BEFORE_RESET,
-        "--after", AFTER_RESET,
+        "--after", AFTER_RESET if reset else AFTER_NO_RESET,
         "write_flash", "-z",
         "--flash_mode", FLASH_MODE,
         "--flash_freq", FLASH_FREQ,
@@ -294,6 +303,12 @@ def parse_args(argv):
     source.add_argument("--release", metavar="TAG", help="flash a tagged release")
     parser.add_argument("--repo", help="owner/name; defaults to the git origin")
     parser.add_argument(
+        "--no-reset",
+        action="store_true",
+        help="leave the board in its bootloader; opening the serial port boots "
+             "it, so a capture started next is its only reset",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="print the esptool command and exit without touching a board",
@@ -344,14 +359,20 @@ def main(argv=None):
             )
             return 1
 
-        command = flash_command(esptool, args.port, args.baud, images)
+        command = flash_command(
+            esptool, args.port, args.baud, images, reset=not args.no_reset
+        )
 
         if args.dry_run:
             print(" ".join(command))
             return 0
 
         print(" ".join(command), file=sys.stderr)
-        return subprocess.run(command).returncode
+        status = subprocess.run(command).returncode
+        if status == 0 and args.no_reset:
+            print("the board is in its bootloader: open its serial port or "
+                  "replug it to boot", file=sys.stderr)
+        return status
 
 
 if __name__ == "__main__":
