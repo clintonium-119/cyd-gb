@@ -1090,9 +1090,9 @@ static void demo_advance()
 }
 #endif /* TEAR_DEMO */
 
-/* The last drawn frame at half size, as raw pixel bytes: colourised only when
- * a save writes it out, through the LUT of that moment. */
-static uint8_t thumb[EMU_THUMB_H][EMU_THUMB_W];
+/* The last drawn frame as raw pixel bytes packed two to a byte: colourised
+ * only when a save writes it out, through the LUT of that moment. */
+static uint8_t thumb[EMU_THUMB_H][EMU_THUMB_W / 2];
 
 void emu_gnuboy_line(const unsigned char* line, int index)
 {
@@ -1102,16 +1102,10 @@ void emu_gnuboy_line(const unsigned char* line, int index)
     if (index < 0 || index >= GB_SCREEN_H) {
         return;
     }
-    /* Every other pixel of every other line, raw, for the save state's
-     * snapshot. Kept on every drawn frame so a save has the last one without
-     * reading the panel back. */
-    if ((index & 1) == 0) {
-        uint8_t* t = thumb[index >> 1];
-
-        for (unsigned x = 0; x < EMU_THUMB_W; x++) {
-            t[x] = line[2u * x];
-        }
-    }
+    /* Every line, packed raw, for the save state's snapshot. Kept on every
+     * drawn frame so a save has the last one without reading the panel
+     * back. */
+    palette_pack_raw_line(line, EMU_THUMB_W, thumb[index]);
     /*
      * The frame boundary is the line number wrapping, NOT gnuboy_run()
      * returning, and the difference is load-bearing rather than pedantic.
@@ -1750,7 +1744,7 @@ bool emu_state_thumb_save(const char* path_vfs)
     /* A row at a time, so nothing larger than one row is held in colour. */
     for (unsigned y = 0; ok && y < EMU_THUMB_H; y++) {
         for (unsigned x = 0; x < EMU_THUMB_W; x++) {
-            row[x] = lut[thumb[y][x]];
+            row[x] = lut[palette_packed_raw(thumb[y], x)];
         }
         ok = fwrite(row, sizeof(row), 1, f) == 1;
     }
