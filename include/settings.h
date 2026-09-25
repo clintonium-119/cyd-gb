@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "cart/boot.h"
 
@@ -30,6 +31,9 @@ struct settings_t {
     // next: without this a builder who power-cycles between rounds re-guesses
     // at every boot, and the guess walks an already-trimmed unit off its null.
     int8_t trim_dir;
+    // The games-list fallback mode, switched from the diagnostics System page.
+    // Off by default: a unit only offers the list when a builder chose it.
+    bool list_mode;
 };
 
 // volume is Off, Low, Med or High, so a bigger number is louder. Off means
@@ -119,6 +123,16 @@ bool settings_pending_load(boot_selection_t* out);
 void settings_pending_save(const boot_selection_t* s);
 
 void settings_pending_clear();
+
+// The one game last started from the games list, booted directly on later
+// power-ons with no cartridge until Return to Games List clears it. One
+// record, no history and no timestamp, for the pending record's reasons.
+// False when none is stored, in which case *out is untouched.
+bool settings_list_game_load(char* out, size_t len);
+
+void settings_list_game_save(const char* rom);
+
+void settings_list_game_clear();
 
 // ─── Setup-progress record ──────────────────────────────────────────────────
 // Which carts the first-boot wizard has written this setup, so the picker can
