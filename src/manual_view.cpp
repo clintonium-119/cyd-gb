@@ -17,11 +17,12 @@
 // module's debounce, so successive samples are already stable.
 #define MANUAL_POLL_MS 16
 
-// Page rows read from the card per File::read. A stored page is at most
-// 2 x GAME_W wide, so the band is at most 16 x 67 = 1,072 bytes. Even, so an
-// overview's row pairs never straddle two bands.
-#define MANUAL_BAND_ROWS 16
-#define MANUAL_MAX_STRIDE ((2 * GAME_W + 7) / 8)
+// A stored page is at most 2 x GAME_W wide, so a decoded band of
+// MANUAL_BAND_ROWS rows is at most 16 x 133 = 2,128 bytes, and its compressed
+// block at most LZ4's worst case for that many bytes, 2,152.
+#define MANUAL_MAX_STRIDE ((2 * GAME_W + 3) / 4)
+#define MANUAL_BAND_BYTES (MANUAL_BAND_ROWS * MANUAL_MAX_STRIDE)
+#define MANUAL_BLOCK_BYTES (MANUAL_BAND_BYTES + MANUAL_BAND_BYTES / 255 + 16)
 
 // The overview's chrome is the theme's: a header naming the page, the help
 // line and the hint footer, when the half-size page fits between them. A
@@ -30,10 +31,10 @@
 // at the footer's left.
 #define MANUAL_ROOM_H (GAME_H - UI_HEADER_H - UI_HELP_H - UI_FOOT_H)
 
-// Black ink on white paper, not the emulator palette. Both values read the
-// same in either byte order, so the resting setSwapBytes(true) is moot.
-#define MANUAL_INK   UI_COL_BG
-#define MANUAL_PAPER UI_COL_TEXT
+// The four stored levels, white paper to black ink, not the emulator palette.
+// Native RGB565 like the theme's colours: cv->image pushes with
+// setSwapBytes(true), as it does the little-endian .565 covers.
+static const uint16_t MANUAL_LEVELS[4] = { 0xFFFF, 0xAD55, 0x52AA, 0x0000 };
 
 static const ui_hint_t HINTS[] = { { "B", "Back" }, { "A", "Zoom" } };
 
@@ -42,9 +43,11 @@ static const ui_hint_t HINTS[] = { { "B", "Back" }, { "A", "Zoom" } };
 typedef struct view_s {
     const ui_canvas_t* cv;
     manual_reader_t rd;
+    uint32_t size;   // the file's, for the band-offset checks
     manual_page_t* pages;
     uint16_t count;
-    uint8_t* band;   // MANUAL_BAND_ROWS page rows, packed
+    uint8_t* block;  // one band's compressed block
+    uint8_t* band;   // MANUAL_BAND_ROWS page rows, decoded
     uint8_t* half;   // one decimated row, packed
     uint16_t* row;   // one GAME_W-pixel RGB565 row
 } view_t;
@@ -61,28 +64,20 @@ static void wait_release()
     delay(100);
 }
 
-// Exactly n bytes at off, however the card splits them.
-static bool read_exact(const view_t* v, uint32_t off, uint8_t* dst, size_t n)
+// Band b of the current page, decoded into v->band.
+static bool decode_band(const view_t* v, const manual_page_t* p, uint16_t b)
 {
-    while (n > 0) {
-        size_t got = 0;
-
-        if (v->rd.read(v->rd.ctx, off, dst, n, &got) != 0 || got == 0) {
-            return false;
-        }
-        off += (uint32_t)got;
-        dst += got;
-        n -= got;
-    }
-    return true;
+    return manual_band(&v->rd, v->size, p, b, v->block, MANUAL_BLOCK_BYTES,
+                       v->band, MANUAL_BAND_BYTES) == MANUAL_OK;
 }
 
 // The tile the nav machine is on, full size. A page narrower or shorter than
-// the window is centred in it on black.
+// the window is centred in it on black. The tile's origin is clamped to the
+// page's edge, not to a band, so its first and last bands may be partial.
 static bool draw_tile(const view_t* v, const manual_nav_t* nav)
 {
     const manual_page_t* p = &v->pages[nav->page];
-    const uint32_t stride = (p->w + 7u) / 8u;
+    const uint32_t stride = (p->w + 3u) / 4u;
     const uint16_t vw = p->w < GAME_W ? p->w : GAME_W;
     const uint16_t vh = p->h < GAME_H ? p->h : GAME_H;
     const int16_t x = (int16_t)((GAME_W - vw) / 2);
@@ -94,20 +89,20 @@ static bool draw_tile(const view_t* v, const manual_nav_t* nav)
     if (vw < GAME_W || vh < GAME_H) {
         v->cv->fill(v->cv->ctx, 0, 0, GAME_W, GAME_H, UI_COL_BG);
     }
-    for (uint16_t r = 0; r < vh; r += MANUAL_BAND_ROWS) {
-        uint16_t n = (uint16_t)(vh - r);
+    for (uint16_t r = y0; r < y0 + vh;) {
+        const uint16_t b = (uint16_t)(r / MANUAL_BAND_ROWS);
+        uint16_t end = (uint16_t)((b + 1) * MANUAL_BAND_ROWS);
 
-        if (n > MANUAL_BAND_ROWS) {
-            n = MANUAL_BAND_ROWS;
+        if (end > y0 + vh) {
+            end = (uint16_t)(y0 + vh);
         }
-        if (!read_exact(v, p->offset + (uint32_t)(y0 + r) * stride, v->band,
-                        (size_t)n * stride)) {
+        if (!decode_band(v, p, b)) {
             return false;
         }
-        for (uint16_t i = 0; i < n; i++) {
-            manual_expand_row(v->band + i * stride, x0, vw, MANUAL_INK,
-                              MANUAL_PAPER, v->row);
-            v->cv->image(v->cv->ctx, x, (int16_t)(y + r + i), vw, 1, v->row,
+        for (; r < end; r++) {
+            manual_expand_row(v->band + (r % MANUAL_BAND_ROWS) * stride, x0,
+                              vw, MANUAL_LEVELS, v->row);
+            v->cv->image(v->cv->ctx, x, (int16_t)(y + r - y0), vw, 1, v->row,
                          0, 1);
         }
     }
@@ -121,7 +116,7 @@ static bool draw_overview(const view_t* v, const manual_nav_t* nav)
 {
     const ui_canvas_t* cv = v->cv;
     const manual_page_t* p = &v->pages[nav->page];
-    const uint32_t stride = (p->w + 7u) / 8u;
+    const uint32_t stride = (p->w + 3u) / 4u;
     const uint16_t hw = (uint16_t)((p->w + 1u) / 2u);
     const uint16_t hh = (uint16_t)((p->h + 1u) / 2u);
     const bool chrome = hh <= MANUAL_ROOM_H;
@@ -144,16 +139,14 @@ static bool draw_overview(const view_t* v, const manual_nav_t* nav)
         if (n > MANUAL_BAND_ROWS) {
             n = MANUAL_BAND_ROWS;
         }
-        if (!read_exact(v, p->offset + (uint32_t)r * stride, v->band,
-                        (size_t)n * stride)) {
+        if (!decode_band(v, p, (uint16_t)(r / MANUAL_BAND_ROWS))) {
             return false;
         }
         for (uint16_t i = 0; i < n; i += 2) {
             const uint8_t* b = (i + 1 < n) ? v->band + (i + 1) * stride : NULL;
 
             manual_decimate_row(v->band + i * stride, b, p->w, v->half);
-            manual_expand_row(v->half, 0, hw, MANUAL_INK, MANUAL_PAPER,
-                              v->row);
+            manual_expand_row(v->half, 0, hw, MANUAL_LEVELS, v->row);
             ui_round_corners_565(v->row, (int16_t)hw, (int16_t)hh,
                                  (int16_t)((r + i) / 2), 1, UI_IMG_R,
                                  UI_COL_BG);
@@ -193,10 +186,9 @@ static bool draw(const view_t* v, const manual_nav_t* nav)
 // Bind, validate and allocate. False with one log line on any refusal.
 static bool view_setup(view_t* v, const char* rom_filename)
 {
-    uint32_t size = 0;
     int rc;
 
-    if (!sd_manual_reader(rom_filename, &v->rd, &size)) {
+    if (!sd_manual_reader(rom_filename, &v->rd, &v->size)) {
         Serial.printf("[MANUAL] no manual for %s\n", rom_filename);
         return false;
     }
@@ -206,15 +198,16 @@ static bool view_setup(view_t* v, const char* rom_filename)
         return false;
     }
     v->pages = (manual_page_t*)malloc(v->count * sizeof(manual_page_t));
-    v->band = (uint8_t*)malloc(MANUAL_BAND_ROWS * MANUAL_MAX_STRIDE);
-    v->half = (uint8_t*)malloc((GAME_W + 7) / 8);
+    v->block = (uint8_t*)malloc(MANUAL_BLOCK_BYTES);
+    v->band = (uint8_t*)malloc(MANUAL_BAND_BYTES);
+    v->half = (uint8_t*)malloc((GAME_W + 3) / 4);
     v->row = (uint16_t*)malloc(GAME_W * sizeof(uint16_t));
-    if (!v->pages || !v->band || !v->half || !v->row) {
+    if (!v->pages || !v->block || !v->band || !v->half || !v->row) {
         Serial.printf("[MANUAL] no memory for %u pages\n",
                       (unsigned)v->count);
         return false;
     }
-    rc = manual_table(&v->rd, size, GAME_W, GAME_H, v->pages, v->count);
+    rc = manual_table(&v->rd, v->size, GAME_W, GAME_H, v->pages, v->count);
     if (rc != MANUAL_OK) {
         Serial.printf("[MANUAL] refused table: %d\n", rc);
         return false;
@@ -253,6 +246,7 @@ bool manual_view_open(const settings_t* s, const char* rom_filename)
         wait_release();
     }
     free(v.pages);
+    free(v.block);
     free(v.band);
     free(v.half);
     free(v.row);
