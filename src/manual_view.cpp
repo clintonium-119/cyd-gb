@@ -169,16 +169,20 @@ static bool draw_overview(const view_t* v, const manual_nav_t* nav)
     return true;
 }
 
-// One repaint and its log line, which the bench reads for timing.
+// One repaint and its log line, which the bench reads for timing and for the
+// heap left while the reader's buffers are held: the largest free block, not
+// the total, is what the next allocation is refused on.
 static bool draw(const view_t* v, const manual_nav_t* nav)
 {
     uint32_t t0 = micros();
     bool ok = nav->overview ? draw_overview(v, nav) : draw_tile(v, nav);
 
-    Serial.printf("[MANUAL] p=%u/%u t=%u,%u ov=%u %lu us%s\n",
+    Serial.printf("[MANUAL] p=%u/%u t=%u,%u ov=%u %lu us heap=%u lfb=%u%s\n",
                   (unsigned)(nav->page + 1), (unsigned)v->count,
                   (unsigned)nav->tx, (unsigned)nav->ty,
                   (unsigned)nav->overview, (unsigned long)(micros() - t0),
+                  (unsigned)ESP.getFreeHeap(),
+                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
                   ok ? "" : " read failed");
     return ok;
 }
