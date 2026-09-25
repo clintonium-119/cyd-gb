@@ -6,7 +6,8 @@
 // The cartridge writer's interface — the picker the boot state machine opens
 // when the user is allowed to choose what goes on a tag.
 //
-// The body is src/cart_writer.cpp, a thin binding over the pure picker and
+// The body is src/cart_writer.cpp, a mode mapping over the shared picker
+// screen (picker_screen.h), itself a thin binding over the pure picker and
 // layout modules in lib/gbcore/ui/. Five rules define it, and none of them are
 // incidental:
 //
@@ -26,8 +27,9 @@
 //      screen on this device.
 //   5. Every exit is a halt or a power-off prompt. Nothing runs after the
 //      writer in the same boot, so its buffers may be generous. The big ones
-//      are allocated on entry and freed on exit, not static: static storage
-//      is paid in every boot, including every boot that plays a game.
+//      belong to the shared picker screen (picker_screen.h), which allocates
+//      them on entry and frees them on exit, not static: static storage is
+//      paid in every boot, including every boot that plays a game.
 //
 // The games list is a separate caller of the same shared picker screen, in a
 // launch mode that only reports a pick; it is not a second writer.
