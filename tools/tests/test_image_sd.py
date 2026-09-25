@@ -751,6 +751,26 @@ def test_a_manual_left_in_the_old_format_is_pruned(manual_sources, capsys):
 
 @ffmpeg_required
 @poppler_required
+def test_strays_are_pruned_before_anything_is_written(manual_sources, monkeypatch):
+    # A card full of an old format's manuals has no room for the new ones
+    # until the old are gone.
+    card = manual_sources["card"]
+    (card / "manual").mkdir()
+    (card / "manual/Tetris.1bp").write_bytes(b"GBMN\x01\x00")
+    real_write = image_sd.write_atomic
+    present_at_writes = []
+
+    def write_atomic(path, data):
+        present_at_writes.append((card / "manual/Tetris.1bp").exists())
+        real_write(path, data)
+
+    monkeypatch.setattr(image_sd, "write_atomic", write_atomic)
+    assert image(manual_sources) == 0
+    assert present_at_writes and not any(present_at_writes)
+
+
+@ffmpeg_required
+@poppler_required
 def test_check_catches_a_single_corrupted_byte_of_a_manual(manual_sources, capsys):
     assert image(manual_sources) == 0
     capsys.readouterr()

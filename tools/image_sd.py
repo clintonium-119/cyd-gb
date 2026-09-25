@@ -638,6 +638,10 @@ def main(argv=None):
         for directory in (*MANAGED_DIRS, SAVE_DIR):
             (target / directory).mkdir(parents=True, exist_ok=True)
 
+        # Strays go first: games.json does not name them, so nothing is lost,
+        # and a card still full of an old format's files has room for the new.
+        removed = prune(target, expected)
+
         copied = 0
         converted = 0
         rendered = render_manuals(expected)
@@ -665,7 +669,6 @@ def main(argv=None):
         else:
             write_atomic(catalog_path, catalog)
 
-        removed = prune(target, expected)
         print(
             f"{len(games)} entries: {copied} ROMs copied, {converted} images "
             f"converted, {manuals} manuals written, "
