@@ -51,8 +51,10 @@ static uint16_t* shot;                      // 18,432 B — the gameplay snapsho
 // this translation unit links into every image, and a 4 KB static would come
 // out of DRAM that has about 15 KB to spare. NULL when it was refused.
 static char* desc;
-static picker_t picker;
-static boot_made_t made;
+// Heap too, for the same reason: about 2 KB between them, and in .bss they
+// would shrink the region after it below the two 23 KB frames a game needs.
+static picker_t* picker;
+static boot_made_t* made;
 static picker_layout_t geom;
 static settings_t cfg;
 
@@ -92,13 +94,13 @@ static enum boot_pick_e screen_run(enum picker_mode_e mode,
     if (immediate) {
         // Which starters this setup has already written, so their rows show a
         // mark. Absent is the empty record, not a failure.
-        if (!settings_made_load(&made)) {
-            boot_made_clear(&made);
+        if (!settings_made_load(made)) {
+            boot_made_clear(made);
         }
     }
 
-    rc = picker_init(&picker, mode, idx, flags ? flags->wild_done : false, pending_set,
-                     immediate ? &made : NULL, geom.rows);
+    rc = picker_init(picker, mode, idx, flags ? flags->wild_done : false,
+                     pending_set, immediate ? made : NULL, geom.rows);
     if (rc != PICKER_OK) {
         Serial.printf("[PICKER] no rows to show (%d)\n", rc);
         return BOOT_PICK_NONE;
@@ -111,16 +113,16 @@ static enum boot_pick_e screen_run(enum picker_mode_e mode,
     }
     cv = display_canvas(cfg.game_x, cfg.game_y);
     picker_layout_measure(&geom, cv);
-    picker_set_marquee_span(&picker, picker_row_overflow(&picker, &geom, cv));
+    picker_set_marquee_span(picker, picker_row_overflow(picker, &geom, cv));
     tft.fillScreen(TFT_BLACK);
-    picker_draw(&picker, &geom, NULL, art, shot, cv);
+    picker_draw(picker, &geom, NULL, art, shot, cv);
 
     for (;;) {
         button_update();
 
         uint8_t word = (uint8_t)button_get_buttons();
         uint32_t now = millis();
-        uint8_t ev = picker_input(&picker, word, now);
+        uint8_t ev = picker_input(picker, word, now);
         uint16_t ci = 0;
 
         if (ev == PICKER_EVENT_DONE) {
@@ -129,14 +131,14 @@ static enum boot_pick_e screen_run(enum picker_mode_e mode,
 
         // A new highlight: how far its label overflows, so the marquee
         // knows whether to run and how far.
-        if (picker.screen == PICKER_SCREEN_LIST &&
+        if (picker->screen == PICKER_SCREEN_LIST &&
             (ev & (PICKER_EVENT_ROWS | PICKER_EVENT_REDRAW))) {
-            picker_set_marquee_span(&picker,
-                                    picker_row_overflow(&picker, &geom, cv));
+            picker_set_marquee_span(picker,
+                                    picker_row_overflow(picker, &geom, cv));
         }
 
         // The highlight settled on a title: its cover and snapshot.
-        if (picker_media_due(&picker, now, &ci)) {
+        if (picker_media_due(picker, now, &ci)) {
             uint32_t began = micros();
             bool have_art =
                 sd_media_read(ART_PATH, idx->e[ci].filename, art, PICKER_ART_PX);
@@ -168,12 +170,12 @@ static enum boot_pick_e screen_run(enum picker_mode_e mode,
                               (unsigned long)(micros() - began));
                 media_logged = true;
             }
-            ev |= picker_media_loaded(&picker, ci, have_art, have_shot);
+            ev |= picker_media_loaded(picker, ci, have_art, have_shot);
         }
 
         // A title was opened: its description, once, behind the screen
         // transition rather than mid-scroll.
-        if (picker_desc_due(&picker, &ci)) {
+        if (picker_desc_due(picker, &ci)) {
             // The full text from /desc, else the catalog's blurb.
             if (desc && !sd_desc_read(idx->e[ci].filename, desc, DESC_MAX)
                 && catalog_read_desc(cat, idx->e[ci].offset, desc, DESC_MAX) !=
@@ -183,9 +185,9 @@ static enum boot_pick_e screen_run(enum picker_mode_e mode,
             // How far this page can scroll depends on the description that
             // just arrived, so the span is handed over before the redraw.
             picker_set_scroll_span(
-                &picker,
+                picker,
                 picker_page_lines(&geom, desc && desc[0] ? desc : NULL),
-                picker_band_rows(&picker, &geom, cv));
+                picker_band_rows(picker, &geom, cv));
             ev |= PICKER_EVENT_BAND;
         }
 
@@ -194,7 +196,7 @@ static enum boot_pick_e screen_run(enum picker_mode_e mode,
 
             // Only what changed. A full repaint on every hold tick blanked
             // the window under the panel's refresh, which was the flicker.
-            picker_draw_events(&picker, &geom, ev,
+            picker_draw_events(picker, &geom, ev,
                                desc && desc[0] ? desc : NULL, art, shot, cv);
             drawn_us = micros() - began;
             if (!logged) {
@@ -211,7 +213,7 @@ static enum boot_pick_e screen_run(enum picker_mode_e mode,
 
     free(desc);
     desc = NULL;
-    return picker_result(&picker, out);
+    return picker_result(picker, out);
 }
 
 enum boot_pick_e picker_screen_run(enum picker_mode_e mode,
@@ -228,7 +230,9 @@ enum boot_pick_e picker_screen_run(enum picker_mode_e mode,
     idx = (catalog_index_t*)malloc(sizeof(*idx));
     art = (uint16_t*)malloc(PICKER_ART_PX * sizeof(uint16_t));
     shot = (uint16_t*)malloc(PICKER_ART_PX * sizeof(uint16_t));
-    if (idx && art && shot) {
+    picker = (picker_t*)malloc(sizeof(*picker));
+    made = (boot_made_t*)malloc(sizeof(*made));
+    if (idx && art && shot && picker && made) {
         pick = screen_run(mode, cat, flags, pending_set, out);
     } else {
         // Refused, the same way a missing catalog is: the caller halts.
@@ -236,9 +240,13 @@ enum boot_pick_e picker_screen_run(enum picker_mode_e mode,
                       (unsigned)heap_caps_get_largest_free_block(
                           MALLOC_CAP_8BIT));
     }
+    free(made);
+    free(picker);
     free(shot);
     free(art);
     free(idx);
+    made = NULL;
+    picker = NULL;
     shot = NULL;
     art = NULL;
     idx = NULL;

@@ -1260,10 +1260,22 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
         Serial.println("[EMU] gnuboy init failed");
         return false;
     }
-    if (gnuboy_load_rom(rom, romlen) != 0) {
-        Serial.println("[EMU] gnuboy rejected the ROM");
-        return false;
+    {
+        /* The code and the heap beside it, because gnuboy's own messages are
+         * compiled out and -3 — its bank allocation refused — looks exactly
+         * like a bad header on the panel. */
+        int rc = gnuboy_load_rom(rom, romlen);
+        if (rc != 0) {
+            Serial.printf("[EMU] gnuboy rejected the ROM (%d), header RAM "
+                          "code %u, free %u, largest block %u\n",
+                          rc, (unsigned)rom[0x149],
+                          (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
+                          (unsigned)heap_caps_get_largest_free_block(
+                              MALLOC_CAP_8BIT));
+            return false;
+        }
     }
+
     /* DMG only, forced rather than asked for, and AFTER the load.
      *
      * gnuboy_set_hwtype() is a stub in this vendored version — its body is
