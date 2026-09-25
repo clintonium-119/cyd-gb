@@ -176,3 +176,28 @@ void palette_build_lut_gnuboy(uint8_t idx, uint8_t bgp, uint8_t obp0,
     }
     palette_build_lut_gnuboy_ramps(pals[idx], bgp, obp0, obp1, lut);
 }
+
+static uint8_t raw_code(uint8_t v)
+{
+    return (uint8_t)((v & 7u) | ((v >> 2) & 8u));
+}
+
+void palette_pack_raw_line(const uint8_t* raw, size_t n, uint8_t* out)
+{
+    size_t i;
+
+    for (i = 0; i + 1 < n; i += 2) {
+        out[i / 2] = (uint8_t)((raw_code(raw[i]) << 4) | raw_code(raw[i + 1]));
+    }
+    if (i < n) {
+        out[i / 2] = (uint8_t)(raw_code(raw[i]) << 4);
+    }
+}
+
+uint8_t palette_packed_raw(const uint8_t* packed, size_t x)
+{
+    uint8_t code = packed[x / 2];
+
+    code = (x & 1u) ? (uint8_t)(code & 15u) : (uint8_t)(code >> 4);
+    return code < 8u ? code : (uint8_t)(code + 24u);
+}

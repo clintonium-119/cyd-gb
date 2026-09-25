@@ -23,6 +23,7 @@
 //
 // Pure C, no Arduino/ESP-IDF headers, no allocation: the LUT is caller-owned.
 
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -101,6 +102,24 @@ void palette_build_lut_ramps(const uint16_t ramps[3][4],
 void palette_build_lut_gnuboy_ramps(const uint16_t ramps[3][4], uint8_t bgp,
                                     uint8_t obp0, uint8_t obp1,
                                     uint16_t lut[PALETTE_LUT_SIZE]);
+
+/*
+ * Four bits per pixel for a copy of gnuboy's raw line bytes, so a whole
+ * 160x144 frame fits in 11,520 bytes.
+ *
+ * gnuboy's DMG path emits only 0-7 (background, window) and 32-39 (OBP0,
+ * OBP1), the groups palette_build_lut_gnuboy_ramps() fills. Code
+ * (v & 7) | ((v >> 2) & 8) maps those sixteen values onto 0-15, and any other
+ * byte aliases onto one of them.
+ *
+ * palette_pack_raw_line() packs n raw bytes into (n + 1) / 2 bytes, the first
+ * pixel of each pair in the high nibble; an odd n leaves the last low nibble
+ * zero. palette_packed_raw() gives back pixel x's raw byte, ready to index the
+ * same LUT as the unpacked line.
+ */
+void palette_pack_raw_line(const uint8_t* raw, size_t n, uint8_t* out);
+
+uint8_t palette_packed_raw(const uint8_t* packed, size_t x);
 
 #ifdef __cplusplus
 }
