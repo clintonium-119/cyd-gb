@@ -406,6 +406,47 @@ static void test_a_null_help_line_only_clears(void)
     TEST_ASSERT_EQUAL_UINT(1, count(OP_FILL));
 }
 
+/* ─── the progress bar ────────────────────────────────────────────────────── */
+
+static void test_an_empty_bar_is_its_full_width_track_only(void)
+{
+    const call_t* c;
+
+    ui_progress_bar(&cv, 12, 200, 242, 0, false);
+    TEST_ASSERT_EQUAL_UINT(1, fk.n);
+    c = nth(OP_ROUND, 0);
+    TEST_ASSERT_EQUAL_INT16(12, c->x);
+    TEST_ASSERT_EQUAL_INT16(200, c->y);
+    TEST_ASSERT_EQUAL_INT16(242, c->w);
+    TEST_ASSERT_EQUAL_INT16(UI_BAR_H, c->h);
+    TEST_ASSERT_EQUAL_INT16(UI_BAR_H / 2, c->r);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_SLOT, c->color);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_BG, c->bg);
+}
+
+static void test_a_growing_bar_paints_only_its_fill(void)
+{
+    const call_t* c;
+
+    ui_progress_bar(&cv, 12, 200, 242, 50, true);
+    TEST_ASSERT_EQUAL_UINT(1, fk.n);
+    c = nth(OP_ROUND, 0);
+    TEST_ASSERT_EQUAL_INT16(12, c->x);
+    TEST_ASSERT_EQUAL_INT16(121, c->w);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_PILL, c->color);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_SLOT, c->bg);
+}
+
+static void test_a_full_bar_fills_the_whole_track(void)
+{
+    ui_progress_bar(&cv, 12, 200, 242, 100, false);
+    TEST_ASSERT_EQUAL_UINT(2, count(OP_ROUND));
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_SLOT, nth(OP_ROUND, 0)->color);
+    TEST_ASSERT_EQUAL_INT16(242, nth(OP_ROUND, 1)->w);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_PILL, nth(OP_ROUND, 1)->color);
+    TEST_ASSERT_EQUAL_UINT(0, fk.violations);
+}
+
 static void test_no_hints_paints_only_the_background(void)
 {
     ui_hint_bar(&cv, W, H - UI_FOOT_H, NULL, 0);
@@ -728,6 +769,9 @@ int main(void)
     RUN_TEST(test_a_plain_row_is_cleared_to_black_with_no_bar);
     RUN_TEST(test_the_header_is_white_left_and_grey_right_on_black);
     RUN_TEST(test_the_help_line_is_one_grey_row_inside_its_band);
+    RUN_TEST(test_an_empty_bar_is_its_full_width_track_only);
+    RUN_TEST(test_a_growing_bar_paints_only_its_fill);
+    RUN_TEST(test_a_full_bar_fills_the_whole_track);
     RUN_TEST(test_a_null_help_line_only_clears);
     RUN_TEST(test_no_hints_paints_only_the_background);
     RUN_TEST(test_two_hints_right_align_and_a_word_button_stretches);

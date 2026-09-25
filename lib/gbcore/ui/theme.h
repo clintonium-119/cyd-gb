@@ -46,6 +46,7 @@
 #define UI_HELP_H      18 /* one line of prose and the gap under it */
 #define UI_FOOT_H      20
 #define UI_GLYPH_D     12 /* a button glyph's circle */
+#define UI_BAR_H       10 /* a progress bar: the hold bar, game loading */
 #define UI_HINT_GAP    6  /* between hint pairs, and glyph to label */
 
 /* Font roles, as the font ids canvas.h names. The hints stay the 8 px GLCD

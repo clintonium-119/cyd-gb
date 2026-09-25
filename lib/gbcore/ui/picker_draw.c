@@ -5,8 +5,6 @@
 
 #include "ui/theme_draw.h"
 
-#define PCT_FULL 100
-
 /* Between the list's two stacked images: as much as the help line under them
  * leaves. */
 #define PICKER_ART_GAP 2
@@ -553,14 +551,8 @@ static void draw_bar(const picker_t* p, const picker_layout_t* g,
     }
     if (!grow || pct == 0) {
         cv->fill(cv->ctx, 0, g->help_y, g->w, UI_HELP_H, UI_COL_BG);
-        cv->round_fill(cv->ctx, g->detail_x, y, g->detail_w, PICKER_BAR_H,
-                       PICKER_BAR_H / 2, UI_COL_SLOT, UI_COL_BG);
     }
-    if (pct > 0) {
-        cv->round_fill(cv->ctx, g->detail_x, y,
-                       (int16_t)(g->detail_w * pct / PCT_FULL), PICKER_BAR_H,
-                       PICKER_BAR_H / 2, UI_COL_PILL, UI_COL_SLOT);
-    }
+    ui_progress_bar(cv, g->detail_x, y, g->detail_w, pct, grow);
 }
 
 /* Side by side and fixed: only the band under them scrolls. An action row

@@ -139,6 +139,22 @@ void ui_help_line(const ui_canvas_t* cv, int16_t w, int16_t y, const char* s)
     }
 }
 
+void ui_progress_bar(const ui_canvas_t* cv, int16_t x, int16_t y, int16_t w,
+                     uint8_t pct, bool grow)
+{
+    if (pct > 100) {
+        pct = 100;
+    }
+    if (!grow || pct == 0) {
+        cv->round_fill(cv->ctx, x, y, w, UI_BAR_H, UI_BAR_H / 2, UI_COL_SLOT,
+                       UI_COL_BG);
+    }
+    if (pct > 0) {
+        cv->round_fill(cv->ctx, x, y, (int16_t)(w * pct / 100), UI_BAR_H,
+                       UI_BAR_H / 2, UI_COL_PILL, UI_COL_SLOT);
+    }
+}
+
 /* A button's circle: round for one letter, stretched for a word. */
 static int16_t glyph_w(const ui_canvas_t* cv, const char* button)
 {

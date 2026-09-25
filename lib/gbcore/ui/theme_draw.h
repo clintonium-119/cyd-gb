@@ -69,6 +69,15 @@ int16_t ui_pill_row(const ui_canvas_t* cv, int16_t x, int16_t y,
 void ui_help_line(const ui_canvas_t* cv, int16_t w, int16_t y, const char* s);
 
 /*
+ * A UI_BAR_H progress bar, rounded like the pill: a grey track w wide and the
+ * white fill over its first pct percent. `grow` is a repaint for a pct that
+ * only ever rises: it paints the fill alone over the track already there, so
+ * the bar does not flicker. Without it, or at 0 %, the track is laid first.
+ */
+void ui_progress_bar(const ui_canvas_t* cv, int16_t x, int16_t y, int16_t w,
+                     uint8_t pct, bool grow);
+
+/*
  * The button-hint footer: a UI_FOOT_H band cleared, and when n > 0 one dark
  * pill right-aligned to the window's inset holding, for each hint, a white
  * circle with the button's letter in bold black, then the label in white.

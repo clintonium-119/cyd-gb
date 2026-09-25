@@ -63,7 +63,7 @@ extern "C" {
  * hint footer. */
 #define PICKER_DETAIL_FOOT_H (UI_HELP_H + UI_FOOT_H)
 
-#define PICKER_BAR_H 10
+#define PICKER_BAR_H UI_BAR_H
 
 /* One glyph advance per printable ASCII character, measured once through the
  * canvas for the description's font: what the word wrap sums, so it breaks
