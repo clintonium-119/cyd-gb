@@ -5,7 +5,9 @@ import re
 import shutil
 import struct
 import subprocess
+import sys
 
+import lz4.block
 import pytest
 
 import gamesdb
@@ -419,93 +421,154 @@ def test_a_catrap_spread_splits_into_halves_that_each_fit_the_box():
         assert scale == pytest.approx(532 / 648)
 
 
-def histogram_of(counts):
-    histogram = [0] * 256
-    for level, count in counts.items():
-        histogram[level] = count
-    return histogram
+def quantize(pixels):
+    """Pixels to their 2 bpp levels, through quantize_page's table for them."""
+    grey = bytes(pixels)
+    return list(grey.translate(image_sd.quantize_page(grey, len(grey), 1)))
 
 
-def test_otsu_puts_the_threshold_between_the_two_modes():
-    t = image_sd.otsu_threshold(histogram_of({30: 400, 220: 600}))
-    assert 30 <= t < 220
+def test_a_page_of_pure_paper_is_all_white_and_pure_ink_all_black():
+    assert quantize([255] * 100) == [0] * 100
+    assert quantize([0] * 100) == [3] * 100
 
 
-def test_otsu_keeps_a_light_minority_white_on_a_dark_page():
-    # A dark back cover with a small light logo: the logo must survive.
-    t = image_sd.otsu_threshold(histogram_of({20: 950, 200: 50}))
-    assert 20 <= t < 200
+def test_grey_halfway_between_paper_and_ink_is_a_grey_level():
+    # Paper 240, ink 40: 140 is halfway, and must not collapse to either end.
+    levels = quantize([240] * 90 + [40] * 9 + [140])
+    assert levels[-1] in (1, 2)
 
 
-def test_otsu_leaves_a_blank_page_white_and_a_black_page_black():
-    assert image_sd.otsu_threshold(histogram_of({255: 1000})) < 255
-    assert image_sd.otsu_threshold(histogram_of({0: 1000})) >= 0
+def test_light_grey_paper_is_still_white():
+    assert quantize([200] * 90 + [20] * 10)[:90] == [0] * 90
 
 
-def test_a_nine_pixel_row_packs_msb_first_with_zero_padding():
-    # black, white x7, black: 1000 0000 | 1 then seven pad bits.
-    grey = bytes([0, 255, 255, 255, 255, 255, 255, 255, 0])
-    assert image_sd.pack_page(grey, 9, 1, 127) == bytes([0b10000000, 0b10000000])
+def test_a_dark_page_keeps_its_light_box_white():
+    # A dark back cover with a small light logo: the logo is the paper point,
+    # since the paper search starts at 128, so it stays white.
+    levels = quantize([20] * 950 + [200] * 50)
+    assert levels[:950] == [3] * 950
+    assert levels[950:] == [0] * 50
+
+
+def test_a_nine_pixel_row_packs_msb_first_at_two_bits_with_zero_padding():
+    # Levels 3 0 1 2 | 3 3 0 0 | 1 then three pad pixels.
+    table = bytes(range(4)) + bytes(252)
+    grey = bytes([3, 0, 1, 2, 3, 3, 0, 0, 1])
+    assert image_sd.pack_page_2bpp(grey, 9, 1, table) == bytes(
+        [0b11000110, 0b11110000, 0b01000000]
+    )
 
 
 def test_rows_are_padded_independently():
-    # Two 3-pixel rows: 101 and 010, each in its own byte.
-    grey = bytes([0, 255, 0, 255, 0, 255])
-    assert image_sd.pack_page(grey, 3, 2, 127) == bytes([0b10100000, 0b01000000])
+    # Two 3-pixel rows, 3 2 1 and 1 2 3, each in its own byte.
+    table = bytes(range(4)) + bytes(252)
+    grey = bytes([3, 2, 1, 1, 2, 3])
+    assert image_sd.pack_page_2bpp(grey, 3, 2, table) == bytes([0b11100100, 0b01101100])
 
 
-def test_encode_manual_lays_out_the_header_table_and_rasters():
-    pages = [(9, 2, bytes(4)), (16, 1, b"\xff\x01")]
+def decode_manual(data):
+    """A reader written from the format alone, to check the writer against.
+
+    Checks every structural rule the C reader enforces and returns each page's
+    raster with its bands decompressed and joined.
+    """
+    magic, version, count = struct.unpack_from("<4sHH", data, 0)
+    assert (magic, version) == (b"GBMN", 2)
+    sizes = [struct.unpack_from("<HH", data, 8 + 4 * index) for index in range(count)]
+    table = 8 + 4 * count
+    blocks_start = table + sum(4 * (-(-h // 16) + 1) for _, h in sizes)
+    previous_end = blocks_start
+    pages = []
+    for w, h in sizes:
+        bands = -(-h // 16)
+        offsets = struct.unpack_from(f"<{bands + 1}I", data, table)
+        table += 4 * (bands + 1)
+        assert offsets[0] == previous_end
+        row_bytes = (w + 3) // 4
+        raster = b""
+        for band in range(bands):
+            rows = min(16, h - 16 * band)
+            assert offsets[band] <= offsets[band + 1]
+            block = lz4.block.decompress(
+                data[offsets[band]:offsets[band + 1]],
+                uncompressed_size=rows * row_bytes,
+            )
+            assert len(block) == rows * row_bytes
+            raster += block
+        previous_end = offsets[-1]
+        pages.append((w, h, raster))
+    assert table == blocks_start
+    assert previous_end == len(data)
+    return pages
+
+
+def test_encode_manual_lays_out_the_header_sizes_band_tables_and_blocks():
+    # A 9x20 page is two bands, 16 rows and a short 4; a 16x1 page is one.
+    pages = [(9, 20, bytes(3 * 20)), (16, 1, b"\xff\x01\x02\x03")]
     data = image_sd.encode_manual(pages)
 
     assert data[:4] == b"GBMN"
-    assert data[4:6] == b"\x01\x00"
+    assert data[4:6] == b"\x02\x00"
     assert data[6:8] == b"\x02\x00"
-    assert data[8:12] == b"\x09\x00\x02\x00"
+    assert data[8:12] == b"\x09\x00\x14\x00"
     assert data[12:16] == b"\x10\x00\x01\x00"
-    assert data[16:] == bytes(4) + b"\xff\x01"
-    assert len(data) == 8 + 4 * 2 + (2 * 2 + 2 * 1)
+    # Three offsets for the first page, two for the second, then the blocks.
+    first = struct.unpack_from("<3I", data, 16)
+    second = struct.unpack_from("<2I", data, 28)
+    assert first[0] == 16 + 4 * 5
+    assert first[2] == second[0]
+    assert second[1] == len(data)
+
+
+def test_every_band_decompresses_to_exactly_its_rows_including_a_short_last_one():
+    raster = bytes(range(3 * 37))
+    pages = [(10, 37, raster)]
+    assert decode_manual(image_sd.encode_manual(pages)) == pages
 
 
 def test_encode_manual_refuses_a_raster_of_the_wrong_length():
     with pytest.raises(ValueError):
-        image_sd.encode_manual([(9, 2, bytes(3))])
-
-
-def decode_manual(data):
-    """A reader written from the format alone, to check the writer against."""
-    magic, version, count = struct.unpack_from("<4sHH", data, 0)
-    assert (magic, version) == (b"GBMN", 1)
-    sizes = [struct.unpack_from("<HH", data, 8 + 4 * index) for index in range(count)]
-    offset = 8 + 4 * count
-    pages = []
-    for w, h in sizes:
-        length = (w + 7) // 8 * h
-        pages.append((w, h, data[offset:offset + length]))
-        offset += length
-    assert offset == len(data)
-    return pages
+        image_sd.encode_manual([(9, 2, bytes(5))])
 
 
 def test_a_two_page_file_decodes_back_to_what_was_encoded():
-    first = image_sd.pack_page(bytes([0, 255] * 15), 10, 3, 127)
-    second = image_sd.pack_page(bytes(range(0, 256, 4)), 8, 8, 100)
+    table = image_sd.quantize_page(bytes(range(0, 256, 4)), 8, 8)
+    first = image_sd.pack_page_2bpp(bytes([0, 255] * 15), 10, 3, table)
+    second = image_sd.pack_page_2bpp(bytes(range(0, 256, 4)), 8, 8, table)
     pages = [(10, 3, first), (8, 8, second)]
     assert decode_manual(image_sd.encode_manual(pages)) == pages
 
 
-# The two pages behind test/fixtures/manual_two_pages.1bp, which the C reader's
-# suite parses: a 10-pixel-wide page, so its rows carry padding, and an 8-wide
-# one that does not.
+def fixture_raster(w, h, level):
+    """A raster of level(x, y) at 2 bpp, packed without the encoder's helpers."""
+    raster = bytearray()
+    for y in range(h):
+        row = bytearray((w + 3) // 4)
+        for x in range(w):
+            row[x // 4] |= level(x, y) << (6 - 2 * (x % 4))
+        raster += row
+    return bytes(raster)
+
+
+# The two pages behind test/fixtures/manual_two_pages.2bp, which the C reader's
+# suite parses with the same two formulas: a 10x20 page, so its rows carry pad
+# bits and its second band is a short 4 rows, using all four levels in
+# diagonal stripes that LZ4 matches with overlapping copies; and a 5x3 page.
 FIXTURE_MANUAL_PAGES = [
-    (10, 3, bytes.fromhex("aa80aa80aa80")),
-    (8, 2, bytes.fromhex("a53c")),
+    (10, 20, fixture_raster(10, 20, lambda x, y: (x + y) % 4)),
+    (5, 3, fixture_raster(5, 3, lambda x, y: (3 * x + y) % 4)),
 ]
 
 
 def test_the_encoder_still_writes_the_c_suites_fixture_byte_for_byte(repo_root):
-    fixture = repo_root / "test" / "fixtures" / "manual_two_pages.1bp"
+    fixture = repo_root / "test" / "fixtures" / "manual_two_pages.2bp"
     assert image_sd.encode_manual(FIXTURE_MANUAL_PAGES) == fixture.read_bytes()
+
+
+def test_the_committed_fixture_decodes_back_to_its_source_rasters(repo_root):
+    fixture = repo_root / "test" / "fixtures" / "manual_two_pages.2bp"
+    assert decode_manual(fixture.read_bytes()) == FIXTURE_MANUAL_PAGES
+
 
 def c_define(path, name):
     """A #define's value as written, quotes and all."""
@@ -526,16 +589,17 @@ def test_the_description_directory_and_suffix_match_the_firmware(repo_root):
     assert c_define(header, "DESC_SUFFIX") == f'"{image_sd.DESC_SUFFIX}"'
 
 
-def test_the_manual_magic_and_version_match_the_firmware(repo_root):
+def test_the_manual_magic_version_and_band_height_match_the_firmware(repo_root):
     header = repo_root / "lib" / "gbcore" / "ui" / "manual.h"
     assert c_define(header, "MANUAL_MAGIC") == f'"{image_sd.MANUAL_MAGIC.decode()}"'
     assert c_define(header, "MANUAL_VERSION") == str(image_sd.MANUAL_VERSION)
+    assert c_define(header, "MANUAL_BAND_ROWS") == str(image_sd.MANUAL_BAND_ROWS)
 
 # --- manual rendering -----------------------------------------------------
 
 # Three fixture pages, in points: a plain page with a black box; a spread wider
-# than 2:1 with a black box on each half; and a dark page carrying a light box,
-# which a fixed threshold would flatten to black.
+# than 2:1 with a black box on each half; and a dark page carrying a lighter
+# box, which a fixed threshold would flatten to black.
 MANUAL_PAGES = [
     (300, 400, "1 g 0 0 300 400 re f 0 g 50 50 100 100 re f"),
     (1000, 300, "1 g 0 0 1000 300 re f 0 g 100 100 100 100 re f 600 100 100 100 re f"),
@@ -590,13 +654,13 @@ def manual_sources(sources):
 
 
 def transitions(w, raster):
-    """Black-to-white changes along the rows, the structure a threshold keeps."""
-    row_bytes = (w + 7) // 8
+    """Changes of level along the rows, the structure quantizing keeps."""
+    row_bytes = (w + 3) // 4
     count = 0
     for start in range(0, len(raster), row_bytes):
-        bits = int.from_bytes(raster[start:start + row_bytes], "big")
-        row = bin(bits)[2:].zfill(row_bytes * 8)[:w]
-        count += row.count("10")
+        row = raster[start:start + row_bytes]
+        levels = [(row[x // 4] >> (6 - 2 * (x % 4))) & 3 for x in range(w)]
+        count += sum(1 for a, b in zip(levels, levels[1:]) if a != b)
     return count
 
 
@@ -605,21 +669,21 @@ def transitions(w, raster):
 def test_one_run_makes_a_manual_only_for_the_entry_with_one(manual_sources):
     assert image(manual_sources) == 0
     card = manual_sources["card"]
-    assert sorted(path.name for path in (card / "manual").iterdir()) == ["Tetris.1bp"]
+    assert sorted(path.name for path in (card / "manual").iterdir()) == ["Tetris.2bp"]
 
 
 @ffmpeg_required
 @poppler_required
 def test_a_manual_is_exactly_the_size_its_table_implies(manual_sources):
     assert image(manual_sources) == 0
-    decode_manual((manual_sources["card"] / "manual/Tetris.1bp").read_bytes())
+    decode_manual((manual_sources["card"] / "manual/Tetris.2bp").read_bytes())
 
 
 @ffmpeg_required
 @poppler_required
 def test_the_wide_page_is_stored_as_two_halves_within_the_box(manual_sources):
     assert image(manual_sources) == 0
-    pages = decode_manual((manual_sources["card"] / "manual/Tetris.1bp").read_bytes())
+    pages = decode_manual((manual_sources["card"] / "manual/Tetris.2bp").read_bytes())
 
     assert [(w, h) for w, h, _ in pages] == [(360, 480), (532, 319), (532, 319), (360, 480)]
     for w, h, raster in pages:
@@ -631,12 +695,14 @@ def test_the_wide_page_is_stored_as_two_halves_within_the_box(manual_sources):
 @poppler_required
 def test_the_dark_page_keeps_its_light_box(manual_sources):
     assert image(manual_sources) == 0
-    pages = decode_manual((manual_sources["card"] / "manual/Tetris.1bp").read_bytes())
+    pages = decode_manual((manual_sources["card"] / "manual/Tetris.2bp").read_bytes())
     w, h, raster = pages[3]
 
-    # The box is 100 pt tall, 120 rows at this fit, one light run per row;
-    # a fixed mid-grey threshold would leave it black with no runs at all.
-    assert transitions(w, raster) >= 100
+    # The box is 100 pt tall, 120 rows at this fit, two edges per row. No grey
+    # on this page reaches the paper search, so the box is a dark grey on black
+    # rather than white, but it is still there; a fixed mid-grey threshold
+    # would leave the page black with no edges at all.
+    assert transitions(w, raster) >= 200
 
 
 @ffmpeg_required
@@ -650,7 +716,7 @@ def test_a_second_run_leaves_the_manual_and_the_manifest_alone(manual_sources, c
     second = capsys.readouterr()
     assert "0 manuals written" in second.err
     assert second.out == first.out
-    assert "manual/Tetris.1bp" in second.out
+    assert "manual/Tetris.2bp" in second.out
 
 
 @ffmpeg_required
@@ -658,15 +724,29 @@ def test_a_second_run_leaves_the_manual_and_the_manifest_alone(manual_sources, c
 def test_a_stray_manual_is_pruned_and_saves_survive(manual_sources, capsys):
     card = manual_sources["card"]
     (card / "manual").mkdir()
-    (card / "manual/Bootleg.1bp").write_bytes(b"GBMN")
+    (card / "manual/Bootleg.2bp").write_bytes(b"GBMN")
     (card / "saves").mkdir()
     (card / "saves/Tetris.sav").write_bytes(b"x")
 
     assert image(manual_sources) == 0
 
-    assert not (card / "manual/Bootleg.1bp").exists()
+    assert not (card / "manual/Bootleg.2bp").exists()
     assert (card / "saves/Tetris.sav").is_file()
-    assert "removed: manual/Bootleg.1bp" in capsys.readouterr().err
+    assert "removed: manual/Bootleg.2bp" in capsys.readouterr().err
+
+
+@ffmpeg_required
+@poppler_required
+def test_a_manual_left_in_the_old_format_is_pruned(manual_sources, capsys):
+    card = manual_sources["card"]
+    (card / "manual").mkdir()
+    (card / "manual/Tetris.1bp").write_bytes(b"GBMN\x01\x00")
+
+    assert image(manual_sources) == 0
+
+    assert not (card / "manual/Tetris.1bp").exists()
+    assert (card / "manual/Tetris.2bp").is_file()
+    assert "removed: manual/Tetris.1bp" in capsys.readouterr().err
 
 
 @ffmpeg_required
@@ -675,13 +755,13 @@ def test_check_catches_a_single_corrupted_byte_of_a_manual(manual_sources, capsy
     assert image(manual_sources) == 0
     capsys.readouterr()
 
-    path = manual_sources["card"] / "manual/Tetris.1bp"
+    path = manual_sources["card"] / "manual/Tetris.2bp"
     data = bytearray(path.read_bytes())
     data[len(data) // 2] ^= 0x01
     path.write_bytes(bytes(data))
 
     assert image(manual_sources, "--check") == 1
-    assert "failed verify: differs from its source: manual/Tetris.1bp" in (
+    assert "failed verify: differs from its source: manual/Tetris.2bp" in (
         capsys.readouterr().err
     )
 
@@ -715,6 +795,20 @@ def test_a_library_with_a_manual_needs_poppler(manual_sources, monkeypatch, caps
     assert image(manual_sources) == 1
     assert "pdftoppm is not on PATH" in capsys.readouterr().err
     assert not (manual_sources["card"] / "roms").exists()
+
+
+def test_a_library_with_a_manual_needs_lz4(manual_sources, monkeypatch, capsys):
+    # A None entry in sys.modules makes the import raise ImportError.
+    monkeypatch.setitem(sys.modules, "lz4.block", None)
+    assert image(manual_sources) == 1
+    assert "the lz4 package is not installed" in capsys.readouterr().err
+    assert not (manual_sources["card"] / "roms").exists()
+
+
+@ffmpeg_required
+def test_a_library_with_no_manual_images_without_lz4(sources, monkeypatch):
+    monkeypatch.setitem(sys.modules, "lz4.block", None)
+    assert image(sources) == 0
 
 
 # --- descriptions ---------------------------------------------------------
