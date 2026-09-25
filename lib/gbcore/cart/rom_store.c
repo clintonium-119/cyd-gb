@@ -102,19 +102,30 @@ bool rom_store_matches(const rom_store_hdr_t* hdr, const char* filename,
     return memcmp(hdr->filename, want, ROM_STORE_NAME_MAX) == 0;
 }
 
+/* The next run of the span from `from`, clipped to its end. `from` is always
+ * a run boundary or the end itself, so every run is aligned. */
+static uint32_t next_run(const rom_store_flash_t* flash, uint32_t from,
+                         uint32_t end)
+{
+    uint32_t run = round_up(ROM_STORE_ERASE_RUN, flash->erase_size);
+
+    return (end - from < run) ? end - from : run;
+}
+
 int rom_store_write_begin(const rom_store_flash_t* flash,
                           rom_store_writer_t* writer, const char* filename,
                           uint32_t size)
 {
     uint32_t erase_len;
+    uint32_t first;
 
     if (!flash_usable(flash) || writer == NULL || filename == NULL ||
         size == 0) {
         return ROM_STORE_ERR_ARGS;
     }
     /* Header sector plus the data sectors the ROM occupies, whole sectors
-     * either way — the one erase covers both, and clearing the header first
-     * is what makes a torn write detectable. */
+     * either way. Only the first run is erased here; clearing the header in
+     * it before any data is written is what makes a torn write detectable. */
     erase_len = round_up(size, flash->erase_size);
     if (erase_len > flash->size - flash->erase_size) {
         return ROM_STORE_ERR_RANGE;
@@ -122,10 +133,13 @@ int rom_store_write_begin(const rom_store_flash_t* flash,
     erase_len += flash->erase_size;
 
     memset(writer, 0, sizeof(*writer));
-    if (flash->erase(flash->ctx, 0, erase_len) != 0) {
+    first = next_run(flash, 0, erase_len);
+    if (flash->erase(flash->ctx, 0, first) != 0) {
         return ROM_STORE_ERR_IO;
     }
     writer->flash = flash;
+    writer->erased = first;
+    writer->erase_end = erase_len;
     writer->declared = size;
     writer->crc = 0; /* zlib's crc32() seed */
     copy_name(writer->filename, filename);
@@ -151,6 +165,14 @@ int rom_store_write_chunk(rom_store_writer_t* writer, const void* data,
         return ROM_STORE_ERR_RANGE;
     }
     off = ROM_STORE_DATA_OFFSET(writer->flash) + writer->written;
+    while (writer->erased < off + len) {
+        uint32_t n = next_run(writer->flash, writer->erased, writer->erase_end);
+
+        if (writer->flash->erase(writer->flash->ctx, writer->erased, n) != 0) {
+            return ROM_STORE_ERR_IO;
+        }
+        writer->erased += n;
+    }
     if (writer->flash->write(writer->flash->ctx, off, data, len) != 0) {
         return ROM_STORE_ERR_IO;
     }

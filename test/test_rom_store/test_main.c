@@ -16,12 +16,15 @@
  * is a statement about counts, not about returned values.
  */
 
-#define FAKE_SZ (64u * 1024u)
+/* Four erase runs, so a ROM can span more than one. */
+#define FAKE_SZ (4u * ROM_STORE_ERASE_RUN)
 #define FAKE_SECTOR 4096u
 #define FAKE_ROOM (FAKE_SZ - FAKE_SECTOR) /* bytes a ROM may occupy */
 
 static uint8_t fake[FAKE_SZ];
 static unsigned n_erase;
+static uint32_t erase_off[8];
+static uint32_t erase_len[8];
 static unsigned n_write;
 static int fault;
 
@@ -60,6 +63,10 @@ static int fake_write(void* ctx, uint32_t off, const void* src, uint32_t len)
 static int fake_erase(void* ctx, uint32_t off, uint32_t len)
 {
     (void)ctx;
+    if (n_erase < 8) {
+        erase_off[n_erase] = off;
+        erase_len[n_erase] = len;
+    }
     n_erase++;
     if ((off % FAKE_SECTOR) != 0 || (len % FAKE_SECTOR) != 0 || len == 0) {
         fault = 1; /* sub-sector erase */
@@ -251,6 +258,78 @@ static void test_torn_write_leaves_no_valid_header(void)
     TEST_ASSERT_FALSE(fault);
 }
 
+/* Three whole runs and 5000 bytes into a fourth. The fake starts written, not
+ * erased, so a write into a run that was not erased first trips `fault`. */
+#define MULTI_RUN_SZ (3u * ROM_STORE_ERASE_RUN - FAKE_SECTOR + ODD_ROM_SZ)
+
+static void test_each_run_is_erased_just_before_its_first_write(void)
+{
+    rom_store_flash_t f = make_flash();
+    rom_store_writer_t w;
+    rom_store_hdr_t hdr;
+    uint32_t done = 0;
+    uint32_t end = 3u * ROM_STORE_ERASE_RUN + 2u * FAKE_SECTOR;
+
+    memset(fake, 0x00, sizeof(fake));
+    TEST_ASSERT_EQUAL_INT(ROM_STORE_OK,
+        rom_store_write_begin(&f, &w, "Pokemon - Red Version.gb", MULTI_RUN_SZ));
+    /* The first run only, header sector and all. */
+    TEST_ASSERT_EQUAL_UINT(1, n_erase);
+    TEST_ASSERT_EQUAL_UINT32(0, erase_off[0]);
+    TEST_ASSERT_EQUAL_UINT32(ROM_STORE_ERASE_RUN, erase_len[0]);
+
+    while (done < MULTI_RUN_SZ) {
+        uint32_t n = MULTI_RUN_SZ - done;
+        if (n > 4096) {
+            n = 4096;
+        }
+        TEST_ASSERT_EQUAL_INT(ROM_STORE_OK,
+                              rom_store_write_chunk(&w, rom + done, n));
+        done += n;
+        /* Never ahead of the byte just written. */
+        TEST_ASSERT_EQUAL_UINT((FAKE_SECTOR + done - 1) / ROM_STORE_ERASE_RUN + 1,
+                               n_erase);
+    }
+    TEST_ASSERT_EQUAL_INT(ROM_STORE_OK, rom_store_write_end(&w));
+
+    TEST_ASSERT_EQUAL_UINT(4, n_erase);
+    TEST_ASSERT_EQUAL_UINT32(ROM_STORE_ERASE_RUN, erase_off[1]);
+    TEST_ASSERT_EQUAL_UINT32(2u * ROM_STORE_ERASE_RUN, erase_off[2]);
+    TEST_ASSERT_EQUAL_UINT32(3u * ROM_STORE_ERASE_RUN, erase_off[3]);
+    /* The last run stops at the ROM's last sector: two sectors hold 5000
+     * bytes, and nothing past them is erased. */
+    TEST_ASSERT_EQUAL_UINT32(2u * FAKE_SECTOR, erase_len[3]);
+    TEST_ASSERT_EQUAL_HEX8(0xFF, fake[end - 1]);
+    TEST_ASSERT_EQUAL_HEX8(0x00, fake[end]);
+
+    TEST_ASSERT_TRUE(rom_store_read_header(&f, &hdr));
+    TEST_ASSERT_EQUAL_HEX32(ref_crc32(rom, MULTI_RUN_SZ), hdr.crc32);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(rom, fake + ROM_STORE_DATA_OFFSET(&f),
+                                  MULTI_RUN_SZ);
+    TEST_ASSERT_FALSE(fault);
+}
+
+static void test_a_write_torn_past_the_first_run_leaves_no_valid_header(void)
+{
+    rom_store_flash_t f = make_flash();
+    rom_store_writer_t w;
+    rom_store_hdr_t hdr;
+    uint32_t done = 0;
+
+    TEST_ASSERT_EQUAL_INT(ROM_STORE_OK,
+        write_rom(&f, "Tetris (World).gb", ODD_ROM_SZ, 1024));
+
+    TEST_ASSERT_EQUAL_INT(ROM_STORE_OK,
+        rom_store_write_begin(&f, &w, "Pokemon - Red Version.gb", MULTI_RUN_SZ));
+    while (done < 2u * ROM_STORE_ERASE_RUN) {
+        TEST_ASSERT_EQUAL_INT(ROM_STORE_OK,
+                              rom_store_write_chunk(&w, rom + done, 4096));
+        done += 4096;
+    }
+    TEST_ASSERT_FALSE(rom_store_read_header(&f, &hdr));
+    TEST_ASSERT_FALSE(fault);
+}
+
 static void test_oversize_rom_is_rejected_without_erasing(void)
 {
     rom_store_flash_t f = make_flash();
@@ -332,6 +411,8 @@ int main(void)
     RUN_TEST(test_unchanged_rom_short_circuits_with_no_erase_or_write);
     RUN_TEST(test_changed_name_or_size_does_not_match);
     RUN_TEST(test_torn_write_leaves_no_valid_header);
+    RUN_TEST(test_each_run_is_erased_just_before_its_first_write);
+    RUN_TEST(test_a_write_torn_past_the_first_run_leaves_no_valid_header);
     RUN_TEST(test_oversize_rom_is_rejected_without_erasing);
     RUN_TEST(test_write_end_before_declared_size_is_an_order_error);
     RUN_TEST(test_verify_accepts_intact_data_and_rejects_a_flipped_byte);

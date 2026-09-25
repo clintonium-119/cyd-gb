@@ -28,7 +28,13 @@ bool rom_store_init();
 // the unqualified alias does not exist in a translation unit that reaches
 // display.h before <SD.h>. Nothing is erased or written on the unchanged
 // path. True when the partition holds this ROM on return.
-bool rom_store_write(fs::File& f, const char* filename);
+//
+// `progress` (may be NULL) is called after each chunk with the bytes copied
+// so far and the total, ending at done == total. It is never called on the
+// unchanged path, which copies nothing.
+typedef void (*rom_store_progress_fn)(uint32_t done, uint32_t total, void* ctx);
+bool rom_store_write(fs::File& f, const char* filename,
+                     rom_store_progress_fn progress, void* ctx);
 
 // Map the stored ROM and return a pointer to its first byte, or NULL. The
 // map lives for the rest of the session; there is no unmap, because there is

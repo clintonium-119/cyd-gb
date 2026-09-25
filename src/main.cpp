@@ -476,7 +476,7 @@ static void load_and_run(const char* name) {
     // Order is load-bearing, not incidental: a flash write stalls the other
     // core's instruction fetch, so the ROM must be in the partition before any
     // emulation task exists.
-    bool in_flash = rom_store_init() && rom_store_write(rom_file, rom_name);
+    bool in_flash = rom_store_init() && rom_store_write(rom_file, rom_name, nullptr, nullptr);
     rom_file.close();
     if (!in_flash) {
         load_halt("ROM store failed", "");

@@ -12,10 +12,16 @@
 // sector, and the ROM starts on a sector boundary so the device side can map
 // it directly. ROM_STORE_DATA_OFFSET() names that start.
 //
-// Write protocol: begin (validate, erase) -> chunk* (stream, fold CRC) ->
-// end (write the header). The header is written LAST and the erase clears it
-// first, so a write torn by a reset or a power cut leaves no valid magic and
-// the next boot rewrites from scratch rather than booting half a ROM.
+// Write protocol: begin (validate, erase the first run) -> chunk* (erase
+// ahead, stream, fold CRC) -> end (write the header). The header is written
+// LAST and the first erase clears it, so a write torn by a reset or a power
+// cut leaves no valid magic and the next boot rewrites from scratch rather
+// than booting half a ROM.
+//
+// The span is erased in ROM_STORE_ERASE_RUN runs, each just before the first
+// byte written into it, rather than all at once in begin: a 1 MB ROM's erase
+// takes seconds, and spread over the chunks it shows as copy progress
+// instead of a stall before the first one.
 //
 // Re-writing an unchanged ROM is the thing this module exists to avoid: the
 // caller reads the header, asks rom_store_matches(), and skips the whole
@@ -83,6 +89,11 @@ rom_store_hdr_t;
 /* Where the ROM image starts, partition-relative. */
 #define ROM_STORE_DATA_OFFSET(flash) ((flash)->erase_size)
 
+/* Bytes erased at a time, partition-relative and aligned: the flash's 64 KB
+ * block, which erases in one operation where 4 KB sectors would take many
+ * times longer. Rounded up to a multiple of erase_size. */
+#define ROM_STORE_ERASE_RUN 65536u
+
 /*
  * Streaming writer state. Caller-owned and opaque in practice: begin fills
  * it, chunk/end consume it. One writer per write; no global state.
@@ -92,6 +103,8 @@ typedef struct rom_store_writer_s {
     uint32_t declared; /* byte count promised to write_begin */
     uint32_t written;  /* bytes accepted so far              */
     uint32_t crc;      /* running CRC32 over accepted bytes  */
+    uint32_t erased;   /* partition bytes [0, erased) erased */
+    uint32_t erase_end; /* end of the span the ROM needs     */
     char filename[ROM_STORE_NAME_MAX];
     bool open;
 } rom_store_writer_t;
@@ -127,16 +140,18 @@ bool rom_store_matches(const rom_store_hdr_t* hdr, const char* filename,
 
 /*
  * Start a write of `size` bytes named `filename`: validates the fit, erases
- * the header sector and the data sectors the ROM will occupy, and arms the
- * writer. Nothing is erased when the call fails. Names longer than
+ * the first ROM_STORE_ERASE_RUN of the span — the header sector with it —
+ * and arms the writer. Nothing is erased when the call fails. Names longer than
  * ROM_STORE_NAME_MAX - 1 are truncated.
  */
 int rom_store_write_begin(const rom_store_flash_t* flash,
                           rom_store_writer_t* writer, const char* filename,
                           uint32_t size);
 
-/* Append the next `len` bytes of the ROM. Writing past the declared size is
- * ROM_STORE_ERR_RANGE; a zero length is accepted and does nothing. */
+/* Append the next `len` bytes of the ROM, first erasing any run they reach
+ * that is not erased yet, never past the ROM's last sector. Writing past the
+ * declared size is ROM_STORE_ERR_RANGE; a zero length is accepted and does
+ * nothing. */
 int rom_store_write_chunk(rom_store_writer_t* writer, const void* data,
                           uint32_t len);
 
