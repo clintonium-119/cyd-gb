@@ -583,7 +583,8 @@ void setup() {
 #endif
 
 #if !defined(DEV_ROM_PATH) && !defined(DEV_WRITER)
-    if (!nfc_init()) {
+    bool reader_ok = nfc_init();
+    if (!reader_ok) {
         Serial.println("[BOOT] NFC reader did not answer");
     }
     read_tag(&in);
@@ -632,6 +633,14 @@ void setup() {
 #if !defined(DEV_ROM_PATH) && !defined(DEV_WRITER)
     // Exactly one retry, and only now that there is a screen to report the
     // outcome on. One, not a loop: a tag that does not read twice is a halt.
+    if (!reader_ok) {
+        reader_ok = nfc_init();
+    }
+    // A reader that does not answer twice is the fault, not the tag: say so
+    // rather than let the tag read fail and blame the cartridge.
+    if (!reader_ok) {
+        halt_screen("Reader not responding", "");
+    }
     if (in.tag != BOOT_TAG_OK) {
         read_tag(&in);
     }
