@@ -313,6 +313,8 @@ enum diag_trim_pat_e {
  * because the fixture a reading was taken on cannot be shown on a screen the
  * fixture fills. */
 #define DIAG_EV_TRIM_FIXTURE 0x100
+/* The games-list mode flipped: the binding stores it. */
+#define DIAG_EV_LIST_MODE   0x200
 
 enum diag_result_e {
     DIAG_OK = 0,
@@ -398,6 +400,7 @@ typedef struct diag_s {
     uint8_t volume;       /* MIX_VOL_OFF .. MIX_VOL_HIGH                  */
     uint8_t pattern;      /* enum diag_pattern_e                          */
     uint8_t frameskip;
+    bool list_mode;       /* the games-list fallback mode, a stored flag  */
     uint32_t toast_until_ms;
     bool toast;
 
@@ -512,6 +515,11 @@ bool diag_tone_on(const diag_t* d);
 uint8_t diag_volume(const diag_t* d);
 uint8_t diag_pattern(const diag_t* d);
 uint8_t diag_frameskip(const diag_t* d);
+
+/* The games-list mode starts off at diag_init(); the binding seeds the stored
+ * value here. A on the System page flips it and reports DIAG_EV_LIST_MODE. */
+void diag_set_list_mode(diag_t* d, bool on);
+bool diag_list_mode(const diag_t* d);
 bool diag_toast_active(const diag_t* d, uint32_t now_ms);
 
 /* ─── Panel trim ─────────────────────────────────────────────────────────── */

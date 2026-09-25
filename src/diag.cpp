@@ -460,6 +460,7 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
     // in, so this boot's first run continues that convergence instead of
     // starting the guess over and walking a good porch off its null.
     diag_trim_set_dir(&d, s->trim_dir);
+    diag_set_list_mode(&d, s->list_mode);
     combo_init(&combo);
     tone_init(&tone_st, TONE_HZ, SPEAKER_SAMPLE_RATE);
 
@@ -561,6 +562,16 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
             s->frameskip = diag_frameskip(&d);
             settings_save(s);
             Serial.printf("[DIAG] frameskip %u\n", (unsigned)s->frameskip);
+        }
+        if (flags & DIAG_EV_LIST_MODE) {
+            s->list_mode = diag_list_mode(&d);
+            // Off forgets the remembered game, so switching the mode back on
+            // later opens the list rather than a stale pick.
+            if (!s->list_mode) {
+                settings_list_game_clear();
+            }
+            settings_save(s);
+            Serial.printf("[DIAG] games list %s\n", s->list_mode ? "on" : "off");
         }
         if ((flags & DIAG_EV_TONE) && !diag_tone_on(&d)) {
             speaker_silence();

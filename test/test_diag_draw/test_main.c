@@ -931,6 +931,26 @@ static void test_the_trim_page_shows_saved_only_while_the_toast_is_up(void)
     TEST_ASSERT_EQUAL_UINT(0, fk.saved_texts);
 }
 
+static void test_the_system_page_draws_the_games_list_toggle(void)
+{
+    fill_data();
+    draw_page(GEOM_24_W, GEOM_24_H, DIAG_PAGE_SYSTEM, 0, true, 0);
+    assert_clean();
+    TEST_ASSERT_TRUE(drew_text("Games list"));
+    TEST_ASSERT_TRUE(drew_text("Off"));
+    TEST_ASSERT_FALSE(drew_text("On"));
+    TEST_ASSERT_TRUE(drew_text("Toggle"));
+
+    diag_input(&st, COMBO_EVENT_NONE, COMBO_BTN_A, 1000);
+    {
+        ui_canvas_t cv = canvas_over(&fk, &geom);
+        diag_draw(&st, &data, &geom, &ck, 1000, &cv);
+    }
+    assert_clean();
+    TEST_ASSERT_TRUE(drew_text("On"));
+    TEST_ASSERT_FALSE(drew_text("Off"));
+}
+
 static void test_a_missing_build_string_still_paints(void)
 {
     fill_data();
@@ -1001,6 +1021,7 @@ int main(void)
     RUN_TEST(test_the_trim_page_shows_the_porch_it_would_store);
     RUN_TEST(test_the_trim_page_follows_the_porch_as_it_is_stepped);
     RUN_TEST(test_the_trim_page_shows_saved_only_while_the_toast_is_up);
+    RUN_TEST(test_the_system_page_draws_the_games_list_toggle);
     RUN_TEST(test_a_missing_build_string_still_paints);
     RUN_TEST(test_a_missing_card_and_catalog_still_paint);
     RUN_TEST(test_a_null_argument_paints_nothing);

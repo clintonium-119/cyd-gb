@@ -118,6 +118,7 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
     d->volume = combo_step_u8(volume, 0, MIX_VOL_OFF, MIX_VOL_HIGH, 1);
     d->pattern = DIAG_PATTERN_BARS;
     d->frameskip = combo_step_u8(frameskip, 0, 0, DIAG_FRAMESKIP_MAX, 1);
+    d->list_mode = false;
     d->toast_until_ms = 0;
     d->toast = false;
 
@@ -800,6 +801,10 @@ uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
                 ev |= DIAG_EV_SAVE_TRIM | DIAG_EV_REDRAW;
             }
             break;
+        case DIAG_PAGE_SYSTEM:
+            d->list_mode = !d->list_mode;
+            ev |= DIAG_EV_LIST_MODE | DIAG_EV_REDRAW;
+            break;
         default:
             break;
         }
@@ -892,6 +897,18 @@ uint8_t diag_pattern(const diag_t* d)
 uint8_t diag_frameskip(const diag_t* d)
 {
     return (d != NULL) ? d->frameskip : 0;
+}
+
+void diag_set_list_mode(diag_t* d, bool on)
+{
+    if (d != NULL) {
+        d->list_mode = on;
+    }
+}
+
+bool diag_list_mode(const diag_t* d)
+{
+    return (d != NULL) ? d->list_mode : false;
 }
 
 bool diag_toast_active(const diag_t* d, uint32_t now_ms)

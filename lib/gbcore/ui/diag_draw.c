@@ -72,7 +72,7 @@ static const char* const HELPS[DIAG_PAGE_COUNT] = {
     "Panel and scaler patterns",
     "Centre the window",
     "Match the game's refresh",
-    "Frameskip and build",
+    "Frameskip, games list, build",
 };
 
 /* One hint footer per page: what the buttons do here. Paging is named on
@@ -93,7 +93,9 @@ static const ui_hint_t HINTS_TRIM[] = {
     { "Start", "Run" }, { "D-pad", "Porch" }, { "B", "Default" },
     { "A", "Save" },
 };
-static const ui_hint_t HINTS_SYSTEM[] = { { "U/D", "Frameskip" }, HINT_PAGE };
+static const ui_hint_t HINTS_SYSTEM[] = {
+    { "A", "Toggle" }, { "U/D", "Frameskip" }, HINT_PAGE,
+};
 
 #define HINTS(a) { (a), (uint8_t)(sizeof(a) / sizeof((a)[0])) }
 static const struct {
@@ -688,10 +690,12 @@ static void page_system(const ui_canvas_t* cv, const diag_layout_t* g,
 
     snprintf(buf, sizeof(buf), "%u", (unsigned)diag_frameskip(d));
     kv_row(cv, g, 0, "Frameskip", buf, UI_COL_TEXT);
-    kv_row(cv, g, 1, "Version",
+    kv_row(cv, g, 1, "Games list", diag_list_mode(d) ? "On" : "Off",
+           UI_COL_TEXT);
+    kv_row(cv, g, 2, "Version",
            (data->fw_version[0] != '\0') ? data->fw_version : "unknown",
            UI_COL_TEXT);
-    kv_row(cv, g, 2, "Built",
+    kv_row(cv, g, 3, "Built",
            (data->build_time[0] != '\0') ? data->build_time : "unknown",
            UI_COL_TEXT);
 }

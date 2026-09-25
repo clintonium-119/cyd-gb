@@ -486,6 +486,52 @@ static void test_frameskip_steps_within_its_range(void)
     TEST_ASSERT_EQUAL_UINT8(0, diag_frameskip(&d));
 }
 
+static void test_a_on_the_system_page_toggles_the_games_list(void)
+{
+    goto_page(DIAG_PAGE_SYSTEM);
+    TEST_ASSERT_FALSE(diag_list_mode(&d));
+
+    sample(COMBO_EVENT_NONE, 0, 100);
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_LIST_MODE | DIAG_EV_REDRAW,
+                            sample(COMBO_EVENT_NONE, COMBO_BTN_A, 105));
+    TEST_ASSERT_TRUE(diag_list_mode(&d));
+
+    sample(COMBO_EVENT_NONE, 0, 200);
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_LIST_MODE | DIAG_EV_REDRAW,
+                            sample(COMBO_EVENT_NONE, COMBO_BTN_A, 205));
+    TEST_ASSERT_FALSE(diag_list_mode(&d));
+}
+
+static void test_a_on_any_other_page_leaves_the_games_list_alone(void)
+{
+    uint8_t page;
+
+    for (page = 0; page < DIAG_PAGE_COUNT; page++) {
+        if (page == DIAG_PAGE_SYSTEM) {
+            continue;
+        }
+        setUp();
+        goto_page(page);
+        sample(COMBO_EVENT_NONE, 0, 100);
+        TEST_ASSERT_EQUAL_HEX16(
+            0, sample(COMBO_EVENT_NONE, COMBO_BTN_A, 105) & DIAG_EV_LIST_MODE);
+        TEST_ASSERT_FALSE(diag_list_mode(&d));
+    }
+}
+
+static void test_frameskip_steps_leave_the_games_list_alone(void)
+{
+    goto_page(DIAG_PAGE_SYSTEM);
+    diag_set_list_mode(&d, true);
+
+    hammer(COMBO_BTN_DOWN, 2);
+    TEST_ASSERT_EQUAL_UINT8(2, diag_frameskip(&d));
+    TEST_ASSERT_TRUE(diag_list_mode(&d));
+    hammer(COMBO_BTN_UP, 1);
+    TEST_ASSERT_EQUAL_UINT8(1, diag_frameskip(&d));
+    TEST_ASSERT_TRUE(diag_list_mode(&d));
+}
+
 /* ─── titles and NULL handling ────────────────────────────────────────────── */
 
 static void test_every_page_has_a_title_and_the_count_has_none(void)
@@ -1626,6 +1672,9 @@ int main(void)
     RUN_TEST(test_leaving_the_audio_page_silences_the_tone);
     RUN_TEST(test_the_display_pattern_cycles_three_ways_round);
     RUN_TEST(test_frameskip_steps_within_its_range);
+    RUN_TEST(test_a_on_the_system_page_toggles_the_games_list);
+    RUN_TEST(test_a_on_any_other_page_leaves_the_games_list_alone);
+    RUN_TEST(test_frameskip_steps_leave_the_games_list_alone);
     RUN_TEST(test_every_page_has_a_title_and_the_count_has_none);
     RUN_TEST(test_a_null_state_is_inert);
     RUN_TEST(test_the_trim_page_starts_from_the_stored_porch);
