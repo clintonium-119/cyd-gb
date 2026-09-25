@@ -28,7 +28,7 @@ specified here.
 /roms/gb/<filename>        the ROM, named exactly as games.json says
 /art/<stem>.565            box art, 96x96 raw RGB565, little-endian
 /shot/<stem>.565           gameplay snapshot, same format
-/manual/<stem>.1bp         scanned manual, 1 bpp pages behind a page table
+/manual/<stem>.2bp         scanned manual, 2 bpp pages in LZ4-compressed bands
 /desc/<stem>.txt           full description, plain ASCII
 /saves/<stem>.sav          battery save, written by the emulator
 /catalog.txt               generated; never hand-edited
@@ -135,7 +135,7 @@ directories gain and lose games together.
 
 ## Manuals
 
-One file per game that has a manual, `/manual/<stem>.1bp`, rendered from the `manual` PDF during
+One file per game that has a manual, `/manual/<stem>.2bp`, rendered from the `manual` PDF during
 imaging. A game without one has no file, and the in-game menu offers no manual for it.
 
 Every integer is little-endian. The file is, in order:
@@ -143,26 +143,39 @@ Every integer is little-endian. The file is, in order:
 | Bytes | Field |
 |---|---|
 | 4 | Magic `GBMN`. |
-| 2 | Version, `1`. |
+| 2 | Version, `2`. |
 | 2 | Page count `n`. |
 | 4 × `n` | Per page, a `u16` width then a `u16` height, in pixels. |
-| Σ `ceil(w / 8) × h` | Every page's raster, back to back, in page order. |
+| Σ 4 × (`ceil(h / 16)` + 1) | Per page, in page order, a table of `u32` band offsets. |
+| the rest | One LZ4 block per band, every band of every page back to back, in page order. |
 
-- A raster is `h` rows top to bottom. Each row is `ceil(w / 8)` bytes, pixels **most-significant bit
-  first**; a set bit is black, a clear bit white. The pad bits at the end of a row are zero.
-- A page's offset is `8 + 4n` plus the raster sizes of the pages before it; nothing else is stored.
-- **Exact-size rule:** a file whose size is not exactly `8 + 4n + Σ ceil(w / 8) × h` is refused, the same
-  rule a `.565` file meets. Uncompressed on purpose, so the reader seeks straight to the rows it shows.
+- A page is cut into **bands of 16 rows**, top to bottom; the last band is shorter when `h` is not a
+  multiple of 16. Each band is compressed on its own as a raw LZ4 block (no frame, no stored size), so the
+  reader decodes any band without the ones before it.
+- Every offset is **absolute** from the start of the file. Band `i` of a page is the block from the page's
+  offset `i` to its offset `i + 1`. A page's last offset is the next page's first, and the last page's
+  last offset is the end of the file.
+- A band decodes to exactly `rows × ceil(w / 4)` bytes: `rows` rows, each `ceil(w / 4)` bytes, pixels
+  **most-significant bits first**, two bits each: `0` white, `1` light grey, `2` dark grey, `3` black. The
+  pad bits at the end of a row are zero.
+- **Exact-size rule:** a file whose size is not exactly its last page's last offset is refused, the same
+  rule a `.565` file meets, and so is a band that does not decode to exactly its size. Offsets that
+  decrease or run past the file are refused.
 - Every page fits within **532 × 480**, twice the game window in each direction, at its own aspect: a tile
   of it is one window, and it decimates 2× to an overview of the whole page.
 - A source page wider than **2:1** is a spread, and is stored as two pages — its left half, then its right
   — each fitted within 532 × 480 on its own aspect.
-- Each page is reduced to one bit at its own Otsu threshold from its grey histogram, a pixel being black
-  when its grey level is at or below it. No fixed threshold is used.
+- Each page is quantized from its own grey histogram. Paper is the most common grey level from 128 up and
+  becomes `0`; ink is the 1st percentile and becomes `3`; the levels between are spaced evenly and
+  rounded. When paper and ink are closer than 8 levels, ink is paper minus 8. No dithering: it would
+  defeat the compression.
+
+`manual-bpp-comparison.png` shows the same pages at 1, 2 and 4 bits per pixel, left to right; the format
+stores the middle column.
 
 The imaging tool renders each page with poppler's `pdftoppm -gray` directly at its stored size, a half
-by cropping a render at twice that width. The library as imaged on 2026-09-23: 114 manuals, 2,680
-stored pages, 70.7 MB.
+by cropping a render at twice that width, and compresses each band with the `lz4` package's
+high-compression mode. The library as imaged on 2026-09-25: 114 manuals, 2,680 stored pages, 41.1 MB.
 
 ## Tag payload grammar
 
