@@ -23,7 +23,9 @@
 // the edge detection below needs no filter of its own.
 #define MENU_POLL_MS 16
 
-#define MENU_ENTRIES 9
+// The most rows the menu has: the tenth, Return to Games List, is shown only
+// for a game started from the games list.
+#define MENU_ENTRIES 10
 
 enum menu_row_e {
     ROW_RESUME = 0,
@@ -35,6 +37,7 @@ enum menu_row_e {
     ROW_BRIGHT,
     ROW_HOTKEYS,
     ROW_RESET,
+    ROW_GAME_LIST,
 };
 
 static const char* const ROW_LABELS[MENU_ENTRIES] = {
@@ -47,6 +50,7 @@ static const char* const ROW_LABELS[MENU_ENTRIES] = {
     "Brightness",
     "Hotkeys",
     "Reset",
+    "Return to Games List",
 };
 
 // What each row does, in the grey line over the hints. One line of prose
@@ -61,6 +65,7 @@ static const char* const ROW_HELP[MENU_ENTRIES] = {
     "Hotkey: Select + Left/Right",
     "Combos that work in a game",
     "Restart from power-on",
+    "Save and pick another game",
 };
 #define HELP_NO_MANUAL "No manual for this game"
 
@@ -148,12 +153,15 @@ static menu_layout_t geom;
 // draw so a value that just changed is the one shown.
 static menu_item_t items[MENU_ENTRIES];
 static char bright_buf[8];
+// How many of the rows this menu shows: all of them for a list-launched game,
+// all but the last otherwise.
+static uint8_t row_count = MENU_ENTRIES - 1;
 
 static const menu_view_t* view(const settings_t* s, const list_state_t* ls)
 {
     static menu_view_t v;
 
-    for (uint8_t row = 0; row < MENU_ENTRIES; row++) {
+    for (uint8_t row = 0; row < row_count; row++) {
         const bool off = row == ROW_MANUAL && !manual_available;
 
         items[row].label = off ? "Game Manual (Unavailable)" : ROW_LABELS[row];
@@ -161,7 +169,7 @@ static const menu_view_t* view(const settings_t* s, const list_state_t* ls)
         items[row].off = off;
     }
     v.items = items;
-    v.n = MENU_ENTRIES;
+    v.n = row_count;
     v.first = list_first(ls);
     v.cursor = list_cursor(ls);
     v.help = items[v.cursor].off ? HELP_NO_MANUAL : ROW_HELP[v.cursor];
@@ -715,7 +723,8 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
     manual_available = name && sd_manual_path(name, path, sizeof(path));
     cv = display_canvas(s->game_x, s->game_y);
     menu_layout(GAME_W, GAME_H, &geom);
-    list_init(&ls, MENU_ENTRIES, MENU_VISIBLE);
+    row_count = (info && info->from_list) ? MENU_ENTRIES : MENU_ENTRIES - 1;
+    list_init(&ls, row_count, MENU_VISIBLE);
     draw_menu(s, &ls);
     wait_release();
 
@@ -762,6 +771,10 @@ enum menu_result_e menu_open(settings_t* s, const menu_cart_info_t* info)
             if (cursor == ROW_RESET) {
                 wait_release();
                 return MENU_RESET;
+            }
+            if (cursor == ROW_GAME_LIST) {
+                wait_release();
+                return MENU_GAME_LIST;
             }
             if (cursor == ROW_STATE) {
                 if (state_screen(info)) {

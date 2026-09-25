@@ -305,6 +305,14 @@ static void flush_save(const char* why) {
     emu_resume_pipeline();
 }
 
+// The games list's way out: settings parked for a coalesced write land
+// first, then the chip restarts into whatever the stored records now say.
+static void restart_now() {
+    settings_flush(millis(), true);
+    Serial.flush();
+    ESP.restart();
+}
+
 static void load_ram() {
     if(!cur_path[0]) return;
     uint32_t sz=0;
@@ -419,18 +427,17 @@ void run_emu() {
                 flush_save("reset");
                 emu_reset();
             }
+            // Back to the list: the game's RAM is saved, and with the record
+            // cleared and no tag the next boot opens the list.
+            if (r == MENU_GAME_LIST) {
+                flush_save("list");
+                settings_list_game_clear();
+                restart_now();
+            }
         }
 
         taskYIELD();
     }
-}
-
-// The games list's one way out: settings parked for a coalesced write land
-// first, then the chip restarts into whatever the stored records now say.
-static void restart_now() {
-    settings_flush(millis(), true);
-    Serial.flush();
-    ESP.restart();
 }
 
 // ─── Load ───────────────────────────────────────────────────────────────────
@@ -485,6 +492,7 @@ static void load_and_run(const char* name) {
     strncpy(cart_info.path, cur_path, sizeof(cart_info.path) - 1);
     cart_info.path[sizeof(cart_info.path) - 1] = '\0';
     emu_get_rom_title(cart_info.title, sizeof(cart_info.title));
+    cart_info.from_list = list_launched;
 
     // The palette is the cartridge's, not the device's, so it is resolved
     // here rather than with the rest of the settings in setup(): the title it

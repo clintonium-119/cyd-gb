@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "ui/list.h"
 #include "ui/menu_draw.h"
 
 /*
@@ -294,6 +295,39 @@ static void test_a_scroll_repaints_the_rows_and_leaves_the_title(void)
     assert_same_as_full();
 }
 
+/* A list-launched game's menu has a tenth row. Up from the top wraps to it,
+ * the window follows, and it draws highlighted inside the window. */
+static void test_a_ten_row_menu_reaches_and_pills_its_last_row(void)
+{
+    menu_item_t ten[N_ROWS + 1];
+    list_state_t ls;
+    unsigned i;
+    bool pilled = false;
+
+    memcpy(ten, items, sizeof(items));
+    ten[N_ROWS].label = "Return to Games List";
+    ten[N_ROWS].value = NULL;
+    ten[N_ROWS].off = false;
+
+    TEST_ASSERT_EQUAL_INT(0, list_init(&ls, N_ROWS + 1, MENU_VISIBLE));
+    list_move(&ls, -1);
+    TEST_ASSERT_EQUAL_UINT16(N_ROWS, list_cursor(&ls));
+    TEST_ASSERT_EQUAL_UINT16(N_ROWS + 1 - MENU_VISIBLE, list_first(&ls));
+
+    v.items = ten;
+    v.n = N_ROWS + 1;
+    v.first = list_first(&ls);
+    v.cursor = list_cursor(&ls);
+    menu_draw(&cv, &g, &v);
+    TEST_ASSERT_EQUAL_UINT(0, fk.violations);
+    for (i = 0; i < fk.logged; i++) {
+        pilled = pilled
+                 || (strcmp(fk.log[i].s, "Return to Games List") == 0
+                     && fk.log[i].fg == UI_COL_PILL_TEXT);
+    }
+    TEST_ASSERT_TRUE(pilled);
+}
+
 static void test_a_value_change_repaints_to_the_full_screen(void)
 {
     v.first = 0;
@@ -482,6 +516,7 @@ int main(void)
     RUN_TEST(test_a_cursor_move_repaints_to_the_full_screen);
     RUN_TEST(test_a_scroll_repaints_the_rows_and_leaves_the_title);
     RUN_TEST(test_a_value_change_repaints_to_the_full_screen);
+    RUN_TEST(test_a_ten_row_menu_reaches_and_pills_its_last_row);
     RUN_TEST(test_the_highlight_is_a_bold_pill_that_hugs_its_label);
     RUN_TEST(test_a_dimmed_row_is_grey_and_never_bold);
     RUN_TEST(test_a_value_sits_outside_the_pill);

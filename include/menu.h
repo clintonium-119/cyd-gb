@@ -13,6 +13,9 @@
 typedef struct menu_cart_info_s {
     char path[80];
     char title[17];
+    // Started from the games list rather than a tag: the menu then ends with
+    // Return to Games List.
+    bool from_list;
 } menu_cart_info_t;
 
 // ─── In-game menu ───────────────────────────────────────────────────────────
@@ -23,11 +26,14 @@ typedef struct menu_cart_info_s {
 enum menu_result_e {
     MENU_RESUME = 0,
     MENU_RESET,
+    MENU_GAME_LIST,
 };
 
 // Nine rows — Resume, Save State, Game Manual, Game Details, Color Palette,
 // Volume, Brightness, Hotkeys, Reset — drawn inside the game window seven at
 // a time and scrolled, driven by the D-pad, with A to act and B to go back.
+// A game started from the games list gets a tenth, last row, Return to Games
+// List, which returns MENU_GAME_LIST; a tag-launched game never shows it.
 // Hotkeys opens a view-only page listing the fixed button combos. Game Manual
 // reads "Game Manual (Unavailable)", dimmed, and does nothing when the
 // running cartridge has no manual on the card; Save State does the same on a
