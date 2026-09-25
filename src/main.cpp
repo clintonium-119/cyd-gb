@@ -214,6 +214,7 @@ static void poll_input(uint32_t now_ms) {
     switch (event) {
         case COMBO_EVENT_MENU:
             menu_req = true;
+            emu_state_thumb_arm();
             return;
         case COMBO_EVENT_FAST_FORWARD:
             // Runtime only: never stored, so every boot starts at 1x.
@@ -323,6 +324,11 @@ static void load_ram() {
 }
 
 // ─── Emulation loop ─────────────────────────────────────────────────────────
+// Runs the menu request may wait for the save state's snapshot: a run can
+// start mid-frame, so a whole frame needs two, and the rest cover a skipped
+// frame or the LCD being off. Past this the menu opens without one.
+#define MENU_SNAPSHOT_RUNS 4
+
 // Never returns. A running game leads to the menu and back, and nowhere else:
 // there is no path from one back to cart selection, and adding one would
 // defeat the cartridge scheme.
@@ -335,6 +341,8 @@ void run_emu() {
     // push task. Input is polled here too, so core 0 hosts nothing but the
     // push task. Logged once rather than assumed.
     Serial.printf("[EMU] emulation on core %d\n", xPortGetCoreID());
+
+    uint8_t menu_runs = 0;
 
     for (;;) {
         uint32_t now = millis();
@@ -355,8 +363,15 @@ void run_emu() {
             flush_save("battery");
         }
 
-        if (menu_req) {
+        // The combo armed the snapshot; the game runs on, the combo masked
+        // from it, until that frame is drawn.
+        if (menu_req && (emu_state_thumb_ready()
+                         || ++menu_runs >= MENU_SNAPSHOT_RUNS)) {
+            Serial.printf("[MENU] snapshot %s after %u runs\n",
+                          emu_state_thumb_ready() ? "ready" : "missing",
+                          (unsigned)menu_runs);
             menu_req = false;
+            menu_runs = 0;
 
             // Before the pause, because flush_save takes the bus itself.
             flush_save("menu");

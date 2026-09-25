@@ -82,11 +82,18 @@ bool emu_autosave_battery(uint16_t mv, uint16_t low_mv, uint16_t hyst_mv);
 bool emu_state_save(const char* path_vfs);
 bool emu_state_load(const char* path_vfs);
 
-// The state's snapshot: the whole last drawn frame, colourised through the
-// palette as it stands now and written as raw little-endian RGB565,
-// EMU_THUMB_W x EMU_THUMB_H with no header — the same format as the card's
-// .565 art, so it is read the same way. A file that fails part way is
-// removed. Pipeline paused, like the two above.
+// The state's snapshot: one whole frame, captured only on request so play
+// pays nothing for it. emu_state_thumb_arm() asks for the next complete
+// frame, lines 0-143 with none missed; emu_state_thumb_ready() says it has
+// been drawn. The menu request arms it and runs frames until it is ready.
+void emu_state_thumb_arm();
+bool emu_state_thumb_ready();
+
+// Writes that frame colourised through the palette as it stands now, as raw
+// little-endian RGB565, EMU_THUMB_W x EMU_THUMB_H with no header — the same
+// format as the card's .565 art, so it is read the same way. With no
+// complete frame, or a write that fails part way, the file is removed and
+// false returned. Pipeline paused, like the two above.
 #define EMU_THUMB_W 160
 #define EMU_THUMB_H 144
 bool emu_state_thumb_save(const char* path_vfs);

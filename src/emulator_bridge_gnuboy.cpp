@@ -1090,9 +1090,22 @@ static void demo_advance()
 }
 #endif /* TEAR_DEMO */
 
-/* The last drawn frame as raw pixel bytes packed two to a byte: colourised
- * only when a save writes it out, through the LUT of that moment. */
+/* The requested frame as raw pixel bytes packed two to a byte: colourised
+ * only when a save writes it out, through the LUT of that moment. thumb_line
+ * is the next line wanted, EMU_THUMB_H once the frame is whole, and -1 before
+ * the first request. */
 static uint8_t thumb[EMU_THUMB_H][EMU_THUMB_W / 2];
+static int16_t thumb_line = -1;
+
+void emu_state_thumb_arm()
+{
+    thumb_line = 0;
+}
+
+bool emu_state_thumb_ready()
+{
+    return thumb_line == EMU_THUMB_H;
+}
 
 void emu_gnuboy_line(const unsigned char* line, int index)
 {
@@ -1102,10 +1115,18 @@ void emu_gnuboy_line(const unsigned char* line, int index)
     if (index < 0 || index >= GB_SCREEN_H) {
         return;
     }
-    /* Every line, packed raw, for the save state's snapshot. Kept on every
-     * drawn frame so a save has the last one without reading the panel
-     * back. */
-    palette_pack_raw_line(line, EMU_THUMB_W, thumb[index]);
+    /* The snapshot's lines while one is wanted, in order from line 0. A gap
+     * (a skipped frame, the LCD switched off) starts it over, so a finished
+     * frame is never two frames spliced. */
+    if (thumb_line >= 0 && thumb_line < EMU_THUMB_H) {
+        if (index != thumb_line) {
+            thumb_line = 0;
+        }
+        if (index == thumb_line) {
+            palette_pack_raw_line(line, EMU_THUMB_W, thumb[index]);
+            thumb_line++;
+        }
+    }
     /*
      * The frame boundary is the line number wrapping, NOT gnuboy_run()
      * returning, and the difference is load-bearing rather than pedantic.
@@ -1738,7 +1759,15 @@ bool emu_state_thumb_save(const char* path_vfs)
     FILE* f;
     bool ok = true;
 
-    if (!emu_up || !path_vfs || !(f = fopen(path_vfs, "wb"))) {
+    if (!emu_up || !path_vfs) {
+        return false;
+    }
+    if (!emu_state_thumb_ready()) {
+        /* A stale snapshot beside a new state would show the wrong moment. */
+        remove(path_vfs);
+        return false;
+    }
+    if (!(f = fopen(path_vfs, "wb"))) {
         return false;
     }
     /* A row at a time, so nothing larger than one row is held in colour. */
