@@ -455,9 +455,8 @@ static void load_halt(const char* l1, const char* l2) {
 // same helper. The track goes down with the first report, so an unchanged
 // ROM, which copies nothing, keeps the plain notice. After that only the fill
 // is repainted, once per whole percent.
-static void load_progress(uint32_t done, uint32_t total, void* ctx) {
+static void load_progress(uint8_t pct, void* ctx) {
     int8_t* last = (int8_t*)ctx;
-    uint8_t pct = (uint8_t)((uint64_t)done * 100 / total);
 
     if (pct == *last) {
         return;

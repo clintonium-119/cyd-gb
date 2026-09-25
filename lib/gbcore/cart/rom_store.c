@@ -147,6 +147,29 @@ int rom_store_write_begin(const rom_store_flash_t* flash,
     return ROM_STORE_OK;
 }
 
+int rom_store_erase_next(rom_store_writer_t* writer, uint32_t* done,
+                         uint32_t* total)
+{
+    uint32_t n;
+
+    if (writer == NULL || !writer->open) {
+        return ROM_STORE_ERR_ORDER;
+    }
+    if (done == NULL || total == NULL) {
+        return ROM_STORE_ERR_ARGS;
+    }
+    n = next_run(writer->flash, writer->erased, writer->erase_end);
+    if (n > 0) {
+        if (writer->flash->erase(writer->flash->ctx, writer->erased, n) != 0) {
+            return ROM_STORE_ERR_IO;
+        }
+        writer->erased += n;
+    }
+    *done = writer->erased;
+    *total = writer->erase_end;
+    return ROM_STORE_OK;
+}
+
 int rom_store_write_chunk(rom_store_writer_t* writer, const void* data,
                           uint32_t len)
 {

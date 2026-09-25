@@ -29,10 +29,10 @@ bool rom_store_init();
 // display.h before <SD.h>. Nothing is erased or written on the unchanged
 // path. True when the partition holds this ROM on return.
 //
-// `progress` (may be NULL) is called after each chunk with the bytes copied
-// so far and the total, ending at done == total. It is never called on the
-// unchanged path, which copies nothing.
-typedef void (*rom_store_progress_fn)(uint32_t done, uint32_t total, void* ctx);
+// `progress` (may be NULL) is called with a percentage that never falls: 0
+// before the erase, then after each erase run and each chunk, ending at 100.
+// It is never called on the unchanged path, which copies nothing.
+typedef void (*rom_store_progress_fn)(uint8_t pct, void* ctx);
 bool rom_store_write(fs::File& f, const char* filename,
                      rom_store_progress_fn progress, void* ctx);
 

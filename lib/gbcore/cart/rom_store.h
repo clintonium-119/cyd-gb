@@ -18,10 +18,10 @@
 // cut leaves no valid magic and the next boot rewrites from scratch rather
 // than booting half a ROM.
 //
-// The span is erased in ROM_STORE_ERASE_RUN runs, each just before the first
-// byte written into it, rather than all at once in begin: a 1 MB ROM's erase
-// takes seconds, and spread over the chunks it shows as copy progress
-// instead of a stall before the first one.
+// The span is erased in ROM_STORE_ERASE_RUN runs rather than all at once in
+// begin: a 1 MB ROM's erase takes seconds, and a caller showing progress
+// erases the rest run by run with rom_store_erase_next() before the copy.
+// A chunk still erases any run it reaches that is not erased yet.
 //
 // Re-writing an unchanged ROM is the thing this module exists to avoid: the
 // caller reads the header, asks rom_store_matches(), and skips the whole
@@ -147,6 +147,15 @@ bool rom_store_matches(const rom_store_hdr_t* hdr, const char* filename,
 int rom_store_write_begin(const rom_store_flash_t* flash,
                           rom_store_writer_t* writer, const char* filename,
                           uint32_t size);
+
+/*
+ * Erase the next ROM_STORE_ERASE_RUN of the span, if any is left, and report
+ * the bytes of the span erased so far and its total. Call until done ==
+ * total to have the whole erase behind you before the copy; once it is, the
+ * call erases nothing and returns ROM_STORE_OK.
+ */
+int rom_store_erase_next(rom_store_writer_t* writer, uint32_t* done,
+                         uint32_t* total);
 
 /* Append the next `len` bytes of the ROM, first erasing any run they reach
  * that is not erased yet, never past the ROM's last sector. Writing past the

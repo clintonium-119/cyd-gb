@@ -18,6 +18,11 @@
 // Bytes streamed per write_chunk call. Also the progress-report unit below.
 #define IO_CHUNK 4096
 
+// The erase's share of the loading bar, so the bar moves at one rate through
+// both phases. Measured on a 1 MB ROM: 2.5-2.7 s of erase against 4.1 s of
+// copy. Retune if the flash chip or IO_CHUNK changes.
+#define ERASE_SHARE_PCT 40
+
 static const esp_partition_t* part = nullptr;
 static rom_store_flash_t flash;
 static const uint8_t* mapped = nullptr;
@@ -87,6 +92,8 @@ bool rom_store_write(fs::File& f, const char* filename,
     uint32_t done = 0;
     uint32_t next_report = 65536;
     uint32_t t0;
+    uint32_t erased = 0;
+    uint32_t span = 1;
     int rc;
 
     if (!part || !f) {
@@ -117,6 +124,9 @@ bool rom_store_write(fs::File& f, const char* filename,
         return false;
     }
 
+    if (progress) {
+        progress(0, ctx);
+    }
     t0 = millis();
     rc = rom_store_write_begin(&flash, &writer, filename, size);
     if (rc != ROM_STORE_OK) {
@@ -126,6 +136,21 @@ bool rom_store_write(fs::File& f, const char* filename,
         return false;
     }
     Serial.printf("[ROM] writing %uKB...\n", size / 1024);
+
+    // The whole erase before the copy, one reported run at a time: each run
+    // is one blocking erase, and interleaved with the chunks it made the bar
+    // stall and then burst at every run.
+    do {
+        rc = rom_store_erase_next(&writer, &erased, &span);
+        if (rc != ROM_STORE_OK) {
+            Serial.printf("[ROM] erase failed (%d) at %u bytes\n", rc, erased);
+            free(buf);
+            return false;
+        }
+        if (progress) {
+            progress((uint8_t)((uint64_t)erased * ERASE_SHARE_PCT / span), ctx);
+        }
+    } while (erased < span);
 
     while (done < size) {
         uint32_t want = size - done;
@@ -148,7 +173,9 @@ bool rom_store_write(fs::File& f, const char* filename,
         }
         done += (uint32_t)got;
         if (progress) {
-            progress(done, size, ctx);
+            progress((uint8_t)(ERASE_SHARE_PCT +
+                               (uint64_t)done * (100 - ERASE_SHARE_PCT) / size),
+                     ctx);
         }
         if (done >= next_report) {
             Serial.printf("[ROM] wrote %uKB\n", done / 1024);

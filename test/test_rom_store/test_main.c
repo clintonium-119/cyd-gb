@@ -309,6 +309,49 @@ static void test_each_run_is_erased_just_before_its_first_write(void)
     TEST_ASSERT_FALSE(fault);
 }
 
+static void test_erase_next_erases_the_span_run_by_run_before_the_copy(void)
+{
+    rom_store_flash_t f = make_flash();
+    rom_store_writer_t w;
+    rom_store_hdr_t hdr;
+    uint32_t done = 0;
+    uint32_t total = 0;
+    uint32_t end = 3u * ROM_STORE_ERASE_RUN + 2u * FAKE_SECTOR;
+    unsigned k;
+
+    memset(fake, 0x00, sizeof(fake));
+    TEST_ASSERT_EQUAL_INT(ROM_STORE_OK,
+        rom_store_write_begin(&f, &w, "Pokemon - Red Version.gb", MULTI_RUN_SZ));
+    for (k = 1; k <= 3; k++) {
+        TEST_ASSERT_EQUAL_INT(ROM_STORE_OK,
+                              rom_store_erase_next(&w, &done, &total));
+        TEST_ASSERT_EQUAL_UINT(k + 1, n_erase);
+        TEST_ASSERT_EQUAL_UINT32(end, total);
+    }
+    TEST_ASSERT_EQUAL_UINT32(total, done);
+    /* Nothing left: no erase, same answer. */
+    TEST_ASSERT_EQUAL_INT(ROM_STORE_OK, rom_store_erase_next(&w, &done, &total));
+    TEST_ASSERT_EQUAL_UINT(4, n_erase);
+    TEST_ASSERT_EQUAL_UINT32(total, done);
+    /* The header is still cleared, and the copy erases nothing more. */
+    TEST_ASSERT_FALSE(rom_store_read_header(&f, &hdr));
+    done = 0;
+    while (done < MULTI_RUN_SZ) {
+        uint32_t n = MULTI_RUN_SZ - done;
+        if (n > 4096) {
+            n = 4096;
+        }
+        TEST_ASSERT_EQUAL_INT(ROM_STORE_OK,
+                              rom_store_write_chunk(&w, rom + done, n));
+        done += n;
+    }
+    TEST_ASSERT_EQUAL_INT(ROM_STORE_OK, rom_store_write_end(&w));
+    TEST_ASSERT_EQUAL_UINT(4, n_erase);
+    TEST_ASSERT_EQUAL_HEX8(0x00, fake[end]);
+    TEST_ASSERT_TRUE(rom_store_read_header(&f, &hdr));
+    TEST_ASSERT_FALSE(fault);
+}
+
 static void test_a_write_torn_past_the_first_run_leaves_no_valid_header(void)
 {
     rom_store_flash_t f = make_flash();
@@ -412,6 +455,7 @@ int main(void)
     RUN_TEST(test_changed_name_or_size_does_not_match);
     RUN_TEST(test_torn_write_leaves_no_valid_header);
     RUN_TEST(test_each_run_is_erased_just_before_its_first_write);
+    RUN_TEST(test_erase_next_erases_the_span_run_by_run_before_the_copy);
     RUN_TEST(test_a_write_torn_past_the_first_run_leaves_no_valid_header);
     RUN_TEST(test_oversize_rom_is_rejected_without_erasing);
     RUN_TEST(test_write_end_before_declared_size_is_an_order_error);
