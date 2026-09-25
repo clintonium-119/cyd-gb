@@ -407,6 +407,78 @@ static void test_need_auth_is_only_returned_while_auth_is_unknown(void)
     }
 }
 
+/* ---- the games-list fallback ------------------------------------------- */
+
+static void test_no_tag_opens_the_list_only_with_the_mode_on(void)
+{
+    int setup;
+    int pending;
+    int stored;
+
+    for (setup = 0; setup < 2; setup++) {
+        for (pending = 0; pending < 2; pending++) {
+            for (stored = 0; stored < 2; stored++) {
+                boot_input_t in = base_input();
+                in.tag = BOOT_TAG_NONE;
+                in.flags.setup_done = (setup != 0);
+                in.flags.menu_done = (setup != 0);
+                in.flags.wild_done = (setup != 0);
+                if (pending) {
+                    set_pending(&in, "Tetris.gb", BOOT_TARGET_WILDCARD);
+                }
+                in.list_set = (stored != 0);
+                snprintf(in.list_rom, sizeof(in.list_rom), "%s", "Tetris.gb");
+
+                in.list_mode = false;
+                TEST_ASSERT_EQUAL_INT(BOOT_HALT_NO_CART, boot_decide(&in));
+                in.list_mode = true;
+                TEST_ASSERT_EQUAL_INT(stored ? BOOT_LIST_LOAD : BOOT_LIST_OPEN,
+                                      boot_decide(&in));
+            }
+        }
+    }
+}
+
+static void test_the_list_mode_changes_no_other_tag_outcome(void)
+{
+    boot_input_t in = base_input();
+
+    in.list_mode = true;
+    in.list_set = true;
+    snprintf(in.list_rom, sizeof(in.list_rom), "%s", "Tetris.gb");
+
+    in.tag = BOOT_TAG_MULTI;
+    TEST_ASSERT_EQUAL_INT(BOOT_HALT_SHIELDING, boot_decide(&in));
+    in.tag = BOOT_TAG_UNREADABLE;
+    TEST_ASSERT_EQUAL_INT(BOOT_HALT_UNREADABLE, boot_decide(&in));
+
+    in.tag = BOOT_TAG_OK;
+    in.cls = BOOT_CLASS_BLANK;
+    TEST_ASSERT_EQUAL_INT(BOOT_HALT_BLANK, boot_decide(&in));
+    in.cls = BOOT_CLASS_MENU;
+    TEST_ASSERT_EQUAL_INT(BOOT_OPEN_WRITER, boot_decide(&in));
+    in.cls = BOOT_CLASS_GAME;
+    set_rom(&in, "Zelda.gb");
+    TEST_ASSERT_EQUAL_INT(BOOT_LOAD, boot_decide(&in));
+    in.cls = BOOT_CLASS_WILD;
+    TEST_ASSERT_EQUAL_INT(BOOT_LOAD, boot_decide(&in));
+}
+
+static void test_after_a_list_pick(void)
+{
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_RECORD_LIST_GAME,
+        boot_after_pick(BOOT_LIST_OPEN, BOOT_PICK_ROM));
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_HALT_NO_SELECTION,
+        boot_after_pick(BOOT_LIST_OPEN, BOOT_PICK_NONE));
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_INVALID,
+        boot_after_pick(BOOT_LIST_OPEN, BOOT_PICK_FINISH));
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_INVALID,
+        boot_after_pick(BOOT_LIST_OPEN, BOOT_PICK_CANCEL_PENDING));
+    /* Loading the remembered game opens no picker. */
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_INVALID,
+        boot_after_pick(BOOT_LIST_LOAD, BOOT_PICK_ROM));
+}
+
 /* ---- after the picker -------------------------------------------------- */
 
 static void test_after_pick_table(void)
@@ -555,6 +627,9 @@ typedef struct {
     boot_flags_t flags;
     boot_selection_t pending;
     bool pending_set;
+    bool list_mode;
+    bool list_set;
+    char list_rom[ROM_STORE_NAME_MAX];
 } nvs_t;
 
 typedef enum boot_pick_e (*picker_fn)(void* ctx, enum boot_action_e opened_by,
@@ -614,10 +689,15 @@ static boot_result_t harness_boot(fake_ntag215_t* tag, nvs_t* nvs,
     in.flags = nvs->flags;
     in.pending_set = nvs->pending_set;
     in.pending = nvs->pending;
-    in.tag = BOOT_TAG_UNREADABLE;
+    in.list_mode = nvs->list_mode;
+    in.list_set = nvs->list_set;
+    memcpy(in.list_rom, nvs->list_rom, sizeof(in.list_rom));
+    /* A NULL tag is an empty slot. */
+    in.tag = (tag != NULL) ? BOOT_TAG_UNREADABLE : BOOT_TAG_NONE;
 
-    if (ntag_read_pages(&dev, NTAG215_PAGE_USER_FIRST, USER_PAGES, user) ==
-        NTAG_OK) {
+    if (tag != NULL &&
+        ntag_read_pages(&dev, NTAG215_PAGE_USER_FIRST, USER_PAGES, user) ==
+            NTAG_OK) {
         rc = ndef_parse_text(user, sizeof(user), payload, sizeof(payload));
         if (rc == NDEF_BLANK) {
             in.tag = BOOT_TAG_OK;
@@ -665,7 +745,8 @@ static boot_result_t harness_boot(fake_ntag215_t* tag, nvs_t* nvs,
 
     case BOOT_WIZARD_PICK_WILD:
     case BOOT_WIZARD_PICK_GAME:
-    case BOOT_OPEN_WRITER: {
+    case BOOT_OPEN_WRITER:
+    case BOOT_LIST_OPEN: {
         boot_selection_t sel;
         enum boot_pick_e pick;
 
@@ -698,6 +779,11 @@ static boot_result_t harness_boot(fake_ntag215_t* tag, nvs_t* nvs,
             break;
         case BOOT_PICK_CLEAR_PENDING:
             nvs->pending_set = false;
+            break;
+        case BOOT_PICK_RECORD_LIST_GAME:
+            /* The executor restarts here; the next boot loads it. */
+            memcpy(nvs->list_rom, sel.rom, sizeof(nvs->list_rom));
+            nvs->list_set = true;
             break;
         default:
             break;
@@ -963,6 +1049,40 @@ static void test_a_foreign_menu_cart_cannot_be_adopted(void)
                                                    FAKE_NTAG215_ANY_PAGE));
 }
 
+static void test_a_list_pick_is_remembered_end_to_end(void)
+{
+    nvs_t nvs;
+    boot_result_t r;
+    scripted_pick_t pick;
+
+    memset(&nvs, 0, sizeof(nvs));
+    nvs.flags.menu_done = true;
+    nvs.flags.wild_done = true;
+    nvs.flags.setup_done = true;
+    pick.pick = BOOT_PICK_ROM;
+    pick.rom = "Tetris.gb";
+    pick.target = BOOT_TARGET_WILDCARD;
+
+    /* Mode off: an empty slot halts, and nothing is recorded. */
+    r = harness_boot(NULL, &nvs, picker_scripted, &pick);
+    TEST_ASSERT_EQUAL_INT(BOOT_HALT_NO_CART, r.action);
+    TEST_ASSERT_FALSE(nvs.list_set);
+
+    /* Mode on: the list opens, and a pick is recorded without a write. */
+    nvs.list_mode = true;
+    r = harness_boot(NULL, &nvs, picker_scripted, &pick);
+    TEST_ASSERT_EQUAL_INT(BOOT_LIST_OPEN, r.action);
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_RECORD_LIST_GAME, r.pick_action);
+    TEST_ASSERT_FALSE(r.wrote);
+    TEST_ASSERT_TRUE(nvs.list_set);
+    TEST_ASSERT_EQUAL_STRING("Tetris.gb", nvs.list_rom);
+
+    /* The next empty-slot boot loads it, opening no picker. */
+    r = harness_boot(NULL, &nvs, picker_scripted, &pick);
+    TEST_ASSERT_EQUAL_INT(BOOT_LIST_LOAD, r.action);
+    TEST_ASSERT_FALSE(r.picked);
+}
+
 static void test_pending_write_executes_end_to_end(void)
 {
     fake_ntag215_t wild_tag;
@@ -1173,6 +1293,10 @@ int main(void)
     RUN_TEST(test_classify);
     RUN_TEST(test_classify_truncates_the_rom_to_the_buffer);
     RUN_TEST(test_read_failures_ignore_flags_and_pending);
+    RUN_TEST(test_no_tag_opens_the_list_only_with_the_mode_on);
+    RUN_TEST(test_the_list_mode_changes_no_other_tag_outcome);
+    RUN_TEST(test_after_a_list_pick);
+    RUN_TEST(test_a_list_pick_is_remembered_end_to_end);
     RUN_TEST(test_menu_with_pending_opens_the_writer_not_the_pending_write);
     RUN_TEST(test_pending_wildcard);
     RUN_TEST(test_pending_new_cart);

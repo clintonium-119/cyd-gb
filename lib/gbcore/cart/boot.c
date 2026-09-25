@@ -138,9 +138,15 @@ enum boot_action_e boot_decide(const boot_input_t* in)
         return BOOT_HALT_UNREADABLE;
     }
 
-    /* 1. Nothing was read, so nothing can be decided. */
+    /* 1. Nothing was read, so nothing can be decided — except, with the
+     * games-list mode on, that no tag at all opens the list, or boots the
+     * game last started from it. Like every read failure it ignores the
+     * wizard flags and any pending write. */
     switch (in->tag) {
     case BOOT_TAG_NONE:
+        if (in->list_mode) {
+            return in->list_set ? BOOT_LIST_LOAD : BOOT_LIST_OPEN;
+        }
         return BOOT_HALT_NO_CART;
     case BOOT_TAG_MULTI:
         return BOOT_HALT_SHIELDING;
@@ -192,7 +198,8 @@ enum boot_pick_action_e boot_after_pick(enum boot_action_e opened_by,
             opened_by == BOOT_WIZARD_ADOPT_MENU ||
             opened_by == BOOT_WIZARD_PICK_WILD ||
             opened_by == BOOT_WIZARD_ADOPT_WILD ||
-            opened_by == BOOT_WIZARD_PICK_GAME) {
+            opened_by == BOOT_WIZARD_PICK_GAME ||
+            opened_by == BOOT_LIST_OPEN) {
             return BOOT_PICK_HALT_NO_SELECTION;
         }
         return BOOT_PICK_INVALID;
@@ -225,6 +232,11 @@ enum boot_pick_action_e boot_after_pick(enum boot_action_e opened_by,
             return BOOT_PICK_CLEAR_PENDING;
         }
         return BOOT_PICK_INVALID;
+
+    case BOOT_LIST_OPEN:
+        /* Launch mode offers games only. */
+        return (pick == BOOT_PICK_ROM) ? BOOT_PICK_RECORD_LIST_GAME
+                                       : BOOT_PICK_INVALID;
 
     default:
         return BOOT_PICK_INVALID;

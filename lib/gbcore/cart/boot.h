@@ -135,6 +135,11 @@ typedef struct boot_input_s {
     boot_flags_t flags;
     bool pending_set;
     boot_selection_t pending;
+    /* The games-list fallback mode, and the one game last started from the
+     * list. Read only when no tag answered. */
+    bool list_mode;
+    bool list_set;
+    char list_rom[ROM_STORE_NAME_MAX];
 } boot_input_t;
 
 enum boot_action_e {
@@ -163,6 +168,11 @@ enum boot_action_e {
     BOOT_OPEN_WRITER,
     BOOT_EXECUTE_PENDING,
     BOOT_LOAD,
+
+    /* No tag, with the games-list mode on. OPEN shows the list; LOAD boots
+     * the game last started from it, named by `list_rom`. */
+    BOOT_LIST_OPEN,
+    BOOT_LIST_LOAD,
 };
 
 /* What the writer or the wizard's picker came back with. */
@@ -181,6 +191,8 @@ enum boot_pick_action_e {
     BOOT_PICK_FINISH_SETUP,
     BOOT_PICK_RECORD_PENDING,
     BOOT_PICK_CLEAR_PENDING,
+    /* The games list: record the game and restart into it. */
+    BOOT_PICK_RECORD_LIST_GAME,
     BOOT_PICK_INVALID,
 };
 
