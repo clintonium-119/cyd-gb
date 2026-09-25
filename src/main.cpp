@@ -451,6 +451,23 @@ static void load_halt(const char* l1, const char* l2) {
     halt_screen(l1, l2);
 }
 
+// The loading screen's bar, where the writer's hold bar sits and drawn by the
+// same helper. The track goes down with the first report, so an unchanged
+// ROM, which copies nothing, keeps the plain notice. After that only the fill
+// is repainted, once per whole percent.
+static void load_progress(uint32_t done, uint32_t total, void* ctx) {
+    int8_t* last = (int8_t*)ctx;
+    uint8_t pct = (uint8_t)((uint64_t)done * 100 / total);
+
+    if (pct == *last) {
+        return;
+    }
+    ui_progress_bar(display_canvas(settings.game_x, settings.game_y),
+                    UI_TEXT_X, GAME_H - UI_FOOT_H - UI_HELP_H + 2,
+                    GAME_W - 2 * UI_TEXT_X, pct, *last >= 0);
+    *last = (int8_t)pct;
+}
+
 // `name` is a ROM file name, not a path: exact match is the rule, and the
 // legacy walk is the fallback for tags hand-written before the device could
 // write them.
@@ -476,7 +493,9 @@ static void load_and_run(const char* name) {
     // Order is load-bearing, not incidental: a flash write stalls the other
     // core's instruction fetch, so the ROM must be in the partition before any
     // emulation task exists.
-    bool in_flash = rom_store_init() && rom_store_write(rom_file, rom_name, nullptr, nullptr);
+    int8_t last_pct = -1;
+    bool in_flash = rom_store_init()
+                    && rom_store_write(rom_file, rom_name, load_progress, &last_pct);
     rom_file.close();
     if (!in_flash) {
         load_halt("ROM store failed", "");
