@@ -85,6 +85,8 @@ bool rom_store_write(fs::File& f, const char* filename)
     uint32_t size;
     uint32_t done = 0;
     uint32_t next_report = 65536;
+    uint32_t t0;
+    uint32_t t_erase;
     int rc;
 
     if (!part || !f) {
@@ -115,6 +117,7 @@ bool rom_store_write(fs::File& f, const char* filename)
         return false;
     }
 
+    t0 = millis();
     rc = rom_store_write_begin(&flash, &writer, filename, size);
     if (rc != ROM_STORE_OK) {
         Serial.printf("[ROM] write refused (%d), %uKB into %uKB\n", rc,
@@ -122,7 +125,9 @@ bool rom_store_write(fs::File& f, const char* filename)
         free(buf);
         return false;
     }
+    t_erase = millis() - t0;
     Serial.printf("[ROM] writing %uKB...\n", size / 1024);
+    t0 = millis();
 
     while (done < size) {
         uint32_t want = size - done;
@@ -156,7 +161,8 @@ bool rom_store_write(fs::File& f, const char* filename)
         Serial.printf("[ROM] commit failed (%d)\n", rc);
         return false;
     }
-    Serial.printf("[ROM] done %u bytes\n", done);
+    Serial.printf("[ROM] done %u bytes, erase %ums, copy %ums\n", done,
+                  t_erase, millis() - t0);
     return true;
 }
 
