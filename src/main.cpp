@@ -603,6 +603,10 @@ void setup() {
         button_update();
         diag = (button_get_buttons() & diag_combo) == diag_combo;
     }
+#ifdef DEV_DIAG_NFC
+    // Bench only: open diagnostics on the tag page with no buttons held.
+    diag = true;
+#endif
     if (diag) {
         Serial.println("[BOOT] diagnostics");
         // The reader comes up for the inspector's sake; no tag is read here.

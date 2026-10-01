@@ -461,6 +461,9 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
     // starting the guess over and walking a good porch off its null.
     diag_trim_set_dir(&d, s->trim_dir);
     diag_set_list_mode(&d, s->list_mode);
+#ifdef DEV_DIAG_NFC
+    d.page = DIAG_PAGE_NFC;   // bench only: see main.cpp
+#endif
     combo_init(&combo);
     tone_init(&tone_st, TONE_HZ, SPEAKER_SAMPLE_RATE);
 
