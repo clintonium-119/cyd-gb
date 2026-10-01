@@ -65,22 +65,33 @@ static uint32_t fw_version = 0;
 
 // ---- I²C primitives -------------------------------------------------------
 
-// The first byte of every I²C read from the PN532 is a status byte whose bit 0
-// says whether a frame is waiting (§6.2.4). Poll it, cheaply, until set.
+// The first byte of every I²C read from the PN532 is a status byte that reads
+// 0x01 once a frame is waiting (§6.2.4). Poll it until it does.
+//
+// Slowly. Reading the status at once after a write, then every 1 ms, crashes
+// the chip on its second command: it acknowledges its address from then on but
+// refuses every byte, until a power cycle or RSTPDN pulse (bench, 2026-10-01,
+// on a CYD and on an ESP32 dev board alike). Adafruit_PN532's timing — 1 ms
+// before the first poll, then every 10 ms — ran every command clean on the
+// same live chip. Every caller waits through here after a write or an ACK, so
+// the leading 1 ms covers both of the gaps that driver leaves.
+//
+// Exactly 0x01, not bit 0: a line nobody drives reads 0xFF.
 static bool pn532_wait_ready(uint32_t timeout_ms) {
     uint32_t start = millis();
+    delay(1);
     for (;;) {
         Wire.requestFrom((uint8_t)PN532_I2C_ADDR, (uint8_t)1);
         if (Wire.available() >= 1) {
             uint8_t status = Wire.read();
-            if (status & 0x01) {
+            if (status == 0x01) {
                 return true;
             }
         }
         if (millis() - start >= timeout_ms) {
             return false;
         }
-        delay(1);
+        delay(10);
     }
 }
 
