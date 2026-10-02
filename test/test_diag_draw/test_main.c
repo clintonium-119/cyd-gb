@@ -71,6 +71,8 @@ typedef struct {
     unsigned range_faults;   /* image row ranges outside the source block */
 
     unsigned bar_fills;      /* fills exactly bar_w wide                  */
+    unsigned hold_rounds;    /* UI_BAR_H round fills in the help band     */
+    int16_t hold_w[2];       /* the first two of them: track, then fill   */
     int16_t bar_w;
 
     unsigned edge_top, edge_bottom, edge_left, edge_right;
@@ -190,6 +192,12 @@ static void fk_round_fill(void* ctx, int16_t x, int16_t y, int16_t w,
     (void)color;
     (void)bg;
     f->round_fills++;
+    if (h == UI_BAR_H && y >= f->help_y && y + h <= f->help_y + UI_HELP_H) {
+        if (f->hold_rounds < 2) {
+            f->hold_w[f->hold_rounds] = w;
+        }
+        f->hold_rounds++;
+    }
     put_rect(f, x, y, w, h);
 }
 
@@ -731,6 +739,150 @@ static void test_the_pages_that_had_a_page_hint_still_name_it(void)
     }
 }
 
+/* ─── the tag page's tools ────────────────────────────────────────────────── */
+
+/* Put the machine on the tag page with `word` held from t = 100 to `now`. */
+static void hold_on_tag_page(int16_t w, int16_t h, uint8_t word, uint32_t now)
+{
+    draw_page(w, h, DIAG_PAGE_NFC, 0, true, 0);
+    diag_input(&st, COMBO_EVENT_NONE, 0, 50);
+    diag_input(&st, COMBO_EVENT_NONE, word, 100);
+    if (now > 100) {
+        diag_input(&st, COMBO_EVENT_NONE, word, now);
+    }
+}
+
+static void test_the_tag_page_draws_the_hold_bar_while_held(void)
+{
+    static const int16_t ws[3] = { GEOM_24_W, GEOM_26_W, GEOM_53_W };
+    static const int16_t hs[3] = { GEOM_24_H, GEOM_26_H, GEOM_53_H };
+    static const uint32_t at[3] = { 100, 600, 1099 };
+    static const uint8_t pct[3] = { 0, 50, 99 };
+    ui_canvas_t cv;
+    uint8_t gi;
+    uint8_t i;
+    int16_t track;
+
+    fill_data();
+    for (gi = 0; gi < 3; gi++) {
+        for (i = 0; i < 3; i++) {
+            hold_on_tag_page(ws[gi], hs[gi], COMBO_BTN_B, at[i]);
+            TEST_ASSERT_EQUAL_UINT8(pct[i], diag_hold_pct(&st));
+            cv = canvas_over(&fk, &geom);
+            diag_draw(&st, &data, &geom, &ck, 0, &cv);
+            assert_clean();
+            track = (int16_t)(geom.w - 2 * UI_PAD);
+            /* The track, and the fill over it once there is any. */
+            TEST_ASSERT_EQUAL_UINT(pct[i] > 0 ? 2 : 1, fk.hold_rounds);
+            TEST_ASSERT_EQUAL_INT16(track, fk.hold_w[0]);
+            if (pct[i] > 0) {
+                TEST_ASSERT_EQUAL_INT16(track * pct[i] / 100, fk.hold_w[1]);
+            }
+            TEST_ASSERT_EQUAL_UINT(0, fk.help_texts);
+        }
+    }
+
+    /* A full bar, painted on its own the way the binding does on the last
+     * tick before the tool fires. */
+    hold_on_tag_page(GEOM_24_W, GEOM_24_H, COMBO_BTN_B, 1099);
+    st.hold_elapsed_ms = 1000;
+    cv = canvas_over(&fk, &geom);
+    diag_draw_hold(&st, &data, &geom, &cv, false);
+    TEST_ASSERT_EQUAL_UINT(0, fk.violations);
+    TEST_ASSERT_EQUAL_INT16(geom.w - 2 * UI_PAD, fk.hold_w[1]);
+
+    /* No hold, no bar. */
+    draw_page(GEOM_53_W, GEOM_53_H, DIAG_PAGE_NFC, 0, true, 0);
+    TEST_ASSERT_EQUAL_UINT(0, fk.hold_rounds);
+    TEST_ASSERT_EQUAL_UINT(1, fk.help_texts);
+}
+
+static void test_the_hold_bar_grows_without_relaying_the_track(void)
+{
+    ui_canvas_t cv;
+
+    fill_data();
+    hold_on_tag_page(GEOM_53_W, GEOM_53_H, COMBO_BTN_SELECT | COMBO_BTN_A,
+                     600);
+    cv = canvas_over(&fk, &geom);
+    diag_draw_hold(&st, &data, &geom, &cv, true);
+    /* The fill alone: no band clear and no track. */
+    TEST_ASSERT_EQUAL_UINT(1, fk.hold_rounds);
+    TEST_ASSERT_EQUAL_INT16((geom.w - 2 * UI_PAD) / 2, fk.hold_w[0]);
+    TEST_ASSERT_EQUAL_UINT(0, fk.help_fills);
+
+    /* Letting go clears the band and puts the help line back. */
+    diag_input(&st, COMBO_EVENT_NONE, COMBO_BTN_SELECT, 700);
+    cv = canvas_over(&fk, &geom);
+    diag_draw_hold(&st, &data, &geom, &cv, true);
+    TEST_ASSERT_EQUAL_UINT(0, fk.hold_rounds);
+    TEST_ASSERT_EQUAL_UINT(1, fk.help_fills);
+    TEST_ASSERT_EQUAL_UINT(1, fk.help_texts);
+}
+
+static void test_each_outcome_draws_its_line(void)
+{
+    static const char* const want[] = {
+        NULL, "Blanked", "Wildcard made: Tetris", "MENU cart made",
+        "Refused: not our tag", "No tag", "Two tags", "Write failed code -5",
+    };
+    uint8_t out;
+    size_t i;
+
+    fill_data();
+    snprintf(data.nfc_outcome_title, sizeof(data.nfc_outcome_title),
+             "Tetris");
+    data.nfc_outcome_rc = -5;
+    for (out = DIAG_NFC_OUT_BLANKED; out <= DIAG_NFC_OUT_FAILED; out++) {
+        data.nfc_outcome = out;
+        draw_page(GEOM_53_W, GEOM_53_H, DIAG_PAGE_NFC, 0, true, 0);
+        assert_clean();
+        TEST_ASSERT_EQUAL_UINT(1, fk.help_texts);
+        TEST_ASSERT_TRUE_MESSAGE(drew_text(want[out]), want[out]);
+    }
+
+    /* A 47-character title is cut inside the band at every window. */
+    data.nfc_outcome = DIAG_NFC_OUT_WILD_MADE;
+    memset(data.nfc_outcome_title, 0, sizeof(data.nfc_outcome_title));
+    for (i = 0; i < sizeof(data.nfc_outcome_title) - 1; i++) {
+        data.nfc_outcome_title[i] = (char)('a' + i % 26);
+    }
+    draw_page(GEOM_24_W, GEOM_24_H, DIAG_PAGE_NFC, 0, true, 0);
+    assert_clean();
+    TEST_ASSERT_EQUAL_UINT(1, fk.help_texts);
+    TEST_ASSERT_EQUAL_UINT(0, fk.help_too_wide);
+    draw_page(GEOM_26_W, GEOM_26_H, DIAG_PAGE_NFC, 0, true, 0);
+    assert_clean();
+    TEST_ASSERT_EQUAL_UINT(0, fk.help_too_wide);
+    draw_page(GEOM_53_W, GEOM_53_H, DIAG_PAGE_NFC, 0, true, 0);
+    assert_clean();
+    TEST_ASSERT_EQUAL_UINT(0, fk.help_too_wide);
+
+    /* No outcome is the page's own help line. */
+    data.nfc_outcome = DIAG_NFC_OUT_NONE;
+    draw_page(GEOM_53_W, GEOM_53_H, DIAG_PAGE_NFC, 0, true, 0);
+    TEST_ASSERT_TRUE(drew_text("Hold Sel+A MENU, Sel+B Wild"));
+}
+
+static void test_the_tag_page_names_its_tools(void)
+{
+    static const int16_t ws[3] = { GEOM_24_W, GEOM_26_W, GEOM_53_W };
+    static const int16_t hs[3] = { GEOM_24_H, GEOM_26_H, GEOM_53_H };
+    uint8_t gi;
+
+    fill_data();
+    for (gi = 0; gi < 3; gi++) {
+        draw_page(ws[gi], hs[gi], DIAG_PAGE_NFC, 0, true, 0);
+        assert_clean();
+        /* All three footer hints fit: none dropped from the end. */
+        TEST_ASSERT_TRUE(drew_text("Scan"));
+        TEST_ASSERT_TRUE(drew_text("Blank"));
+        TEST_ASSERT_TRUE(drew_text("Page"));
+        TEST_ASSERT_TRUE(drew_text("Hold Sel+A MENU, Sel+B Wild"));
+        TEST_ASSERT_EQUAL_UINT(0, fk.help_too_wide);
+    }
+}
+
 static void test_the_header_has_no_band_and_no_rule(void)
 {
     uint8_t page;
@@ -1028,6 +1180,10 @@ int main(void)
     RUN_TEST(test_every_page_has_a_help_line_and_a_hint_footer);
     RUN_TEST(test_every_help_line_fits_one_row);
     RUN_TEST(test_the_pages_that_had_a_page_hint_still_name_it);
+    RUN_TEST(test_the_tag_page_draws_the_hold_bar_while_held);
+    RUN_TEST(test_the_hold_bar_grows_without_relaying_the_track);
+    RUN_TEST(test_each_outcome_draws_its_line);
+    RUN_TEST(test_the_tag_page_names_its_tools);
     RUN_TEST(test_the_header_has_no_band_and_no_rule);
     RUN_TEST(test_no_page_runs_into_the_help_line);
     RUN_TEST(test_every_page_starts_its_rows_at_the_title_and_fits_them);

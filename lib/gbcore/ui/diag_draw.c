@@ -66,7 +66,7 @@ static const char* const CLASS_NAMES[4] = { "blank", "MENU", "WILD", "game" };
 static const char* const HELPS[DIAG_PAGE_COUNT] = {
     "Press a button to light it",
     "Card, catalog, free space",
-    "The tag as the boot reads it",
+    "Hold Sel+A MENU, Sel+B Wild",
     "Battery at pin and cell",
     "A tone at each volume",
     "Panel and scaler patterns",
@@ -80,7 +80,24 @@ static const char* const HELPS[DIAG_PAGE_COUNT] = {
  * the two tuning pages spend the footer on their own buttons. */
 #define HINT_PAGE { "Sel+L/R", "Page" }
 static const ui_hint_t HINTS_PAGE[] = { HINT_PAGE };
-static const ui_hint_t HINTS_NFC[] = { { "A", "Scan" }, HINT_PAGE };
+/* Five hints do not fit the narrowest window, so the two Select tools are
+ * named in the tag page's help line instead. */
+static const ui_hint_t HINTS_NFC[] = {
+    { "A", "Scan" }, { "B", "Blank" }, HINT_PAGE,
+};
+
+/* What the last held tool did, one line in the help band. */
+static const char* const OUTCOME_LINES[] = {
+    NULL,                   /* DIAG_NFC_OUT_NONE: the ordinary help line */
+    "Blanked",
+    "Wildcard made: %s",
+    "MENU cart made",
+    "Refused: not our tag",
+    "No tag",
+    "Two tags",
+    "Write failed code %d",
+};
+#define OUTCOME_COUNT (sizeof(OUTCOME_LINES) / sizeof(OUTCOME_LINES[0]))
 static const ui_hint_t HINTS_AUDIO[] = {
     { "A", "Tone" }, { "U/D", "Volume" }, HINT_PAGE,
 };
@@ -203,13 +220,49 @@ static void draw_header(const ui_canvas_t* cv, const diag_layout_t* g,
 }
 
 /* The help line and the hint footer. */
+/* The tag page's help band with no hold running: the last tool's outcome
+ * when there is one, cut to the band, else the page's help line. */
+static void nfc_help(const ui_canvas_t* cv, const diag_layout_t* g,
+                     const diag_data_t* data)
+{
+    char line[64];
+    size_t n;
+    uint8_t out = data->nfc_outcome;
+
+    if (out == DIAG_NFC_OUT_NONE || out >= OUTCOME_COUNT) {
+        ui_help_line(cv, g->w, g->help_y, HELPS[DIAG_PAGE_NFC]);
+        return;
+    }
+    if (out == DIAG_NFC_OUT_WILD_MADE) {
+        snprintf(line, sizeof(line), OUTCOME_LINES[out],
+                 data->nfc_outcome_title);
+    } else if (out == DIAG_NFC_OUT_FAILED) {
+        snprintf(line, sizeof(line), OUTCOME_LINES[out],
+                 data->nfc_outcome_rc);
+    } else {
+        snprintf(line, sizeof(line), "%s", OUTCOME_LINES[out]);
+    }
+    /* A long title is cut rather than left to the driver's clip, so the
+     * line stays centred on what is actually shown. */
+    n = strlen(line);
+    while (n > 0 &&
+           cv->measure(cv->ctx, line, UI_FONT_HELP) > g->w - 2 * UI_TEXT_X) {
+        line[--n] = '\0';
+    }
+    ui_help_line(cv, g->w, g->help_y, line);
+}
+
 static void draw_footer(const ui_canvas_t* cv, const diag_layout_t* g,
-                        uint8_t page)
+                        const diag_t* d, const diag_data_t* data, uint8_t page)
 {
     if (page >= DIAG_PAGE_COUNT) {
         return;
     }
-    ui_help_line(cv, g->w, g->help_y, HELPS[page]);
+    if (page == DIAG_PAGE_NFC) {
+        diag_draw_hold(d, data, g, cv, false);
+    } else {
+        ui_help_line(cv, g->w, g->help_y, HELPS[page]);
+    }
     ui_hint_bar(cv, g->w, g->foot_y, FOOTERS[page].hints, FOOTERS[page].n);
 }
 
@@ -719,7 +772,7 @@ void diag_draw(const diag_t* d, const diag_data_t* data,
     page = diag_page(d);
     draw_header(cv, g, page);
     if (draws_border(d, page)) {
-        draw_footer(cv, g, page);
+        draw_footer(cv, g, d, data, page);
     }
 
     switch (page) {
@@ -755,6 +808,28 @@ void diag_draw(const diag_t* d, const diag_data_t* data,
     }
 
     if (!draws_border(d, page)) {
-        draw_footer(cv, g, page);
+        draw_footer(cv, g, d, data, page);
     }
+}
+
+void diag_draw_hold(const diag_t* d, const diag_data_t* data,
+                    const diag_layout_t* g, const ui_canvas_t* cv, bool grow)
+{
+    uint8_t pct;
+
+    if (d == NULL || data == NULL || g == NULL || cv == NULL) {
+        return;
+    }
+    if (diag_hold_tool(d) == DIAG_TOOL_NONE) {
+        nfc_help(cv, g, data);
+        return;
+    }
+    /* The same bar, band and grow-only repaint as the game list's hold:
+     * the track is laid once and only the fill is painted after that. */
+    pct = diag_hold_pct(d);
+    if (!grow || pct == 0) {
+        cv->fill(cv->ctx, 0, g->help_y, g->w, UI_HELP_H, UI_COL_BG);
+    }
+    ui_progress_bar(cv, UI_PAD, (int16_t)(g->help_y + 2),
+                    (int16_t)(g->w - 2 * UI_PAD), pct, grow);
 }
