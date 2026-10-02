@@ -3,6 +3,7 @@
 #include "audio/mix.h"
 #include "input/combo.h"
 #include "ui/diag.h"
+#include "ui/picker.h"
 
 /* The four direction bits, as one mask. */
 #define DIAG_DPAD_MASK \
@@ -79,8 +80,10 @@ static uint16_t change_page(diag_t* d, int8_t dir)
 
     /* A direction still held across the switch belongs to the page that is
      * gone. Clearing it means the first press on the new page acts at once
-     * instead of inheriting a deadline. */
+     * instead of inheriting a deadline. A tool's hold belongs to the tag
+     * page the same way. */
     d->held_dir = 0;
+    d->hold_tool = DIAG_TOOL_NONE;
 
     ev |= on_enter(d);
 
@@ -121,6 +124,9 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
     d->list_mode = false;
     d->toast_until_ms = 0;
     d->toast = false;
+    d->hold_tool = DIAG_TOOL_NONE;
+    d->hold_start_ms = 0;
+    d->hold_elapsed_ms = 0;
 
     d->trim_fpa = (uint8_t)clamp_i16((int16_t)trim_fpa, 1, 126);
     d->trim_ratio = (uint8_t)clamp_i16((int16_t)trim_ratio, 0, 63);
@@ -712,12 +718,77 @@ static bool direction_due(diag_t* d, uint8_t dir_bits, uint32_t now_ms)
     return false;
 }
 
+/* The exact word each tool's hold needs. */
+static uint8_t tool_combo(uint8_t tool)
+{
+    switch (tool) {
+    case DIAG_TOOL_BLANK:
+        return COMBO_BTN_B;
+    case DIAG_TOOL_MENU:
+        return (uint8_t)(COMBO_BTN_SELECT | COMBO_BTN_A);
+    case DIAG_TOOL_WILD:
+        return (uint8_t)(COMBO_BTN_SELECT | COMBO_BTN_B);
+    default:
+        return 0;
+    }
+}
+
+static uint16_t tool_event(uint8_t tool)
+{
+    switch (tool) {
+    case DIAG_TOOL_BLANK:
+        return DIAG_EV_NFC_BLANK;
+    case DIAG_TOOL_MENU:
+        return DIAG_EV_NFC_MENU;
+    case DIAG_TOOL_WILD:
+        return DIAG_EV_NFC_WILD;
+    default:
+        return 0;
+    }
+}
+
+/*
+ * A running hold, one call on. It survives only while the word is exactly its
+ * combo: a release, an extra button — the fast-forward latch masking A, B and
+ * Select included — ends it with nothing fired.
+ */
+static uint16_t hold_step(diag_t* d, uint8_t joypad, uint32_t now_ms)
+{
+    uint8_t tool = d->hold_tool;
+
+    if (joypad != tool_combo(tool)) {
+        d->hold_tool = DIAG_TOOL_NONE;
+        return DIAG_EV_HOLD;
+    }
+    d->hold_elapsed_ms = now_ms - d->hold_start_ms;
+    if (d->hold_elapsed_ms >= (uint32_t)PICKER_HOLD_MS) {
+        d->hold_tool = DIAG_TOOL_NONE;
+        return (uint16_t)(tool_event(tool) | DIAG_EV_HOLD);
+    }
+    return DIAG_EV_HOLD;
+}
+
+/* A tool's hold starts on a press edge, and only with exactly its combo down
+ * — a B pressed while a direction is held is a fumble, not a blank. */
+static uint16_t hold_begin(diag_t* d, uint8_t tool, uint8_t joypad,
+                           uint32_t now_ms)
+{
+    if (joypad != tool_combo(tool)) {
+        return 0;
+    }
+    d->hold_tool = tool;
+    d->hold_start_ms = now_ms;
+    d->hold_elapsed_ms = 0;
+    return DIAG_EV_HOLD;
+}
+
 uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
                     uint32_t now_ms)
 {
     uint16_t ev = 0;
     uint8_t pressed;
     uint8_t dir_bits;
+    bool select;
 
     if (d == NULL) {
         return 0;
@@ -736,6 +807,14 @@ uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
 
     pressed = (uint8_t)(joypad & ~d->prev_word);
     d->prev_word = joypad;
+
+    /* A running hold owns the tag page's buttons: nothing else starts until
+     * it fires or ends, which is what stops a cancelled Select+A from
+     * becoming a Select+B in the same call. */
+    if (d->hold_tool != DIAG_TOOL_NONE) {
+        return hold_step(d, joypad, now_ms);
+    }
+    select = (joypad & COMBO_BTN_SELECT) != 0;
 
     dir_bits = (uint8_t)(joypad & DIAG_DPAD_MASK);
     if (direction_due(d, dir_bits, now_ms)) {
@@ -778,7 +857,12 @@ uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
             ev |= DIAG_EV_SAVE_NUDGE | DIAG_EV_REDRAW;
             break;
         case DIAG_PAGE_NFC:
-            ev |= DIAG_EV_NFC_SCAN;
+            /* Select+A is the MENU tool, never a scan. */
+            if (select) {
+                ev |= hold_begin(d, DIAG_TOOL_MENU, joypad, now_ms);
+            } else {
+                ev |= DIAG_EV_NFC_SCAN;
+            }
             break;
         case DIAG_PAGE_AUDIO:
             d->tone_on = !d->tone_on;
@@ -811,7 +895,10 @@ uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
     }
 
     if (pressed & COMBO_BTN_B) {
-        if (d->page == DIAG_PAGE_NUDGE) {
+        if (d->page == DIAG_PAGE_NFC) {
+            ev |= hold_begin(d, select ? DIAG_TOOL_WILD : DIAG_TOOL_BLANK,
+                             joypad, now_ms);
+        } else if (d->page == DIAG_PAGE_NUDGE) {
             d->x = d->default_x;
             d->y = d->default_y;
             ev |= DIAG_EV_REDRAW;
@@ -925,4 +1012,20 @@ const char* diag_page_title(uint8_t page)
         return NULL;
     }
     return page_titles[page];
+}
+
+uint8_t diag_hold_tool(const diag_t* d)
+{
+    return (d != NULL) ? d->hold_tool : (uint8_t)DIAG_TOOL_NONE;
+}
+
+uint8_t diag_hold_pct(const diag_t* d)
+{
+    uint32_t pct;
+
+    if (d == NULL || d->hold_tool == DIAG_TOOL_NONE) {
+        return 0;
+    }
+    pct = d->hold_elapsed_ms * 100u / (uint32_t)PICKER_HOLD_MS;
+    return (uint8_t)(pct > 100u ? 100u : pct);
 }

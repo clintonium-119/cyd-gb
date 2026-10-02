@@ -40,6 +40,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "cart/catalog.h"
 #include "cart/ndef.h"
 
 #ifdef __cplusplus
@@ -99,6 +100,29 @@ enum diag_nfc_state_e {
     DIAG_NFC_ONE,
     DIAG_NFC_MULTI,
     DIAG_NFC_ERR,
+};
+
+/* The tag page's held tools. Each is a combo held through the hold bar:
+ * BLANK is B, MENU is Select+A, WILD is Select+B. WILD's completed hold asks
+ * for the game list, and the game's own hold there confirms the write. */
+enum diag_tool_e {
+    DIAG_TOOL_NONE = 0,
+    DIAG_TOOL_BLANK,
+    DIAG_TOOL_MENU,
+    DIAG_TOOL_WILD,
+};
+
+/* What the last tool did, as the binding reports it back for the page to
+ * show. NONE shows the page's ordinary help line. */
+enum diag_nfc_outcome_e {
+    DIAG_NFC_OUT_NONE = 0,
+    DIAG_NFC_OUT_BLANKED,
+    DIAG_NFC_OUT_WILD_MADE,
+    DIAG_NFC_OUT_MENU_MADE,
+    DIAG_NFC_OUT_REFUSED,
+    DIAG_NFC_OUT_NO_TAG,
+    DIAG_NFC_OUT_MULTI,
+    DIAG_NFC_OUT_FAILED,
 };
 
 /* The bridge takes any uint8_t and shows one frame in every skip + 1, so this
@@ -317,6 +341,13 @@ enum diag_trim_pat_e {
 #define DIAG_EV_TRIM_FIXTURE 0x100
 /* The games-list mode flipped: the binding stores it. */
 #define DIAG_EV_LIST_MODE   0x200
+/* A tag-page tool's hold completed: the binding carries the tool out. WILD
+ * asks for the game list first. */
+#define DIAG_EV_NFC_BLANK   0x400
+#define DIAG_EV_NFC_MENU    0x800
+#define DIAG_EV_NFC_WILD    0x1000
+/* The hold bar moved or cleared: the binding repaints the bar alone. */
+#define DIAG_EV_HOLD        0x2000
 
 enum diag_result_e {
     DIAG_OK = 0,
@@ -350,8 +381,9 @@ typedef struct diag_data_s {
     uint32_t sd_used_mb;
     bool sd_stats_ok;
 
-    /* Tag inspector. Read-only throughout: every field is something the
-     * inspector saw, and there is no field for anything it could change. */
+    /* Tag inspector. Every field but the outcome is something the inspector
+     * saw; the outcome is what the last held tool did, and the title is the
+     * game a wildcard was made for. */
     uint8_t nfc_state;          /* enum diag_nfc_state_e                    */
     uint32_t nfc_fw;            /* the reader's own firmware word           */
     char uid_hex[15];           /* 7 bytes as hex, NUL-terminated           */
@@ -365,6 +397,9 @@ typedef struct diag_data_s {
     int ndef_rc;                /* the decoder's own result code            */
     char payload[NDEF_TEXT_MAX + 1];
     uint8_t cls;                /* the tag class the boot classifier gives  */
+    uint8_t nfc_outcome;        /* enum diag_nfc_outcome_e                  */
+    int nfc_outcome_rc;         /* the failed write's code, for FAILED      */
+    char nfc_outcome_title[CATALOG_TITLE_MAX];
 
     /* Battery page. The divider is carried as a value rather than read from a
      * header so the page can show the number the firmware actually used. */
@@ -405,6 +440,12 @@ typedef struct diag_s {
     bool list_mode;       /* the games-list fallback mode, a stored flag  */
     uint32_t toast_until_ms;
     bool toast;
+
+    /* The tag page's tool hold, timed the way the game list times its own:
+     * which tool, from when, and how far it has got. */
+    uint8_t hold_tool;        /* enum diag_tool_e                           */
+    uint32_t hold_start_ms;
+    uint32_t hold_elapsed_ms;
 
     /* Panel trim. The working porch, the one B restores, and everything the
      * crossing count needs. */
@@ -497,6 +538,11 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
  * the combo module's cadence — two directions at once are a fumble and do
  * nothing.
  *
+ * On the tag page a bare A scans, and B, Select+A and Select+B each start a
+ * tool's hold on their press edge with exactly that combo down. Every call
+ * while it runs reports DIAG_EV_HOLD; after PICKER_HOLD_MS it reports the
+ * tool's event once. Any change to the word, or a page change, cancels it.
+ *
  * Returns the OR of the DIAG_EV_* flags, or 0 for a NULL state.
  */
 uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
@@ -523,6 +569,11 @@ uint8_t diag_frameskip(const diag_t* d);
 void diag_set_list_mode(diag_t* d, bool on);
 bool diag_list_mode(const diag_t* d);
 bool diag_toast_active(const diag_t* d, uint32_t now_ms);
+
+/* The tool being held on the tag page, DIAG_TOOL_NONE when none is, and how
+ * far its hold has got as 0..100 — 0 when none is. */
+uint8_t diag_hold_tool(const diag_t* d);
+uint8_t diag_hold_pct(const diag_t* d);
 
 /* ─── Panel trim ─────────────────────────────────────────────────────────── */
 

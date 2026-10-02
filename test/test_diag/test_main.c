@@ -380,6 +380,183 @@ static void test_a_rescans_on_the_tag_page_and_nowhere_else(void)
     TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_A, 500));
 }
 
+/* ─── the tag page's tools ────────────────────────────────────────────────── */
+
+#define SEL_A ((uint8_t)(COMBO_BTN_SELECT | COMBO_BTN_A))
+#define SEL_B ((uint8_t)(COMBO_BTN_SELECT | COMBO_BTN_B))
+
+/* Press `word` at t = 100 on a quiet tag page and hold it to `until`, one
+ * sample every 100 ms; returns the OR of every event the hold produced past
+ * the press. */
+static uint16_t hold_word(uint8_t word, uint32_t until)
+{
+    uint16_t ev = 0;
+    uint32_t t;
+
+    goto_page(DIAG_PAGE_NFC);
+    sample(COMBO_EVENT_NONE, 0, 50);
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_HOLD, sample(COMBO_EVENT_NONE, word, 100));
+    for (t = 200; t <= until; t += 100) {
+        ev |= sample(COMBO_EVENT_NONE, word, t);
+    }
+    return ev;
+}
+
+/* The press, 999 ms with nothing fired, the tool at 1000 ms, and nothing on
+ * the next poll with the combo still down. */
+static void assert_held_tool_fires_once(uint8_t word, uint8_t tool,
+                                        uint16_t tool_ev)
+{
+    uint16_t ev = hold_word(word, 1000);
+
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_HOLD, ev);
+    TEST_ASSERT_EQUAL_UINT8(tool, diag_hold_tool(&d));
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_HOLD,
+        sample(COMBO_EVENT_NONE, word, 1099));
+    TEST_ASSERT_EQUAL_HEX16(tool_ev | DIAG_EV_HOLD,
+        sample(COMBO_EVENT_NONE, word, 1100));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, word, 1200));
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, word, 3000));
+}
+
+static void test_b_held_one_second_blanks_once(void)
+{
+    assert_held_tool_fires_once(COMBO_BTN_B, DIAG_TOOL_BLANK,
+                                DIAG_EV_NFC_BLANK);
+}
+
+static void test_select_a_held_one_second_makes_menu_once(void)
+{
+    assert_held_tool_fires_once(SEL_A, DIAG_TOOL_MENU, DIAG_EV_NFC_MENU);
+}
+
+static void test_select_b_held_one_second_asks_for_the_picker_once(void)
+{
+    assert_held_tool_fires_once(SEL_B, DIAG_TOOL_WILD, DIAG_EV_NFC_WILD);
+}
+
+static void test_releasing_early_cancels_the_hold(void)
+{
+    static const uint8_t words[3] = { COMBO_BTN_B, SEL_A, SEL_B };
+    /* Releasing one button of a two-button combo is a release too. */
+    static const uint8_t left[3] = { 0, COMBO_BTN_SELECT, COMBO_BTN_B };
+    uint8_t i;
+
+    for (i = 0; i < 3; i++) {
+        setUp();
+        hold_word(words[i], 600);
+        TEST_ASSERT_EQUAL_UINT8(50, diag_hold_pct(&d));
+        TEST_ASSERT_EQUAL_HEX16(DIAG_EV_HOLD,
+            sample(COMBO_EVENT_NONE, left[i], 700));
+        TEST_ASSERT_EQUAL_UINT8(0, diag_hold_pct(&d));
+        TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
+        TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, left[i], 2000));
+    }
+}
+
+static void test_an_extra_button_cancels_the_hold(void)
+{
+    hold_word(COMBO_BTN_B, 500);
+    /* Select arriving turns B into Select+B, and starts nothing new. */
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_HOLD,
+        sample(COMBO_EVENT_NONE, SEL_B, 600));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, SEL_B, 2000));
+
+    /* B arriving on a Select+A hold is the fast-forward combo, whose latch
+     * masks the word to nothing: still a cancel, and never a wildcard. */
+    setUp();
+    hold_word(SEL_A, 500);
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_HOLD,
+        sample(COMBO_EVENT_NONE, SEL_A | COMBO_BTN_B, 600));
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, 0, 700));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
+
+    /* A tool never starts with anything else already down. */
+    setUp();
+    goto_page(DIAG_PAGE_NFC);
+    sample(COMBO_EVENT_NONE, COMBO_BTN_RIGHT, 50);
+    TEST_ASSERT_EQUAL_HEX16(0,
+        sample(COMBO_EVENT_NONE, COMBO_BTN_RIGHT | COMBO_BTN_B, 100));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
+}
+
+static void test_a_page_change_cancels_the_hold(void)
+{
+    uint16_t ev;
+
+    hold_word(SEL_A, 500);
+    ev = sample(COMBO_EVENT_BRIGHT_UP, SEL_A, 600);
+    TEST_ASSERT_TRUE((ev & DIAG_EV_PAGE) != 0);
+    TEST_ASSERT_EQUAL_HEX16(0, ev & DIAG_EV_NFC_MENU);
+    TEST_ASSERT_EQUAL_UINT8(DIAG_PAGE_BATTERY, diag_page(&d));
+    TEST_ASSERT_EQUAL_UINT8(0, diag_hold_pct(&d));
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, SEL_A, 2000));
+}
+
+static void test_select_a_does_not_scan(void)
+{
+    goto_page(DIAG_PAGE_NFC);
+    TEST_ASSERT_EQUAL_HEX16(0,
+        sample(COMBO_EVENT_NONE, SEL_A, 100) & DIAG_EV_NFC_SCAN);
+    sample(COMBO_EVENT_NONE, 0, 200);
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_NFC_SCAN,
+        sample(COMBO_EVENT_NONE, COMBO_BTN_A, 300));
+}
+
+static void test_tools_do_nothing_off_the_tag_page(void)
+{
+    uint8_t page;
+    uint32_t t = 1000;
+    uint16_t ev;
+
+    for (page = 0; page < DIAG_PAGE_COUNT; page++) {
+        if (page == DIAG_PAGE_NFC) {
+            continue;
+        }
+        setUp();
+        goto_page(page);
+        sample(COMBO_EVENT_NONE, 0, t);
+        ev = sample(COMBO_EVENT_NONE, COMBO_BTN_B, t + 10);
+        ev |= sample(COMBO_EVENT_NONE, COMBO_BTN_B, t + 2000);
+        sample(COMBO_EVENT_NONE, COMBO_BTN_SELECT, t + 2010);
+        ev |= sample(COMBO_EVENT_NONE, SEL_A, t + 2020);
+        ev |= sample(COMBO_EVENT_NONE, SEL_A, t + 4000);
+        sample(COMBO_EVENT_NONE, COMBO_BTN_SELECT, t + 4010);
+        ev |= sample(COMBO_EVENT_NONE, SEL_B, t + 4020);
+        ev |= sample(COMBO_EVENT_NONE, SEL_B, t + 6000);
+        TEST_ASSERT_EQUAL_HEX16(0, ev & (DIAG_EV_NFC_BLANK | DIAG_EV_NFC_MENU
+                                         | DIAG_EV_NFC_WILD | DIAG_EV_HOLD));
+        TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
+    }
+
+    /* The nudge page's B still resets. */
+    setUp();
+    goto_page(DIAG_PAGE_NUDGE);
+    sample(COMBO_EVENT_NONE, 0, 50);
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_REDRAW,
+        sample(COMBO_EVENT_NONE, COMBO_BTN_B, 100));
+}
+
+static void test_hold_pct_tracks_elapsed(void)
+{
+    TEST_ASSERT_EQUAL_UINT8(0, diag_hold_pct(&d));
+    goto_page(DIAG_PAGE_NFC);
+    sample(COMBO_EVENT_NONE, 0, 50);
+    sample(COMBO_EVENT_NONE, COMBO_BTN_B, 100);
+    TEST_ASSERT_EQUAL_UINT8(0, diag_hold_pct(&d));
+    sample(COMBO_EVENT_NONE, COMBO_BTN_B, 600);
+    TEST_ASSERT_EQUAL_UINT8(50, diag_hold_pct(&d));
+    sample(COMBO_EVENT_NONE, COMBO_BTN_B, 1099);
+    TEST_ASSERT_EQUAL_UINT8(99, diag_hold_pct(&d));
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_NFC_BLANK | DIAG_EV_HOLD,
+        sample(COMBO_EVENT_NONE, COMBO_BTN_B, 1100));
+    /* Fired, the hold is over and the bar empty again. */
+    TEST_ASSERT_EQUAL_UINT8(0, diag_hold_pct(&d));
+    TEST_ASSERT_EQUAL_UINT8(100, (uint8_t)(d.hold_elapsed_ms / 10));
+}
+
 /* ─── the audio page ──────────────────────────────────────────────────────── */
 
 static void test_a_toggles_the_tone(void)
@@ -1667,6 +1844,15 @@ int main(void)
     RUN_TEST(test_a_held_a_fires_once);
     RUN_TEST(test_arriving_at_the_tag_page_asks_for_one_scan_either_way);
     RUN_TEST(test_a_rescans_on_the_tag_page_and_nowhere_else);
+    RUN_TEST(test_b_held_one_second_blanks_once);
+    RUN_TEST(test_select_a_held_one_second_makes_menu_once);
+    RUN_TEST(test_select_b_held_one_second_asks_for_the_picker_once);
+    RUN_TEST(test_releasing_early_cancels_the_hold);
+    RUN_TEST(test_an_extra_button_cancels_the_hold);
+    RUN_TEST(test_a_page_change_cancels_the_hold);
+    RUN_TEST(test_select_a_does_not_scan);
+    RUN_TEST(test_tools_do_nothing_off_the_tag_page);
+    RUN_TEST(test_hold_pct_tracks_elapsed);
     RUN_TEST(test_a_toggles_the_tone);
     RUN_TEST(test_the_volume_index_steps_without_wrapping);
     RUN_TEST(test_leaving_the_audio_page_silences_the_tone);
