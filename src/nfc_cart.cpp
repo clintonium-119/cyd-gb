@@ -315,6 +315,27 @@ enum nfc_detect_e nfc_detect(uint8_t uid[7], uint8_t* uid_len) {
         *uid_len = 0;
     }
 
+    // Drop the RF field and raise it again first (RFConfiguration item 1,
+    // §7.3.1), so every tag in the field starts this search from power-on.
+    // Without it a tag the previous detect or write left selected or halted
+    // ignores the search, and a cart sitting still on the reader reads as
+    // "no tag" on every other look (bench, 2026-10-02). ISO 14443-3 resets a
+    // tag after 5 ms without the field; 10 ms each way is a margin, not a
+    // measurement.
+    uint8_t field[3] = { PN532_CMD_RF_CONFIGURATION, 0x01, 0x00 };
+    uint8_t ack[4];
+    if (pn532_command(field, sizeof(field), ack, sizeof(ack),
+                      NFC_READY_TIMEOUT_MS) < 0) {
+        return NFC_DETECT_ERR;
+    }
+    delay(10);
+    field[2] = 0x01;
+    if (pn532_command(field, sizeof(field), ack, sizeof(ack),
+                      NFC_READY_TIMEOUT_MS) < 0) {
+        return NFC_DETECT_ERR;
+    }
+    delay(10);
+
     // InListPassiveTarget (§7.3.5): MaxTg, BrTy, no InitiatorData.
     // Response: NbTg, then per target Tg, SENS_RES(2), SEL_RES, NFCIDLength,
     // NFCID1[NFCIDLength], optional ATS. Two targets fit in `resp`.
