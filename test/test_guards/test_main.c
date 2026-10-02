@@ -389,11 +389,11 @@ static void test_the_writer_drives_the_pure_picker(void)
         "src/cart_writer.cpp does not open the shared picker screen");
 }
 
-/* The picker screen has at most three callers: the writer, the boot
- * executor's games list, which opens it in launch mode only, and diagnostics,
- * which opens it once in its own diagnostics mode for the wildcard tool's
- * pick. Any other caller, or a list that could reach a writing mode, is a
- * second route to the writer. */
+/* The picker screen has three callers: the writer, the boot executor's games
+ * list, which opens it in launch mode only, and diagnostics, which opens it
+ * once in its own diagnostics mode for the wildcard tool's pick. Any other
+ * caller, or a list that could reach a writing mode, is a second route to the
+ * writer. */
 static int c_callers;
 static char c_files[512];
 
@@ -412,25 +412,19 @@ static void count_picker_screen_run(const char* dir, const char* name)
     }
 }
 
-static void test_the_picker_screen_has_at_most_three_callers(void)
+static void test_the_picker_screen_has_three_callers(void)
 {
-    const char* diag = PROJECT_DIR "/src/diag.cpp";
-    int diag_calls = file_count_outside_ifdef(diag, "picker_screen_run(",
-                                              "DEV_WRITER");
-
     c_callers = 0;
     c_files[0] = '\0';
 
     TEST_ASSERT_GREATER_THAN(
         0, visit_dir(PROJECT_DIR "/src", ".cpp", count_picker_screen_run));
-    TEST_ASSERT_EQUAL_INT_MESSAGE(2 + diag_calls, c_callers, c_files);
-    TEST_ASSERT_LESS_OR_EQUAL_INT_MESSAGE(
-        1, diag_calls, "src/diag.cpp opens the picker screen more than once");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(3, c_callers, c_files);
     TEST_ASSERT_EQUAL_INT_MESSAGE(
-        diag_calls,
-        file_count_outside_ifdef(diag, "picker_screen_run(PICKER_MODE_DIAG",
-                                 "DEV_WRITER"),
-        "src/diag.cpp opens the picker screen in a mode other than its own");
+        1, file_count_outside_ifdef(PROJECT_DIR "/src/diag.cpp",
+                                    "picker_screen_run(PICKER_MODE_DIAG",
+                                    "DEV_WRITER"),
+        "src/diag.cpp does not open the picker screen once, in its own mode");
     TEST_ASSERT_EQUAL_INT_MESSAGE(
         1, file_count_outside_ifdef(PROJECT_DIR "/src/cart_writer.cpp",
                                     "picker_screen_run(", "DEV_WRITER"),
@@ -602,6 +596,22 @@ static void test_the_diagnostics_reach_only_the_diag_verbs(void)
     }
 }
 
+/* The narrowed scan, proved non-vacuous: the binding does call each of the
+ * three verbs it is allowed, so the equality above is not 0 == 0. */
+static void test_the_diagnostics_call_each_diag_verb(void)
+{
+    static const char* const verbs[] = {
+        "provision_diag_blank(",
+        "provision_diag_make_wild(",
+        "provision_diag_make_menu(",
+    };
+
+    for (size_t i = 0; i < sizeof(verbs) / sizeof(verbs[0]); i++) {
+        TEST_ASSERT_GREATER_THAN_MESSAGE(
+            0, file_count(PROJECT_DIR "/src/diag.cpp", verbs[i]), verbs[i]);
+    }
+}
+
 /* The same scan, proved non-vacuous: a renamed or emptied binding would let
  * the test above pass by scanning nothing of consequence. */
 static void test_the_diagnostics_define_the_mode(void)
@@ -676,7 +686,7 @@ int main(void)
     RUN_TEST(test_writer_open_is_declared_once);
     RUN_TEST(test_the_writer_references_no_lower_layer);
     RUN_TEST(test_the_writer_drives_the_pure_picker);
-    RUN_TEST(test_the_picker_screen_has_at_most_three_callers);
+    RUN_TEST(test_the_picker_screen_has_three_callers);
     RUN_TEST(test_platformio_ini_does_not_mention_the_rom_bypass);
     RUN_TEST(test_platformio_ini_does_not_mention_the_writer_bypass);
     RUN_TEST(test_the_menu_references_no_writer_or_tag_symbol);
@@ -684,6 +694,7 @@ int main(void)
     RUN_TEST(test_no_exit_path_symbol_under_src);
     RUN_TEST(test_the_diagnostics_reference_no_forbidden_layer);
     RUN_TEST(test_the_diagnostics_reach_only_the_diag_verbs);
+    RUN_TEST(test_the_diagnostics_call_each_diag_verb);
     RUN_TEST(test_the_diagnostics_define_the_mode);
     RUN_TEST(test_the_diagnostics_push_the_trim_to_the_panel);
     RUN_TEST(test_render_config_states_a_size_for_every_geometry);

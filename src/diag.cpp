@@ -3,9 +3,11 @@
 #include "battery.h"
 #include "build_info.h"
 #include "button_input.h"
+#include "cart_provision.h"
 #include "display.h"
 #include "hw_config.h"
 #include "nfc_cart.h"
+#include "picker_screen.h"
 #include "render_config.h"
 #include "render/scaler.h"
 #include "sd_manager.h"
@@ -40,6 +42,9 @@
 //             live
 //   * read  — the card once at entry, the ADC once a second on its own page,
 //             and the tag only when someone asks
+//   * write — the tag page's three held tools, each handed to the
+//             provisioner's diagnostics verbs against the tag on the reader
+//             at that moment; this file composes no write of its own
 //
 // It reaches for nothing above or below itself. The names it must not mention
 // are the guard test's list, not repeated here, because that test scans this
@@ -68,7 +73,8 @@ static int16_t stereo[2 * SPEAKER_SAMPLES_PER_FRAME];  // 2,192 B
 static uint8_t mono[SPEAKER_SAMPLES_PER_FRAME];        //   548 B
 
 // The tag layer talks through the reader's transceive and knows nothing else
-// about it. Read-only use throughout: nothing here composes a write.
+// about it. Only reads go through it here; the tag tools' writes go through
+// the provisioner.
 static const ntag_dev_t tag_dev = { NULL, nfc_transceive };
 
 // The origin the last draw used, so a moved window can be cleared before the
@@ -207,8 +213,8 @@ static void redraw(uint32_t now_ms)
 // The one line the page cannot draw itself, because it has to be on the panel
 // before the reader blocks rather than after it answers. It takes the help
 // line's place, in white so it reads as news, and leaves the hints alone; the
-// redraw after the scan puts the help back.
-static void say_scanning()
+// redraw after the scan or the write puts the help back.
+static void say_busy(const char* line)
 {
     int16_t ox = 0;
     int16_t oy = 0;
@@ -217,9 +223,118 @@ static void say_scanning()
     diag_origin(&d, &ox, &oy);
     cv = display_canvas(ox, oy);
     cv->fill(cv->ctx, 0, geom.help_y, geom.w, UI_HELP_H, UI_COL_BG);
-    cv->text(cv->ctx, "Scanning...", UI_PAD, geom.help_y,
+    cv->text(cv->ctx, line, UI_PAD, geom.help_y,
              (int16_t)(geom.w - 2 * UI_PAD), 1, UI_FONT_HELP, UI_ALIGN_LEFT,
              UI_COL_TEXT, UI_COL_BG);
+}
+
+// ─── the tag tools ──────────────────────────────────────────────────────────
+
+// One held tool, carried out against whatever is on the reader now — the
+// last scan may be a different cart. The outcome goes into the snapshot for
+// the page to show, and the rescan after it shows what the tag now holds.
+// `rom` is the wildcard's game, and NULL for the other two tools.
+static void run_tool(uint8_t tool, const char* rom)
+{
+    uint8_t uid[DIAG_UID_BYTES] = { 0 };
+    uint8_t uid_len = 0;
+    int rc = NTAG_ERR_IO;
+
+    data.nfc_outcome_rc = 0;
+    switch (nfc_detect(uid, &uid_len)) {
+    case NFC_DETECT_NONE:
+        data.nfc_outcome = DIAG_NFC_OUT_NO_TAG;
+        break;
+    case NFC_DETECT_MULTI:
+        data.nfc_outcome = DIAG_NFC_OUT_MULTI;
+        break;
+    case NFC_DETECT_ERR:
+        data.nfc_outcome = DIAG_NFC_OUT_FAILED;
+        data.nfc_outcome_rc = NTAG_ERR_IO;
+        break;
+    case NFC_DETECT_ONE:
+        say_busy("Writing...");
+        if (tool == DIAG_TOOL_BLANK) {
+            rc = provision_diag_blank();
+        } else if (tool == DIAG_TOOL_MENU) {
+            rc = provision_diag_make_menu();
+        } else {
+            rc = provision_diag_make_wild(rom);
+        }
+        if (rc == NTAG_OK) {
+            data.nfc_outcome = (tool == DIAG_TOOL_BLANK)  ? DIAG_NFC_OUT_BLANKED
+                               : (tool == DIAG_TOOL_MENU) ? DIAG_NFC_OUT_MENU_MADE
+                                                          : DIAG_NFC_OUT_WILD_MADE;
+        } else if (rc == NTAG_ERR_AUTH) {
+            data.nfc_outcome = DIAG_NFC_OUT_REFUSED;
+        } else {
+            data.nfc_outcome = DIAG_NFC_OUT_FAILED;
+            data.nfc_outcome_rc = rc;
+        }
+        break;
+    }
+    Serial.printf("[DIAG] tool=%u rom='%s' outcome=%u rc=%d\n",
+                  (unsigned)tool, rom ? rom : "", (unsigned)data.nfc_outcome,
+                  rc);
+
+    say_busy("Scanning...");
+    scan_tag();
+}
+
+// Every button up, so the next screen starts from a clean edge: the picker
+// must not read the B of Select+B as a press, and the tag page must not read
+// the A that confirmed a pick as a scan.
+static void wait_release()
+{
+    do {
+        delay(DIAG_POLL_MS);
+        button_update();
+    } while (button_get_buttons() != 0);
+}
+
+// The wildcard tool: the whole catalog in the picker's diagnostics mode, and
+// a held pick written to the tag. B on the list comes back with nothing
+// written and no outcome.
+static void run_wild_tool(uint32_t now_ms)
+{
+    catalog_reader_t cat;
+    catalog_entry_t e;
+    boot_selection_t sel;
+    enum boot_pick_e pick;
+    const char* title;
+
+    wait_release();
+    if (!sd_catalog_reader(&cat)) {
+        data.nfc_outcome = DIAG_NFC_OUT_FAILED;
+        data.nfc_outcome_rc = NTAG_ERR_ARGS;
+        Serial.println("[DIAG] wildcard tool: no catalog");
+        return;
+    }
+
+    memset(&sel, 0, sizeof(sel));
+    pick = picker_screen_run(PICKER_MODE_DIAG, &cat, NULL, false, &sel);
+    if (pick == BOOT_PICK_ROM) {
+        // The catalog's title when it has one, the file name otherwise.
+        title = sel.rom;
+        if (catalog_find(&cat, sel.rom, &e) == CATALOG_OK) {
+            title = e.title;
+        }
+        strncpy(data.nfc_outcome_title, title,
+                sizeof(data.nfc_outcome_title) - 1);
+        data.nfc_outcome_title[sizeof(data.nfc_outcome_title) - 1] = '\0';
+    }
+
+    // The picker painted over the whole panel: the page comes back in full,
+    // with the combo module and the machine's edges reset to a released pad.
+    wait_release();
+    combo_init(&combo);
+    diag_input(&d, COMBO_EVENT_NONE, 0, now_ms);
+    drawn_ox = -1;
+    drawn_oy = -1;
+    redraw(now_ms);
+    if (pick == BOOT_PICK_ROM) {
+        run_tool(DIAG_TOOL_WILD, sel.rom);
+    }
 }
 
 // ─── the panel-trim fixture ─────────────────────────────────────────────────
@@ -579,12 +694,37 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
         if ((flags & DIAG_EV_TONE) && !diag_tone_on(&d)) {
             speaker_silence();
         }
+        if (flags & (DIAG_EV_NFC_SCAN | DIAG_EV_PAGE)) {
+            // A fresh look, or leaving the page, retires the last outcome.
+            data.nfc_outcome = DIAG_NFC_OUT_NONE;
+        }
         if (flags & DIAG_EV_NFC_SCAN) {
             if (nfc_ok) {
-                say_scanning();
+                say_busy("Scanning...");
                 scan_tag();
             }
             dirty = true;
+        }
+        // A reader that did not answer at boot has nothing to write with, and
+        // the page already says so.
+        if (nfc_ok && (flags & DIAG_EV_NFC_BLANK)) {
+            run_tool(DIAG_TOOL_BLANK, NULL);
+            dirty = true;
+        }
+        if (nfc_ok && (flags & DIAG_EV_NFC_MENU)) {
+            run_tool(DIAG_TOOL_MENU, NULL);
+            dirty = true;
+        }
+        if (nfc_ok && (flags & DIAG_EV_NFC_WILD)) {
+            run_wild_tool(now);
+            dirty = true;
+        }
+        if ((flags & DIAG_EV_HOLD) && !(flags & DIAG_EV_REDRAW) && !dirty) {
+            int16_t ox = 0;
+            int16_t oy = 0;
+
+            diag_origin(&d, &ox, &oy);
+            diag_draw_hold(&d, &data, &geom, display_canvas(ox, oy), true);
         }
 
         // Before the draw and before any frame goes out, so a corrected porch
