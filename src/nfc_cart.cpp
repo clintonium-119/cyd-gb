@@ -38,6 +38,7 @@
 #define PN532_CMD_SAM_CONFIGURATION    0x14
 #define PN532_CMD_RF_CONFIGURATION     0x32
 #define PN532_CMD_IN_DATA_EXCHANGE     0x40
+#define PN532_CMD_IN_COMMUNICATE_THRU  0x42
 #define PN532_CMD_IN_LIST_PASSIVE_TARGET 0x4A
 
 // InDataExchange status byte, low six bits (§7.1). 0x01 is the RF timeout —
@@ -368,20 +369,30 @@ int nfc_transceive(void* ctx, const uint8_t* tx, size_t tx_len,
         return NTAG_XCV_IO;
     }
 
-    // InDataExchange (§7.3.8): Tg = 1 (the target nfc_detect() selected),
-    // then the raw tag command. Response: Status, then the tag's answer.
+    // READ and WRITE go by InDataExchange (§7.3.8): Tg = 1 (the target
+    // nfc_detect() selected), then the tag command; the PN532 knows these
+    // Mifare Ultralight commands and frames WRITE's 4-bit ACK itself. It
+    // refuses any command byte it does not know as Mifare ("Cmd value is
+    // incorrect"), which takes in PWD_AUTH and GET_VERSION, so everything
+    // else goes by InCommunicateThru (§7.3.9), which sends the bytes as they
+    // are. Both answer Status, then the tag's reply.
     uint8_t body[2 + NTAG_READ_SIZE + 4];
     if (tx_len > sizeof(body) - 2) {
         return NTAG_XCV_IO;
     }
-    body[0] = PN532_CMD_IN_DATA_EXCHANGE;
-    body[1] = 0x01;
+    size_t n_hdr = 0;
+    if (tx[0] == NTAG_CMD_READ || tx[0] == NTAG_CMD_WRITE) {
+        body[n_hdr++] = PN532_CMD_IN_DATA_EXCHANGE;
+        body[n_hdr++] = 0x01;
+    } else {
+        body[n_hdr++] = PN532_CMD_IN_COMMUNICATE_THRU;
+    }
     for (size_t i = 0; i < tx_len; i++) {
-        body[2 + i] = tx[i];
+        body[n_hdr + i] = tx[i];
     }
 
     uint8_t resp[1 + NTAG_READ_SIZE + 8];
-    int n = pn532_command(body, 2 + tx_len, resp, sizeof(resp),
+    int n = pn532_command(body, n_hdr + tx_len, resp, sizeof(resp),
                           NFC_READY_TIMEOUT_MS);
     if (n < 1) {
         return NTAG_XCV_IO;
