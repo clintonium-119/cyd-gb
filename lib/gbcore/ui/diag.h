@@ -572,6 +572,11 @@ uint8_t diag_frameskip(const diag_t* d);
 /* The games-list mode starts off at diag_init(); the binding seeds the stored
  * value here. A on the System page flips it and reports DIAG_EV_LIST_MODE. */
 void diag_set_list_mode(diag_t* d, bool on);
+
+/* The buttons already down when the page gets control back — from the game
+ * list a tool opened, say. None of them is a press until let go, so a B that
+ * backed out of the list does not start a blank. */
+void diag_set_held(diag_t* d, uint8_t joypad);
 bool diag_list_mode(const diag_t* d);
 bool diag_toast_active(const diag_t* d, uint32_t now_ms);
 

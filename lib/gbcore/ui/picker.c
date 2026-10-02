@@ -382,6 +382,15 @@ int picker_set_marquee_span(picker_t* p, int16_t overflow_px)
     return PICKER_OK;
 }
 
+int picker_set_held(picker_t* p, uint8_t buttons)
+{
+    if (p == NULL) {
+        return PICKER_ERR_ARGS;
+    }
+    p->prev_buttons = buttons;
+    return PICKER_OK;
+}
+
 bool picker_media_due(picker_t* p, uint32_t now_ms, uint16_t* cat_idx)
 {
     const picker_row_t* row;

@@ -285,15 +285,21 @@ static void run_tool(uint8_t tool, const char* rom)
     scan_tag();
 }
 
-// Every button up, so the next screen starts from a clean edge: the picker
-// must not read the B of Select+B as a press, and the tag page must not read
-// the A that confirmed a pick as a scan.
-static void wait_release()
+// Back from the game list: the combo module and the machine restart from the
+// buttons down right now, so the A that confirmed a pick, or the B that
+// backed out, is not read as a fresh press — without waiting for a release.
+// The second sample, one debounce window on, is what makes that word stable.
+static void resync_input()
 {
-    do {
-        delay(DIAG_POLL_MS);
-        button_update();
-    } while (button_get_buttons() != 0);
+    uint8_t ev = COMBO_EVENT_NONE;
+
+    combo_init(&combo);
+    button_update();
+    combo_update(&combo, button_get_buttons(), millis(), &ev);
+    delay(COMBO_DEBOUNCE_MS + 1);
+    button_update();
+    combo_update(&combo, button_get_buttons(), millis(), &ev);
+    diag_set_held(&d, combo_joypad(&combo));
 }
 
 // The wildcard and game-cart tools: a game list in one of the picker's
@@ -308,7 +314,6 @@ static void run_pick_tool(uint8_t tool, uint32_t now_ms)
     enum boot_pick_e pick;
     const char* title;
 
-    wait_release();
     if (!sd_catalog_reader(&cat)) {
         data.nfc_outcome = DIAG_NFC_OUT_FAILED;
         data.nfc_outcome_rc = NTAG_ERR_ARGS;
@@ -335,10 +340,8 @@ static void run_pick_tool(uint8_t tool, uint32_t now_ms)
     }
 
     // The picker painted over the whole panel: the page comes back in full,
-    // with the combo module and the machine's edges reset to a released pad.
-    wait_release();
-    combo_init(&combo);
-    diag_input(&d, COMBO_EVENT_NONE, 0, now_ms);
+    // and the write follows at once rather than on the release.
+    resync_input();
     drawn_ox = -1;
     drawn_oy = -1;
     redraw(now_ms);

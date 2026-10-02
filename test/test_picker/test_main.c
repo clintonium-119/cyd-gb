@@ -424,6 +424,23 @@ static void test_diag_starter_mode_hold_picks_the_game(void)
     }
 }
 
+static void test_a_button_held_at_open_is_not_a_press(void)
+{
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_DIAG, false, false, NULL);
+
+    /* The B of the Select+B hold that opened the list is still down. */
+    TEST_ASSERT_EQUAL_INT(PICKER_OK,
+                          picker_set_held(&p, (uint8_t)(B_B | COMBO_BTN_SELECT)));
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_NONE,
+                            press(&p, (uint8_t)(B_B | COMBO_BTN_SELECT), 0));
+    TEST_ASSERT_EQUAL_UINT8(PICKER_SCREEN_LIST, p.screen);
+    /* Let go and press again, and it is a press. */
+    press(&p, B_NONE, 100);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_DONE, press(&p, B_B, 200));
+    TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_set_held(NULL, 0));
+}
+
 /* ─── the selection ───────────────────────────────────────────────────────── */
 
 static void test_a_held_launch_pick_returns_its_filename(void)
@@ -1054,6 +1071,7 @@ int main(void)
     RUN_TEST(test_diag_starter_mode_lists_every_starter_and_nothing_else);
     RUN_TEST(test_diag_starter_mode_b_on_the_list_returns_no_pick);
     RUN_TEST(test_diag_starter_mode_hold_picks_the_game);
+    RUN_TEST(test_a_button_held_at_open_is_not_a_press);
     RUN_TEST(test_a_held_launch_pick_returns_its_filename);
     RUN_TEST(test_an_early_release_in_launch_mode_picks_nothing);
     RUN_TEST(test_a_confirmed_game_row_returns_its_filename);

@@ -240,6 +240,13 @@ int picker_set_scroll_span(picker_t* p, uint16_t page_lines,
 int picker_set_marquee_span(picker_t* p, int16_t overflow_px);
 
 /*
+ * The buttons already down when the screen opens — the end of the hold that
+ * opened it, say. None of them is a press until it is let go and pressed
+ * again, so the screen can open at once instead of waiting for a release.
+ */
+int picker_set_held(picker_t* p, uint8_t buttons);
+
+/*
  * Whether the highlighted title's cover and snapshot should be fetched now.
  * True once per highlight on a game row, once it has been still for
  * PICKER_MEDIA_SETTLE_MS — on the list, or straight away on the detail page of

@@ -553,6 +553,23 @@ static void test_tools_do_nothing_off_the_tag_page(void)
         sample(COMBO_EVENT_NONE, COMBO_BTN_B, 100));
 }
 
+static void test_a_button_held_on_return_is_not_a_press(void)
+{
+    goto_page(DIAG_PAGE_NFC);
+    /* The B that backed out of the game list is still down. */
+    diag_set_held(&d, COMBO_BTN_B);
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_B, 100));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
+    /* The A that confirmed a pick is not a scan. */
+    diag_set_held(&d, COMBO_BTN_A);
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_A, 200));
+    /* Released and pressed again, each acts. */
+    sample(COMBO_EVENT_NONE, 0, 300);
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_NFC_SCAN,
+                            sample(COMBO_EVENT_NONE, COMBO_BTN_A, 400));
+    diag_set_held(NULL, 0);
+}
+
 static void test_hold_pct_tracks_elapsed(void)
 {
     TEST_ASSERT_EQUAL_UINT8(0, diag_hold_pct(&d));
@@ -1867,6 +1884,7 @@ int main(void)
     RUN_TEST(test_a_page_change_cancels_the_hold);
     RUN_TEST(test_select_a_does_not_scan);
     RUN_TEST(test_tools_do_nothing_off_the_tag_page);
+    RUN_TEST(test_a_button_held_on_return_is_not_a_press);
     RUN_TEST(test_hold_pct_tracks_elapsed);
     RUN_TEST(test_a_toggles_the_tone);
     RUN_TEST(test_the_volume_index_steps_without_wrapping);

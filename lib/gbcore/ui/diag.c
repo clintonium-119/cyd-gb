@@ -1037,3 +1037,10 @@ uint8_t diag_hold_pct(const diag_t* d)
     pct = d->hold_elapsed_ms * 100u / (uint32_t)PICKER_HOLD_MS;
     return (uint8_t)(pct > 100u ? 100u : pct);
 }
+
+void diag_set_held(diag_t* d, uint8_t joypad)
+{
+    if (d != NULL) {
+        d->prev_word = joypad;
+    }
+}

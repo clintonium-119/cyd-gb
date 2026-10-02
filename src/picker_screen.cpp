@@ -105,6 +105,10 @@ static enum boot_pick_e screen_run(enum picker_mode_e mode,
         Serial.printf("[PICKER] no rows to show (%d)\n", rc);
         return BOOT_PICK_NONE;
     }
+    // Whatever is still down from the hold that opened this screen is not a
+    // press here, so the caller need not wait for a release first.
+    button_update();
+    picker_set_held(picker, (uint8_t)button_get_buttons());
 
     desc = (char*)malloc(DESC_MAX);
     if (!desc) {
