@@ -16,8 +16,9 @@
  *   (c) the writer reaches for nothing below itself,
  *   (f) the in-game menu is not a route to the writer or to the tag,
  *   (g) no source under src/ carries the removed exit-to-selection path,
- *   (h) the diagnostic mode is a reader and a viewer, never a route to the
- *       writer, the tag write path, the ROM store or the emulator,
+ *   (h) the diagnostic mode is a reader, a viewer and a caller of the
+ *       provisioner's diagnostics verbs only — never a route to the writer,
+ *       the ROM store or the emulator,
  *
  * plus (e) the bench ROM bypass cannot be configured into a default build.
  * Guard (d), the tag layer's page whitelist, is a behavioural property and
@@ -40,6 +41,7 @@ static const char* const WRITE_SYMS[] = {
     "ntag_protect",
     "ntag_provision",
     "ntag_pwd_auth",
+    "ntag_blank",
 };
 #define N_WRITE_SYMS (sizeof(WRITE_SYMS) / sizeof(WRITE_SYMS[0]))
 
@@ -73,7 +75,10 @@ static const char* const MENU_FORBIDDEN[] = {
 
 /* Layers the diagnostic mode must not reach into. It reads a tag, the card,
  * the ADC and the panel, and shows what it found; it never resolves a
- * cartridge to a file, picks a game, or touches the emulator.
+ * cartridge to a file, launches a game, opens the writer or touches the
+ * emulator. Its three tag repairs go through the provisioner's diagnostics
+ * verbs, which test_the_diagnostics_reach_only_the_diag_verbs pins, so the
+ * provisioner's prefix is not listed here.
  *
  * Unlike the menu's list this names sd_rom_path and sd_rom_find_legacy rather
  * than the sd_rom_ prefix, because sd_rom_count() is the SD page's own data
@@ -85,7 +90,6 @@ static const char* const MENU_FORBIDDEN[] = {
  * provisioner. */
 static const char* const DIAG_FORBIDDEN[] = {
     "writer_open",
-    "provision_",
     "rom_store_",
     "sd_rom_path",
     "sd_rom_find_legacy",
@@ -385,9 +389,11 @@ static void test_the_writer_drives_the_pure_picker(void)
         "src/cart_writer.cpp does not open the shared picker screen");
 }
 
-/* The picker screen has two callers: the writer, and the boot executor's
- * games list, which opens it in launch mode only. A third caller, or a list
- * that could reach a writing mode, is a second route to the writer. */
+/* The picker screen has at most three callers: the writer, the boot
+ * executor's games list, which opens it in launch mode only, and diagnostics,
+ * which opens it once in its own diagnostics mode for the wildcard tool's
+ * pick. Any other caller, or a list that could reach a writing mode, is a
+ * second route to the writer. */
 static int c_callers;
 static char c_files[512];
 
@@ -406,14 +412,25 @@ static void count_picker_screen_run(const char* dir, const char* name)
     }
 }
 
-static void test_the_picker_screen_has_two_callers(void)
+static void test_the_picker_screen_has_at_most_three_callers(void)
 {
+    const char* diag = PROJECT_DIR "/src/diag.cpp";
+    int diag_calls = file_count_outside_ifdef(diag, "picker_screen_run(",
+                                              "DEV_WRITER");
+
     c_callers = 0;
     c_files[0] = '\0';
 
     TEST_ASSERT_GREATER_THAN(
         0, visit_dir(PROJECT_DIR "/src", ".cpp", count_picker_screen_run));
-    TEST_ASSERT_EQUAL_INT_MESSAGE(2, c_callers, c_files);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(2 + diag_calls, c_callers, c_files);
+    TEST_ASSERT_LESS_OR_EQUAL_INT_MESSAGE(
+        1, diag_calls, "src/diag.cpp opens the picker screen more than once");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(
+        diag_calls,
+        file_count_outside_ifdef(diag, "picker_screen_run(PICKER_MODE_DIAG",
+                                 "DEV_WRITER"),
+        "src/diag.cpp opens the picker screen in a mode other than its own");
     TEST_ASSERT_EQUAL_INT_MESSAGE(
         1, file_count_outside_ifdef(PROJECT_DIR "/src/cart_writer.cpp",
                                     "picker_screen_run(", "DEV_WRITER"),
@@ -557,6 +574,34 @@ static void test_the_diagnostics_reference_no_forbidden_layer(void)
     }
 }
 
+/* The diagnostics binding may name the provisioner's diagnostics verbs and
+ * no other provisioner name; the pure modules, both headers and the theme
+ * they draw with name none.
+ * Counted with comments, like every other guard here. */
+static void test_the_diagnostics_reach_only_the_diag_verbs(void)
+{
+    static const char* const none[] = {
+        PROJECT_DIR "/include/diag.h",
+        PROJECT_DIR "/lib/gbcore/ui/diag.c",
+        PROJECT_DIR "/lib/gbcore/ui/diag.h",
+        PROJECT_DIR "/lib/gbcore/ui/diag_draw.c",
+        PROJECT_DIR "/lib/gbcore/ui/diag_draw.h",
+        PROJECT_DIR "/lib/gbcore/ui/theme.h",
+        PROJECT_DIR "/lib/gbcore/ui/theme_draw.h",
+        PROJECT_DIR "/lib/gbcore/ui/theme_draw.c",
+    };
+    const char* binding = PROJECT_DIR "/src/diag.cpp";
+
+    TEST_ASSERT_EQUAL_INT_MESSAGE(
+        file_count(binding, "provision_diag_"),
+        file_count(binding, "provision_"),
+        "src/diag.cpp names a provisioner verb that is not a diagnostics one");
+    for (size_t p = 0; p < sizeof(none) / sizeof(none[0]); p++) {
+        TEST_ASSERT_EQUAL_INT_MESSAGE(0, file_count(none[p], "provision_"),
+                                      none[p]);
+    }
+}
+
 /* The same scan, proved non-vacuous: a renamed or emptied binding would let
  * the test above pass by scanning nothing of consequence. */
 static void test_the_diagnostics_define_the_mode(void)
@@ -631,13 +676,14 @@ int main(void)
     RUN_TEST(test_writer_open_is_declared_once);
     RUN_TEST(test_the_writer_references_no_lower_layer);
     RUN_TEST(test_the_writer_drives_the_pure_picker);
-    RUN_TEST(test_the_picker_screen_has_two_callers);
+    RUN_TEST(test_the_picker_screen_has_at_most_three_callers);
     RUN_TEST(test_platformio_ini_does_not_mention_the_rom_bypass);
     RUN_TEST(test_platformio_ini_does_not_mention_the_writer_bypass);
     RUN_TEST(test_the_menu_references_no_writer_or_tag_symbol);
     RUN_TEST(test_the_menu_defines_menu_open);
     RUN_TEST(test_no_exit_path_symbol_under_src);
     RUN_TEST(test_the_diagnostics_reference_no_forbidden_layer);
+    RUN_TEST(test_the_diagnostics_reach_only_the_diag_verbs);
     RUN_TEST(test_the_diagnostics_define_the_mode);
     RUN_TEST(test_the_diagnostics_push_the_trim_to_the_panel);
     RUN_TEST(test_render_config_states_a_size_for_every_geometry);
