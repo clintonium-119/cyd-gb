@@ -47,6 +47,27 @@ Everything here is reversible. Nothing below is, once the shell is on.
 - [ ] Button feel through the shell: `____`.
 - [ ] Cartridge slot alignment and the reader's range through the closed shell: `____`.
 
+## Making the cartridges
+
+A cartridge is double-sided: one tag per face, and the reader must see only the face pointing at it.
+This stack read only the facing tag, from either side (bench, 2026-10-01, one chip, with the
+reader's receiver gain at 33 dB — `PN532_RF_CFG` in `include/hw_config.h`):
+
+    NFC tag
+    ferrite sticker
+    0.5 mm steel plate
+    1 mm plastic
+    0.5 mm steel plate
+    ferrite sticker
+    NFC tag
+
+- [ ] **Keep the 1 mm spacer between the plates.** Without it the rear tag answers too. Cardboard
+      worked as well as a magnet, so it is the distance that counts; the PLA shell can be the spacer.
+- [ ] **Hold the cartridge concentric over the antenna.** Off-centre, the field wraps round the plates
+      and reaches the rear tag; 33 dB tolerated a few mm of offset, 38 dB did not.
+- [ ] **Keep the cartridge about 1 mm or more off the reader.** Flat against it, the two coils detune
+      each other and a scan finds no tag or both. The slot or the shell wall sets this gap.
+
 ## First boot
 
 Deliberately **after** the shell is closed, because the first-boot wizard exercises the cartridge

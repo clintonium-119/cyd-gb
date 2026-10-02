@@ -157,10 +157,10 @@
 
 // Receiver gain: the PN532's CIU_RFCfg register, bits 6-4 (datasheet
 // Table 245). 0x49 is 33 dB; the default 0x59 is 38 dB. A double-sided cart
-// (tag, ferrite, steel disc, spacer, steel disc, ferrite, tag) held a few mm
-// off-centre at 1-2 mm read both tags at 38 dB and only the facing one at
-// 33 dB, on either side (bench, 2026-10-01, one chip, transmit power at
-// full). 23 dB, the next step down, read nothing at all.
+// built to the stack in docs/ASSEMBLY.md ("Making the cartridges") held a
+// few mm off-centre at 1-2 mm read both tags at 38 dB and only the facing
+// one at 33 dB, on either side (bench, 2026-10-01, one chip, transmit power
+// at full). 23 dB, the next step down, read nothing at all.
 //
 // Two limits this does not fix. The spacer between the discs is required:
 // without it the rear tag still answered at 33 dB (cardboard worked as well
