@@ -1026,6 +1026,34 @@ static void test_re_adoption_after_an_nvs_clear(void)
     assert_tag_payload(&menu_tag, "MENU");
 }
 
+static void test_a_blanked_menu_cart_boots_as_a_blank_open_tag(void)
+{
+    fake_ntag215_t menu_tag;
+    fake_ntag215_t factory_tag;
+    ntag_dev_t dev;
+    nvs_t nvs;
+    boot_result_t r;
+
+    fake_ntag215_init(&menu_tag);
+    dev.ctx = &menu_tag;
+    dev.xcv = fake_ntag215_xcv;
+    TEST_ASSERT_EQUAL_INT(NTAG_OK, provision_class(&dev, BOOT_CLASS_MENU, NULL));
+    TEST_ASSERT_EQUAL_INT(NTAG_OK, ntag_blank(&dev, PWD, PACK));
+
+    /* Setup not started: a blanked cart and a factory one boot the same. */
+    memset(&nvs, 0, sizeof(nvs));
+    fake_ntag215_init(&factory_tag);
+    r = harness_boot(&factory_tag, &nvs, NULL, NULL);
+    TEST_ASSERT_EQUAL_INT(BOOT_WIZARD_WRITE_MENU, r.action);
+
+    memset(&nvs, 0, sizeof(nvs));
+    r = harness_boot(&menu_tag, &nvs, NULL, NULL);
+    TEST_ASSERT_EQUAL_INT(BOOT_WIZARD_WRITE_MENU, r.action);
+    TEST_ASSERT_EQUAL_INT(NTAG_OK, r.write_rc);
+    assert_tag_payload(&menu_tag, "MENU");
+    assert_tag_protected(&menu_tag);
+}
+
 static void test_a_foreign_menu_cart_cannot_be_adopted(void)
 {
     fake_ntag215_t menu_tag;
@@ -1315,6 +1343,7 @@ int main(void)
     RUN_TEST(test_wizard_completes_on_the_host_against_fake_tags);
     RUN_TEST(test_the_stub_picker_finishes_setup_in_three_boots);
     RUN_TEST(test_re_adoption_after_an_nvs_clear);
+    RUN_TEST(test_a_blanked_menu_cart_boots_as_a_blank_open_tag);
     RUN_TEST(test_a_foreign_menu_cart_cannot_be_adopted);
     RUN_TEST(test_pending_write_executes_end_to_end);
     RUN_TEST(test_a_pending_write_repeats_after_a_failed_protect);

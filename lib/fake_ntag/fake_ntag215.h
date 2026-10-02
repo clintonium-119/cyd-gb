@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 #define FAKE_NTAG215_PAGES 0x87
-#define FAKE_NTAG215_LOG_MAX 64
+#define FAKE_NTAG215_LOG_MAX 512
 
 /* Passed as `page` to fake_ntag215_count() to count a command regardless of
  * which page it addressed. */

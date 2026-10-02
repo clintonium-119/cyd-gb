@@ -255,11 +255,48 @@ int ntag_pwd_auth(const ntag_dev_t* dev, const uint8_t* pwd,
     return NTAG_OK;
 }
 
+/* ACCESS: PROT clear so reads stay open and a phone can still inspect a
+ * cart, CFGLCK clear so the configuration is never frozen, AUTHLIM clear so a
+ * wrong guess can never brick a cart. Every other bit and byte of the page is
+ * written back exactly as it was read. The data sheet marks bit 5 and bytes
+ * 1-3 RFUI and says to write them as 0, but real tags ship with a non-zero
+ * byte there, so this preserves whatever the part actually holds rather than
+ * clearing a value whose meaning is undocumented. */
+static int clear_access(const ntag_dev_t* dev)
+{
+    uint8_t page[NTAG_PAGE_SIZE];
+    int rc;
+
+    rc = ntag_read_pages(dev, NTAG215_PAGE_CFG1, 1, page);
+    if (rc != NTAG_OK) {
+        return rc;
+    }
+    page[NTAG215_CFG1_ACCESS] =
+        (uint8_t)(page[NTAG215_CFG1_ACCESS] &
+                  (uint8_t) ~(NTAG215_ACCESS_PROT | NTAG215_ACCESS_CFGLCK |
+                              NTAG215_ACCESS_AUTHLIM_MASK));
+    return ntag_write_page(dev, NTAG215_PAGE_CFG1, page);
+}
+
+/* AUTH0 alone. MIRROR and MIRROR_PAGE are preserved because STRG_MOD_EN
+ * defaults to 1 and clearing it would weaken the tag's modulation. */
+static int write_auth0(const ntag_dev_t* dev, uint8_t auth0)
+{
+    uint8_t page[NTAG_PAGE_SIZE];
+    int rc;
+
+    rc = ntag_read_pages(dev, NTAG215_PAGE_CFG0, 1, page);
+    if (rc != NTAG_OK) {
+        return rc;
+    }
+    page[NTAG215_CFG0_AUTH0] = auth0;
+    return ntag_write_page(dev, NTAG215_PAGE_CFG0, page);
+}
+
 int ntag_protect(const ntag_dev_t* dev, const uint8_t* pwd,
                  const uint8_t* pack)
 {
     uint8_t page[NTAG_PAGE_SIZE];
-    uint8_t cfg[NTAG_PAGE_SIZE];
     int rc;
 
     if (!dev_usable(dev) || pwd == NULL || pack == NULL) {
@@ -282,24 +319,8 @@ int ntag_protect(const ntag_dev_t* dev, const uint8_t* pwd,
         return rc;
     }
 
-    /* 3. ACCESS: PROT clear so reads stay open and a phone can still inspect
-     * a cart, CFGLCK clear so the configuration is never frozen, AUTHLIM
-     * clear so a wrong guess can never brick a cart. Every other bit and
-     * byte of the page is written back exactly as it was read. The data
-     * sheet marks bit 5 and bytes 1-3 RFUI and says to write them as 0, but
-     * real tags ship with a non-zero byte there, so this preserves whatever
-     * the part actually holds rather than clearing a value whose meaning is
-     * undocumented. */
-    rc = ntag_read_pages(dev, NTAG215_PAGE_CFG1, 1, cfg);
-    if (rc != NTAG_OK) {
-        return rc;
-    }
-    memcpy(page, cfg, NTAG_PAGE_SIZE);
-    page[NTAG215_CFG1_ACCESS] =
-        (uint8_t)(cfg[NTAG215_CFG1_ACCESS] &
-                  (uint8_t) ~(NTAG215_ACCESS_PROT | NTAG215_ACCESS_CFGLCK |
-                              NTAG215_ACCESS_AUTHLIM_MASK));
-    rc = ntag_write_page(dev, NTAG215_PAGE_CFG1, page);
+    /* 3. ACCESS, with the three bits we own cleared. */
+    rc = clear_access(dev);
     if (rc != NTAG_OK) {
         return rc;
     }
@@ -307,16 +328,8 @@ int ntag_protect(const ntag_dev_t* dev, const uint8_t* pwd,
     /* 4. AUTH0 last, so protection only engages once the password above is
      * actually in place. A run that dies before this point leaves the tag
      * open and re-provisionable, which is what the boot flow's heal path
-     * relies on. Only AUTH0 changes: MIRROR and MIRROR_PAGE are preserved
-     * because STRG_MOD_EN defaults to 1 and clearing it would weaken the
-     * tag's modulation. */
-    rc = ntag_read_pages(dev, NTAG215_PAGE_CFG0, 1, cfg);
-    if (rc != NTAG_OK) {
-        return rc;
-    }
-    memcpy(page, cfg, NTAG_PAGE_SIZE);
-    page[NTAG215_CFG0_AUTH0] = NTAG215_PAGE_USER_FIRST;
-    return ntag_write_page(dev, NTAG215_PAGE_CFG0, page);
+     * relies on. */
+    return write_auth0(dev, NTAG215_PAGE_USER_FIRST);
 }
 
 int ntag_provision(const ntag_dev_t* dev, const uint8_t* ndef, size_t len,
@@ -363,4 +376,112 @@ int ntag_provision(const ntag_dev_t* dev, const uint8_t* ndef, size_t len,
     /* PWD and PACK read back as zeros, so authenticating against the tag is
      * the only available proof that protection actually took. */
     return ntag_pwd_auth(dev, pwd, pack);
+}
+
+int ntag_blank(const ntag_dev_t* dev, const uint8_t* pwd, const uint8_t* pack)
+{
+    static const uint8_t empty_ndef[NTAG_PAGE_SIZE] = { 0x03, 0x00, 0xFE,
+                                                        0x00 };
+    static const uint8_t zeros[NTAG_PAGE_SIZE] = { 0 };
+    static const uint8_t pwd_default[NTAG_PWD_SIZE] = NTAG215_PWD_DEFAULT;
+    static const uint8_t pack_default[NTAG_PACK_SIZE] = NTAG215_PACK_DEFAULT;
+    uint8_t buf[NTAG_READ_SIZE];
+    uint8_t auth0 = 0;
+    size_t n;
+    size_t i;
+    uint8_t p;
+    int rc;
+
+    if (!dev_usable(dev) || pwd == NULL || pack == NULL) {
+        return NTAG_ERR_ARGS;
+    }
+
+    /* 1. A protected tag needs a session before any write. If the password
+     * is not ours the tag belongs to someone else and we stop. */
+    rc = ntag_read_auth0(dev, &auth0);
+    if (rc != NTAG_OK) {
+        return rc;
+    }
+    if (auth0 != NTAG215_AUTH0_OPEN) {
+        rc = ntag_pwd_auth(dev, pwd, pack);
+        if (rc != NTAG_OK) {
+            return rc;
+        }
+    }
+
+    /* 2. User memory: an empty NDEF message, then zeros. */
+    for (p = NTAG215_PAGE_USER_FIRST; p <= NTAG215_PAGE_USER_LAST; p++) {
+        rc = ntag_write_page(dev, p,
+                             p == NTAG215_PAGE_USER_FIRST ? empty_ndef : zeros);
+        if (rc != NTAG_OK) {
+            return rc;
+        }
+    }
+    /* Read back four pages per READ, comparing only user memory. */
+    for (p = NTAG215_PAGE_USER_FIRST; p <= NTAG215_PAGE_USER_LAST;
+         p = (uint8_t)(p + n)) {
+        n = (size_t)(NTAG215_PAGE_USER_LAST - p + 1);
+        if (n > NTAG_READ_SIZE / NTAG_PAGE_SIZE) {
+            n = NTAG_READ_SIZE / NTAG_PAGE_SIZE;
+        }
+        rc = ntag_read_pages(dev, p, n, buf);
+        if (rc != NTAG_OK) {
+            return rc;
+        }
+        for (i = 0; i < n; i++) {
+            if (memcmp(buf + i * NTAG_PAGE_SIZE,
+                       p + i == NTAG215_PAGE_USER_FIRST ? empty_ndef : zeros,
+                       NTAG_PAGE_SIZE) != 0) {
+                return NTAG_ERR_VERIFY;
+            }
+        }
+    }
+
+    /* 3. AUTH0 open, before the password changes. */
+    rc = write_auth0(dev, NTAG215_AUTH0_OPEN);
+    if (rc != NTAG_OK) {
+        return rc;
+    }
+
+    /* 4. ACCESS, with the three bits we own cleared. */
+    rc = clear_access(dev);
+    if (rc != NTAG_OK) {
+        return rc;
+    }
+
+    /* 5. PWD, then PACK, whose upper two bytes are RFUI. */
+    rc = ntag_write_page(dev, NTAG215_PAGE_PWD, pwd_default);
+    if (rc != NTAG_OK) {
+        return rc;
+    }
+    memset(buf, 0, NTAG_PAGE_SIZE);
+    memcpy(buf, pack_default, NTAG_PACK_SIZE);
+    rc = ntag_write_page(dev, NTAG215_PAGE_PACK, buf);
+    if (rc != NTAG_OK) {
+        return rc;
+    }
+
+    /* 6. Prove it. PWD and PACK read back as zeros, so the default password
+     * answering with the default PACK is the only proof they took. */
+    rc = ntag_read_auth0(dev, &auth0);
+    if (rc != NTAG_OK) {
+        return rc;
+    }
+    if (auth0 != NTAG215_AUTH0_OPEN) {
+        return NTAG_ERR_VERIFY;
+    }
+    rc = ntag_read_pages(dev, NTAG215_PAGE_CFG1, 1, buf);
+    if (rc != NTAG_OK) {
+        return rc;
+    }
+    if ((buf[NTAG215_CFG1_ACCESS] &
+         (NTAG215_ACCESS_PROT | NTAG215_ACCESS_CFGLCK |
+          NTAG215_ACCESS_AUTHLIM_MASK)) != 0) {
+        return NTAG_ERR_VERIFY;
+    }
+    rc = ntag_pwd_auth(dev, pwd_default, pack_default);
+    if (rc == NTAG_ERR_AUTH) {
+        return NTAG_ERR_VERIFY;
+    }
+    return rc;
 }

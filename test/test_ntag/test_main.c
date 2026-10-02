@@ -377,6 +377,123 @@ static void test_a_mid_sequence_nak_leaves_auth0_open(void)
     assert_provisioned_state();
 }
 
+/* ---- factory blank ------------------------------------------------------ */
+
+static const uint8_t PWD_DEFAULT[4] = NTAG215_PWD_DEFAULT;
+static const uint8_t PACK_DEFAULT[2] = NTAG215_PACK_DEFAULT;
+
+static size_t index_of_write(int page)
+{
+    size_t i;
+    for (i = 0; i < tag.logged; i++) {
+        if (tag.log[i].cmd == NTAG_CMD_WRITE && tag.log[i].page == page) {
+            return i;
+        }
+    }
+    return tag.logged;
+}
+
+static void test_blank_restores_a_provisioned_tag_to_delivery_state(void)
+{
+    fake_ntag215_t fresh;
+
+    TEST_ASSERT_EQUAL_INT(NTAG_OK,
+        ntag_provision(&dev, MSG, sizeof(MSG), PWD, PACK));
+    TEST_ASSERT_EQUAL_INT(NTAG_OK, ntag_blank(&dev, PWD, PACK));
+
+    fake_ntag215_init(&fresh);
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(
+        fresh.pages[NTAG215_PAGE_USER_FIRST], tag.pages[NTAG215_PAGE_USER_FIRST],
+        (NTAG215_PAGE_COUNT - NTAG215_PAGE_USER_FIRST) * NTAG_PAGE_SIZE);
+    TEST_ASSERT_EQUAL_HEX8(NTAG215_AUTH0_OPEN, fake_ntag215_auth0(&tag));
+}
+
+static void test_blank_of_an_open_tag_does_not_authenticate_first(void)
+{
+    TEST_ASSERT_EQUAL_INT(NTAG_OK, ntag_blank(&dev, PWD, PACK));
+
+    /* The closing default-password proof is the only PWD_AUTH, and it comes
+     * after the last WRITE. */
+    TEST_ASSERT_EQUAL_size_t(1, fake_ntag215_count(&tag, NTAG_CMD_PWD_AUTH,
+                                                   FAKE_NTAG215_ANY_PAGE));
+    TEST_ASSERT_EQUAL_HEX8(NTAG_CMD_PWD_AUTH, tag.log[tag.logged - 1].cmd);
+    TEST_ASSERT_EQUAL_size_t(tag.seen, tag.logged);
+}
+
+static void test_blank_of_a_foreign_tag_writes_nothing(void)
+{
+    fake_ntag215_set_protected(&tag, OTHER_PWD, OTHER_PACK,
+                               NTAG215_PAGE_USER_FIRST);
+
+    TEST_ASSERT_EQUAL_INT(NTAG_ERR_AUTH, ntag_blank(&dev, PWD, PACK));
+    TEST_ASSERT_EQUAL_size_t(0, fake_ntag215_count(&tag, NTAG_CMD_WRITE,
+                                                   FAKE_NTAG215_ANY_PAGE));
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(OTHER_PWD, tag.pages[NTAG215_PAGE_PWD], 4);
+}
+
+static void test_blank_opens_auth0_before_resetting_the_password(void)
+{
+    TEST_ASSERT_EQUAL_INT(NTAG_OK,
+        ntag_provision(&dev, MSG, sizeof(MSG), PWD, PACK));
+    fake_ntag215_reset_log(&tag);
+
+    TEST_ASSERT_EQUAL_INT(NTAG_OK, ntag_blank(&dev, PWD, PACK));
+    TEST_ASSERT_EQUAL_size_t(tag.seen, tag.logged);
+    TEST_ASSERT_TRUE(index_of_write(NTAG215_PAGE_CFG0) <
+                     index_of_write(NTAG215_PAGE_PWD));
+    TEST_ASSERT_TRUE(index_of_write(NTAG215_PAGE_PWD) < tag.logged);
+
+    /* Cut short at the PWD write, the tag is open and still answers ours. */
+    fake_ntag215_init(&tag);
+    TEST_ASSERT_EQUAL_INT(NTAG_OK,
+        ntag_provision(&dev, MSG, sizeof(MSG), PWD, PACK));
+    tag.nak_one_write = true;
+    tag.nak_write_page = NTAG215_PAGE_PWD;
+    TEST_ASSERT_EQUAL_INT(NTAG_ERR_NAK, ntag_blank(&dev, PWD, PACK));
+    TEST_ASSERT_EQUAL_HEX8(NTAG215_AUTH0_OPEN, fake_ntag215_auth0(&tag));
+    tag.nak_one_write = false;
+    TEST_ASSERT_EQUAL_INT(NTAG_OK, ntag_blank(&dev, PWD, PACK));
+}
+
+static void test_blank_preserves_access_bits_it_does_not_own(void)
+{
+    TEST_ASSERT_EQUAL_INT(NTAG_OK,
+        ntag_provision(&dev, MSG, sizeof(MSG), PWD, PACK));
+    /* NFC counter on, plus every bit blank owns. */
+    tag.pages[NTAG215_PAGE_CFG1][0] = 0x18 | NTAG215_ACCESS_PROT | 0x03;
+    TEST_ASSERT_EQUAL_HEX8(0x05, tag.pages[NTAG215_PAGE_CFG1][1]);
+
+    TEST_ASSERT_EQUAL_INT(NTAG_OK, ntag_blank(&dev, PWD, PACK));
+
+    TEST_ASSERT_EQUAL_HEX8(0x18, fake_ntag215_access(&tag));
+    TEST_ASSERT_EQUAL_HEX8(0x05, tag.pages[NTAG215_PAGE_CFG1][1]);
+    TEST_ASSERT_EQUAL_HEX8(0x04, tag.pages[NTAG215_PAGE_CFG0][0]);
+}
+
+static void test_blank_never_touches_a_lock_page(void)
+{
+    TEST_ASSERT_EQUAL_INT(NTAG_OK,
+        ntag_provision(&dev, MSG, sizeof(MSG), PWD, PACK));
+    TEST_ASSERT_EQUAL_INT(NTAG_OK, ntag_blank(&dev, PWD, PACK));
+    TEST_ASSERT_EQUAL_size_t(tag.seen, tag.logged);
+    TEST_ASSERT_EQUAL_size_t(0, fake_ntag215_lock_pages_touched(&tag));
+    TEST_ASSERT_EQUAL_HEX8(0, fake_ntag215_access(&tag) & NTAG215_ACCESS_CFGLCK);
+}
+
+static void test_blank_then_provision_round_trips(void)
+{
+    TEST_ASSERT_EQUAL_INT(NTAG_OK,
+        ntag_provision(&dev, MSG, sizeof(MSG), PWD, PACK));
+    TEST_ASSERT_EQUAL_INT(NTAG_OK, ntag_blank(&dev, PWD, PACK));
+    TEST_ASSERT_EQUAL_INT(NTAG_OK,
+        ntag_pwd_auth(&dev, PWD_DEFAULT, PACK_DEFAULT));
+
+    fake_ntag215_reset_log(&tag);
+    TEST_ASSERT_EQUAL_INT(NTAG_OK,
+        ntag_provision(&dev, MSG, sizeof(MSG), PWD, PACK));
+    assert_provisioned_state();
+}
+
 static void test_transport_failures_never_become_success(void)
 {
     uint8_t buf[NTAG_READ_SIZE];
@@ -459,6 +576,13 @@ int main(void)
     RUN_TEST(test_provision_of_a_foreign_tag_writes_nothing);
     RUN_TEST(test_verify_detects_a_flipped_byte);
     RUN_TEST(test_a_mid_sequence_nak_leaves_auth0_open);
+    RUN_TEST(test_blank_restores_a_provisioned_tag_to_delivery_state);
+    RUN_TEST(test_blank_of_an_open_tag_does_not_authenticate_first);
+    RUN_TEST(test_blank_of_a_foreign_tag_writes_nothing);
+    RUN_TEST(test_blank_opens_auth0_before_resetting_the_password);
+    RUN_TEST(test_blank_preserves_access_bits_it_does_not_own);
+    RUN_TEST(test_blank_never_touches_a_lock_page);
+    RUN_TEST(test_blank_then_provision_round_trips);
     RUN_TEST(test_transport_failures_never_become_success);
     RUN_TEST(test_null_arguments_are_rejected);
     RUN_TEST(test_write_bytes_will_not_run_past_user_memory);

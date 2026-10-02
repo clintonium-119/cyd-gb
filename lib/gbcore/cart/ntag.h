@@ -63,6 +63,11 @@ extern "C" {
 #define NTAG215_CFG0_AUTH0 3
 #define NTAG215_AUTH0_OPEN 0xFF
 
+/* PWD and PACK as the part is delivered (data sheet Table 8): the password
+ * FFFFFFFFh and the acknowledge 0000h. Only ntag_blank() writes them back. */
+#define NTAG215_PWD_DEFAULT { 0xFF, 0xFF, 0xFF, 0xFF }
+#define NTAG215_PACK_DEFAULT { 0x00, 0x00 }
+
 /* CFG1 byte 0 is the ACCESS byte (data sheet Table 8, Table 10):
  *   bit 7    PROT              1 = protect reads too; we always write 0
  *   bit 6    CFGLCK            1 = configuration permanently locked, every
@@ -186,6 +191,24 @@ int ntag_protect(const ntag_dev_t* dev, const uint8_t* pwd,
  */
 int ntag_provision(const ntag_dev_t* dev, const uint8_t* ndef, size_t len,
                    const uint8_t* pwd, const uint8_t* pack);
+
+/*
+ * Restore a tag that is open or ours to its delivery state, verifying each
+ * part: authenticate with pwd/pack if the tag is protected (a refusal is
+ * NTAG_ERR_AUTH with nothing written), write an empty NDEF message to the
+ * first user page and zeros through the rest, open AUTH0, clear PROT, CFGLCK
+ * and AUTHLIM, then put PWD and PACK back to their defaults. The lock pages
+ * and the capability container are never touched.
+ *
+ * AUTH0 opens before PWD resets. The other order, cut short between the two,
+ * would leave a tag protected by the default password, which our password no
+ * longer opens — a cart every tool would then refuse. In this order an
+ * interrupted blank leaves the tag either still ours or already open.
+ *
+ * The closing proof is a PWD_AUTH with the default password, which the data
+ * sheet says the part answers whatever AUTH0 holds.
+ */
+int ntag_blank(const ntag_dev_t* dev, const uint8_t* pwd, const uint8_t* pack);
 
 #ifdef __cplusplus
 }
