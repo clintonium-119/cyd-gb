@@ -728,6 +728,8 @@ static uint8_t tool_combo(uint8_t tool)
         return (uint8_t)(COMBO_BTN_SELECT | COMBO_BTN_A);
     case DIAG_TOOL_WILD:
         return (uint8_t)(COMBO_BTN_SELECT | COMBO_BTN_B);
+    case DIAG_TOOL_GAME:
+        return COMBO_BTN_START;
     default:
         return 0;
     }
@@ -742,6 +744,8 @@ static uint16_t tool_event(uint8_t tool)
         return DIAG_EV_NFC_MENU;
     case DIAG_TOOL_WILD:
         return DIAG_EV_NFC_WILD;
+    case DIAG_TOOL_GAME:
+        return DIAG_EV_NFC_GAME;
     default:
         return 0;
     }
@@ -919,11 +923,15 @@ uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
         }
     }
 
-    /* Start is the crossing mark, and the trim page is the only place it
-     * means anything: every other page leaves it to the combo module, which
-     * is where Start+Select got the builder into this mode in the first
-     * place. It starts the run as well as marking within one, so the builder
-     * never has to reach for a second button mid-count. */
+    /* Start alone is the tag page's game-cart tool. */
+    if ((pressed & COMBO_BTN_START) && d->page == DIAG_PAGE_NFC) {
+        ev |= hold_begin(d, DIAG_TOOL_GAME, joypad, now_ms);
+    }
+    /* Start is the crossing mark on the trim page; every other page leaves
+     * it to the combo module, which is where Start+Select got the builder
+     * into this mode in the first place. It starts the run as well as
+     * marking within one, so the builder never has to reach for a second
+     * button mid-count. */
     if ((pressed & COMBO_BTN_START) && d->page == DIAG_PAGE_TRIM) {
         if (d->trim_state == DIAG_TRIM_IDLE) {
             trim_run_begin(d);

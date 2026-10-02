@@ -419,7 +419,7 @@ static void draw_list(const picker_t* p, const picker_layout_t* g,
         draw_row(p, g, cv, (uint16_t)(first + i));
     }
     draw_list_media(p, g, cv, art, shot);
-    if (p->mode == PICKER_MODE_DIAG) {
+    if (p->mode == PICKER_MODE_DIAG || p->mode == PICKER_MODE_DIAG_STARTER) {
         ui_hint_bar(cv, g->w, g->foot_y, DIAG_LIST_HINTS,
                     N_HINTS(DIAG_LIST_HINTS));
     } else {

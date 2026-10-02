@@ -24,8 +24,8 @@
 //      emulator symbol appears here, in code or in prose.
 //   3. It writes no tag itself. On the tag page it decides when a held tool
 //      is confirmed and reports it; the binding asks the provisioner.
-//   4. It selects no game itself. A confirmed wildcard tool asks the binding
-//      to open the shared game list for one pick; the list is never drawn
+//   4. It selects no game itself. A confirmed wildcard or game-cart tool
+//      asks the binding to open the shared game list for one pick; the list is never drawn
 //      from here. It holds one stored toggle, the games-list fallback mode,
 //      which another boot path reads.
 //   5. When it renders, it renders inside the game window — every coordinate
@@ -103,13 +103,15 @@ enum diag_nfc_state_e {
 };
 
 /* The tag page's held tools. Each is a combo held through the hold bar:
- * BLANK is B, MENU is Select+A, WILD is Select+B. WILD's completed hold asks
- * for the game list, and the game's own hold there confirms the write. */
+ * BLANK is B, MENU is Select+A, WILD is Select+B, GAME is Start. WILD's and
+ * GAME's completed holds ask for a game list, and the game's own hold there
+ * confirms the write. */
 enum diag_tool_e {
     DIAG_TOOL_NONE = 0,
     DIAG_TOOL_BLANK,
     DIAG_TOOL_MENU,
     DIAG_TOOL_WILD,
+    DIAG_TOOL_GAME,
 };
 
 /* What the last tool did, as the binding reports it back for the page to
@@ -123,6 +125,7 @@ enum diag_nfc_outcome_e {
     DIAG_NFC_OUT_NO_TAG,
     DIAG_NFC_OUT_MULTI,
     DIAG_NFC_OUT_FAILED,
+    DIAG_NFC_OUT_GAME_MADE,
 };
 
 /* The bridge takes any uint8_t and shows one frame in every skip + 1, so this
@@ -342,12 +345,13 @@ enum diag_trim_pat_e {
 /* The games-list mode flipped: the binding stores it. */
 #define DIAG_EV_LIST_MODE   0x200
 /* A tag-page tool's hold completed: the binding carries the tool out. WILD
- * asks for the game list first. */
+ * and GAME ask for a game list first. */
 #define DIAG_EV_NFC_BLANK   0x400
 #define DIAG_EV_NFC_MENU    0x800
 #define DIAG_EV_NFC_WILD    0x1000
 /* The hold bar moved or cleared: the binding repaints the bar alone. */
 #define DIAG_EV_HOLD        0x2000
+#define DIAG_EV_NFC_GAME    0x4000
 
 enum diag_result_e {
     DIAG_OK = 0,
@@ -538,7 +542,8 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
  * the combo module's cadence — two directions at once are a fumble and do
  * nothing.
  *
- * On the tag page a bare A scans, and B, Select+A and Select+B each start a
+ * On the tag page a bare A scans, and B, Select+A, Select+B and Start each
+ * start a
  * tool's hold on their press edge with exactly that combo down. Every call
  * while it runs reports DIAG_EV_HOLD; after PICKER_HOLD_MS it reports the
  * tool's event once. Any change to the word, or a page change, cancels it.

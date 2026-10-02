@@ -78,7 +78,7 @@ int provision_heal();
 
 // ─── Diagnostics tag tools ─────────────────────────────────────────────────
 
-// The diagnostics tag page's three repair writes, each on the tag currently
+// The diagnostics tag page's four repair writes, each on the tag currently
 // selected. They write the tag and record nothing: no wizard flag, no
 // carts-made entry, no pending change. Each returns 0 or a negative tag-layer
 // error, and NTAG_ERR_AUTH means the tag is protected with a password that is
@@ -92,3 +92,7 @@ int provision_diag_make_wild(const char* rom);
 
 // Make the tag a MENU cart.
 int provision_diag_make_menu();
+
+// Make the tag an ordinary game cart for `rom`. NTAG_ERR_ARGS for NULL or
+// empty.
+int provision_diag_make_game(const char* rom);

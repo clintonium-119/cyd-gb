@@ -66,7 +66,7 @@ static const char* const CLASS_NAMES[4] = { "blank", "MENU", "WILD", "game" };
 static const char* const HELPS[DIAG_PAGE_COUNT] = {
     "Press a button to light it",
     "Card, catalog, free space",
-    "Hold Sel+A MENU, Sel+B Wild",
+    "Sel+A MENU, Sel+B Wild, Start Game",
     "Battery at pin and cell",
     "A tone at each volume",
     "Panel and scaler patterns",
@@ -80,8 +80,8 @@ static const char* const HELPS[DIAG_PAGE_COUNT] = {
  * the two tuning pages spend the footer on their own buttons. */
 #define HINT_PAGE { "Sel+L/R", "Page" }
 static const ui_hint_t HINTS_PAGE[] = { HINT_PAGE };
-/* Five hints do not fit the narrowest window, so the two Select tools are
- * named in the tag page's help line instead. */
+/* Five hints do not fit the narrowest window, so the Select and Start tools
+ * are named in the tag page's help line instead. */
 static const ui_hint_t HINTS_NFC[] = {
     { "A", "Scan" }, { "B", "Blank" }, HINT_PAGE,
 };
@@ -96,6 +96,7 @@ static const char* const OUTCOME_LINES[] = {
     "No tag",
     "Two tags",
     "Write failed code %d",
+    "Game cart made: %s",
 };
 #define OUTCOME_COUNT (sizeof(OUTCOME_LINES) / sizeof(OUTCOME_LINES[0]))
 static const ui_hint_t HINTS_AUDIO[] = {
@@ -233,7 +234,7 @@ static void nfc_help(const ui_canvas_t* cv, const diag_layout_t* g,
         ui_help_line(cv, g->w, g->help_y, HELPS[DIAG_PAGE_NFC]);
         return;
     }
-    if (out == DIAG_NFC_OUT_WILD_MADE) {
+    if (out == DIAG_NFC_OUT_WILD_MADE || out == DIAG_NFC_OUT_GAME_MADE) {
         snprintf(line, sizeof(line), OUTCOME_LINES[out],
                  data->nfc_outcome_title);
     } else if (out == DIAG_NFC_OUT_FAILED) {

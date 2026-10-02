@@ -825,6 +825,7 @@ static void test_each_outcome_draws_its_line(void)
     static const char* const want[] = {
         NULL, "Blanked", "Wildcard made: Tetris", "MENU cart made",
         "Refused: not our tag", "No tag", "Two tags", "Write failed code -5",
+        "Game cart made: Tetris",
     };
     uint8_t out;
     size_t i;
@@ -833,7 +834,7 @@ static void test_each_outcome_draws_its_line(void)
     snprintf(data.nfc_outcome_title, sizeof(data.nfc_outcome_title),
              "Tetris");
     data.nfc_outcome_rc = -5;
-    for (out = DIAG_NFC_OUT_BLANKED; out <= DIAG_NFC_OUT_FAILED; out++) {
+    for (out = DIAG_NFC_OUT_BLANKED; out <= DIAG_NFC_OUT_GAME_MADE; out++) {
         data.nfc_outcome = out;
         draw_page(GEOM_53_W, GEOM_53_H, DIAG_PAGE_NFC, 0, true, 0);
         assert_clean();
@@ -861,7 +862,7 @@ static void test_each_outcome_draws_its_line(void)
     /* No outcome is the page's own help line. */
     data.nfc_outcome = DIAG_NFC_OUT_NONE;
     draw_page(GEOM_53_W, GEOM_53_H, DIAG_PAGE_NFC, 0, true, 0);
-    TEST_ASSERT_TRUE(drew_text("Hold Sel+A MENU, Sel+B Wild"));
+    TEST_ASSERT_TRUE(drew_text("Sel+A MENU, Sel+B Wild, Start Game"));
 }
 
 static void test_the_tag_page_names_its_tools(void)
@@ -878,7 +879,7 @@ static void test_the_tag_page_names_its_tools(void)
         TEST_ASSERT_TRUE(drew_text("Scan"));
         TEST_ASSERT_TRUE(drew_text("Blank"));
         TEST_ASSERT_TRUE(drew_text("Page"));
-        TEST_ASSERT_TRUE(drew_text("Hold Sel+A MENU, Sel+B Wild"));
+        TEST_ASSERT_TRUE(drew_text("Sel+A MENU, Sel+B Wild, Start Game"));
         TEST_ASSERT_EQUAL_UINT(0, fk.help_too_wide);
     }
 }

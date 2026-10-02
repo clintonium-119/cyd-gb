@@ -436,14 +436,21 @@ static void test_select_b_held_one_second_asks_for_the_picker_once(void)
     assert_held_tool_fires_once(SEL_B, DIAG_TOOL_WILD, DIAG_EV_NFC_WILD);
 }
 
+static void test_start_held_one_second_makes_a_game_cart_once(void)
+{
+    assert_held_tool_fires_once(COMBO_BTN_START, DIAG_TOOL_GAME,
+                                DIAG_EV_NFC_GAME);
+}
+
 static void test_releasing_early_cancels_the_hold(void)
 {
-    static const uint8_t words[3] = { COMBO_BTN_B, SEL_A, SEL_B };
+    static const uint8_t words[4] = { COMBO_BTN_B, SEL_A, SEL_B,
+                                      COMBO_BTN_START };
     /* Releasing one button of a two-button combo is a release too. */
-    static const uint8_t left[3] = { 0, COMBO_BTN_SELECT, COMBO_BTN_B };
+    static const uint8_t left[4] = { 0, COMBO_BTN_SELECT, COMBO_BTN_B, 0 };
     uint8_t i;
 
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < 4; i++) {
         setUp();
         hold_word(words[i], 600);
         TEST_ASSERT_EQUAL_UINT8(50, diag_hold_pct(&d));
@@ -526,8 +533,15 @@ static void test_tools_do_nothing_off_the_tag_page(void)
         sample(COMBO_EVENT_NONE, COMBO_BTN_SELECT, t + 4010);
         ev |= sample(COMBO_EVENT_NONE, SEL_B, t + 4020);
         ev |= sample(COMBO_EVENT_NONE, SEL_B, t + 6000);
+        /* Start only off the trim page, whose Start starts a run. */
+        if (page != DIAG_PAGE_TRIM) {
+            sample(COMBO_EVENT_NONE, 0, t + 6010);
+            ev |= sample(COMBO_EVENT_NONE, COMBO_BTN_START, t + 6020);
+            ev |= sample(COMBO_EVENT_NONE, COMBO_BTN_START, t + 8000);
+        }
         TEST_ASSERT_EQUAL_HEX16(0, ev & (DIAG_EV_NFC_BLANK | DIAG_EV_NFC_MENU
-                                         | DIAG_EV_NFC_WILD | DIAG_EV_HOLD));
+                                         | DIAG_EV_NFC_WILD | DIAG_EV_NFC_GAME
+                                         | DIAG_EV_HOLD));
         TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
     }
 
@@ -1847,6 +1861,7 @@ int main(void)
     RUN_TEST(test_b_held_one_second_blanks_once);
     RUN_TEST(test_select_a_held_one_second_makes_menu_once);
     RUN_TEST(test_select_b_held_one_second_asks_for_the_picker_once);
+    RUN_TEST(test_start_held_one_second_makes_a_game_cart_once);
     RUN_TEST(test_releasing_early_cancels_the_hold);
     RUN_TEST(test_an_extra_button_cancels_the_hold);
     RUN_TEST(test_a_page_change_cancels_the_hold);

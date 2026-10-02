@@ -29,8 +29,8 @@ that together preserve the same intent:
    by clearing NVS from the flashing station over USB — a computer-and-adult gate, the same class of gate the
    original design placed on the phone writing station. There is no button combo, no settings entry, no
    hidden path. The cart is the key. One exception sits outside the writer: the diagnostics tag page,
-   reached only by holding Start+Select at power-on, carries three repair writes. It can restore the tag
-   on the reader to factory blank, or make a wildcard or a MENU cart from it. Each is held to confirm,
+   reached only by holding Start+Select at power-on, carries four repair writes. It can restore the tag
+   on the reader to factory blank, or make a wildcard, a MENU cart or a starter game cart from it. Each is held to confirm,
    refuses a tag the build password does not open, goes through the one provisioner, and leaves the setup
    flags alone. It does not open the writer.
 2. **Selecting a game in the writer does not launch it.** It records a pending write and instructs the user
@@ -50,8 +50,8 @@ cartridge system was built to impose.
 > **Never add** a path from a running game back to ROM selection, a "recent games" list, or any way to reach
 > the cart writer other than booting with a MENU cartridge (or the one-shot first-boot wizard, re-armed only
 > by an NVS clear at the flashing station). Selecting a ROM in the writer must never load it in the same
-> session. The one other tag write is the diagnostics tag page's three held repair tools (blank, wildcard,
-> MENU cart), which go through the provisioner and never open the writer. Re-read §6.1 and §13 before
+> session. The one other tag write is the diagnostics tag page's four held repair tools (blank, wildcard,
+> MENU cart, starter game cart), which go through the provisioner and never open the writer. Re-read §6.1 and §13 before
 > planning. WS-06's guard tests enforce the gating mechanically.
 
 ### The WS-06 symbol test is replaced, not dropped
@@ -418,7 +418,7 @@ The two-sided tag/steel/tag puck and its labelling rule are removed.
 | **WS-06** `nfc-cart` | **Substantially expanded.** Owns the full tag protocol layer: `lib/gbcore/cart/ntag.c` (injected transceive, page whitelist, write → verify → protect), `ndef.c` compose, `catalog.c`, the minimal I²C PN532 driver in `src/nfc_cart.cpp`, the boot state machine of §2 with `MaxTg = 2`, the `pending_t` NVS record, the wizard write handler in `src/cart_provision.cpp` with a fixed-starter stub picker, the four guard tests of §0, and the dotted-stem matcher tests. The old write-symbol test is replaced per §0. |
 | **WS-12** *(new)* `cart-writer` | **New workstream.** `src/cart_writer.cpp`: catalog list, D-pad navigation with page jump, art and description loading, confirmation screen, pending / immediate modes, Cancel pending, New cart, Rewrite a game cart, starter filter, Finish setup. Depends on WS-03 (render), WS-05 (input), WS-06 (tag I/O, catalog), WS-07 (list state machine). Keeping it separate preserves WS-06 as a testable protocol layer with no display dependency. |
 | **WS-07** `menu-saves` | Mostly unchanged. The in-game menu keeps **Resume / Volume / Brightness / Palette / Cart Info / Reset** and gains nothing — the writer is *not* reachable from it. Cart Info gains protection state and the `MENU` / `WILD:` / plain classification. Add the render-inside-`GAME_*`-window constraint. |
-| **WS-09** `diagnostics` | Gains a tag inspector: UID, `GET_VERSION`, protection state, raw NDEF hex, decoded payload. Its only writes are three held repair tools (factory blank, wildcard, MENU cart) through the provisioner's diagnostics verbs — guard tests (a) and (h) apply. Add the window constraint. |
+| **WS-09** `diagnostics` | Gains a tag inspector: UID, `GET_VERSION`, protection state, raw NDEF hex, decoded payload. Its only writes are four held repair tools (factory blank, wildcard, MENU cart, starter game cart) through the provisioner's diagnostics verbs — guard tests (a) and (h) apply. Add the window constraint. |
 | **WS-10** `build-tools` | **Shrinks and shifts.** Delete `web/` (Web NFC app, clipboard fallback, QR generator) and the Web NFC exit criterion. Keep `games.json` + validator, `image_sd.py`, the ESP Web Tools flashing station, `docs/ASSEMBLY.md`. **Gains:** `tools/seed_games_json.py`, a one-shot seed from `~/ES-DE/gamelists/gb/gamelist.xml` (85 of 132 curated stems match a `<name>` exactly; `tools/esde_aliases.json` maps the 47 shortened names; 74 covers match by stem) with descriptions truncated at a sentence boundary to 200 bytes; art conversion (PNG → `.565`); catalog emission; and a flashing-station **factory reset** (NVS clear) step documented in `ASSEMBLY.md`. |
 | **WS-11** `bench` | New verification items — see §9. Remains the last workstream. |
 

@@ -91,6 +91,10 @@ enum picker_mode_e {
      * picked. It writes nothing itself; the caller decides what a pick
      * means. */
     PICKER_MODE_DIAG,
+    /* The diagnostics game-cart tool: the setup's starter games only, with
+     * no made marks and no action row, and B on the list as in
+     * PICKER_MODE_DIAG. */
+    PICKER_MODE_DIAG_STARTER,
 };
 
 enum picker_screen_e {

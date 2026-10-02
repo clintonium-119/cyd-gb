@@ -35,8 +35,8 @@ them before proposing changes." These are therefore rails, not background.
   list. The cart writer, its write path and its single entry are unchanged. Nothing else relaxes: no boot
   combo, no list for tag-launched games, no history.
   **A second narrow exception (user-confirmed 2026-10-01):** the diagnostics tag page, reached only by
-  holding Start+Select at power-on, may restore the tag on the reader to factory blank, or make a wildcard
-  or a MENU cart from it. Each write is held to confirm, refuses a tag the build password does not open,
+  holding Start+Select at power-on, may restore the tag on the reader to factory blank, or make a wildcard,
+  a MENU cart or a game cart for one of the setup's starter games from it. Each write is held to confirm, refuses a tag the build password does not open,
   goes through the one provisioner, and leaves the setup flags untouched. The writer itself is still
   reached only from a MENU cart or the first-boot wizard. Nothing else relaxes: no in-game route, no
   settings entry, no other combo.
@@ -54,7 +54,7 @@ them before proposing changes." These are therefore rails, not background.
 - **Do read `reference/ORIGINAL_ROADMAP.md` §13 before proposing anything that looks like an obvious improvement.** It is a
   list of things already considered and rejected, each with the reason: no ROM browser (bar the
   diagnostics-toggled games-list fallback above), no tag writing outside the writer (bar the diagnostics
-  tag page's three held repair tools above), no Retro-Go, no
+  tag page's four held repair tools above), no Retro-Go, no
   driving IO4 (the bench proved it is not the amp enable and its real function is unknown), no building on
   the vendor datasheet without metering (it has been wrong twice: the header pinout and IO4), no stretching
   to 240 rows, no blending byte-swapped pixels, no per-pixel cross-palette branch, no manual Save/Load, no

@@ -42,7 +42,7 @@
 //             live
 //   * read  — the card once at entry, the ADC once a second on its own page,
 //             and the tag only when someone asks
-//   * write — the tag page's three held tools, each handed to the
+//   * write — the tag page's four held tools, each handed to the
 //             provisioner's diagnostics verbs against the tag on the reader
 //             at that moment; this file composes no write of its own
 //
@@ -233,7 +233,8 @@ static void say_busy(const char* line)
 // One held tool, carried out against whatever is on the reader now — the
 // last scan may be a different cart. The outcome goes into the snapshot for
 // the page to show, and the rescan after it shows what the tag now holds.
-// `rom` is the wildcard's game, and NULL for the other two tools.
+// `rom` is the wildcard's or the game cart's game, and NULL for blank and
+// MENU.
 static void run_tool(uint8_t tool, const char* rom)
 {
     uint8_t uid[DIAG_UID_BYTES] = { 0 };
@@ -256,18 +257,21 @@ static void run_tool(uint8_t tool, const char* rom)
         say_busy("Writing...");
         if (tool == DIAG_TOOL_BLANK) {
             rc = provision_diag_blank();
+            data.nfc_outcome = DIAG_NFC_OUT_BLANKED;
         } else if (tool == DIAG_TOOL_MENU) {
             rc = provision_diag_make_menu();
+            data.nfc_outcome = DIAG_NFC_OUT_MENU_MADE;
+        } else if (tool == DIAG_TOOL_GAME) {
+            rc = provision_diag_make_game(rom);
+            data.nfc_outcome = DIAG_NFC_OUT_GAME_MADE;
         } else {
             rc = provision_diag_make_wild(rom);
+            data.nfc_outcome = DIAG_NFC_OUT_WILD_MADE;
         }
-        if (rc == NTAG_OK) {
-            data.nfc_outcome = (tool == DIAG_TOOL_BLANK)  ? DIAG_NFC_OUT_BLANKED
-                               : (tool == DIAG_TOOL_MENU) ? DIAG_NFC_OUT_MENU_MADE
-                                                          : DIAG_NFC_OUT_WILD_MADE;
-        } else if (rc == NTAG_ERR_AUTH) {
+        // The outcome set beside the verb stands only for a clean write.
+        if (rc == NTAG_ERR_AUTH) {
             data.nfc_outcome = DIAG_NFC_OUT_REFUSED;
-        } else {
+        } else if (rc != NTAG_OK) {
             data.nfc_outcome = DIAG_NFC_OUT_FAILED;
             data.nfc_outcome_rc = rc;
         }
@@ -292,10 +296,11 @@ static void wait_release()
     } while (button_get_buttons() != 0);
 }
 
-// The wildcard tool: the whole catalog in the picker's diagnostics mode, and
-// a held pick written to the tag. B on the list comes back with nothing
-// written and no outcome.
-static void run_wild_tool(uint32_t now_ms)
+// The wildcard and game-cart tools: a game list in one of the picker's
+// diagnostics modes — the whole catalog for a wildcard, the setup's starters
+// for a game cart — and a held pick written to the tag. B on the list comes
+// back with nothing written and no outcome.
+static void run_pick_tool(uint8_t tool, uint32_t now_ms)
 {
     catalog_reader_t cat;
     catalog_entry_t e;
@@ -307,12 +312,17 @@ static void run_wild_tool(uint32_t now_ms)
     if (!sd_catalog_reader(&cat)) {
         data.nfc_outcome = DIAG_NFC_OUT_FAILED;
         data.nfc_outcome_rc = NTAG_ERR_ARGS;
-        Serial.println("[DIAG] wildcard tool: no catalog");
+        Serial.println("[DIAG] pick tool: no catalog");
         return;
     }
 
     memset(&sel, 0, sizeof(sel));
-    pick = picker_screen_run(PICKER_MODE_DIAG, &cat, NULL, false, &sel);
+    if (tool == DIAG_TOOL_GAME) {
+        pick = picker_screen_run(PICKER_MODE_DIAG_STARTER, &cat, NULL, false,
+                                 &sel);
+    } else {
+        pick = picker_screen_run(PICKER_MODE_DIAG, &cat, NULL, false, &sel);
+    }
     if (pick == BOOT_PICK_ROM) {
         // The catalog's title when it has one, the file name otherwise.
         title = sel.rom;
@@ -333,7 +343,7 @@ static void run_wild_tool(uint32_t now_ms)
     drawn_oy = -1;
     redraw(now_ms);
     if (pick == BOOT_PICK_ROM) {
-        run_tool(DIAG_TOOL_WILD, sel.rom);
+        run_tool(tool, sel.rom);
     }
 }
 
@@ -716,7 +726,11 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
             dirty = true;
         }
         if (nfc_ok && (flags & DIAG_EV_NFC_WILD)) {
-            run_wild_tool(now);
+            run_pick_tool(DIAG_TOOL_WILD, now);
+            dirty = true;
+        }
+        if (nfc_ok && (flags & DIAG_EV_NFC_GAME)) {
+            run_pick_tool(DIAG_TOOL_GAME, now);
             dirty = true;
         }
         if ((flags & DIAG_EV_HOLD) && !(flags & DIAG_EV_REDRAW) && !dirty) {

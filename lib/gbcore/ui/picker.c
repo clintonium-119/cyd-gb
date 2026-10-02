@@ -52,6 +52,15 @@ static void build_rows(picker_t* p, bool wild_done, bool pending_set)
         return;
     }
 
+    if (p->mode == PICKER_MODE_DIAG_STARTER) {
+        for (i = 0; i < (uint16_t)p->cat->count; i++) {
+            if (p->cat->e[i].flags & CATALOG_FLAG_STARTER) {
+                add_row(p, PICKER_ROW_GAME, i);
+            }
+        }
+        return;
+    }
+
     /* The wizard. Before the wildcard is written the boot flow treats a
      * finish as invalid, so the row is not offered at all rather than offered
      * and refused. */
@@ -272,7 +281,8 @@ uint8_t picker_input(picker_t* p, uint8_t buttons, uint32_t now_ms)
         }
         /* Only diagnostics has somewhere to go back to from the list; every
          * other mode leaves by a pick or a power cycle. */
-        if ((pressed & COMBO_BTN_B) && p->mode == PICKER_MODE_DIAG) {
+        if ((pressed & COMBO_BTN_B) && (p->mode == PICKER_MODE_DIAG ||
+                                        p->mode == PICKER_MODE_DIAG_STARTER)) {
             p->pick = BOOT_PICK_NONE;
             p->screen = PICKER_SCREEN_DONE;
             return PICKER_EVENT_DONE;

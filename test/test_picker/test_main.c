@@ -373,6 +373,57 @@ static void test_diag_mode_hold_picks_the_game(void)
     TEST_ASSERT_EQUAL_STRING("Game 001.gb", out.rom);
 }
 
+static void test_diag_starter_mode_lists_every_starter_and_nothing_else(void)
+{
+    fill_library(LIB_COUNT);
+    /* Every made-mark and action-row input on: none may change the rows. */
+    picker_t p = fresh(PICKER_MODE_DIAG_STARTER, true, true, NULL);
+    uint16_t i;
+
+    /* Rows 0, 10, ... 130 are starters: 132 / 10 rounded up is 14. */
+    TEST_ASSERT_EQUAL_UINT16((LIB_COUNT + LIB_STARTER_EVERY - 1)
+                                 / LIB_STARTER_EVERY,
+                             p.row_count);
+    for (i = 0; i < p.row_count; i++) {
+        TEST_ASSERT_EQUAL_UINT8(PICKER_ROW_GAME, p.rows[i].kind);
+        TEST_ASSERT_EQUAL_UINT16(i * LIB_STARTER_EVERY, p.rows[i].cat);
+    }
+}
+
+static void test_diag_starter_mode_b_on_the_list_returns_no_pick(void)
+{
+    boot_selection_t out;
+
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_DIAG_STARTER, false, false, NULL);
+
+    press(&p, B_NONE, 0);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_DONE, press(&p, B_B, 100));
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_NONE, picker_result(&p, &out));
+}
+
+static void test_diag_starter_mode_hold_picks_the_game(void)
+{
+    boot_selection_t out;
+    uint16_t row;
+
+    fill_library(LIB_COUNT);
+    /* Every starter is pickable, the last one included. */
+    for (row = 0; row < 14; row += 13) {
+        picker_t p = fresh(PICKER_MODE_DIAG_STARTER, false, false, NULL);
+        char want[24];
+
+        open_row(&p, row, 0);
+        press(&p, B_NONE, 1000);
+        press(&p, B_A, 1100);
+        TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_DONE, press(&p, B_A, 2100));
+        TEST_ASSERT_EQUAL_INT(BOOT_PICK_ROM, picker_result(&p, &out));
+        snprintf(want, sizeof(want), "Game %03u.gb",
+                 (unsigned)(row * LIB_STARTER_EVERY));
+        TEST_ASSERT_EQUAL_STRING(want, out.rom);
+    }
+}
+
 /* ─── the selection ───────────────────────────────────────────────────────── */
 
 static void test_a_held_launch_pick_returns_its_filename(void)
@@ -1000,6 +1051,9 @@ int main(void)
     RUN_TEST(test_diag_mode_b_on_the_list_returns_no_pick);
     RUN_TEST(test_b_on_the_list_still_does_nothing_in_the_other_modes);
     RUN_TEST(test_diag_mode_hold_picks_the_game);
+    RUN_TEST(test_diag_starter_mode_lists_every_starter_and_nothing_else);
+    RUN_TEST(test_diag_starter_mode_b_on_the_list_returns_no_pick);
+    RUN_TEST(test_diag_starter_mode_hold_picks_the_game);
     RUN_TEST(test_a_held_launch_pick_returns_its_filename);
     RUN_TEST(test_an_early_release_in_launch_mode_picks_nothing);
     RUN_TEST(test_a_confirmed_game_row_returns_its_filename);

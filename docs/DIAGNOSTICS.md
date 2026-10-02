@@ -32,13 +32,17 @@ Work down the list. Write the result in the blank; a blank you cannot fill is th
    - **Select + A** — make it a MENU cartridge.
    - **Select + B** — open the full game list. Pick a game, then hold **A** to make the cartridge that
      game's wildcard. **B** goes back; **B** on the list returns here with nothing written.
+   - **Start** — open the setup's starter games. Pick one, then hold **A** to make the cartridge that
+     game's ordinary game cart. **B** works as above.
 
    The page then shows what happened and scans the cartridge again:
-   `Blanked`, `MENU cart made` and `Wildcard made: <game>` mean the write worked.
+   `Blanked`, `MENU cart made`, `Wildcard made: <game>` and `Game cart made: <game>` mean the write
+   worked.
    `Refused: not our tag` means the cartridge is locked with another password; it was not touched.
    `No tag` and `Two tags` mean nothing was written; hold exactly one cartridge to the reader.
    `Write failed code <n>` means the write stopped part way; try again, then report the code.
-   None of the tools change the setup wizard or its list of cartridges made.
+   None of the tools change the setup wizard or its list of cartridges made, so a later wizard run still
+   offers every starter.
 6. **Battery** — Cell should sit between 3.5 V and 4.2 V on a charged cell (that range is the cell's
    datasheet, not a measurement of this board). Note all three numbers as shown: `____`.
 7. **Audio** — press **A** for the tone. It should be steady, not buzzing. **Down** three times: it should

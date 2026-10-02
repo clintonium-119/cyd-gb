@@ -7,7 +7,8 @@
 // The picker screen: the list of games, each game's page, and the 1 s hold
 // that picks one. The cart writer opens it in pending or immediate mode, the
 // boot executor's games list opens it in launch mode, and diagnostics opens
-// it in its own diagnostics mode, where B on the list returns with no pick.
+// it in one of its two diagnostics modes, where B on the list returns with no
+// pick.
 // Three rules:
 //
 //   1. It returns a pick. It never writes a tag and never loads a game; the

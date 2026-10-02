@@ -208,3 +208,12 @@ int provision_diag_make_menu() {
     Serial.printf("[CART] diag menu -> %d\n", rc);
     return rc;
 }
+
+int provision_diag_make_game(const char* rom) {
+    if (!rom || !rom[0]) {
+        return NTAG_ERR_ARGS;
+    }
+    int rc = write_cart(BOOT_CLASS_GAME, rom);
+    Serial.printf("[CART] diag game -> %d\n", rc);
+    return rc;
+}
