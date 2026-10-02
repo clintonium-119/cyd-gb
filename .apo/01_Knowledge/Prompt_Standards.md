@@ -8,7 +8,7 @@ title: "Prompt Standards"
 status: in_progress
 owner: ""
 created: '2026-08-27'
-updated: '2026-09-25'
+updated: '2026-10-01'
 reviewed_on: ""
 related_notes: ["[[01_Knowledge/Coding_Standards]]", "[[01_Knowledge/System_Overview]]"]
 tags: [apovault, knowledge, standards]
@@ -34,6 +34,12 @@ them before proposing changes." These are therefore rails, not background.
   and writes no tag. The in-game menu's Return to Games List row appears only for a game launched from that
   list. The cart writer, its write path and its single entry are unchanged. Nothing else relaxes: no boot
   combo, no list for tag-launched games, no history.
+  **A second narrow exception (user-confirmed 2026-10-01):** the diagnostics tag page, reached only by
+  holding Start+Select at power-on, may restore the tag on the reader to factory blank, or make a wildcard
+  or a MENU cart from it. Each write is held to confirm, refuses a tag the build password does not open,
+  goes through the one provisioner, and leaves the setup flags untouched. The writer itself is still
+  reached only from a MENU cart or the first-boot wizard. Nothing else relaxes: no in-game route, no
+  settings entry, no other combo.
 - **Do not switch the emulator to Retro-Go.** It is a launcher; adapting it means suppressing its central
   feature. Borrow its techniques — core split, DMA, single framebuffer push — not its architecture.
   **Source:** `reference/ORIGINAL_ROADMAP.md:338-345, 669-670` (read 2026-08-27).
@@ -47,7 +53,8 @@ them before proposing changes." These are therefore rails, not background.
   **Source:** `reference/ORIGINAL_ROADMAP.md:26-29, 293-300, 679-696` (read 2026-09-01).
 - **Do read `reference/ORIGINAL_ROADMAP.md` §13 before proposing anything that looks like an obvious improvement.** It is a
   list of things already considered and rejected, each with the reason: no ROM browser (bar the
-  diagnostics-toggled games-list fallback above), no Retro-Go, no
+  diagnostics-toggled games-list fallback above), no tag writing outside the writer (bar the diagnostics
+  tag page's three held repair tools above), no Retro-Go, no
   driving IO4 (the bench proved it is not the amp enable and its real function is unknown), no building on
   the vendor datasheet without metering (it has been wrong twice: the header pinout and IO4), no stretching
   to 240 rows, no blending byte-swapped pixels, no per-pixel cross-palette branch, no manual Save/Load, no

@@ -496,7 +496,7 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
   mode is a halt: there is no way back, and the power switch is the exit.
 - **Eight pages, Select+Left/Right to switch**, so the bare D-pad belongs to the page — which is what makes
   a one-pixel nudge possible. Buttons (live, GPA bit labelled), SD (mounted, ROM count, catalog entries,
-  used of total), NFC — a **read-only tag inspector**: PN532 firmware version, UID, `GET_VERSION`,
+  used of total), NFC — a **tag inspector with three held repair tools**: PN532 firmware version, UID, `GET_VERSION`,
   protection state (`AUTH0`/`ACCESS`), raw NDEF hex, decoded payload and classification, **scanned on page
   entry and on A** rather than polled, because a detect with no tag in the field blocks for about a second
   — battery (raw ADC, pin mV, cell mV through `BAT_DIVIDER`), audio (test tone through the mixer's own
@@ -506,10 +506,13 @@ Notes/risks.** The "Deferred verification" bullets are copied verbatim into WS-1
   and UTC build time, both compiled in by `scripts/pre_build_info.py`.
 - **No FPS overlay.** The once-a-second `[PERF]` serial line is the fps readout; an overlay would mean
   drawing on the DMA frame path, which is the one path this design keeps clear.
-- **No tag write path.** WS-06's guard tests apply: the diagnostic translation units reference no tag-write
-  symbols (guard (a) already fails if they do), and `writer_open()` keeps its single call site (guard (b)).
-  Guard (h) adds the shape of this mode: it is a reader and a viewer, never a route to the writer, the
-  provisioner, the ROM store, the ROM path resolver or the emulator.
+- **Three repair writes on the tag page.** Hold B to restore the tag on the reader to factory blank, Select+A
+  to make a MENU cart, or Select+B to open the full catalog and then hold A on a game to make its wildcard.
+  Each is held through the 1 s hold bar, refuses a tag the build password does not open, and leaves the
+  setup flags alone. WS-06's guard tests apply: the diagnostic translation units reference no tag-write
+  symbols (guard (a)), and `writer_open()` keeps its single call site (guard (b)). Guard (h) adds the shape
+  of this mode: it reaches the provisioner only through its `provision_diag_` verbs, and never the writer,
+  the ROM store, the ROM path resolver or the emulator.
 - **Renders inside `GAME_X/Y/W/H`** (§3 rule 6).
 
 **Code-complete exit**
@@ -666,6 +669,10 @@ state machine). **Serial position:** after WS-07, before WS-08 (§1). **Design:*
    page. It is off by default. With it on, a boot that would halt "No cartridge" or "Reader not responding"
    opens a launcher over the writer's game list instead; it launches games and writes no tag. A game it
    launched shows Return to Games List as the in-game menu's last row. No other route reaches the list.
+   A second exception: the diagnostics tag page, reached only by holding Start+Select at power-on, can
+   restore the tag on the reader to factory blank, or make a wildcard or a MENU cart from it. Each write is
+   held to confirm, refuses a tag the build password does not open, goes through the provisioner, and
+   leaves the setup flags alone. It never opens the writer.
 2. **Bench-dependent values are constants**, named in one of two headers, defaulted to the design doc's value,
    with a comment citing the § and the §11 item that verifies it.
 3. **Host tests for anything pure.** If a function has no `Arduino.h` dependency, it goes in the core modules

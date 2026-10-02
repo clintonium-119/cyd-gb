@@ -75,8 +75,9 @@ reader end to end. If the wizard completes, the reader works at final geometry â
 bench test on an open board cannot tell you.
 
 - [ ] **Diagnostics first.** Hold Start+Select while switching on and work through
-      [`DIAGNOSTICS.md`](DIAGNOSTICS.md). It reads no cartridge and changes nothing but the window nudge,
-      so a fault found here is found before the wizard writes anything. Then power off. Result: `____`.
+      [`DIAGNOSTICS.md`](DIAGNOSTICS.md). It reads no cartridge on the way in and changes nothing but
+      the window nudge unless you hold one of its tag tools, so a fault found here is found before the
+      wizard writes anything. Then power off. Result: `____`.
 - [ ] Power on. The wizard runs because NVS is empty on a freshly flashed unit.
 - [ ] **MENU cartridge.** The wizard writes it, or adopts one that already carries `MENU`. Result:
       `____`.
@@ -90,8 +91,11 @@ bench test on an open board cannot tell you.
 ## Recovery
 
 The only route back to the wizard. There is no button combo and no on-device path, by design â€” the
-firmware cannot write a tag except through the menu cartridge, and it cannot re-enter setup except
-through this.
+firmware cannot re-enter setup except through this.
+
+A single bad cartridge does not need it. The diagnostics NFC tag page can restore a cartridge to factory
+blank, or remake it as a MENU or wildcard cartridge, without touching the wizard flags (see
+[`DIAGNOSTICS.md`](DIAGNOSTICS.md), Tag tools).
 
     python tools/factory_reset.py --port ____
 

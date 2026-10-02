@@ -15,7 +15,8 @@
 //      nothing else does — a guard test pins the count at exactly one call
 //      plus this declaration, so "when can this device write a cart" has a
 //      single answer. There is no button combo and no settings entry: the
-//      cart is the key.
+//      cart is the key. The diagnostics tag page's repair tools write through
+//      the provisioner, not through the writer, and never open it.
 //   2. It returns a pick. It never writes a tag and never launches a game;
 //      it reports what the user chose and the decision table works out what
 //      that means. A picker that wrote would put a second write site in the

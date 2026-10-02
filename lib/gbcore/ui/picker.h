@@ -18,7 +18,9 @@
 // where the writer's behaviour actually lives:
 //
 //   1. One call site — the boot state machine's executor opens the writer and
-//      nothing else does. No button combo, no settings entry.
+//      nothing else does. No button combo, no settings entry. The diagnostics
+//      tag page writes through the provisioner, not the writer, and never
+//      opens it.
 //   2. It returns a pick. It never writes a tag and never launches a game.
 //   3. It reaches for nothing below itself: no tag, reader, emulator or ROM
 //      storage symbol appears here, in code or in prose.

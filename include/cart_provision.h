@@ -12,8 +12,9 @@
 // instead of a search. Anything that needs a tag written asks one of the
 // verbs below.
 //
-// These verbs are executors, not deciders. The boot decision table in
-// lib/gbcore/cart/boot.c has already worked out which action applies; each
+// These verbs are executors for two deciders: the boot decision table in
+// lib/gbcore/cart/boot.c and the diagnostics tag page. The decider has
+// already worked out which action applies; each
 // function here carries out exactly the action it is handed and neither
 // re-examines the tag's class nor consults the setup flags to second-guess
 // it. Nothing here draws on the display or holds a user-facing string —

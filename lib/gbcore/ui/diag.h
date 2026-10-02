@@ -22,10 +22,12 @@
 //      may be static and generous.
 //   2. It reaches for nothing below itself. No tag, reader, storage or
 //      emulator symbol appears here, in code or in prose.
-//   3. It writes no tag and offers no route to one.
-//   4. It selects no game, and has no list of games to select from. It holds
-//      one stored toggle, the games-list fallback mode, which another boot
-//      path reads; the list is never shown from here.
+//   3. It writes no tag itself. On the tag page it decides when a held tool
+//      is confirmed and reports it; the binding asks the provisioner.
+//   4. It selects no game itself. A confirmed wildcard tool asks the binding
+//      to open the shared game list for one pick; the list is never drawn
+//      from here. It holds one stored toggle, the games-list fallback mode,
+//      which another boot path reads.
 //   5. When it renders, it renders inside the game window — every coordinate
 //      the layout module produces is window-relative.
 //

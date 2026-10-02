@@ -4,7 +4,7 @@
 computer.
 
 **Get in:** hold **Start + Select** while switching the unit on. Nothing is read from a cartridge on the
-way in, and nothing is written at any point.
+way in, and nothing is written unless you hold one of the tag tools below.
 
 **Move around:** **Select + Left/Right** changes page. The plain D-pad belongs to the page you are on.
 
@@ -23,6 +23,22 @@ Work down the list. Write the result in the blank; a blank you cannot fill is th
    Class `blank` or `MENU`: `____`.
 5. **NFC tag, empty** — take the cartridge away and press **A**. State should read `no tag` within about a
    second: `____`.
+
+   **Tag tools** — only on the NFC tag page, and only if a cartridge needs fixing. Each one writes the
+   cartridge on the reader, so hold it on the back of the shell first. Hold the buttons until the bar along
+   the bottom fills (about a second). Letting go early cancels and writes nothing.
+
+   - **B** — restore the cartridge to factory blank.
+   - **Select + A** — make it a MENU cartridge.
+   - **Select + B** — open the full game list. Pick a game, then hold **A** to make the cartridge that
+     game's wildcard. **B** goes back; **B** on the list returns here with nothing written.
+
+   The page then shows what happened and scans the cartridge again:
+   `Blanked`, `MENU cart made` and `Wildcard made: <game>` mean the write worked.
+   `Refused: not our tag` means the cartridge is locked with another password; it was not touched.
+   `No tag` and `Two tags` mean nothing was written; hold exactly one cartridge to the reader.
+   `Write failed code <n>` means the write stopped part way; try again, then report the code.
+   None of the tools change the setup wizard or its list of cartridges made.
 6. **Battery** — Cell should sit between 3.5 V and 4.2 V on a charged cell (that range is the cell's
    datasheet, not a measurement of this board). Note all three numbers as shown: `____`.
 7. **Audio** — press **A** for the tone. It should be steady, not buzzing. **Down** three times: it should

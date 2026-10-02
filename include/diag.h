@@ -15,15 +15,18 @@
 //   2. It never returns. The mode is a halt: the way out is a power cycle,
 //      which is also how a builder gets back to playing. Nothing runs after
 //      it in the same boot, so its buffers may be static and generous.
-//   3. It reads a tag and never writes one. The inspector shows what is on a
-//      cart — its UID, its protection bytes, its raw NDEF and its class — and
-//      has no path to changing any of it. A guard test pins that by
-//      substring, so the rule holds in comments too.
+//   3. It reads a tag, and writes one only through the provisioner's three
+//      diagnostics verbs — factory blank, wildcard and MENU cart — each held
+//      to confirm. The inspector shows what is on a cart — its UID, its
+//      protection bytes, its raw NDEF and its class. A tag the build password
+//      does not open is refused, and the setup flags are never touched.
 //   4. It reaches for nothing above or below itself: no writer, no
-//      provisioner, no ROM storage and no emulator symbol appears in its
-//      sources. It selects no game, and has no list of games to select from.
-//      It holds one stored toggle, the games-list fallback mode, which the
-//      boot path reads on a later power-on; diagnostics itself lists nothing.
+//      provisioner verb but those three, no ROM storage and no emulator
+//      symbol appears in its sources. A guard test pins that by substring, so
+//      the rule holds in comments too. It opens the shared picker screen for
+//      the wildcard tool's pick only, and launches nothing. It holds one
+//      stored toggle, the games-list fallback mode, which the boot path reads
+//      on a later power-on.
 //   5. When it renders, it renders inside the game window, like every other
 //      screen on this device — which is what lets the nudge page move the
 //      whole window while a builder watches its border.
