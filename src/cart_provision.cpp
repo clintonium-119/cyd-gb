@@ -53,8 +53,9 @@ static int compose(enum boot_class_e cls, const char* rom, uint8_t* buf,
 }
 
 // Compose for `cls`, then write, verify and protect in one sequence. The
-// class is always one the decision table asked for; a menu cart is never a
-// write target, because the table checks MENU before it checks pending.
+// class is always one a decider asked for. A menu cart is never a target of
+// the boot table, which checks MENU before it checks pending; diagnostics may
+// ask for one.
 static int write_cart(enum boot_class_e cls, const char* rom) {
     uint8_t msg[NDEF_BUF_MAX];
     size_t len = 0;
@@ -184,5 +185,26 @@ int provision_heal() {
     // as zeros, so authenticating against them is the read.
     rc = ntag_pwd_auth(&dev, pwd, pack);
     Serial.printf("[CART] heal -> %d\n", rc);
+    return rc;
+}
+
+int provision_diag_blank() {
+    int rc = ntag_blank(&dev, pwd, pack);
+    Serial.printf("[CART] diag blank -> %d\n", rc);
+    return rc;
+}
+
+int provision_diag_make_wild(const char* rom) {
+    if (!rom || !rom[0]) {
+        return NTAG_ERR_ARGS;
+    }
+    int rc = write_cart(BOOT_CLASS_WILD, rom);
+    Serial.printf("[CART] diag wild -> %d\n", rc);
+    return rc;
+}
+
+int provision_diag_make_menu() {
+    int rc = write_cart(BOOT_CLASS_MENU, NULL);
+    Serial.printf("[CART] diag menu -> %d\n", rc);
     return rc;
 }
