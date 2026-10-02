@@ -32,9 +32,13 @@ static const char* const ACTION_NOTE[] = {
 };
 
 /* The footer's buttons: A opens a title, and on its page A is held to do
- * what that page is for and B goes back. B does nothing on the list. */
+ * what that page is for and B goes back. B does nothing on the list, except
+ * in the diagnostics mode, where it goes back to the tag page. */
 static const ui_hint_t LIST_HINTS[] = {
     { "A", "Select" },
+};
+static const ui_hint_t DIAG_LIST_HINTS[] = {
+    { "B", "Back" }, { "A", "Select" },
 };
 static const ui_hint_t DETAIL_HINTS[][2] = {
     { { "B", "Back" }, { "A", "Hold to install to cart" } }, /* a game  */
@@ -415,7 +419,12 @@ static void draw_list(const picker_t* p, const picker_layout_t* g,
         draw_row(p, g, cv, (uint16_t)(first + i));
     }
     draw_list_media(p, g, cv, art, shot);
-    ui_hint_bar(cv, g->w, g->foot_y, LIST_HINTS, N_HINTS(LIST_HINTS));
+    if (p->mode == PICKER_MODE_DIAG) {
+        ui_hint_bar(cv, g->w, g->foot_y, DIAG_LIST_HINTS,
+                    N_HINTS(DIAG_LIST_HINTS));
+    } else {
+        ui_hint_bar(cv, g->w, g->foot_y, LIST_HINTS, N_HINTS(LIST_HINTS));
+    }
 }
 
 int16_t picker_row_overflow(const picker_t* p, const picker_layout_t* g,

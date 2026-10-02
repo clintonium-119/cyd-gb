@@ -86,6 +86,11 @@ enum picker_mode_e {
     /* The games list: every game, no action row, and a pick starts the game
      * rather than lining up a write. It writes no tag. */
     PICKER_MODE_LAUNCH,
+    /* The diagnostics wildcard tool: every game, no action row, and the
+     * writer's hold on a game's page. B on the list goes back with nothing
+     * picked. It writes nothing itself; the caller decides what a pick
+     * means. */
+    PICKER_MODE_DIAG,
 };
 
 enum picker_screen_e {

@@ -877,6 +877,44 @@ static void test_the_launch_page_says_hold_to_play(void)
     TEST_ASSERT_TRUE(install);
 }
 
+static void test_diag_mode_list_footer_names_back(void)
+{
+    unsigned t;
+    bool back = false;
+
+    fill_library(LIB_COUNT);
+    run_list(GEOM_53_W, GEOM_53_H, PICKER_MODE_DIAG, false, false, NULL);
+    assert_sane();
+    for (t = 0; t < fk.logged; t++) {
+        back = back || strcmp(fk.log[t].s, "Back") == 0;
+    }
+    TEST_ASSERT_TRUE(back);
+
+    /* The other modes' list still names only Select. */
+    run_list(GEOM_53_W, GEOM_53_H, PICKER_MODE_LAUNCH, false, false, NULL);
+    assert_sane();
+    for (t = 0; t < fk.logged; t++) {
+        TEST_ASSERT_NOT_EQUAL(0, strcmp(fk.log[t].s, "Back"));
+    }
+}
+
+static void test_diag_mode_game_page_says_hold_to_install(void)
+{
+    unsigned t;
+    bool install = false;
+
+    fill_library(LIB_COUNT);
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_DIAG, false, false, 0,
+               PICKER_MEDIA_READY, PICKER_MEDIA_READY, 50, 0, DESC_200);
+    assert_sane();
+    for (t = 0; t < fk.logged; t++) {
+        install = install
+                  || strcmp(fk.log[t].s, "Hold to install to cart") == 0;
+        TEST_ASSERT_NULL(strstr(fk.log[t].s, "Hold to play"));
+    }
+    TEST_ASSERT_TRUE(install);
+}
+
 /* ─── the description ─────────────────────────────────────────────────────── */
 
 static void test_the_page_is_the_description_and_never_less_than_the_band(void)
@@ -1422,6 +1460,8 @@ int main(void)
     RUN_TEST(test_missing_media_draws_two_placeholders_and_no_image);
     RUN_TEST(test_an_action_page_explains_itself);
     RUN_TEST(test_the_launch_page_says_hold_to_play);
+    RUN_TEST(test_diag_mode_list_footer_names_back);
+    RUN_TEST(test_diag_mode_game_page_says_hold_to_install);
     RUN_TEST(test_the_hold_bar_appears_only_once_the_hold_starts);
     RUN_TEST(test_every_wrapped_line_fits_the_column_in_pixels);
     RUN_TEST(test_the_wrap_breaks_at_spaces_and_hard_breaks_long_words);

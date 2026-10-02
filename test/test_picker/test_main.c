@@ -305,6 +305,74 @@ static void test_launch_mode_is_every_game_and_no_action_row(void)
     }
 }
 
+static void test_diag_mode_lists_every_game_and_no_action_row(void)
+{
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_DIAG, true, true, NULL);
+    picker_t launch = fresh(PICKER_MODE_LAUNCH, true, true, NULL);
+    uint16_t i;
+
+    TEST_ASSERT_EQUAL_UINT16(LIB_COUNT, p.row_count);
+    TEST_ASSERT_EQUAL_UINT16(launch.row_count, p.row_count);
+    for (i = 0; i < p.row_count; i++) {
+        TEST_ASSERT_EQUAL_UINT8(PICKER_ROW_GAME, p.rows[i].kind);
+        TEST_ASSERT_EQUAL_UINT16(i, p.rows[i].cat);
+    }
+}
+
+static void test_diag_mode_b_on_the_list_returns_no_pick(void)
+{
+    boot_selection_t out;
+
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_DIAG, false, false, NULL);
+
+    memset(&out, 0xA5, sizeof(out));
+    press(&p, B_NONE, 0);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_DONE, press(&p, B_B, 100));
+    TEST_ASSERT_EQUAL_UINT8(PICKER_SCREEN_DONE, p.screen);
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_NONE, picker_result(&p, &out));
+    TEST_ASSERT_EQUAL_HEX8(0xA5, ((uint8_t*)&out)[0]);
+
+    /* B on a game's page still goes back to the list, not out. */
+    p = fresh(PICKER_MODE_DIAG, false, false, NULL);
+    open_row(&p, 1, 0);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_REDRAW, press(&p, B_B, 100));
+    TEST_ASSERT_EQUAL_UINT8(PICKER_SCREEN_LIST, p.screen);
+}
+
+static void test_b_on_the_list_still_does_nothing_in_the_other_modes(void)
+{
+    static const enum picker_mode_e modes[3] = {
+        PICKER_MODE_PENDING, PICKER_MODE_IMMEDIATE, PICKER_MODE_LAUNCH,
+    };
+    size_t i;
+
+    fill_library(LIB_COUNT);
+    for (i = 0; i < 3; i++) {
+        picker_t p = fresh(modes[i], true, false, NULL);
+
+        press(&p, B_NONE, 0);
+        TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_NONE, press(&p, B_B, 100));
+        TEST_ASSERT_EQUAL_UINT8(PICKER_SCREEN_LIST, p.screen);
+    }
+}
+
+static void test_diag_mode_hold_picks_the_game(void)
+{
+    boot_selection_t out;
+
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_DIAG, false, false, NULL);
+
+    open_row(&p, 1, 0);
+    press(&p, B_NONE, 100);
+    press(&p, B_A, 200);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_DONE, press(&p, B_A, 1200));
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_ROM, picker_result(&p, &out));
+    TEST_ASSERT_EQUAL_STRING("Game 001.gb", out.rom);
+}
+
 /* ─── the selection ───────────────────────────────────────────────────────── */
 
 static void test_a_held_launch_pick_returns_its_filename(void)
@@ -928,6 +996,10 @@ int main(void)
     RUN_TEST(test_letting_go_early_resets_the_hold);
     RUN_TEST(test_a_done_machine_ignores_every_further_sample);
     RUN_TEST(test_launch_mode_is_every_game_and_no_action_row);
+    RUN_TEST(test_diag_mode_lists_every_game_and_no_action_row);
+    RUN_TEST(test_diag_mode_b_on_the_list_returns_no_pick);
+    RUN_TEST(test_b_on_the_list_still_does_nothing_in_the_other_modes);
+    RUN_TEST(test_diag_mode_hold_picks_the_game);
     RUN_TEST(test_a_held_launch_pick_returns_its_filename);
     RUN_TEST(test_an_early_release_in_launch_mode_picks_nothing);
     RUN_TEST(test_a_confirmed_game_row_returns_its_filename);

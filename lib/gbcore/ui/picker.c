@@ -41,7 +41,8 @@ static void build_rows(picker_t* p, bool wild_done, bool pending_set)
         return;
     }
 
-    if (p->mode == PICKER_MODE_PENDING || p->mode == PICKER_MODE_LAUNCH) {
+    if (p->mode == PICKER_MODE_PENDING || p->mode == PICKER_MODE_LAUNCH ||
+        p->mode == PICKER_MODE_DIAG) {
         if (pending_set && p->mode == PICKER_MODE_PENDING) {
             add_row(p, PICKER_ROW_CANCEL_PENDING, 0);
         }
@@ -268,6 +269,13 @@ uint8_t picker_input(picker_t* p, uint8_t buttons, uint32_t now_ms)
                      : (uint8_t)PICKER_EVENT_REDRAW;
         } else if (marquee_step(p, now_ms)) {
             ev = PICKER_EVENT_MARQUEE;
+        }
+        /* Only diagnostics has somewhere to go back to from the list; every
+         * other mode leaves by a pick or a power cycle. */
+        if ((pressed & COMBO_BTN_B) && p->mode == PICKER_MODE_DIAG) {
+            p->pick = BOOT_PICK_NONE;
+            p->screen = PICKER_SCREEN_DONE;
+            return PICKER_EVENT_DONE;
         }
         if ((pressed & COMBO_BTN_A) == 0 || cursor_row(p) == NULL) {
             return ev;
