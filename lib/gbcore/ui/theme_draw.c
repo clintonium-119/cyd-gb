@@ -223,12 +223,10 @@ void ui_hint_bar(const ui_canvas_t* cv, int16_t w, int16_t y,
 }
 
 void ui_notice(const ui_canvas_t* cv, int16_t w, int16_t h, const char* title,
-               const char* body, bool is_error, const ui_hint_t* hints,
-               uint8_t n)
+               const char* body, const ui_hint_t* hints, uint8_t n)
 {
     const int16_t cy = (int16_t)(h / 2);
     const int16_t bw = (int16_t)(w - 2 * UI_PAD);
-    const uint16_t tc = is_error ? UI_COL_WARN : UI_COL_TEXT;
     int16_t body_y = (int16_t)(cy + 10);
 
     cv->fill(cv->ctx, 0, 0, w, h, UI_COL_BG);
@@ -237,10 +235,10 @@ void ui_notice(const ui_canvas_t* cv, int16_t w, int16_t h, const char* title,
             /* Centred on cy - 20, as the boot screen always put it. */
             cv->text(cv->ctx, title, UI_PAD,
                      (int16_t)(cy - 20 - ui_font_height(UI_FONT_NOTICE) / 2),
-                     bw, 1, UI_FONT_NOTICE, UI_ALIGN_CENTER, tc, UI_COL_BG);
+                     bw, 1, UI_FONT_NOTICE, UI_ALIGN_CENTER, UI_COL_TEXT, UI_COL_BG);
         } else {
             cv->text(cv->ctx, title, UI_PAD, (int16_t)(cy - 30), bw, 2,
-                     UI_FONT_LIST, UI_ALIGN_CENTER, tc, UI_COL_BG);
+                     UI_FONT_LIST, UI_ALIGN_CENTER, UI_COL_TEXT, UI_COL_BG);
             body_y = (int16_t)(cy - 30 +
                                2 * UI_ROW_PITCH(ui_font_height(UI_FONT_LIST)) +
                                4);

@@ -582,7 +582,7 @@ static void notice(const char* msg)
     static const ui_hint_t HINTS[] = { { "B", "Back" } };
     menu_band_t none = {};
 
-    ui_notice(cv, geom.w, geom.h, msg, NULL, true, HINTS, N_HINTS(HINTS));
+    ui_notice(cv, geom.w, geom.h, msg, NULL, HINTS, N_HINTS(HINTS));
     page_input(&none);
 }
 

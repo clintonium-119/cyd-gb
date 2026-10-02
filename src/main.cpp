@@ -72,33 +72,23 @@ static bool list_launched = false;
 // bottom edge — which is what the arguments to the shared helper say below.
 
 // l1 is the condition, l2 the detail: the theme's notice, white on black
-// with a grey detail, and red only when it is an error. l1 drops from font 4
-// to the wrapped small font when the large one would not fit the window.
-static void notice(const char* l1, const char* l2, bool is_error) {
+// with a grey detail, a fault and a next step alike. l1 drops from font 4 to
+// the wrapped small font when the large one would not fit the window.
+static void notice(const char* l1, const char* l2) {
     display_clear(UI_COL_BG);
     ui_notice(display_canvas(settings.game_x, settings.game_y), GAME_W, GAME_H,
-              l1, l2, is_error, NULL, 0);
+              l1, l2, NULL, 0);
 }
 
 // Halt means halt: no retry loop, and no fallback browser unless the
 // games-list mode is on. The DMG's mechanical interlock already forces a
 // power-off to change carts, so the power cycle is the retry.
-static void halt(const char* l1, const char* l2, bool is_error) {
+static void halt(const char* l1, const char* l2) {
     Serial.printf("[BOOT] halt: %s %s\n", l1, l2 ? l2 : "");
-    notice(l1, l2, is_error);
+    notice(l1, l2);
     for (;;) {
         delay(1000);
     }
-}
-
-// Something went wrong: the card, the tag, the file or a write.
-static void halt_screen(const char* l1, const char* l2) {
-    halt(l1, l2, true);
-}
-
-// Nothing went wrong: a write that worked, or what to insert next.
-static void halt_notice(const char* l1, const char* l2) {
-    halt(l1, l2, false);
 }
 
 // ─── Tag read ───────────────────────────────────────────────────────────────
@@ -191,7 +181,7 @@ static void show_pending_banner() {
         l2 = "insert the cart to rewrite";
     }
 
-    notice(l1, l2, false);
+    notice(l1, l2);
     delay(PENDING_BANNER_MS);
 }
 
@@ -448,7 +438,7 @@ static void load_halt(const char* l1, const char* l2) {
     if (list_launched) {
         settings_list_game_clear();
     }
-    halt_screen(l1, l2);
+    halt(l1, l2);
 }
 
 // The loading screen's bar, where the writer's hold bar sits and drawn by the
@@ -476,7 +466,7 @@ static void load_and_run(const char* name) {
         load_halt("Not found:", tag_payload[0] ? tag_payload : name);
     }
 
-    notice("Loading...", "", false);
+    notice("Loading...", "");
 
     // Basename, not the path: it is what the store records and compares, and
     // deriving it here keeps it in step with cur_path instead of repeating the
@@ -695,7 +685,7 @@ void setup() {
     // or the remembered game still boots; the first read may have left
     // UNREADABLE behind, so the outcome is set rather than read again.
     if (!reader_ok && !settings.list_mode) {
-        halt_screen("Reader not responding", "");
+        halt("Reader not responding", "");
     }
     if (!reader_ok) {
         Serial.println("[BOOT] reader down, games list mode: no tag");
@@ -706,7 +696,7 @@ void setup() {
 #endif
 
     if (!sd_init()) {
-        halt_screen("SD Card Error!", "Insert FAT32 SD & reset");
+        halt("SD Card Error!", "Insert FAT32 SD & reset");
     }
     cat_ok = sd_catalog_reader(&cat);
 
@@ -766,7 +756,7 @@ void loop() {
                                                 &dev_sel);
         Serial.printf("[DEV] writer pick=%d rom=%s target=%u\n",
                       (int)dev_pick, dev_sel.rom, (unsigned)dev_sel.target);
-        halt_notice("Dev writer", "Nothing written. Power off");
+        halt("Dev writer", "Nothing written. Power off");
     }
 #endif
 
@@ -787,59 +777,59 @@ void loop() {
 
     switch (action) {
         case BOOT_HALT_NO_CART:
-            halt_screen("No cartridge", "");
+            halt("No cartridge", "");
             break;
         case BOOT_HALT_SHIELDING:
-            halt_screen("Shielding fault", "");
+            halt("Shielding fault", "");
             break;
         case BOOT_HALT_UNREADABLE:
-            halt_screen("Unreadable tag", tag_payload);
+            halt("Unreadable tag", tag_payload);
             break;
         case BOOT_HALT_BLANK:
-            halt_notice("Blank cart. Use your MENU cart", "");
+            halt("Blank cart. Use your MENU cart", "");
             break;
         case BOOT_HALT_INSERT_WILDCARD:
-            halt_notice("Insert your wildcard", "");
+            halt("Insert your wildcard", "");
             break;
         case BOOT_HALT_INSERT_BLANK:
-            halt_notice("Insert a blank cart", "");
+            halt("Insert a blank cart", "");
             break;
         case BOOT_HALT_INSERT_GAME_CART:
-            halt_notice("Insert a game cart", "");
+            halt("Insert a game cart", "");
             break;
         case BOOT_HALT_SETUP_INSERT_BLANK:
-            halt_notice("Setup: insert a blank cart", "");
+            halt("Setup: insert a blank cart", "");
             break;
 
         // Re-entry already happened above; a second request means the tag
         // stopped answering between the two decisions.
         case BOOT_NEED_AUTH:
-            halt_screen("Unreadable tag", tag_payload);
+            halt("Unreadable tag", tag_payload);
             break;
 
         case BOOT_WIZARD_WRITE_MENU:
             rc = provision_wizard_menu(&in.flags);
             if (rc != 0) {
                 snprintf(detail, sizeof(detail), "code %d", rc);
-                halt_screen("Write failed", detail);
+                halt("Write failed", detail);
             }
-            halt_notice("MENU cart made. Power off", "");
+            halt("MENU cart made. Power off", "");
             break;
         case BOOT_WIZARD_ADOPT_MENU:
             rc = provision_wizard_adopt(BOOT_CLASS_MENU, &in.flags);
             if (rc != 0) {
                 snprintf(detail, sizeof(detail), "code %d", rc);
-                halt_screen("Write failed", detail);
+                halt("Write failed", detail);
             }
-            halt_notice("Menu cart adopted. Power off", "");
+            halt("Menu cart adopted. Power off", "");
             break;
         case BOOT_WIZARD_ADOPT_WILD:
             rc = provision_wizard_adopt(BOOT_CLASS_WILD, &in.flags);
             if (rc != 0) {
                 snprintf(detail, sizeof(detail), "code %d", rc);
-                halt_screen("Write failed", detail);
+                halt("Write failed", detail);
             }
-            halt_notice("Wildcard adopted. Power off", "");
+            halt("Wildcard adopted. Power off", "");
             break;
 
         // One call site for the writer, all three actions that open it.
@@ -860,9 +850,9 @@ void loop() {
                     rc = provision_wizard_write(pa, &sel, &in.flags);
                     if (rc != 0) {
                         snprintf(detail, sizeof(detail), "code %d", rc);
-                        halt_screen("Write failed", detail);
+                        halt("Write failed", detail);
                     }
-                    halt_notice(pa == BOOT_PICK_WRITE_WILD
+                    halt(pa == BOOT_PICK_WRITE_WILD
                                     ? "Wildcard made. Power off"
                                     : "Game cart made. Power off", "");
                     break;
@@ -870,27 +860,27 @@ void loop() {
                     rc = provision_wizard_finish(&in.flags);
                     if (rc != 0) {
                         snprintf(detail, sizeof(detail), "code %d", rc);
-                        halt_screen("Write failed", detail);
+                        halt("Write failed", detail);
                     }
-                    halt_notice("Setup finished. Power off", "");
+                    halt("Setup finished. Power off", "");
                     break;
                 case BOOT_PICK_RECORD_PENDING:
                     settings_pending_save(&sel);
-                    halt_notice("Power off, insert your wildcard, power on", "");
+                    halt("Power off, insert your wildcard, power on", "");
                     break;
                 case BOOT_PICK_CLEAR_PENDING:
                     settings_pending_clear();
-                    halt_notice("Pending write cancelled. Power off", "");
+                    halt("Pending write cancelled. Power off", "");
                     break;
                 case BOOT_PICK_HALT_MENU_CART:
-                    halt_notice("Menu cart", "");
+                    halt("Menu cart", "");
                     break;
                 case BOOT_PICK_HALT_NO_SELECTION:
-                    halt_notice("Setup: insert a blank cart", "");
+                    halt("Setup: insert a blank cart", "");
                     break;
                 case BOOT_PICK_RECORD_LIST_GAME:
                 case BOOT_PICK_INVALID:
-                    halt_screen("Write failed", "");
+                    halt("Write failed", "");
                     break;
             }
             break;
@@ -908,7 +898,7 @@ void loop() {
                 settings_list_game_save(sel.rom);
                 restart_now();
             }
-            halt_screen("No cartridge", "");
+            halt("No cartridge", "");
             break;
 
         case BOOT_LIST_LOAD:
@@ -917,15 +907,15 @@ void loop() {
             break;
 
         case BOOT_EXECUTE_PENDING:
-            notice("Writing cart...", "", false);
+            notice("Writing cart...", "");
             rc = provision_execute_pending(&in.pending, in.cls);
             if (rc == NTAG_ERR_AUTH) {
                 // Someone else's tag. The record stays for the right one.
-                halt_notice("Insert your wildcard", "");
+                halt("Insert your wildcard", "");
             }
             if (rc != 0) {
                 snprintf(detail, sizeof(detail), "code %d", rc);
-                halt_screen("Write failed", detail);
+                halt("Write failed", detail);
             }
             load_and_run(in.pending.rom);
             break;
@@ -937,5 +927,5 @@ void loop() {
 
     // Unreachable: every arm above halts. Here so a future action added to
     // the table cannot silently fall through into a second loop() pass.
-    halt_screen("Unreadable tag", tag_payload);
+    halt("Unreadable tag", tag_payload);
 }

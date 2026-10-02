@@ -90,13 +90,12 @@ void ui_hint_bar(const ui_canvas_t* cv, int16_t w, int16_t y,
 
 /*
  * A whole-window message: the title centred in the header font when it
- * fits, else wrapped over two rows of the list font, red only when is_error;
- * the body centred under it in grey prose, up to four rows; the hint footer
- * when n > 0.
+ * fits, else wrapped over two rows of the list font, in white whether it
+ * reports a fault or a next step; the body centred under it in grey prose,
+ * up to four rows; the hint footer when n > 0.
  */
 void ui_notice(const ui_canvas_t* cv, int16_t w, int16_t h, const char* title,
-               const char* body, bool is_error, const ui_hint_t* hints,
-               uint8_t n);
+               const char* body, const ui_hint_t* hints, uint8_t n);
 
 /*
  * A scroll mark: a 7 x 4 chevron whose top-left is x, y, pointing up when

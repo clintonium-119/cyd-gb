@@ -29,8 +29,8 @@
 #define UI_COL_HINT_BG   0x4A69 /* the hint footer's pill */
 #define UI_COL_GLYPH     0xFFFF /* a button's circle in the hint footer */
 #define UI_COL_GLYPH_FG  0x0000 /* the button's letter in it */
-#define UI_COL_OK        0x07E0 /* a check that passed */
-#define UI_COL_WARN      0xF800 /* errors only */
+#define UI_COL_OK        0x07E0 /* a diagnostics check that passed */
+#define UI_COL_WARN      0xF800 /* a diagnostics check that failed */
 #define UI_COL_SLOT      0x1082 /* an empty image slot */
 
 /* Chrome geometry, in pixels. */

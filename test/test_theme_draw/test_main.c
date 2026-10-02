@@ -511,21 +511,22 @@ static void test_hints_that_do_not_fit_are_dropped_from_the_end(void)
 
 /* ─── the notice ─────────────────────────────────────────────────────────── */
 
-static void test_the_notice_title_is_red_only_for_an_error(void)
+static void test_every_notice_title_is_white(void)
 {
-    ui_notice(&cv, W, H, "Blank cart", "Put a game on it.", false, NULL, 0);
+    ui_notice(&cv, W, H, "Blank cart", "Put a game on it.", NULL, 0);
     TEST_ASSERT_EQUAL_HEX16(UI_COL_TEXT, nth(OP_TEXT, 0)->color);
     TEST_ASSERT_EQUAL_HEX16(UI_COL_TEXT, nth(OP_TEXT, 1)->color);
+    /* A fault reads in the same white as a next step. */
     setUp();
-    ui_notice(&cv, W, H, "Unreadable tag", NULL, true, NULL, 0);
-    TEST_ASSERT_EQUAL_HEX16(UI_COL_WARN, nth(OP_TEXT, 0)->color);
+    ui_notice(&cv, W, H, "Unreadable tag", NULL, NULL, 0);
+    TEST_ASSERT_EQUAL_HEX16(UI_COL_TEXT, nth(OP_TEXT, 0)->color);
     TEST_ASSERT_EQUAL_UINT(1, count(OP_TEXT));
 }
 
 static void test_a_long_notice_title_wraps_in_the_list_font(void)
 {
     ui_notice(&cv, W, H, "This title is far too long for the large font",
-              "body", false, NULL, 0);
+              "body", NULL, 0);
     TEST_ASSERT_EQUAL_UINT8(UI_FONT_LIST, nth(OP_TEXT, 0)->font);
     TEST_ASSERT_EQUAL_UINT8(2, nth(OP_TEXT, 0)->rows);
     TEST_ASSERT_TRUE(nth(OP_TEXT, 1)->y >=
@@ -536,8 +537,8 @@ static void test_a_long_notice_title_wraps_in_the_list_font(void)
 static void test_a_notice_without_hints_has_no_footer_and_a_four_row_body(void)
 {
     ui_notice(&cv, W, H, "Write failed", "code -3 and a detail line long enough "
-              "to wrap over more rows than the notice will give it", true,
-              NULL, 0);
+              "to wrap over more rows than the notice will give it", NULL,
+              0);
     /* The window's fill, and nothing round: no hint bar. */
     TEST_ASSERT_EQUAL_UINT(1, count(OP_FILL));
     TEST_ASSERT_EQUAL_UINT(0, count(OP_ROUND));
@@ -551,7 +552,7 @@ static void test_a_notice_with_hints_ends_in_the_footer(void)
 {
     static const ui_hint_t hints[] = { { "A", "Continue" } };
 
-    ui_notice(&cv, W, H, "Ready", "Insert a cart.", false, hints, 1);
+    ui_notice(&cv, W, H, "Ready", "Insert a cart.", hints, 1);
     TEST_ASSERT_EQUAL_INT16(H - UI_FOOT_H, nth(OP_FILL, 1)->y);
     TEST_ASSERT_EQUAL_INT16(UI_FOOT_H, nth(OP_FILL, 1)->h);
     /* Title, body, then the hint's button, twice, and label. */
@@ -776,7 +777,7 @@ int main(void)
     RUN_TEST(test_no_hints_paints_only_the_background);
     RUN_TEST(test_two_hints_right_align_and_a_word_button_stretches);
     RUN_TEST(test_hints_that_do_not_fit_are_dropped_from_the_end);
-    RUN_TEST(test_the_notice_title_is_red_only_for_an_error);
+    RUN_TEST(test_every_notice_title_is_white);
     RUN_TEST(test_a_long_notice_title_wraps_in_the_list_font);
     RUN_TEST(test_a_notice_without_hints_has_no_footer_and_a_four_row_body);
     RUN_TEST(test_a_notice_with_hints_ends_in_the_footer);
