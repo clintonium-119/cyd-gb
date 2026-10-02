@@ -155,6 +155,20 @@
 #define NFC_DETECT_TIMEOUT_MS 1000
 #define NFC_READY_TIMEOUT_MS   100
 
+// Receiver gain: the PN532's CIU_RFCfg register, bits 6-4 (datasheet
+// Table 245). 0x49 is 33 dB; the default 0x59 is 38 dB. A double-sided cart
+// (tag, ferrite, steel disc, spacer, steel disc, ferrite, tag) held a few mm
+// off-centre at 1-2 mm read both tags at 38 dB and only the facing one at
+// 33 dB, on either side (bench, 2026-10-01, one chip, transmit power at
+// full). 23 dB, the next step down, read nothing at all.
+//
+// Two limits this does not fix. The spacer between the discs is required:
+// without it the rear tag still answered at 33 dB (cardboard worked as well
+// as a magnet, so it is distance, not magnetism). And a cart flat on the
+// reader (0 mm) detunes both coils and reads nothing or both tags, so the
+// shell must hold the cart about 1 mm or more off the antenna.
+#define PN532_RF_CFG 0x49
+
 // ─── NFC tag password ───────────────────────────────────────────────────────
 // THIS PASSWORD IS NOT A SECRET, and nothing about the cartridge scheme
 // depends on it staying one.

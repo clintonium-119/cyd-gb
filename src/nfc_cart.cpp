@@ -292,6 +292,20 @@ bool nfc_init() {
         return false;
     }
 
+    // RFConfiguration analog settings for 106 kbps type A (§7.3.1, Table 19):
+    // the manual's defaults, but with the receiver gain from hw_config.h.
+    // Transmit power stays at full: a tag flat on the reader detunes both
+    // coils and stops answering below about 3/4 power.
+    static const uint8_t analog[13] = {
+        PN532_CMD_RF_CONFIGURATION, 0x0A,
+        PN532_RF_CFG, 0xF4, 0x3F, 0x11, 0x4D, 0x85, 0x61, 0x6F, 0x26, 0x62, 0x87,
+    };
+    if (pn532_command(analog, sizeof(analog), resp, sizeof(resp),
+                      NFC_READY_TIMEOUT_MS) < 0) {
+        Serial.println("[nfc] RFConfiguration analog failed");
+        return false;
+    }
+
     return true;
 }
 
