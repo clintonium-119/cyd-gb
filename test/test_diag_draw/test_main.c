@@ -73,6 +73,8 @@ typedef struct {
     unsigned bar_fills;      /* fills exactly bar_w wide                  */
     unsigned hold_rounds;    /* UI_BAR_H round fills in the help band     */
     int16_t hold_w[2];       /* the first two of them: track, then fill   */
+    unsigned row_pills;      /* DIAG_ROW_H round fills above the help band */
+    int16_t row_pill_y;      /* where the last of them landed             */
     int16_t bar_w;
 
     unsigned edge_top, edge_bottom, edge_left, edge_right;
@@ -197,6 +199,10 @@ static void fk_round_fill(void* ctx, int16_t x, int16_t y, int16_t w,
             f->hold_w[f->hold_rounds] = w;
         }
         f->hold_rounds++;
+    }
+    if (h == DIAG_ROW_H && y + h <= f->help_y) {
+        f->row_pills++;
+        f->row_pill_y = y;
     }
     put_rect(f, x, y, w, h);
 }
@@ -731,7 +737,8 @@ static void test_the_pages_that_had_a_page_hint_still_name_it(void)
     fill_data();
     for (page = 0; page < DIAG_PAGE_COUNT; page++) {
         draw_page(GEOM_53_W, GEOM_53_H, page, 0, true, 0);
-        if (page == DIAG_PAGE_NUDGE || page == DIAG_PAGE_TRIM) {
+        if (page == DIAG_PAGE_NUDGE || page == DIAG_PAGE_TRIM
+            || page == DIAG_PAGE_SYSTEM) {
             continue;
         }
         TEST_ASSERT_TRUE_MESSAGE(drew_text("Sel+L/R"), diag_page_title(page));
@@ -1084,24 +1091,136 @@ static void test_the_trim_page_shows_saved_only_while_the_toast_is_up(void)
     TEST_ASSERT_EQUAL_UINT(0, fk.saved_texts);
 }
 
-static void test_the_system_page_draws_the_games_list_toggle(void)
+/* Where `want` was drawn in the order of text calls, or -1. */
+static int seen_at(const char* want)
+{
+    unsigned i;
+
+    for (i = 0; i < fk.seen_n; i++) {
+        if (strcmp(fk.seen[i], want) == 0) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+/* The System page with the cursor moved `row` rows down from the top. */
+static void draw_system(int16_t w, int16_t h, uint8_t row)
+{
+    draw_page(w, h, DIAG_PAGE_SYSTEM, row, true, 0);
+    TEST_ASSERT_EQUAL_UINT8(row, diag_sys_row(&st));
+}
+
+static void redraw(void)
+{
+    ui_canvas_t cv = canvas_over(&fk, &geom);
+    diag_draw(&st, &data, &geom, &ck, 1000, &cv);
+}
+
+static void test_the_system_page_draws_its_rows_in_order(void)
+{
+    static const char* const labels[6] = {
+        "Frameskip", "Games list", "Boot logo", "Restart setup", "Version",
+        "Built",
+    };
+    uint8_t i;
+
+    fill_data();
+    draw_system(GEOM_24_W, GEOM_24_H, 0);
+    assert_clean();
+    for (i = 0; i < 6; i++) {
+        TEST_ASSERT_TRUE_MESSAGE(seen_at(labels[i]) >= 0, labels[i]);
+        if (i > 0) {
+            TEST_ASSERT_TRUE_MESSAGE(seen_at(labels[i - 1]) < seen_at(labels[i]),
+                                     labels[i]);
+        }
+    }
+}
+
+static void test_only_the_selected_system_row_is_highlighted(void)
+{
+    uint8_t row;
+
+    fill_data();
+    for (row = 0; row < DIAG_SYS_ROW_COUNT; row++) {
+        draw_system(GEOM_53_W, GEOM_53_H, row);
+        assert_clean();
+        TEST_ASSERT_EQUAL_UINT(1, fk.row_pills);
+        TEST_ASSERT_EQUAL_INT16(geom.body_y + row * DIAG_ROW_H,
+                                fk.row_pill_y);
+    }
+}
+
+static void test_the_system_page_draws_both_switches(void)
 {
     fill_data();
-    draw_page(GEOM_24_W, GEOM_24_H, DIAG_PAGE_SYSTEM, 0, true, 0);
-    assert_clean();
-    TEST_ASSERT_TRUE(drew_text("Games list"));
+    draw_system(GEOM_24_W, GEOM_24_H, 0);
     TEST_ASSERT_TRUE(drew_text("Off"));
-    TEST_ASSERT_FALSE(drew_text("On"));
-    TEST_ASSERT_TRUE(drew_text("Toggle"));
+    TEST_ASSERT_TRUE(drew_text("On"));
+    /* Games list first, off; boot logo after it, on. */
+    TEST_ASSERT_TRUE(seen_at("Off") < seen_at("Boot logo"));
+    TEST_ASSERT_TRUE(seen_at("On") > seen_at("Boot logo"));
 
     diag_set_list_mode(&st, true);
-    {
-        ui_canvas_t cv = canvas_over(&fk, &geom);
-        diag_draw(&st, &data, &geom, &ck, 1000, &cv);
-    }
+    diag_set_boot_logo(&st, false);
+    redraw();
     assert_clean();
-    TEST_ASSERT_TRUE(drew_text("On"));
-    TEST_ASSERT_FALSE(drew_text("Off"));
+    TEST_ASSERT_TRUE(seen_at("On") < seen_at("Boot logo"));
+    TEST_ASSERT_TRUE(seen_at("Off") > seen_at("Boot logo"));
+
+    diag_set_list_mode(&st, false);
+    redraw();
+    TEST_ASSERT_TRUE(drew_text("Off"));
+    TEST_ASSERT_FALSE(drew_text("On"));
+}
+
+static void test_a_restart_hold_draws_the_hold_bar(void)
+{
+    static const int16_t ws[3] = { GEOM_24_W, GEOM_26_W, GEOM_53_W };
+    static const int16_t hs[3] = { GEOM_24_H, GEOM_26_H, GEOM_53_H };
+    uint8_t gi;
+
+    fill_data();
+    for (gi = 0; gi < 3; gi++) {
+        draw_system(ws[gi], hs[gi], DIAG_SYS_SETUP);
+        TEST_ASSERT_EQUAL_UINT(0, fk.hold_rounds);
+        TEST_ASSERT_EQUAL_UINT(1, fk.help_texts);
+
+        diag_input(&st, COMBO_EVENT_NONE, 0, 50);
+        diag_input(&st, COMBO_EVENT_NONE, COMBO_BTN_A, 100);
+        diag_input(&st, COMBO_EVENT_NONE, COMBO_BTN_A, 600);
+        TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_SETUP, diag_hold_tool(&st));
+        redraw();
+        assert_clean();
+        TEST_ASSERT_EQUAL_UINT(2, fk.hold_rounds);
+        TEST_ASSERT_EQUAL_INT16(geom.w - 2 * UI_PAD, fk.hold_w[0]);
+        TEST_ASSERT_EQUAL_UINT(0, fk.help_texts);
+
+        /* Letting go puts the page's help line back. */
+        diag_input(&st, COMBO_EVENT_NONE, 0, 700);
+        redraw();
+        TEST_ASSERT_EQUAL_UINT(0, fk.hold_rounds);
+        TEST_ASSERT_EQUAL_UINT(1, fk.help_texts);
+    }
+}
+
+static void test_the_system_footer_names_its_buttons(void)
+{
+    static const int16_t ws[3] = { GEOM_24_W, GEOM_26_W, GEOM_53_W };
+    static const int16_t hs[3] = { GEOM_24_H, GEOM_26_H, GEOM_53_H };
+    uint8_t gi;
+
+    fill_data();
+    for (gi = 0; gi < 3; gi++) {
+        draw_system(ws[gi], hs[gi], 0);
+        assert_clean();
+        TEST_ASSERT_TRUE(drew_text("U/D"));
+        TEST_ASSERT_TRUE(drew_text("Row"));
+        TEST_ASSERT_TRUE(drew_text("L/R"));
+        TEST_ASSERT_TRUE(drew_text("Toggle"));
+        TEST_ASSERT_TRUE(drew_text(
+            "Frameskip, list, logo, setup, build"));
+    }
 }
 
 static void test_a_missing_build_string_still_paints(void)
@@ -1174,7 +1293,11 @@ int main(void)
     RUN_TEST(test_the_trim_page_shows_the_porch_it_would_store);
     RUN_TEST(test_the_trim_page_follows_the_porch_as_it_is_stepped);
     RUN_TEST(test_the_trim_page_shows_saved_only_while_the_toast_is_up);
-    RUN_TEST(test_the_system_page_draws_the_games_list_toggle);
+    RUN_TEST(test_the_system_page_draws_its_rows_in_order);
+    RUN_TEST(test_only_the_selected_system_row_is_highlighted);
+    RUN_TEST(test_the_system_page_draws_both_switches);
+    RUN_TEST(test_a_restart_hold_draws_the_hold_bar);
+    RUN_TEST(test_the_system_footer_names_its_buttons);
     RUN_TEST(test_a_missing_build_string_still_paints);
     RUN_TEST(test_a_missing_card_and_catalog_still_paint);
     RUN_TEST(test_a_null_argument_paints_nothing);

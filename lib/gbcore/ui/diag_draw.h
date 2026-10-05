@@ -108,9 +108,10 @@ void diag_draw(const diag_t* d, const diag_data_t* data,
 void diag_checker_build(diag_checker_t* ck, uint8_t idx);
 
 /*
- * The tag page's help band alone: while a tool is held, the theme's progress
- * bar at diag_hold_pct(); otherwise the band cleared and the last tool's
- * outcome line, or the page's help line when there is none. diag_draw()
+ * A page's help band alone: while a tool is held — a tag tool, or the System
+ * page's Restart setup — the theme's progress bar at diag_hold_pct();
+ * otherwise the band cleared and, on the tag page, the last tool's outcome
+ * line, or the page's help line when there is none. diag_draw()
  * paints it as part of the page; the binding calls it by itself on each
  * DIAG_EV_HOLD. `grow` is a hold tick's repaint, which paints the fill only.
  *

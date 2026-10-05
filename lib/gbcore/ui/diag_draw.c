@@ -72,7 +72,7 @@ static const char* const HELPS[DIAG_PAGE_COUNT] = {
     "Panel and scaler patterns",
     "Centre the window",
     "Match the game's refresh",
-    "Frameskip, games list, build",
+    "Frameskip, list, logo, setup, build",
 };
 
 /* One hint footer per page: what the buttons do here. Paging is named on
@@ -111,8 +111,9 @@ static const ui_hint_t HINTS_TRIM[] = {
     { "Start", "Run" }, { "D-pad", "Porch" }, { "B", "Default" },
     { "A", "Save" },
 };
+/* No room for the page hint beside the row cursor's three. */
 static const ui_hint_t HINTS_SYSTEM[] = {
-    { "A", "Toggle" }, { "U/D", "Frameskip" }, HINT_PAGE,
+    { "U/D", "Row" }, { "L/R", "Frameskip" }, { "A", "Toggle" },
 };
 
 #define HINTS(a) { (a), (uint8_t)(sizeof(a) / sizeof((a)[0])) }
@@ -259,11 +260,7 @@ static void draw_footer(const ui_canvas_t* cv, const diag_layout_t* g,
     if (page >= DIAG_PAGE_COUNT) {
         return;
     }
-    if (page == DIAG_PAGE_NFC) {
-        diag_draw_hold(d, data, g, cv, false);
-    } else {
-        ui_help_line(cv, g->w, g->help_y, HELPS[page]);
-    }
+    diag_draw_hold(d, data, g, cv, false);
     ui_hint_bar(cv, g->w, g->foot_y, FOOTERS[page].hints, FOOTERS[page].n);
 }
 
@@ -737,21 +734,53 @@ static void page_trim(const ui_canvas_t* cv, const diag_layout_t* g,
     }
 }
 
+/* A System row the cursor can sit on: a kv_row, or a whole-width label when
+ * there is no value. With the cursor on it the label sits in the theme's
+ * white pill, hugging the label and stopping short of the value column. */
+static void sys_row(const ui_canvas_t* cv, const diag_layout_t* g,
+                    const diag_t* d, uint8_t row, const char* label,
+                    const char* value)
+{
+    int16_t max_w = (int16_t)(g->w - 2 * UI_PAD);
+
+    if (diag_sys_row(d) != row) {
+        if (value != NULL) {
+            kv_row(cv, g, row, label, value, UI_COL_TEXT);
+        } else {
+            full_row(cv, g, row, label, UI_COL_TEXT);
+        }
+        return;
+    }
+    if (value != NULL) {
+        max_w = (int16_t)(g->label_w + UI_PILL_PAD);
+    }
+    ui_pill_row(cv, UI_PAD, row_y(g, row), max_w, DIAG_ROW_H, label,
+                UI_FONT_SMALL, false, 0);
+    if (value != NULL) {
+        cv->text(cv->ctx, value, (int16_t)(UI_TEXT_X + g->label_w),
+                 row_y(g, row), g->col_w, 1, UI_FONT_SMALL, UI_ALIGN_LEFT,
+                 UI_COL_TEXT, UI_COL_BG);
+    }
+}
+
 static void page_system(const ui_canvas_t* cv, const diag_layout_t* g,
                         const diag_data_t* data, const diag_t* d)
 {
     char buf[16];
 
     snprintf(buf, sizeof(buf), "%u", (unsigned)diag_frameskip(d));
-    kv_row(cv, g, 0, "Frameskip", buf, UI_COL_TEXT);
-    kv_row(cv, g, 1, "Games list", diag_list_mode(d) ? "On" : "Off",
-           UI_COL_TEXT);
-    kv_row(cv, g, 2, "Version",
+    sys_row(cv, g, d, DIAG_SYS_FRAMESKIP, "Frameskip", buf);
+    sys_row(cv, g, d, DIAG_SYS_LIST, "Games list",
+            diag_list_mode(d) ? "On" : "Off");
+    sys_row(cv, g, d, DIAG_SYS_LOGO, "Boot logo",
+            diag_boot_logo(d) ? "On" : "Off");
+    sys_row(cv, g, d, DIAG_SYS_SETUP, "Restart setup", NULL);
+    kv_row(cv, g, 4, "Version",
            (data->fw_version[0] != '\0') ? data->fw_version : "unknown",
-           UI_COL_TEXT);
-    kv_row(cv, g, 3, "Built",
+           UI_COL_DIM);
+    kv_row(cv, g, 5, "Built",
            (data->build_time[0] != '\0') ? data->build_time : "unknown",
-           UI_COL_TEXT);
+           UI_COL_DIM);
 }
 
 /* ─── the draw ────────────────────────────────────────────────────────────── */
@@ -822,7 +851,11 @@ void diag_draw_hold(const diag_t* d, const diag_data_t* data,
         return;
     }
     if (diag_hold_tool(d) == DIAG_TOOL_NONE) {
-        nfc_help(cv, g, data);
+        if (diag_page(d) == DIAG_PAGE_NFC) {
+            nfc_help(cv, g, data);
+        } else if (diag_page(d) < DIAG_PAGE_COUNT) {
+            ui_help_line(cv, g->w, g->help_y, HELPS[diag_page(d)]);
+        }
         return;
     }
     /* The same bar, band and grow-only repaint as the game list's hold:
