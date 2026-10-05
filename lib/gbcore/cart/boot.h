@@ -82,6 +82,11 @@ typedef struct boot_flags_s {
     bool menu_done;
     bool wild_done;
     bool setup_done;
+    /* Restart setup's mode: every wizard step writes over a tag that is ours
+     * or unprotected instead of adopting or refusing it. Set by the
+     * diagnostics System page's Restart setup, cleared by Finish setup. Last,
+     * so a zeroed struct is a first boot that is not rewriting. */
+    bool rewrite;
 } boot_flags_t;
 
 /* ─── Setup-progress record ─────────────────────────────────────────────────

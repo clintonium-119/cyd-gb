@@ -57,13 +57,32 @@ static bool adoptable(enum boot_auth_e auth)
     return auth == BOOT_AUTH_OURS || auth == BOOT_AUTH_OPEN;
 }
 
+/* A restarted setup's answer for a non-blank tag: the step's own write or
+ * pick when the tag is ours or unprotected, the password check when that is
+ * not yet known, and a refusal for a foreign tag. */
+static enum boot_action_e decide_rewrite(const boot_input_t* in,
+                                         enum boot_action_e write)
+{
+    if (in->auth == BOOT_AUTH_UNKNOWN) {
+        return BOOT_NEED_AUTH;
+    }
+    return adoptable(in->auth) ? write : BOOT_HALT_SETUP_INSERT_BLANK;
+}
+
 /* The first-boot wizard: MENU cart, then wildcard, then one game cart. Each
  * step accepts a blank tag, or re-adopts an existing tag of the class it is
  * looking for — which is what makes the wizard survive an NVS clear without
- * the kid having to find fresh tags. */
+ * the kid having to find fresh tags. In a restarted setup (flags.rewrite)
+ * each step instead writes over any tag of ours or an unprotected one,
+ * whatever its class, so the same carts can run setup again. */
 static enum boot_action_e decide_wizard(const boot_input_t* in)
 {
+    bool rewrite = in->flags.rewrite && in->cls != BOOT_CLASS_BLANK;
+
     if (!in->flags.menu_done) {
+        if (rewrite) {
+            return decide_rewrite(in, BOOT_WIZARD_WRITE_MENU);
+        }
         if (in->cls == BOOT_CLASS_BLANK) {
             return BOOT_WIZARD_WRITE_MENU;
         }
@@ -78,6 +97,9 @@ static enum boot_action_e decide_wizard(const boot_input_t* in)
     }
 
     if (!in->flags.wild_done) {
+        if (rewrite) {
+            return decide_rewrite(in, BOOT_WIZARD_PICK_WILD);
+        }
         if (in->cls == BOOT_CLASS_BLANK) {
             return BOOT_WIZARD_PICK_WILD;
         }
@@ -91,7 +113,11 @@ static enum boot_action_e decide_wizard(const boot_input_t* in)
         return BOOT_HALT_SETUP_INSERT_BLANK;
     }
 
-    /* Last step: one ordinary game cart, which only a blank tag can become. */
+    /* Last step: one ordinary game cart, which only a blank tag can become
+     * outside a restarted setup. */
+    if (rewrite) {
+        return decide_rewrite(in, BOOT_WIZARD_PICK_GAME);
+    }
     if (in->cls == BOOT_CLASS_BLANK) {
         return BOOT_WIZARD_PICK_GAME;
     }

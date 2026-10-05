@@ -332,6 +332,64 @@ static void test_wizard_step_three_game_cart(void)
     TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_INSERT_BLANK, boot_decide(&in));
 }
 
+/* A restarted setup writes over any tag of ours or an unprotected one at
+ * every step, whatever its class; a foreign tag is still refused. */
+static void test_rewrite_writes_over_our_own_and_open_tags(void)
+{
+    static const enum boot_action_e write[3] = {
+        BOOT_WIZARD_WRITE_MENU, BOOT_WIZARD_PICK_WILD, BOOT_WIZARD_PICK_GAME,
+    };
+    static const enum boot_class_e tagged[3] = {
+        BOOT_CLASS_MENU, BOOT_CLASS_WILD, BOOT_CLASS_GAME,
+    };
+    int step;
+    size_t c;
+
+    for (step = 0; step < 3; step++) {
+        boot_input_t in = wizard_input(step >= 1, step >= 2);
+        in.flags.rewrite = true;
+        for (c = 0; c < 3; c++) {
+            in.cls = tagged[c];
+            in.auth = BOOT_AUTH_OURS;
+            TEST_ASSERT_EQUAL_INT(write[step], boot_decide(&in));
+            in.auth = BOOT_AUTH_OPEN;
+            TEST_ASSERT_EQUAL_INT(write[step], boot_decide(&in));
+            in.auth = BOOT_AUTH_UNKNOWN;
+            TEST_ASSERT_EQUAL_INT(BOOT_NEED_AUTH, boot_decide(&in));
+            in.auth = BOOT_AUTH_FOREIGN;
+            TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_INSERT_BLANK,
+                                  boot_decide(&in));
+        }
+    }
+}
+
+/* A blank tag answers the same with the rewrite mode on or off. */
+static void test_rewrite_leaves_blank_tags_unchanged(void)
+{
+    int step;
+
+    for (step = 0; step < 3; step++) {
+        boot_input_t in = wizard_input(step >= 1, step >= 2);
+        enum boot_action_e plain;
+        in.cls = BOOT_CLASS_BLANK;
+        plain = boot_decide(&in);
+        in.flags.rewrite = true;
+        TEST_ASSERT_EQUAL_INT(plain, boot_decide(&in));
+    }
+}
+
+/* The mode only means something inside the wizard. */
+static void test_rewrite_is_ignored_once_setup_is_done(void)
+{
+    boot_input_t in = base_input();
+
+    in.flags.rewrite = true;
+    in.cls = BOOT_CLASS_GAME;
+    in.auth = BOOT_AUTH_OURS;
+    set_rom(&in, "Tetris.gb");
+    TEST_ASSERT_EQUAL_INT(BOOT_LOAD, boot_decide(&in));
+}
+
 /* No wizard input can reach the writer or load a game. */
 static void test_unfinished_setup_never_loads_or_opens_the_writer(void)
 {
@@ -340,24 +398,29 @@ static void test_unfinished_setup_never_loads_or_opens_the_writer(void)
     int menu;
     int wild;
     int pending;
+    int rewrite;
 
     for (cls = 0; cls <= BOOT_CLASS_GAME; cls++) {
         for (auth = 0; auth <= BOOT_AUTH_FOREIGN; auth++) {
             for (menu = 0; menu < 2; menu++) {
                 for (wild = 0; wild < 2; wild++) {
                     for (pending = 0; pending < 2; pending++) {
-                        boot_input_t in = wizard_input(menu != 0, wild != 0);
-                        enum boot_action_e a;
-                        in.cls = (enum boot_class_e)cls;
-                        in.auth = (enum boot_auth_e)auth;
-                        if (pending) {
-                            set_pending(&in, "Tetris.gb",
-                                        BOOT_TARGET_WILDCARD);
+                        for (rewrite = 0; rewrite < 2; rewrite++) {
+                            boot_input_t in =
+                                wizard_input(menu != 0, wild != 0);
+                            enum boot_action_e a;
+                            in.cls = (enum boot_class_e)cls;
+                            in.auth = (enum boot_auth_e)auth;
+                            in.flags.rewrite = (rewrite != 0);
+                            if (pending) {
+                                set_pending(&in, "Tetris.gb",
+                                            BOOT_TARGET_WILDCARD);
+                            }
+                            a = boot_decide(&in);
+                            TEST_ASSERT_NOT_EQUAL(BOOT_LOAD, a);
+                            TEST_ASSERT_NOT_EQUAL(BOOT_OPEN_WRITER, a);
+                            TEST_ASSERT_NOT_EQUAL(BOOT_EXECUTE_PENDING, a);
                         }
-                        a = boot_decide(&in);
-                        TEST_ASSERT_NOT_EQUAL(BOOT_LOAD, a);
-                        TEST_ASSERT_NOT_EQUAL(BOOT_OPEN_WRITER, a);
-                        TEST_ASSERT_NOT_EQUAL(BOOT_EXECUTE_PENDING, a);
                     }
                 }
             }
@@ -1334,6 +1397,9 @@ int main(void)
     RUN_TEST(test_wizard_step_one_menu_cart);
     RUN_TEST(test_wizard_step_two_wildcard);
     RUN_TEST(test_wizard_step_three_game_cart);
+    RUN_TEST(test_rewrite_writes_over_our_own_and_open_tags);
+    RUN_TEST(test_rewrite_leaves_blank_tags_unchanged);
+    RUN_TEST(test_rewrite_is_ignored_once_setup_is_done);
     RUN_TEST(test_unfinished_setup_never_loads_or_opens_the_writer);
     RUN_TEST(test_need_auth_is_only_returned_while_auth_is_unknown);
     RUN_TEST(test_after_pick_table);
