@@ -34,6 +34,9 @@ struct settings_t {
     // The games-list fallback mode, switched from the diagnostics System page.
     // Off by default: a unit only offers the list when a builder chose it.
     bool list_mode;
+    // Whether a game starts through the DMG boot ROM and its logo, switched
+    // from the diagnostics System page. On by default.
+    bool boot_logo;
 };
 
 // volume is Off, Low, Med or High, so a bigger number is louder. Off means

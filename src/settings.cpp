@@ -34,6 +34,7 @@ void settings_defaults(settings_t* s) {
     // Med, not High: halfway in loudness between the quiet and loud steps.
     s->volume = SETTINGS_VOL_MED;
     s->list_mode = false;
+    s->boot_logo = true;
     s->game_x = GAME_X;
     s->game_y = GAME_Y;
     // The batch-typical null, not the panel's power-on porch. An
@@ -57,6 +58,7 @@ bool settings_load(settings_t* s) {
     if (has) {
         s->frameskip = prefs.getUChar("fskip", s->frameskip);
         s->list_mode = prefs.getBool("glist", s->list_mode);
+        s->boot_logo = prefs.getBool("blogo", s->boot_logo);
         s->brightness = prefs.getUChar("bright", s->brightness);
         // "vol3", not "vol": the old key held a High/Med/Low/Off index that
         // counted down towards louder, and read with the new encoding it
@@ -124,6 +126,7 @@ void settings_save(const settings_t* s) {
     prefs.begin("settings", false);
     prefs.putUChar("fskip", s->frameskip);
     prefs.putBool("glist", s->list_mode);
+    prefs.putBool("blogo", s->boot_logo);
     prefs.putUChar("bright", s->brightness);
     prefs.putUChar("vol3", s->volume);
     prefs.putShort("gx", s->game_x);

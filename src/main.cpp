@@ -496,9 +496,13 @@ static void load_and_run(const char* name) {
         load_halt("Map failed", "");
     }
     // Read on the stack: emu_init() copies it into gnuboy's own buffer.
-    uint8_t boot_rom[DMG_BOOT_ROM_SIZE];
-    if (sd_boot_rom_read(boot_rom, sizeof(boot_rom))) {
-        emu_set_boot_rom(boot_rom);
+    // With the logo switched off nothing is set, and the game starts at
+    // 0x0100 as it does on a card without the boot ROM file.
+    if (settings.boot_logo) {
+        uint8_t boot_rom[DMG_BOOT_ROM_SIZE];
+        if (sd_boot_rom_read(boot_rom, sizeof(boot_rom))) {
+            emu_set_boot_rom(boot_rom);
+        }
     }
     if (!emu_init(rom, rom_len)) {
         load_halt("Init failed", "");
