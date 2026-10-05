@@ -1201,6 +1201,28 @@ static void test_a_restart_hold_draws_the_hold_bar(void)
         redraw();
         TEST_ASSERT_EQUAL_UINT(0, fk.hold_rounds);
         TEST_ASSERT_EQUAL_UINT(1, fk.help_texts);
+        TEST_ASSERT_FALSE(drew_text("Setup restarts at next power-on"));
+    }
+}
+
+static void test_a_completed_restart_stays_on_the_page(void)
+{
+    static const int16_t ws[3] = { GEOM_24_W, GEOM_26_W, GEOM_53_W };
+    static const int16_t hs[3] = { GEOM_24_H, GEOM_26_H, GEOM_53_H };
+    uint8_t gi;
+
+    fill_data();
+    for (gi = 0; gi < 3; gi++) {
+        draw_system(ws[gi], hs[gi], DIAG_SYS_SETUP);
+        diag_input(&st, COMBO_EVENT_NONE, 0, 50);
+        diag_input(&st, COMBO_EVENT_NONE, COMBO_BTN_A, 100);
+        diag_input(&st, COMBO_EVENT_NONE, COMBO_BTN_A, 1100);
+        diag_input(&st, COMBO_EVENT_NONE, 0, 1200);
+        diag_tick(&st, 60000);
+        redraw();
+        assert_clean();
+        TEST_ASSERT_EQUAL_UINT(0, fk.body_overruns);
+        TEST_ASSERT_TRUE(drew_text("Setup restarts at next power-on"));
     }
 }
 
@@ -1297,6 +1319,7 @@ int main(void)
     RUN_TEST(test_only_the_selected_system_row_is_highlighted);
     RUN_TEST(test_the_system_page_draws_both_switches);
     RUN_TEST(test_a_restart_hold_draws_the_hold_bar);
+    RUN_TEST(test_a_completed_restart_stays_on_the_page);
     RUN_TEST(test_the_system_footer_names_its_buttons);
     RUN_TEST(test_a_missing_build_string_still_paints);
     RUN_TEST(test_a_missing_card_and_catalog_still_paint);

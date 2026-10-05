@@ -818,8 +818,11 @@ static void test_a_held_on_restart_setup_fires_once(void)
 
     TEST_ASSERT_EQUAL_HEX16(DIAG_EV_HOLD, ev);
     TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_SETUP, diag_hold_tool(&d));
-    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_SETUP_RESTART | DIAG_EV_HOLD,
+    TEST_ASSERT_FALSE(diag_setup_restarted(&d));
+    TEST_ASSERT_EQUAL_HEX16(
+        DIAG_EV_SETUP_RESTART | DIAG_EV_HOLD | DIAG_EV_REDRAW,
         sample(COMBO_EVENT_NONE, COMBO_BTN_A, 1100));
+    TEST_ASSERT_TRUE(diag_setup_restarted(&d));
     TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
     TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_A, 1200));
     TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_A, 3000));
@@ -835,6 +838,7 @@ static void test_releasing_early_cancels_the_restart(void)
     TEST_ASSERT_EQUAL_HEX16(DIAG_EV_HOLD, sample(COMBO_EVENT_NONE, 0, 700));
     TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
     TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, 0, 2000));
+    TEST_ASSERT_FALSE(diag_setup_restarted(&d));
 }
 
 static void test_an_extra_button_cancels_the_restart(void)
@@ -926,6 +930,7 @@ static void test_a_null_state_is_inert(void)
     TEST_ASSERT_EQUAL_UINT8(DIAG_PATTERN_BARS, diag_pattern(NULL));
     TEST_ASSERT_EQUAL_UINT8(0, diag_frameskip(NULL));
     TEST_ASSERT_FALSE(diag_boot_logo(NULL));
+    TEST_ASSERT_FALSE(diag_setup_restarted(NULL));
     TEST_ASSERT_EQUAL_UINT8(DIAG_SYS_FRAMESKIP, diag_sys_row(NULL));
     TEST_ASSERT_FALSE(diag_toast_active(NULL, 100));
 

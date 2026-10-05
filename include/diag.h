@@ -19,15 +19,17 @@
 //      diagnostics verbs — factory blank, wildcard, MENU cart and starter
 //      game cart — each held to confirm. The inspector shows what is on a
 //      cart — its UID, its protection bytes, its raw NDEF and its class. A
-//      tag the build password does not open is refused, and the setup flags
-//      are never touched.
+//      tag the build password does not open is refused, and the tag tools
+//      never touch the setup flags. The System page's Restart setup clears
+//      them, held to confirm, for the next power-on.
 //   4. It reaches for nothing above or below itself: no writer, no
 //      provisioner verb but those four, no ROM storage and no emulator
 //      symbol appears in its sources. A guard test pins that by substring, so
 //      the rule holds in comments too. It opens the shared picker screen for
 //      the wildcard and game-cart tools' picks only, and launches nothing.
-//      It holds one stored toggle, the games-list fallback mode, which the
-//      boot path reads on a later power-on.
+//      It holds two stored toggles, the games-list fallback mode and the
+//      boot logo, and can restart setup; the boot path reads all three on a
+//      later power-on.
 //   5. When it renders, it renders inside the game window, like every other
 //      screen on this device — which is what lets the nudge page move the
 //      whole window while a builder watches its border.

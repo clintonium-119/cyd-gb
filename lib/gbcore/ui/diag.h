@@ -460,6 +460,7 @@ typedef struct diag_s {
     bool list_mode;       /* the games-list fallback mode, a stored flag  */
     bool boot_logo;       /* the DMG boot logo before a game, stored      */
     uint8_t sys_row;      /* enum diag_sys_row_e, the System page cursor  */
+    bool setup_restarted; /* Restart setup fired; shown until power-off   */
     uint32_t toast_until_ms;
     bool toast;
 
@@ -603,6 +604,10 @@ bool diag_boot_logo(const diag_t* d);
 
 /* The System page's selected row, enum diag_sys_row_e. */
 uint8_t diag_sys_row(const diag_t* d);
+
+/* Whether Restart setup has fired this session. It takes effect on the next
+ * power-on, so the page says so for as long as diagnostics runs. */
+bool diag_setup_restarted(const diag_t* d);
 
 /* The buttons already down when the page gets control back — from the game
  * list a tool opened, say. None of them is a press until let go, so a B that

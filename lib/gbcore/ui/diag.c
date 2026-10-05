@@ -127,6 +127,7 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
     d->list_mode = false;
     d->boot_logo = true;
     d->sys_row = DIAG_SYS_FRAMESKIP;
+    d->setup_restarted = false;
     d->toast_until_ms = 0;
     d->toast = false;
     d->hold_tool = DIAG_TOOL_NONE;
@@ -781,6 +782,12 @@ static uint16_t hold_step(diag_t* d, uint8_t joypad, uint32_t now_ms)
     d->hold_elapsed_ms = now_ms - d->hold_start_ms;
     if (d->hold_elapsed_ms >= (uint32_t)PICKER_HOLD_MS) {
         d->hold_tool = DIAG_TOOL_NONE;
+        if (tool == DIAG_TOOL_SETUP) {
+            /* The page shows the restart, so it repaints. */
+            d->setup_restarted = true;
+            return (uint16_t)(tool_event(tool) | DIAG_EV_HOLD
+                              | DIAG_EV_REDRAW);
+        }
         return (uint16_t)(tool_event(tool) | DIAG_EV_HOLD);
     }
     return DIAG_EV_HOLD;
@@ -1042,6 +1049,11 @@ bool diag_boot_logo(const diag_t* d)
 uint8_t diag_sys_row(const diag_t* d)
 {
     return (d != NULL) ? d->sys_row : (uint8_t)DIAG_SYS_FRAMESKIP;
+}
+
+bool diag_setup_restarted(const diag_t* d)
+{
+    return (d != NULL) ? d->setup_restarted : false;
 }
 
 bool diag_toast_active(const diag_t* d, uint32_t now_ms)

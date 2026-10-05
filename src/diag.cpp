@@ -589,6 +589,7 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
     // starting the guess over and walking a good porch off its null.
     diag_trim_set_dir(&d, s->trim_dir);
     diag_set_list_mode(&d, s->list_mode);
+    diag_set_boot_logo(&d, s->boot_logo);
 #ifdef DEV_DIAG_NFC
     d.page = DIAG_PAGE_NFC;   // bench only: see main.cpp
 #endif
@@ -695,14 +696,33 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
             Serial.printf("[DIAG] frameskip %u\n", (unsigned)s->frameskip);
         }
         if (flags & DIAG_EV_SWITCH) {
+            bool list_was = s->list_mode;
+
             s->list_mode = diag_list_mode(&d);
+            s->boot_logo = diag_boot_logo(&d);
             // Off forgets the remembered game, so switching the mode back on
             // later opens the list rather than a stale pick.
-            if (!s->list_mode) {
+            if (list_was && !s->list_mode) {
                 settings_list_game_clear();
             }
             settings_save(s);
-            Serial.printf("[DIAG] games list %s\n", s->list_mode ? "on" : "off");
+            Serial.printf("[DIAG] games list %s, boot logo %s\n",
+                          s->list_mode ? "on" : "off",
+                          s->boot_logo ? "on" : "off");
+        }
+        if (flags & DIAG_EV_SETUP_RESTART) {
+            // Settings traffic, not a tag write: the next power-on finds
+            // setup unstarted and in its rewrite mode, so each step writes
+            // over our own carts. The made record and any pending writer
+            // selection belong to the setup being thrown away; the
+            // games-list mode and its remembered game do not.
+            boot_flags_t f = {};
+
+            f.rewrite = true;
+            settings_wizard_save(&f);
+            settings_made_clear();
+            settings_pending_clear();
+            Serial.println("[DIAG] setup restart: wizard at next power-on");
         }
         if ((flags & DIAG_EV_TONE) && !diag_tone_on(&d)) {
             speaker_silence();
