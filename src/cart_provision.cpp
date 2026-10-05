@@ -150,6 +150,9 @@ int provision_wizard_finish(boot_flags_t* flags) {
         return NTAG_ERR_ARGS;
     }
     flags->setup_done = true;
+    // A restarted setup's rewrite mode ends with the setup it restarted:
+    // only another Restart setup writes over carts again.
+    flags->rewrite = false;
     Serial.println("[CART] setup finished");
     // Setup is over, so the "made this setup" marks have nothing left to
     // mark.

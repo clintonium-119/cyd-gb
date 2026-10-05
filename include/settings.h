@@ -111,8 +111,10 @@ void settings_flush(uint32_t now_ms, bool force);
 // power cycle the record exists to span, and an age would only invite a
 // staleness rule the flow does not want.
 //
-// The three wizard flags record how far first-boot setup got: the menu cart
+// The four wizard flags record how far first-boot setup got: the menu cart
 // written or adopted, the wildcard written or adopted, and setup finished.
+// The fourth is a mode rather than progress: a setup restarted from the
+// diagnostics System page writes over our own carts until Finish clears it.
 // Nothing else about the wizard is kept — no UID, and no list of which game
 // carts it wrote.
 //

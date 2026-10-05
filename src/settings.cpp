@@ -327,6 +327,7 @@ void settings_wizard_load(boot_flags_t* f) {
     f->menu_done = prefs.getBool("wz_menu", false);
     f->wild_done = prefs.getBool("wz_wild", false);
     f->setup_done = prefs.getBool("wz_done", false);
+    f->rewrite = prefs.getBool("wz_rewr", false);
     prefs.end();
 }
 
@@ -335,5 +336,6 @@ void settings_wizard_save(const boot_flags_t* f) {
     prefs.putBool("wz_menu", f->menu_done);
     prefs.putBool("wz_wild", f->wild_done);
     prefs.putBool("wz_done", f->setup_done);
+    prefs.putBool("wz_rewr", f->rewrite);
     prefs.end();
 }
