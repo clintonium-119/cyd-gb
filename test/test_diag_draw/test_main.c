@@ -1094,7 +1094,7 @@ static void test_the_system_page_draws_the_games_list_toggle(void)
     TEST_ASSERT_FALSE(drew_text("On"));
     TEST_ASSERT_TRUE(drew_text("Toggle"));
 
-    diag_input(&st, COMBO_EVENT_NONE, COMBO_BTN_A, 1000);
+    diag_set_list_mode(&st, true);
     {
         ui_canvas_t cv = canvas_over(&fk, &geom);
         diag_draw(&st, &data, &geom, &ck, 1000, &cv);

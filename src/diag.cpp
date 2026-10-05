@@ -694,7 +694,7 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
             settings_save(s);
             Serial.printf("[DIAG] frameskip %u\n", (unsigned)s->frameskip);
         }
-        if (flags & DIAG_EV_LIST_MODE) {
+        if (flags & DIAG_EV_SWITCH) {
             s->list_mode = diag_list_mode(&d);
             // Off forgets the remembered game, so switching the mode back on
             // later opens the list rather than a stale pick.

@@ -112,6 +112,18 @@ enum diag_tool_e {
     DIAG_TOOL_MENU,
     DIAG_TOOL_WILD,
     DIAG_TOOL_GAME,
+    /* Not a tag tool: the System page's Restart setup, A held alone on its
+     * row. It shares the hold bar and its timing. */
+    DIAG_TOOL_SETUP,
+};
+
+/* The System page's selectable rows, top to bottom. */
+enum diag_sys_row_e {
+    DIAG_SYS_FRAMESKIP = 0,
+    DIAG_SYS_LIST,
+    DIAG_SYS_LOGO,
+    DIAG_SYS_SETUP,
+    DIAG_SYS_ROW_COUNT,
 };
 
 /* What the last tool did, as the binding reports it back for the page to
@@ -342,8 +354,9 @@ enum diag_trim_pat_e {
  * because the fixture a reading was taken on cannot be shown on a screen the
  * fixture fills. */
 #define DIAG_EV_TRIM_FIXTURE 0x100
-/* The games-list mode flipped: the binding stores it. */
-#define DIAG_EV_LIST_MODE   0x200
+/* A System-page switch flipped — the games-list mode or the boot logo: the
+ * binding stores both. */
+#define DIAG_EV_SWITCH      0x200
 /* A tag-page tool's hold completed: the binding carries the tool out. WILD
  * and GAME ask for a game list first. */
 #define DIAG_EV_NFC_BLANK   0x400
@@ -352,6 +365,9 @@ enum diag_trim_pat_e {
 /* The hold bar moved or cleared: the binding repaints the bar alone. */
 #define DIAG_EV_HOLD        0x2000
 #define DIAG_EV_NFC_GAME    0x4000
+/* Restart setup's hold completed: the binding clears the setup for the next
+ * power-on. The last free bit of the event word. */
+#define DIAG_EV_SETUP_RESTART 0x8000
 
 enum diag_result_e {
     DIAG_OK = 0,
@@ -442,10 +458,13 @@ typedef struct diag_s {
     uint8_t pattern;      /* enum diag_pattern_e                          */
     uint8_t frameskip;
     bool list_mode;       /* the games-list fallback mode, a stored flag  */
+    bool boot_logo;       /* the DMG boot logo before a game, stored      */
+    uint8_t sys_row;      /* enum diag_sys_row_e, the System page cursor  */
     uint32_t toast_until_ms;
     bool toast;
 
-    /* The tag page's tool hold, timed the way the game list times its own:
+    /* A tool's hold — the tag page's four and Restart setup — timed the way
+     * the game list times its own:
      * which tool, from when, and how far it has got. */
     uint8_t hold_tool;        /* enum diag_tool_e                           */
     uint32_t hold_start_ms;
@@ -548,6 +567,10 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
  * while it runs reports DIAG_EV_HOLD; after PICKER_HOLD_MS it reports the
  * tool's event once. Any change to the word, or a page change, cancels it.
  *
+ * On the System page Up/Down move the row cursor (clamped), Left/Right step
+ * frameskip, and A flips the selected switch (DIAG_EV_SWITCH). A held alone
+ * on Restart setup runs the same hold and reports DIAG_EV_SETUP_RESTART.
+ *
  * Returns the OR of the DIAG_EV_* flags, or 0 for a NULL state.
  */
 uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
@@ -570,8 +593,16 @@ uint8_t diag_pattern(const diag_t* d);
 uint8_t diag_frameskip(const diag_t* d);
 
 /* The games-list mode starts off at diag_init(); the binding seeds the stored
- * value here. A on the System page flips it and reports DIAG_EV_LIST_MODE. */
+ * value here. A on the System page flips it and reports DIAG_EV_SWITCH. */
 void diag_set_list_mode(diag_t* d, bool on);
+
+/* The boot logo starts on at diag_init(); the binding seeds the stored value
+ * here. A on the System page flips it and reports DIAG_EV_SWITCH. */
+void diag_set_boot_logo(diag_t* d, bool on);
+bool diag_boot_logo(const diag_t* d);
+
+/* The System page's selected row, enum diag_sys_row_e. */
+uint8_t diag_sys_row(const diag_t* d);
 
 /* The buttons already down when the page gets control back — from the game
  * list a tool opened, say. None of them is a press until let go, so a B that
@@ -580,7 +611,7 @@ void diag_set_held(diag_t* d, uint8_t joypad);
 bool diag_list_mode(const diag_t* d);
 bool diag_toast_active(const diag_t* d, uint32_t now_ms);
 
-/* The tool being held on the tag page, DIAG_TOOL_NONE when none is, and how
+/* The tool being held, DIAG_TOOL_NONE when none is, and how
  * far its hold has got as 0..100 — 0 when none is. */
 uint8_t diag_hold_tool(const diag_t* d);
 uint8_t diag_hold_pct(const diag_t* d);

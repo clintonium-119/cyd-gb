@@ -668,6 +668,14 @@ static void test_the_display_pattern_cycles_three_ways_round(void)
 
 /* ─── the system page ─────────────────────────────────────────────────────── */
 
+/* Move the System page cursor to `row` from the top, one Down at a time. */
+static void goto_sys_row(uint8_t row)
+{
+    goto_page(DIAG_PAGE_SYSTEM);
+    hammer(COMBO_BTN_DOWN, row);
+    TEST_ASSERT_EQUAL_UINT8(row, diag_sys_row(&d));
+}
+
 static void test_frameskip_steps_within_its_range(void)
 {
     uint8_t i;
@@ -678,39 +686,175 @@ static void test_frameskip_steps_within_its_range(void)
     for (i = 1; i <= DIAG_FRAMESKIP_MAX; i++) {
         sample(COMBO_EVENT_NONE, 0, (uint32_t)(i * 100));
         TEST_ASSERT_EQUAL_HEX16(DIAG_EV_FRAMESKIP | DIAG_EV_REDRAW,
-            sample(COMBO_EVENT_NONE, COMBO_BTN_DOWN,
+            sample(COMBO_EVENT_NONE, COMBO_BTN_RIGHT,
                    (uint32_t)(i * 100 + 5)));
         TEST_ASSERT_EQUAL_UINT8(i, diag_frameskip(&d));
     }
 
     sample(COMBO_EVENT_NONE, 0, 1000);
-    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_DOWN, 1005));
+    TEST_ASSERT_EQUAL_HEX16(0,
+        sample(COMBO_EVENT_NONE, COMBO_BTN_RIGHT, 1005));
     TEST_ASSERT_EQUAL_UINT8(DIAG_FRAMESKIP_MAX, diag_frameskip(&d));
 
-    hammer(COMBO_BTN_UP, DIAG_FRAMESKIP_MAX);
+    hammer(COMBO_BTN_LEFT, DIAG_FRAMESKIP_MAX);
     TEST_ASSERT_EQUAL_UINT8(0, diag_frameskip(&d));
     sample(COMBO_EVENT_NONE, 0, 4000);
-    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_UP, 4005));
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_LEFT, 4005));
     TEST_ASSERT_EQUAL_UINT8(0, diag_frameskip(&d));
 }
 
-static void test_a_on_the_system_page_toggles_the_games_list(void)
+/* Left/Right are frameskip on every row, and Up/Down never are. */
+static void test_frameskip_steps_from_any_row(void)
+{
+    goto_sys_row(DIAG_SYS_SETUP);
+    hammer(COMBO_BTN_RIGHT, 2);
+    TEST_ASSERT_EQUAL_UINT8(2, diag_frameskip(&d));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_SYS_SETUP, diag_sys_row(&d));
+    hammer(COMBO_BTN_UP, 3);
+    TEST_ASSERT_EQUAL_UINT8(2, diag_frameskip(&d));
+}
+
+static void test_the_cursor_moves_and_clamps_at_both_ends(void)
+{
+    uint8_t i;
+
+    goto_page(DIAG_PAGE_SYSTEM);
+    TEST_ASSERT_EQUAL_UINT8(DIAG_SYS_FRAMESKIP, diag_sys_row(&d));
+
+    sample(COMBO_EVENT_NONE, 0, 50);
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_UP, 55));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_SYS_FRAMESKIP, diag_sys_row(&d));
+
+    for (i = 1; i < DIAG_SYS_ROW_COUNT; i++) {
+        sample(COMBO_EVENT_NONE, 0, (uint32_t)(i * 100));
+        TEST_ASSERT_EQUAL_HEX16(DIAG_EV_REDRAW,
+            sample(COMBO_EVENT_NONE, COMBO_BTN_DOWN,
+                   (uint32_t)(i * 100 + 5)));
+        TEST_ASSERT_EQUAL_UINT8(i, diag_sys_row(&d));
+    }
+
+    /* No wrap at the bottom. */
+    sample(COMBO_EVENT_NONE, 0, 1000);
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_DOWN, 1005));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_SYS_SETUP, diag_sys_row(&d));
+
+    hammer(COMBO_BTN_UP, 10);
+    TEST_ASSERT_EQUAL_UINT8(DIAG_SYS_FRAMESKIP, diag_sys_row(&d));
+}
+
+static void test_the_cursor_resets_on_page_entry(void)
+{
+    goto_sys_row(DIAG_SYS_LOGO);
+    sample(COMBO_EVENT_BRIGHT_UP, COMBO_BTN_SELECT, 100);
+    sample(COMBO_EVENT_BRIGHT_DOWN, COMBO_BTN_SELECT, 200);
+    TEST_ASSERT_EQUAL_UINT8(DIAG_PAGE_SYSTEM, diag_page(&d));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_SYS_FRAMESKIP, diag_sys_row(&d));
+}
+
+static void test_a_on_the_frameskip_row_does_nothing(void)
 {
     goto_page(DIAG_PAGE_SYSTEM);
+    sample(COMBO_EVENT_NONE, 0, 100);
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_A, 105));
+    TEST_ASSERT_FALSE(diag_list_mode(&d));
+    TEST_ASSERT_TRUE(diag_boot_logo(&d));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
+}
+
+static void test_a_on_the_games_list_row_toggles_it(void)
+{
+    goto_sys_row(DIAG_SYS_LIST);
     TEST_ASSERT_FALSE(diag_list_mode(&d));
 
     sample(COMBO_EVENT_NONE, 0, 100);
-    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_LIST_MODE | DIAG_EV_REDRAW,
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_SWITCH | DIAG_EV_REDRAW,
                             sample(COMBO_EVENT_NONE, COMBO_BTN_A, 105));
     TEST_ASSERT_TRUE(diag_list_mode(&d));
+    TEST_ASSERT_TRUE(diag_boot_logo(&d));
 
     sample(COMBO_EVENT_NONE, 0, 200);
-    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_LIST_MODE | DIAG_EV_REDRAW,
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_SWITCH | DIAG_EV_REDRAW,
                             sample(COMBO_EVENT_NONE, COMBO_BTN_A, 205));
     TEST_ASSERT_FALSE(diag_list_mode(&d));
 }
 
-static void test_a_on_any_other_page_leaves_the_games_list_alone(void)
+static void test_a_on_the_boot_logo_row_toggles_it(void)
+{
+    goto_sys_row(DIAG_SYS_LOGO);
+    TEST_ASSERT_TRUE(diag_boot_logo(&d));
+
+    sample(COMBO_EVENT_NONE, 0, 100);
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_SWITCH | DIAG_EV_REDRAW,
+                            sample(COMBO_EVENT_NONE, COMBO_BTN_A, 105));
+    TEST_ASSERT_FALSE(diag_boot_logo(&d));
+    TEST_ASSERT_FALSE(diag_list_mode(&d));
+
+    sample(COMBO_EVENT_NONE, 0, 200);
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_SWITCH | DIAG_EV_REDRAW,
+                            sample(COMBO_EVENT_NONE, COMBO_BTN_A, 205));
+    TEST_ASSERT_TRUE(diag_boot_logo(&d));
+}
+
+/* A pressed on Restart setup at t = 100 and held to `until`; returns the OR
+ * of every event past the press. */
+static uint16_t hold_restart(uint32_t until)
+{
+    uint16_t ev = 0;
+    uint32_t t;
+
+    goto_sys_row(DIAG_SYS_SETUP);
+    sample(COMBO_EVENT_NONE, 0, 50);
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_HOLD,
+        sample(COMBO_EVENT_NONE, COMBO_BTN_A, 100));
+    for (t = 200; t <= until; t += 100) {
+        ev |= sample(COMBO_EVENT_NONE, COMBO_BTN_A, t);
+    }
+    return ev;
+}
+
+static void test_a_held_on_restart_setup_fires_once(void)
+{
+    uint16_t ev = hold_restart(1000);
+
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_HOLD, ev);
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_SETUP, diag_hold_tool(&d));
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_SETUP_RESTART | DIAG_EV_HOLD,
+        sample(COMBO_EVENT_NONE, COMBO_BTN_A, 1100));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_A, 1200));
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_A, 3000));
+    /* Neither switch moved. */
+    TEST_ASSERT_FALSE(diag_list_mode(&d));
+    TEST_ASSERT_TRUE(diag_boot_logo(&d));
+}
+
+static void test_releasing_early_cancels_the_restart(void)
+{
+    hold_restart(600);
+    TEST_ASSERT_EQUAL_UINT8(50, diag_hold_pct(&d));
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_HOLD, sample(COMBO_EVENT_NONE, 0, 700));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, 0, 2000));
+}
+
+static void test_an_extra_button_cancels_the_restart(void)
+{
+    hold_restart(500);
+    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_HOLD,
+        sample(COMBO_EVENT_NONE, COMBO_BTN_A | COMBO_BTN_B, 600));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
+    TEST_ASSERT_EQUAL_HEX16(0,
+        sample(COMBO_EVENT_NONE, COMBO_BTN_A | COMBO_BTN_B, 2000));
+
+    /* Nor does it start with anything else already down. */
+    setUp();
+    goto_sys_row(DIAG_SYS_SETUP);
+    sample(COMBO_EVENT_NONE, COMBO_BTN_SELECT, 50);
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, SEL_A, 100));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
+}
+
+static void test_a_on_any_other_page_leaves_the_switches_alone(void)
 {
     uint8_t page;
 
@@ -722,22 +866,35 @@ static void test_a_on_any_other_page_leaves_the_games_list_alone(void)
         goto_page(page);
         sample(COMBO_EVENT_NONE, 0, 100);
         TEST_ASSERT_EQUAL_HEX16(
-            0, sample(COMBO_EVENT_NONE, COMBO_BTN_A, 105) & DIAG_EV_LIST_MODE);
+            0, sample(COMBO_EVENT_NONE, COMBO_BTN_A, 105) & DIAG_EV_SWITCH);
         TEST_ASSERT_FALSE(diag_list_mode(&d));
+        TEST_ASSERT_TRUE(diag_boot_logo(&d));
     }
 }
 
-static void test_frameskip_steps_leave_the_games_list_alone(void)
+static void test_frameskip_steps_leave_the_switches_alone(void)
 {
     goto_page(DIAG_PAGE_SYSTEM);
     diag_set_list_mode(&d, true);
+    diag_set_boot_logo(&d, false);
 
-    hammer(COMBO_BTN_DOWN, 2);
+    hammer(COMBO_BTN_RIGHT, 2);
     TEST_ASSERT_EQUAL_UINT8(2, diag_frameskip(&d));
     TEST_ASSERT_TRUE(diag_list_mode(&d));
-    hammer(COMBO_BTN_UP, 1);
+    TEST_ASSERT_FALSE(diag_boot_logo(&d));
+    hammer(COMBO_BTN_LEFT, 1);
     TEST_ASSERT_EQUAL_UINT8(1, diag_frameskip(&d));
     TEST_ASSERT_TRUE(diag_list_mode(&d));
+    TEST_ASSERT_FALSE(diag_boot_logo(&d));
+}
+
+static void test_the_boot_logo_round_trips(void)
+{
+    diag_set_boot_logo(&d, false);
+    TEST_ASSERT_FALSE(diag_boot_logo(&d));
+    diag_set_boot_logo(&d, true);
+    TEST_ASSERT_TRUE(diag_boot_logo(&d));
+    diag_set_boot_logo(NULL, true);
 }
 
 /* ─── titles and NULL handling ────────────────────────────────────────────── */
@@ -768,6 +925,8 @@ static void test_a_null_state_is_inert(void)
     TEST_ASSERT_EQUAL_UINT8(MIX_VOL_OFF, diag_volume(NULL));
     TEST_ASSERT_EQUAL_UINT8(DIAG_PATTERN_BARS, diag_pattern(NULL));
     TEST_ASSERT_EQUAL_UINT8(0, diag_frameskip(NULL));
+    TEST_ASSERT_FALSE(diag_boot_logo(NULL));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_SYS_FRAMESKIP, diag_sys_row(NULL));
     TEST_ASSERT_FALSE(diag_toast_active(NULL, 100));
 
     diag_origin(NULL, &x, &y);
@@ -1891,9 +2050,18 @@ int main(void)
     RUN_TEST(test_leaving_the_audio_page_silences_the_tone);
     RUN_TEST(test_the_display_pattern_cycles_three_ways_round);
     RUN_TEST(test_frameskip_steps_within_its_range);
-    RUN_TEST(test_a_on_the_system_page_toggles_the_games_list);
-    RUN_TEST(test_a_on_any_other_page_leaves_the_games_list_alone);
-    RUN_TEST(test_frameskip_steps_leave_the_games_list_alone);
+    RUN_TEST(test_frameskip_steps_from_any_row);
+    RUN_TEST(test_the_cursor_moves_and_clamps_at_both_ends);
+    RUN_TEST(test_the_cursor_resets_on_page_entry);
+    RUN_TEST(test_a_on_the_frameskip_row_does_nothing);
+    RUN_TEST(test_a_on_the_games_list_row_toggles_it);
+    RUN_TEST(test_a_on_the_boot_logo_row_toggles_it);
+    RUN_TEST(test_a_held_on_restart_setup_fires_once);
+    RUN_TEST(test_releasing_early_cancels_the_restart);
+    RUN_TEST(test_an_extra_button_cancels_the_restart);
+    RUN_TEST(test_a_on_any_other_page_leaves_the_switches_alone);
+    RUN_TEST(test_frameskip_steps_leave_the_switches_alone);
+    RUN_TEST(test_the_boot_logo_round_trips);
     RUN_TEST(test_every_page_has_a_title_and_the_count_has_none);
     RUN_TEST(test_a_null_state_is_inert);
     RUN_TEST(test_the_trim_page_starts_from_the_stored_porch);

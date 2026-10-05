@@ -42,6 +42,9 @@ static uint16_t on_enter(diag_t* d)
     if (d->page == DIAG_PAGE_NFC) {
         return DIAG_EV_NFC_SCAN;
     }
+    if (d->page == DIAG_PAGE_SYSTEM) {
+        d->sys_row = DIAG_SYS_FRAMESKIP;
+    }
     return 0;
 }
 
@@ -80,7 +83,7 @@ static uint16_t change_page(diag_t* d, int8_t dir)
 
     /* A direction still held across the switch belongs to the page that is
      * gone. Clearing it means the first press on the new page acts at once
-     * instead of inheriting a deadline. A tool's hold belongs to the tag
+     * instead of inheriting a deadline. A tool's hold belongs to its
      * page the same way. */
     d->held_dir = 0;
     d->hold_tool = DIAG_TOOL_NONE;
@@ -122,6 +125,8 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
     d->pattern = DIAG_PATTERN_BARS;
     d->frameskip = combo_step_u8(frameskip, 0, 0, DIAG_FRAMESKIP_MAX, 1);
     d->list_mode = false;
+    d->boot_logo = true;
+    d->sys_row = DIAG_SYS_FRAMESKIP;
     d->toast_until_ms = 0;
     d->toast = false;
     d->hold_tool = DIAG_TOOL_NONE;
@@ -237,23 +242,28 @@ static uint16_t pattern_step(diag_t* d, uint8_t dir_bits)
     return DIAG_EV_REDRAW;
 }
 
-static uint16_t frameskip_step(diag_t* d, uint8_t dir_bits)
+/* The System page: Up/Down move the row cursor, clamped at both ends, and
+ * Left/Right step frameskip whichever row is selected. */
+static uint16_t system_step(diag_t* d, uint8_t dir_bits)
 {
-    uint8_t before = d->frameskip;
-    int8_t dir = 0;
+    uint8_t before;
 
-    if (dir_bits == COMBO_BTN_DOWN) {
-        dir = +1;
-    } else if (dir_bits == COMBO_BTN_UP) {
-        dir = -1;
-    } else {
-        return 0;
+    if (dir_bits == COMBO_BTN_UP || dir_bits == COMBO_BTN_DOWN) {
+        before = d->sys_row;
+        d->sys_row = combo_step_u8(d->sys_row,
+                                   (dir_bits == COMBO_BTN_DOWN) ? +1 : -1,
+                                   0, DIAG_SYS_ROW_COUNT - 1, 1);
+        return (uint16_t)((d->sys_row != before) ? DIAG_EV_REDRAW : 0);
     }
-
-    d->frameskip = combo_step_u8(d->frameskip, dir, 0, DIAG_FRAMESKIP_MAX, 1);
-
-    return (uint16_t)((d->frameskip != before)
-                          ? (DIAG_EV_FRAMESKIP | DIAG_EV_REDRAW) : 0);
+    if (dir_bits == COMBO_BTN_RIGHT || dir_bits == COMBO_BTN_LEFT) {
+        before = d->frameskip;
+        d->frameskip = combo_step_u8(d->frameskip,
+                                     (dir_bits == COMBO_BTN_RIGHT) ? +1 : -1,
+                                     0, DIAG_FRAMESKIP_MAX, 1);
+        return (uint16_t)((d->frameskip != before)
+                              ? (DIAG_EV_FRAMESKIP | DIAG_EV_REDRAW) : 0);
+    }
+    return 0;
 }
 
 
@@ -730,6 +740,8 @@ static uint8_t tool_combo(uint8_t tool)
         return (uint8_t)(COMBO_BTN_SELECT | COMBO_BTN_B);
     case DIAG_TOOL_GAME:
         return COMBO_BTN_START;
+    case DIAG_TOOL_SETUP:
+        return COMBO_BTN_A;
     default:
         return 0;
     }
@@ -746,6 +758,8 @@ static uint16_t tool_event(uint8_t tool)
         return DIAG_EV_NFC_WILD;
     case DIAG_TOOL_GAME:
         return DIAG_EV_NFC_GAME;
+    case DIAG_TOOL_SETUP:
+        return DIAG_EV_SETUP_RESTART;
     default:
         return 0;
     }
@@ -812,7 +826,7 @@ uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
     pressed = (uint8_t)(joypad & ~d->prev_word);
     d->prev_word = joypad;
 
-    /* A running hold owns the tag page's buttons: nothing else starts until
+    /* A running hold owns the page's buttons: nothing else starts until
      * it fires or ends, which is what stops a cancelled Select+A from
      * becoming a Select+B in the same call. */
     if (d->hold_tool != DIAG_TOOL_NONE) {
@@ -844,7 +858,7 @@ uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
             }
             break;
         case DIAG_PAGE_SYSTEM:
-            ev |= frameskip_step(d, dir_bits);
+            ev |= system_step(d, dir_bits);
             break;
         default:
             /* Buttons, SD, tag and battery are readouts: the D-pad has
@@ -890,8 +904,15 @@ uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
             }
             break;
         case DIAG_PAGE_SYSTEM:
-            d->list_mode = !d->list_mode;
-            ev |= DIAG_EV_LIST_MODE | DIAG_EV_REDRAW;
+            if (d->sys_row == DIAG_SYS_LIST) {
+                d->list_mode = !d->list_mode;
+                ev |= DIAG_EV_SWITCH | DIAG_EV_REDRAW;
+            } else if (d->sys_row == DIAG_SYS_LOGO) {
+                d->boot_logo = !d->boot_logo;
+                ev |= DIAG_EV_SWITCH | DIAG_EV_REDRAW;
+            } else if (d->sys_row == DIAG_SYS_SETUP) {
+                ev |= hold_begin(d, DIAG_TOOL_SETUP, joypad, now_ms);
+            }
             break;
         default:
             break;
@@ -1004,6 +1025,23 @@ void diag_set_list_mode(diag_t* d, bool on)
 bool diag_list_mode(const diag_t* d)
 {
     return (d != NULL) ? d->list_mode : false;
+}
+
+void diag_set_boot_logo(diag_t* d, bool on)
+{
+    if (d != NULL) {
+        d->boot_logo = on;
+    }
+}
+
+bool diag_boot_logo(const diag_t* d)
+{
+    return (d != NULL) ? d->boot_logo : false;
+}
+
+uint8_t diag_sys_row(const diag_t* d)
+{
+    return (d != NULL) ? d->sys_row : (uint8_t)DIAG_SYS_FRAMESKIP;
 }
 
 bool diag_toast_active(const diag_t* d, uint32_t now_ms)
