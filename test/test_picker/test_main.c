@@ -142,16 +142,52 @@ static void test_a_pending_write_adds_a_cancel_row_at_the_top(void)
     TEST_ASSERT_EQUAL_UINT16(0, p.rows[1].cat);
 }
 
+/* The game-cart step: Finish setup, then the starters. */
 static void test_the_wizard_shows_starters_only(void)
+{
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_IMMEDIATE, true, false, NULL);
+    uint16_t i;
+
+    TEST_ASSERT_EQUAL_UINT16(LIB_STARTERS + 1, p.row_count);
+    for (i = 1; i < p.row_count; i++) {
+        TEST_ASSERT_EQUAL_UINT8(PICKER_ROW_GAME, p.rows[i].kind);
+        TEST_ASSERT_TRUE(lib.e[p.rows[i].cat].flags & CATALOG_FLAG_STARTER);
+    }
+}
+
+/* The wildcard step: every game that is not a starter, in file order, so
+ * the wildcard never duplicates a game cart. */
+static void test_the_wildcard_step_shows_the_non_starters(void)
 {
     fill_library(LIB_COUNT);
     picker_t p = fresh(PICKER_MODE_IMMEDIATE, false, false, NULL);
     uint16_t i;
 
-    TEST_ASSERT_EQUAL_UINT16(LIB_STARTERS, p.row_count);
+    TEST_ASSERT_EQUAL_UINT16(LIB_COUNT - LIB_STARTERS, p.row_count);
     for (i = 0; i < p.row_count; i++) {
         TEST_ASSERT_EQUAL_UINT8(PICKER_ROW_GAME, p.rows[i].kind);
-        TEST_ASSERT_TRUE(lib.e[p.rows[i].cat].flags & CATALOG_FLAG_STARTER);
+        TEST_ASSERT_FALSE(lib.e[p.rows[i].cat].flags & CATALOG_FLAG_STARTER);
+        if (i > 0) {
+            TEST_ASSERT_TRUE(p.rows[i].cat > p.rows[i - 1].cat);
+        }
+    }
+}
+
+/* Every game a starter: the wildcard step offers the whole catalog. */
+static void test_an_all_starter_catalog_offers_every_game_for_the_wildcard(void)
+{
+    uint16_t i;
+
+    fill_library(LIB_COUNT);
+    for (i = 0; i < LIB_COUNT; i++) {
+        lib.e[i].flags = CATALOG_FLAG_STARTER;
+    }
+    picker_t p = fresh(PICKER_MODE_IMMEDIATE, false, false, NULL);
+
+    TEST_ASSERT_EQUAL_UINT16(LIB_COUNT, p.row_count);
+    for (i = 0; i < p.row_count; i++) {
+        TEST_ASSERT_EQUAL_UINT16(i, p.rows[i].cat);
     }
 }
 
@@ -178,7 +214,8 @@ static void test_a_made_filename_marks_exactly_its_row(void)
     boot_made_clear(&made);
     TEST_ASSERT_EQUAL_INT(BOOT_MADE_OK, boot_made_add(&made, "Game 010.gb"));
 
-    picker_t p = fresh(PICKER_MODE_IMMEDIATE, false, false, &made);
+    /* Marks matter at the game-cart step, where the starters are. */
+    picker_t p = fresh(PICKER_MODE_IMMEDIATE, true, false, &made);
     for (i = 0; i < p.row_count; i++) {
         if (picker_row_marked(&p, i)) {
             marked++;
@@ -187,11 +224,11 @@ static void test_a_made_filename_marks_exactly_its_row(void)
     }
     TEST_ASSERT_EQUAL_UINT(1, marked);
 
-    /* "Game 000.gb" is row 0 and was never made. */
-    TEST_ASSERT_FALSE(picker_row_marked(&p, 0));
+    /* "Game 000.gb" is row 1, under Finish, and was never made. */
+    TEST_ASSERT_FALSE(picker_row_marked(&p, 1));
 
     /* No record at all marks nothing. */
-    picker_t bare = fresh(PICKER_MODE_IMMEDIATE, false, false, NULL);
+    picker_t bare = fresh(PICKER_MODE_IMMEDIATE, true, false, NULL);
     for (i = 0; i < bare.row_count; i++) {
         TEST_ASSERT_FALSE(picker_row_marked(&bare, i));
     }
@@ -1074,11 +1111,25 @@ static void test_a_title_that_fits_never_scrolls(void)
 
 /* ─── argument and empty cases ────────────────────────────────────────────── */
 
-static void test_a_wizard_with_no_starter_is_empty(void)
+/* With no starter the wildcard step still has every game, but the
+ * game-cart step has only Finish setup. An empty catalog has nothing at
+ * all. */
+static void test_a_wizard_with_no_starter_keeps_its_wildcard_step(void)
 {
     picker_t p;
 
     fill_library_without_starters(LIB_COUNT);
+    TEST_ASSERT_EQUAL_INT(PICKER_OK,
+                          picker_init(&p, PICKER_MODE_IMMEDIATE, &lib, false,
+                                      false, NULL, LIB_ROWS));
+    TEST_ASSERT_EQUAL_UINT16(LIB_COUNT, p.row_count);
+    TEST_ASSERT_EQUAL_INT(PICKER_OK,
+                          picker_init(&p, PICKER_MODE_IMMEDIATE, &lib, true,
+                                      false, NULL, LIB_ROWS));
+    TEST_ASSERT_EQUAL_UINT16(1, p.row_count);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_ROW_FINISH, p.rows[0].kind);
+
+    fill_library(0);
     TEST_ASSERT_EQUAL_INT(PICKER_ERR_EMPTY,
                           picker_init(&p, PICKER_MODE_IMMEDIATE, &lib, false,
                                       false, NULL, LIB_ROWS));
@@ -1111,6 +1162,8 @@ int main(void)
     RUN_TEST(test_pending_without_a_pending_write_is_the_whole_catalog);
     RUN_TEST(test_a_pending_write_adds_a_cancel_row_at_the_top);
     RUN_TEST(test_the_wizard_shows_starters_only);
+    RUN_TEST(test_the_wildcard_step_shows_the_non_starters);
+    RUN_TEST(test_an_all_starter_catalog_offers_every_game_for_the_wildcard);
     RUN_TEST(test_finish_setup_appears_only_once_the_wildcard_is_written);
     RUN_TEST(test_a_made_filename_marks_exactly_its_row);
     RUN_TEST(test_a_opens_the_highlighted_titles_detail_page);
@@ -1159,7 +1212,7 @@ int main(void)
     RUN_TEST(test_the_marquee_runs_its_timeline);
     RUN_TEST(test_a_move_resets_the_marquee);
     RUN_TEST(test_a_title_that_fits_never_scrolls);
-    RUN_TEST(test_a_wizard_with_no_starter_is_empty);
+    RUN_TEST(test_a_wizard_with_no_starter_keeps_its_wildcard_step);
     RUN_TEST(test_init_rejects_bad_arguments);
     return UNITY_END();
 }

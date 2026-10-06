@@ -534,10 +534,11 @@ static void test_a_marked_row_still_fits_its_box(void)
 
     fill_library(LIB_COUNT);
     boot_made_clear(&made);
-    /* Row 0 in immediate mode, so the marked label is on screen. */
+    /* Row 1 at the game-cart step, under Finish, so the marked label is on
+     * screen. */
     TEST_ASSERT_EQUAL_INT(BOOT_MADE_OK, boot_made_add(&made, "Game 000.gb"));
 
-    run_list(GEOM_53_W, GEOM_53_H, PICKER_MODE_IMMEDIATE, false, false, &made);
+    run_list(GEOM_53_W, GEOM_53_H, PICKER_MODE_IMMEDIATE, true, false, &made);
     assert_sane();
 }
 

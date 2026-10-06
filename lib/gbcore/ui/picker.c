@@ -70,12 +70,27 @@ static void build_rows(picker_t* p, bool wild_done, bool pending_set)
         return;
     }
 
-    /* The wizard. Before the wildcard is written the boot flow treats a
-     * finish as invalid, so the row is not offered at all rather than offered
-     * and refused. */
-    if (wild_done) {
-        add_row(p, PICKER_ROW_FINISH, 0);
+    /* The wizard's wildcard step: the games that are not starters, so the
+     * wildcard never duplicates a game cart, or every game when all of them
+     * are starters. Before the wildcard is written the boot flow treats a
+     * finish as invalid, so that row is not offered at all rather than
+     * offered and refused. */
+    if (!wild_done) {
+        for (i = 0; i < (uint16_t)p->cat->count; i++) {
+            if (!(p->cat->e[i].flags & CATALOG_FLAG_STARTER)) {
+                add_row(p, PICKER_ROW_GAME, i);
+            }
+        }
+        if (p->row_count == 0) {
+            for (i = 0; i < (uint16_t)p->cat->count; i++) {
+                add_row(p, PICKER_ROW_GAME, i);
+            }
+        }
+        return;
     }
+
+    /* The game-cart step: Finish setup, then the starters. */
+    add_row(p, PICKER_ROW_FINISH, 0);
     for (i = 0; i < (uint16_t)p->cat->count; i++) {
         if (p->cat->e[i].flags & CATALOG_FLAG_STARTER) {
             add_row(p, PICKER_ROW_GAME, i);

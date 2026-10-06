@@ -188,10 +188,12 @@ typedef struct picker_s {
  * top.
  *
  * Pending mode offers Cancel pending write, only when one is set, then every
- * catalog entry in file order. Immediate mode — the wizard — offers Finish
- * setup, only once the wildcard is done, because before that the boot flow
- * treats a finish as invalid, and then the `starter` entries only. Launch
- * mode — the games list — offers every catalog entry and no action row;
+ * catalog entry in file order. Immediate mode — the wizard — offers, before
+ * the wildcard is done, the entries that are not starters, or every entry
+ * when all of them are; after it, Finish setup and then the `starter`
+ * entries only. Finish is not offered earlier because the boot flow treats a
+ * finish before the wildcard as invalid. Launch mode — the games list —
+ * offers every catalog entry and no action row;
  * `pending_set` is ignored. Finish and make-MENU modes offer their one action
  * row and no game.
  *
