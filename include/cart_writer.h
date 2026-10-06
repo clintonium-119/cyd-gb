@@ -44,14 +44,20 @@ enum writer_mode_e {
     WRITER_MODE_PENDING,
     // The first-boot wizard: the tag to write is the one in the field now.
     WRITER_MODE_IMMEDIATE,
+    // The wizard's last step with the MENU cart or wildcard in: Finish setup
+    // alone, which writes nothing.
+    WRITER_MODE_FINISH,
+    // A restarted setup's first step with a wildcard or game cart in: one
+    // held row that confirms turning it into the MENU cart.
+    WRITER_MODE_MAKE_MENU,
 };
 
 // Open the picker and return what the user chose. On BOOT_PICK_ROM, *out
 // carries the selection, and `target` is always BOOT_TARGET_WILDCARD: the
 // writer's one job from a menu cart is choosing the wildcard's next game, and
 // writing blank carts belongs to the first-boot wizard. *out is untouched for
-// every other result.
+// every other result. `header` is the list's one-line header, or NULL.
 enum boot_pick_e writer_open(enum writer_mode_e mode,
                              const catalog_reader_t* cat,
                              const boot_flags_t* flags, bool pending_set,
-                             boot_selection_t* out);
+                             const char* header, boot_selection_t* out);

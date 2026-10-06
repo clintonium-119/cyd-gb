@@ -23,6 +23,7 @@
 #include "cart/catalog.h"
 #include "cart/ndef.h"
 #include "cart/ntag.h"
+#include "ui/setup_copy.h"
 #include "ui/theme_draw.h"
 #include <SD.h>
 
@@ -89,6 +90,18 @@ static void halt(const char* l1, const char* l2) {
     for (;;) {
         delay(1000);
     }
+}
+
+// A setup screen: its title and body come from the copy table, worded for
+// the step the stored flags say this is and the cart on the reader. `code`
+// is shown only on the write-failed screen.
+static void setup_halt(enum setup_screen_e screen, int code) {
+    char title[SETUP_COPY_MAX];
+    char body[SETUP_COPY_MAX];
+
+    setup_copy(screen, &in.flags, in.cls, code, title, sizeof(title), body,
+               sizeof(body));
+    halt(title, body);
 }
 
 // ─── Tag read ───────────────────────────────────────────────────────────────
@@ -757,7 +770,7 @@ void loop() {
         enum boot_pick_e dev_pick = writer_open(dev_mode,
                                                 cat_ok ? &cat : NULL,
                                                 &in.flags, in.pending_set,
-                                                &dev_sel);
+                                                NULL, &dev_sel);
         Serial.printf("[DEV] writer pick=%d rom=%s target=%u\n",
                       (int)dev_pick, dev_sel.rom, (unsigned)dev_sel.target);
         halt("Dev writer", "Nothing written. Power off");
@@ -781,6 +794,9 @@ void loop() {
 
     switch (action) {
         case BOOT_HALT_NO_CART:
+            if (!in.flags.setup_done) {
+                setup_halt(SETUP_SCREEN_NO_CART, 0);
+            }
             halt("No cartridge", "");
             break;
         case BOOT_HALT_SHIELDING:
@@ -802,7 +818,10 @@ void loop() {
             halt("Insert a game cart", "");
             break;
         case BOOT_HALT_SETUP_INSERT_BLANK:
-            halt("Setup: insert a blank cart", "");
+            setup_halt(SETUP_SCREEN_WRONG_CART, 0);
+            break;
+        case BOOT_HALT_SETUP_FOREIGN:
+            setup_halt(SETUP_SCREEN_FOREIGN, 0);
             break;
 
         // Re-entry already happened above; a second request means the tag
@@ -814,38 +833,63 @@ void loop() {
         case BOOT_WIZARD_WRITE_MENU:
             rc = provision_wizard_menu(&in.flags);
             if (rc != 0) {
-                snprintf(detail, sizeof(detail), "code %d", rc);
-                halt("Write failed", detail);
+                setup_halt(SETUP_SCREEN_WRITE_FAILED, rc);
             }
-            halt("MENU cart made. Power off", "");
+            setup_halt(SETUP_SCREEN_MENU_DONE, 0);
             break;
         case BOOT_WIZARD_ADOPT_MENU:
             rc = provision_wizard_adopt(BOOT_CLASS_MENU, &in.flags);
             if (rc != 0) {
-                snprintf(detail, sizeof(detail), "code %d", rc);
-                halt("Write failed", detail);
+                setup_halt(SETUP_SCREEN_WRITE_FAILED, rc);
             }
-            halt("Menu cart adopted. Power off", "");
+            setup_halt(SETUP_SCREEN_MENU_DONE, 0);
             break;
         case BOOT_WIZARD_ADOPT_WILD:
             rc = provision_wizard_adopt(BOOT_CLASS_WILD, &in.flags);
             if (rc != 0) {
-                snprintf(detail, sizeof(detail), "code %d", rc);
-                halt("Write failed", detail);
+                setup_halt(SETUP_SCREEN_WRITE_FAILED, rc);
             }
-            halt("Wildcard adopted. Power off", "");
+            setup_halt(SETUP_SCREEN_WILD_DONE, 0);
             break;
 
-        // One call site for the writer, all three actions that open it.
+        // One call site for the writer, every action that opens it.
         // boot_after_pick() takes the action that opened it precisely so the
         // caller does not need one entry point per mode: that is what keeps
         // "when can this device write a cart" a single auditable place.
         case BOOT_WIZARD_PICK_WILD:
         case BOOT_WIZARD_PICK_GAME:
-        case BOOT_OPEN_WRITER:
-            pick = writer_open(action == BOOT_OPEN_WRITER ? WRITER_MODE_PENDING
-                                                         : WRITER_MODE_IMMEDIATE,
-                               cat_ok ? &cat : NULL, &in.flags, in.pending_set,
+        case BOOT_WIZARD_FINISH:
+        case BOOT_WIZARD_CONFIRM_MENU:
+        case BOOT_OPEN_WRITER: {
+            enum writer_mode_e mode = WRITER_MODE_PENDING;
+            char header[SETUP_COPY_MAX];
+            char unused[SETUP_COPY_MAX];
+            enum setup_screen_e list = SETUP_SCREEN_LIST_WILD;
+
+            switch (action) {
+                case BOOT_WIZARD_PICK_WILD:
+                    mode = WRITER_MODE_IMMEDIATE;
+                    break;
+                case BOOT_WIZARD_PICK_GAME:
+                    mode = WRITER_MODE_IMMEDIATE;
+                    list = SETUP_SCREEN_LIST_GAME;
+                    break;
+                case BOOT_WIZARD_FINISH:
+                    mode = WRITER_MODE_FINISH;
+                    list = SETUP_SCREEN_LIST_FINISH;
+                    break;
+                case BOOT_WIZARD_CONFIRM_MENU:
+                    mode = WRITER_MODE_MAKE_MENU;
+                    list = SETUP_SCREEN_LIST_MAKE_MENU;
+                    break;
+                default:
+                    break;
+            }
+            setup_copy(list, &in.flags, in.cls, 0, header, sizeof(header),
+                       unused, sizeof(unused));
+            pick = writer_open(mode, cat_ok ? &cat : NULL, &in.flags,
+                               in.pending_set,
+                               (mode == WRITER_MODE_PENDING) ? NULL : header,
                                &sel);
             pa = boot_after_pick(action, pick);
             switch (pa) {
@@ -853,20 +897,26 @@ void loop() {
                 case BOOT_PICK_WRITE_GAME:
                     rc = provision_wizard_write(pa, &sel, &in.flags);
                     if (rc != 0) {
-                        snprintf(detail, sizeof(detail), "code %d", rc);
-                        halt("Write failed", detail);
+                        setup_halt(SETUP_SCREEN_WRITE_FAILED, rc);
                     }
-                    halt(pa == BOOT_PICK_WRITE_WILD
-                                    ? "Wildcard made. Power off"
-                                    : "Game cart made. Power off", "");
+                    setup_halt(pa == BOOT_PICK_WRITE_WILD
+                                   ? SETUP_SCREEN_WILD_DONE
+                                   : SETUP_SCREEN_GAME_DONE,
+                               0);
+                    break;
+                case BOOT_PICK_WRITE_MENU:
+                    rc = provision_wizard_menu(&in.flags);
+                    if (rc != 0) {
+                        setup_halt(SETUP_SCREEN_WRITE_FAILED, rc);
+                    }
+                    setup_halt(SETUP_SCREEN_MENU_DONE, 0);
                     break;
                 case BOOT_PICK_FINISH_SETUP:
                     rc = provision_wizard_finish(&in.flags);
                     if (rc != 0) {
-                        snprintf(detail, sizeof(detail), "code %d", rc);
-                        halt("Write failed", detail);
+                        setup_halt(SETUP_SCREEN_WRITE_FAILED, rc);
                     }
-                    halt("Setup finished. Power off", "");
+                    setup_halt(SETUP_SCREEN_FINISHED, 0);
                     break;
                 case BOOT_PICK_RECORD_PENDING:
                     settings_pending_save(&sel);
@@ -879,8 +929,10 @@ void loop() {
                 case BOOT_PICK_HALT_MENU_CART:
                     halt("Menu cart", "");
                     break;
+                // A setup list closes with nothing picked only when it had
+                // nothing to show: no game list, or no starter in it.
                 case BOOT_PICK_HALT_NO_SELECTION:
-                    halt("Setup: insert a blank cart", "");
+                    setup_halt(SETUP_SCREEN_NO_GAMES, 0);
                     break;
                 case BOOT_PICK_RECORD_LIST_GAME:
                 case BOOT_PICK_INVALID:
@@ -888,6 +940,7 @@ void loop() {
                     break;
             }
             break;
+        }
 
         // The games list: the picker screen in launch mode, which writes no
         // tag. A pick is recorded and the chip restarts, so the game boots
