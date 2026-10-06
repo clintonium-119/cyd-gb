@@ -259,8 +259,13 @@ void settings_pending_save(const boot_selection_t* s) {
 
 void settings_pending_clear() {
     prefs.begin("settings", false);
-    prefs.remove("p_rom");
-    prefs.remove("p_tgt");
+    // Only keys that exist: removing an absent one logs an NVS error.
+    if (prefs.isKey("p_rom")) {
+        prefs.remove("p_rom");
+    }
+    if (prefs.isKey("p_tgt")) {
+        prefs.remove("p_tgt");
+    }
     prefs.end();
 }
 
@@ -318,7 +323,9 @@ void settings_made_save(const boot_made_t* m) {
 
 void settings_made_clear() {
     prefs.begin("settings", false);
-    prefs.remove("made");
+    if (prefs.isKey("made")) {
+        prefs.remove("made");
+    }
     prefs.end();
 }
 
