@@ -782,7 +782,10 @@ static void page_system(const ui_canvas_t* cv, const diag_layout_t* g,
            (data->build_time[0] != '\0') ? data->build_time : "unknown",
            UI_COL_DIM);
     if (diag_setup_restarted(d)) {
-        full_row(cv, g, 7, "Setup restarts at next power-on", UI_COL_TEXT);
+        full_rows(cv, g, 7, 3,
+                  "Setup restarts: the next cart you boot becomes the new "
+                  "MENU cart.",
+                  UI_COL_TEXT);
     }
 }
 

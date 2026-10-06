@@ -84,7 +84,7 @@ typedef struct {
     unsigned dark_boxes;
 
     unsigned saved_texts;    /* text calls whose string is "Saved"        */
-    char seen[48][40];       /* every string drawn, for the pages that
+    char seen[48][72];       /* every string drawn, for the pages that
                               * report a number rather than a picture     */
     unsigned seen_n;
 
@@ -1091,6 +1091,9 @@ static void test_the_trim_page_shows_saved_only_while_the_toast_is_up(void)
     TEST_ASSERT_EQUAL_UINT(0, fk.saved_texts);
 }
 
+#define RESTART_NOTICE \
+    "Setup restarts: the next cart you boot becomes the new MENU cart."
+
 /* Where `want` was drawn in the order of text calls, or -1. */
 static int seen_at(const char* want)
 {
@@ -1201,7 +1204,7 @@ static void test_a_restart_hold_draws_the_hold_bar(void)
         redraw();
         TEST_ASSERT_EQUAL_UINT(0, fk.hold_rounds);
         TEST_ASSERT_EQUAL_UINT(1, fk.help_texts);
-        TEST_ASSERT_FALSE(drew_text("Setup restarts at next power-on"));
+        TEST_ASSERT_FALSE(drew_text(RESTART_NOTICE));
     }
 }
 
@@ -1222,7 +1225,8 @@ static void test_a_completed_restart_stays_on_the_page(void)
         redraw();
         assert_clean();
         TEST_ASSERT_EQUAL_UINT(0, fk.body_overruns);
-        TEST_ASSERT_TRUE(drew_text("Setup restarts at next power-on"));
+        TEST_ASSERT_EQUAL_UINT(0, fk.small_overflow);
+        TEST_ASSERT_TRUE(drew_text(RESTART_NOTICE));
     }
 }
 
