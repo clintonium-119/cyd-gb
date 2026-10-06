@@ -40,8 +40,9 @@ extern "C" {
 #define PICKER_ART_H  96
 #define PICKER_ART_PX (PICKER_ART_W * PICKER_ART_H)
 
-/* The list has no header and no help line: its rows and its images run from
- * the top inset to the hints. */
+/* Without a header the list has no help line: its rows and its images run
+ * from the top inset to the hints. A header takes one help-line band there
+ * and moves both down by it (picker_layout_header()). */
 #define PICKER_LIST_TOP UI_PAD
 #define PICKER_ROW_H    UI_PILL_H_LIST
 #define PICKER_MIN_ROWS 3
@@ -78,6 +79,7 @@ typedef struct picker_adv_s {
 typedef struct picker_layout_s {
     int16_t w, h;
     uint8_t rows;    /* list rows above the hints                  */
+    int16_t list_top;    /* the first row's and the cover's top    */
     int16_t list_w;  /* width of a row's text inside its pill      */
     int16_t list_art_x;  /* the list's image column, left edge     */
     int16_t list_art_y;  /* the cover's top                       */
@@ -108,6 +110,14 @@ typedef struct picker_layout_s {
  * to stack both images above the help line.
  */
 int picker_layout(int16_t w, int16_t h, picker_layout_t* out);
+
+/*
+ * Make room for a list header: the rows and the images start one help-line
+ * band lower, and the list shows that much less. PICKER_ERR_ARGS for a NULL
+ * layout, or when fewer than PICKER_MIN_ROWS rows or the two stacked images
+ * would be left. Call it once, before picker_init() takes g->rows.
+ */
+int picker_layout_header(picker_layout_t* g);
 
 /*
  * Measure the description font's advances into g->adv. Until this is called

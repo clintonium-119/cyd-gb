@@ -20,6 +20,7 @@ static const char* const ACTION_LABEL[] = {
     "",                     /* PICKER_ROW_GAME — the catalog title  */
     "Cancel pending write", /* PICKER_ROW_CANCEL_PENDING            */
     "Finish setup",         /* PICKER_ROW_FINISH                    */
+    "Make MENU cart",       /* PICKER_ROW_MAKE_MENU                 */
 };
 
 
@@ -28,7 +29,9 @@ static const char* const ACTION_LABEL[] = {
 static const char* const ACTION_NOTE[] = {
     NULL,                                             /* PICKER_ROW_GAME  */
     "Drops the game you lined up",                    /* CANCEL_PENDING   */
-    "Ends setup. Only a MENU cart reopens the writer", /* FINISH          */
+    "Ends setup. Later, your MENU cart picks a new game for your wildcard.",
+                                                      /* FINISH           */
+    "Turns this cart into your MENU cart",            /* MAKE_MENU        */
 };
 
 /* The footer's buttons: A opens a title, and on its page A is held to do
@@ -44,6 +47,14 @@ static const ui_hint_t DETAIL_HINTS[][2] = {
     { { "B", "Back" }, { "A", "Hold to install to cart" } }, /* a game  */
     { { "B", "Back" }, { "A", "Hold to cancel write" } },    /* CANCEL  */
     { { "B", "Back" }, { "A", "Hold to finish setup" } },    /* FINISH  */
+    { { "B", "Back" }, { "A", "Hold to make MENU cart" } },  /* MAKE_MENU */
+};
+/* Setup's game page names the cart the hold makes. */
+static const ui_hint_t WILD_HINTS[] = {
+    { "B", "Back" }, { "A", "Hold to make wildcard" },
+};
+static const ui_hint_t GAME_CART_HINTS[] = {
+    { "B", "Back" }, { "A", "Hold to make game cart" },
 };
 /* The games list's game page: the same hold starts the game. */
 static const ui_hint_t LAUNCH_HINTS[] = {
@@ -93,6 +104,7 @@ int picker_layout(int16_t w, int16_t h, picker_layout_t* out)
     out->help_y = (int16_t)(out->foot_y - UI_HELP_H);
 
     /* The list has no help line: its rows run down to the hints. */
+    out->list_top = PICKER_LIST_TOP;
     out->rows = (uint8_t)((out->foot_y - PICKER_LIST_TOP) / PICKER_ROW_H);
     /* The image column hugs the right edge; the titles get the rest, and a
      * title's text sits the pill's padding inside it. */
@@ -119,6 +131,27 @@ int picker_layout(int16_t w, int16_t h, picker_layout_t* out)
     if (out->rows < PICKER_MIN_ROWS || out->band_rows < 1) {
         return PICKER_ERR_ARGS;
     }
+    return PICKER_OK;
+}
+
+int picker_layout_header(picker_layout_t* g)
+{
+    int16_t top;
+    int16_t rows;
+
+    if (g == NULL) {
+        return PICKER_ERR_ARGS;
+    }
+    top = (int16_t)(g->list_top + UI_HELP_H);
+    rows = (int16_t)((g->foot_y - top) / PICKER_ROW_H);
+    if (rows < PICKER_MIN_ROWS ||
+        top + 2 * PICKER_ART_H + PICKER_ART_GAP > g->foot_y) {
+        return PICKER_ERR_ARGS;
+    }
+    g->list_top = top;
+    g->rows = (uint8_t)rows;
+    g->list_art_y = top;
+    g->list_shot_y = (int16_t)(top + PICKER_ART_H + PICKER_ART_GAP);
     return PICKER_OK;
 }
 
@@ -366,9 +399,9 @@ static void draw_list_media(const picker_t* p, const picker_layout_t* g,
     uint16_t cursor = list_cursor(&p->list);
 
     if (cursor >= p->row_count || p->rows[cursor].kind != PICKER_ROW_GAME) {
-        cv->fill(cv->ctx, TITLE_COL_W(g), PICKER_LIST_TOP,
+        cv->fill(cv->ctx, TITLE_COL_W(g), g->list_top,
                  (int16_t)(g->w - TITLE_COL_W(g)),
-                 (int16_t)(g->foot_y - PICKER_LIST_TOP), UI_COL_BG);
+                 (int16_t)(g->foot_y - g->list_top), UI_COL_BG);
         return;
     }
     draw_media(cv, g->list_art_x, g->list_art_y, p->art_state, art,
@@ -395,7 +428,7 @@ static void draw_row(const picker_t* p, const picker_layout_t* g,
         idx - first >= (uint16_t)g->rows) {
         return;
     }
-    y = (int16_t)(PICKER_LIST_TOP + (idx - first) * PICKER_ROW_H);
+    y = (int16_t)(g->list_top + (idx - first) * PICKER_ROW_H);
     label = row_label(p, idx, buf, sizeof(buf));
 
     if (idx != list_cursor(&p->list)) {
@@ -415,6 +448,9 @@ static void draw_list(const picker_t* p, const picker_layout_t* g,
     uint8_t i;
 
     cv->fill(cv->ctx, 0, 0, g->w, g->h, UI_COL_BG);
+    if (p->header != NULL) {
+        ui_help_line(cv, g->w, (int16_t)(g->list_top - UI_HELP_H), p->header);
+    }
     for (i = 0; i < g->rows; i++) {
         draw_row(p, g, cv, (uint16_t)(first + i));
     }
@@ -579,6 +615,20 @@ static void draw_detail_media(const picker_t* p, const picker_layout_t* g,
     draw_media(cv, g->shot_x, y, p->shot_state, shot, SHOT_MISSING);
 }
 
+/* The detail page's footer: what holding A does on this page. */
+static const ui_hint_t* detail_hints(const picker_t* p)
+{
+    uint8_t kind = p->rows[p->detail_row].kind;
+
+    if (p->mode == PICKER_MODE_LAUNCH) {
+        return LAUNCH_HINTS;
+    }
+    if (p->mode == PICKER_MODE_IMMEDIATE && kind == PICKER_ROW_GAME) {
+        return p->wild_done ? GAME_CART_HINTS : WILD_HINTS;
+    }
+    return DETAIL_HINTS[kind];
+}
+
 static void draw_detail(const picker_t* p, const picker_layout_t* g,
                         const char* desc, const uint16_t* art,
                         const uint16_t* shot, const ui_canvas_t* cv)
@@ -596,10 +646,7 @@ static void draw_detail(const picker_t* p, const picker_layout_t* g,
     /* What confirming does, or how far the hold has got, and how to confirm
      * it. No filename: the title already names the game. */
     draw_bar(p, g, cv, false);
-    ui_hint_bar(cv, g->w, g->foot_y,
-                (p->mode == PICKER_MODE_LAUNCH)
-                    ? LAUNCH_HINTS
-                    : DETAIL_HINTS[p->rows[p->detail_row].kind],
+    ui_hint_bar(cv, g->w, g->foot_y, detail_hints(p),
                 N_HINTS(DETAIL_HINTS[0]));
 }
 

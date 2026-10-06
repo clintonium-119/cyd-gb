@@ -550,6 +550,62 @@ static void test_the_finish_row_returns_finish(void)
     TEST_ASSERT_EQUAL_INT(BOOT_PICK_FINISH, picker_result(&p, &out));
 }
 
+/* Setup's finish-only list: one Finish row, whatever the wildcard step. */
+static void test_finish_mode_is_the_finish_row_alone(void)
+{
+    boot_selection_t out;
+    int wild;
+
+    fill_library(LIB_COUNT);
+    for (wild = 0; wild < 2; wild++) {
+        picker_t p = fresh(PICKER_MODE_FINISH, wild != 0, true, NULL);
+
+        TEST_ASSERT_EQUAL_UINT16(1, p.row_count);
+        TEST_ASSERT_EQUAL_UINT8(PICKER_ROW_FINISH, p.rows[0].kind);
+        open_row(&p, 0, 0);
+        press(&p, B_NONE, 100);
+        press(&p, B_A, 200);
+        TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_DONE, press(&p, B_A, 1200));
+        TEST_ASSERT_EQUAL_INT(BOOT_PICK_FINISH, picker_result(&p, &out));
+    }
+}
+
+/* A restarted setup's make-MENU list: one row, held to confirm. */
+static void test_make_menu_mode_is_one_held_row(void)
+{
+    boot_selection_t out;
+
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_MAKE_MENU, true, false, NULL);
+
+    TEST_ASSERT_EQUAL_UINT16(1, p.row_count);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_ROW_MAKE_MENU, p.rows[0].kind);
+    open_row(&p, 0, 0);
+    press(&p, B_NONE, 100);
+    press(&p, B_A, 200);
+    /* Let go early: nothing. */
+    press(&p, B_NONE, 700);
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_NONE, picker_result(&p, &out));
+    press(&p, B_A, 800);
+    TEST_ASSERT_EQUAL_UINT8(PICKER_EVENT_DONE, press(&p, B_A, 1800));
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_MAKE_MENU, picker_result(&p, &out));
+}
+
+static void test_the_header_is_the_callers_string(void)
+{
+    static const char header[] = "Step 2 of 3";
+
+    fill_library(LIB_COUNT);
+    picker_t p = fresh(PICKER_MODE_IMMEDIATE, false, false, NULL);
+
+    TEST_ASSERT_NULL(p.header);
+    TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_set_header(&p, header));
+    TEST_ASSERT_EQUAL_PTR(header, p.header);
+    TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_set_header(&p, NULL));
+    TEST_ASSERT_NULL(p.header);
+    TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_set_header(NULL, header));
+}
+
 /* ─── the detail band's scroll ────────────────────────────────────────────── */
 
 static void test_the_band_scrolls_a_line_at_the_shared_cadence(void)
@@ -1078,6 +1134,9 @@ int main(void)
     RUN_TEST(test_every_mode_returns_the_wildcard_target);
     RUN_TEST(test_the_cancel_row_returns_cancel_pending);
     RUN_TEST(test_the_finish_row_returns_finish);
+    RUN_TEST(test_finish_mode_is_the_finish_row_alone);
+    RUN_TEST(test_make_menu_mode_is_one_held_row);
+    RUN_TEST(test_the_header_is_the_callers_string);
     RUN_TEST(test_the_band_scrolls_a_line_at_the_shared_cadence);
     RUN_TEST(test_the_band_clamps_at_both_ends_rather_than_wrapping);
     RUN_TEST(test_a_page_with_nothing_to_scroll_ignores_up_and_down);

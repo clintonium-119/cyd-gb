@@ -52,6 +52,15 @@ static void build_rows(picker_t* p, bool wild_done, bool pending_set)
         return;
     }
 
+    if (p->mode == PICKER_MODE_FINISH) {
+        add_row(p, PICKER_ROW_FINISH, 0);
+        return;
+    }
+    if (p->mode == PICKER_MODE_MAKE_MENU) {
+        add_row(p, PICKER_ROW_MAKE_MENU, 0);
+        return;
+    }
+
     if (p->mode == PICKER_MODE_DIAG_STARTER) {
         for (i = 0; i < (uint16_t)p->cat->count; i++) {
             if (p->cat->e[i].flags & CATALOG_FLAG_STARTER) {
@@ -177,6 +186,9 @@ static void settle(picker_t* p)
     case PICKER_ROW_FINISH:
         p->pick = BOOT_PICK_FINISH;
         break;
+    case PICKER_ROW_MAKE_MENU:
+        p->pick = BOOT_PICK_MAKE_MENU;
+        break;
     case PICKER_ROW_GAME:
     default:
         p->pick = BOOT_PICK_ROM;
@@ -238,6 +250,7 @@ int picker_init(picker_t* p, enum picker_mode_e mode,
         return PICKER_ERR_ARGS;
     }
     p->mode = (uint8_t)mode;
+    p->wild_done = wild_done;
     p->cat = cat;
     p->made = made;
 
@@ -247,6 +260,15 @@ int picker_init(picker_t* p, enum picker_mode_e mode,
     if (p->row_count == 0) {
         return PICKER_ERR_EMPTY;
     }
+    return PICKER_OK;
+}
+
+int picker_set_header(picker_t* p, const char* header)
+{
+    if (p == NULL) {
+        return PICKER_ERR_ARGS;
+    }
+    p->header = header;
     return PICKER_OK;
 }
 

@@ -23,9 +23,12 @@
 //
 // `flags` drives the wizard's starter filter and Finish setup, and
 // `pending_set` whether pending mode offers Cancel; launch mode ignores both.
+// `header` is a one-line header drawn above the list, or NULL for none. It
+// costs one visible row, and is the caller's string: this screen holds no
+// setup words of its own.
 // On BOOT_PICK_ROM, *out carries the selection. BOOT_PICK_NONE, with *out
 // untouched, when there is no catalog, no heap, or no row to show.
 enum boot_pick_e picker_screen_run(enum picker_mode_e mode,
                                    const catalog_reader_t* cat,
                                    const boot_flags_t* flags, bool pending_set,
-                                   boot_selection_t* out);
+                                   const char* header, boot_selection_t* out);

@@ -66,7 +66,8 @@ extern "C" {
 #define PICKER_MARQUEE_STEP_MS  40
 #define PICKER_MARQUEE_PAUSE_MS 1000
 
-/* Cancel pending write, or Finish setup — one per mode, never both. */
+/* Cancel pending write, Finish setup or Make MENU cart — one per mode,
+ * never two. */
 #define PICKER_ACTION_MAX 1
 
 #define PICKER_ROWS_MAX (CATALOG_MAX + PICKER_ACTION_MAX)
@@ -95,6 +96,12 @@ enum picker_mode_e {
      * no made marks and no action row, and B on the list as in
      * PICKER_MODE_DIAG. */
     PICKER_MODE_DIAG_STARTER,
+    /* Setup's last step with the MENU cart or wildcard in: Finish setup
+     * alone. It writes nothing. */
+    PICKER_MODE_FINISH,
+    /* A restarted setup's first step with a wildcard or game cart in: Make
+     * MENU cart alone, whose held page confirms replacing that cart. */
+    PICKER_MODE_MAKE_MENU,
 };
 
 enum picker_screen_e {
@@ -107,6 +114,7 @@ enum picker_row_kind_e {
     PICKER_ROW_GAME = 0,
     PICKER_ROW_CANCEL_PENDING,
     PICKER_ROW_FINISH,
+    PICKER_ROW_MAKE_MENU,
 };
 
 enum picker_media_e {
@@ -144,6 +152,8 @@ typedef struct picker_row_s {
  */
 typedef struct picker_s {
     uint8_t mode;
+    bool wild_done;
+    const char* header;   /* the caller's, or NULL for none          */
     const catalog_index_t* cat;
     const boot_made_t* made;
     picker_row_t rows[PICKER_ROWS_MAX];
@@ -182,7 +192,8 @@ typedef struct picker_s {
  * setup, only once the wildcard is done, because before that the boot flow
  * treats a finish as invalid, and then the `starter` entries only. Launch
  * mode — the games list — offers every catalog entry and no action row;
- * `pending_set` is ignored.
+ * `pending_set` is ignored. Finish and make-MENU modes offer their one action
+ * row and no game.
  *
  * PICKER_ERR_ARGS for a NULL picker or catalog or rows_visible == 0;
  * PICKER_ERR_EMPTY when the mode composed no rows, with the state left
@@ -238,6 +249,14 @@ int picker_set_scroll_span(picker_t* p, uint16_t page_lines,
  * title never inherits a long one's scroll.
  */
 int picker_set_marquee_span(picker_t* p, int16_t overflow_px);
+
+/*
+ * A one-line header above the list, or NULL for none. The string is the
+ * caller's and must outlive the picker; this module holds no words of its
+ * own for it. The header costs a list row: lay the screen out with
+ * picker_layout_header() before picker_init() so rows_visible counts it.
+ */
+int picker_set_header(picker_t* p, const char* header);
 
 /*
  * The buttons already down when the screen opens — the end of the hold that

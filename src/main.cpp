@@ -895,7 +895,7 @@ void loop() {
         case BOOT_LIST_OPEN:
             pick = picker_screen_run(PICKER_MODE_LAUNCH,
                                      cat_ok ? &cat : NULL, &in.flags, false,
-                                     &sel);
+                                     NULL, &sel);
             pa = boot_after_pick(action, pick);
             if (pa == BOOT_PICK_RECORD_LIST_GAME) {
                 Serial.printf("[BOOT] list pick %s\n", sel.rom);

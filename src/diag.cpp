@@ -324,9 +324,10 @@ static void run_pick_tool(uint8_t tool, uint32_t now_ms)
     memset(&sel, 0, sizeof(sel));
     if (tool == DIAG_TOOL_GAME) {
         pick = picker_screen_run(PICKER_MODE_DIAG_STARTER, &cat, NULL, false,
-                                 &sel);
+                                 NULL, &sel);
     } else {
-        pick = picker_screen_run(PICKER_MODE_DIAG, &cat, NULL, false, &sel);
+        pick = picker_screen_run(PICKER_MODE_DIAG, &cat, NULL, false, NULL,
+                                 &sel);
     }
     if (pick == BOOT_PICK_ROM) {
         // The catalog's title when it has one, the file name otherwise.

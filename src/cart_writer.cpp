@@ -11,5 +11,5 @@ enum boot_pick_e writer_open(enum writer_mode_e mode,
     return picker_screen_run((mode == WRITER_MODE_IMMEDIATE)
                                  ? PICKER_MODE_IMMEDIATE
                                  : PICKER_MODE_PENDING,
-                             cat, flags, pending_set, out);
+                             cat, flags, pending_set, NULL, out);
 }

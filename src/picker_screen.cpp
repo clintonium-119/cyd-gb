@@ -63,7 +63,7 @@ static settings_t cfg;
 static enum boot_pick_e screen_run(enum picker_mode_e mode,
                                    const catalog_reader_t* cat,
                                    const boot_flags_t* flags, bool pending_set,
-                                   boot_selection_t* out) {
+                                   const char* header, boot_selection_t* out) {
     bool immediate = (mode == PICKER_MODE_IMMEDIATE);
     uint32_t drawn_us = 0;
     bool logged = false;
@@ -90,6 +90,11 @@ static enum boot_pick_e screen_run(enum picker_mode_e mode,
                       rc);
         return BOOT_PICK_NONE;
     }
+    if (header && picker_layout_header(&geom) != PICKER_OK) {
+        // Same: every RENDER_GEOM has room for it.
+        Serial.printf("[PICKER] no room for a header\n");
+        header = NULL;
+    }
 
     if (immediate) {
         // Which starters this setup has already written, so their rows show a
@@ -105,6 +110,7 @@ static enum boot_pick_e screen_run(enum picker_mode_e mode,
         Serial.printf("[PICKER] no rows to show (%d)\n", rc);
         return BOOT_PICK_NONE;
     }
+    picker_set_header(picker, header);
     // Whatever is still down from the hold that opened this screen is not a
     // press here, so the caller need not wait for a release first.
     button_update();
@@ -223,7 +229,7 @@ static enum boot_pick_e screen_run(enum picker_mode_e mode,
 enum boot_pick_e picker_screen_run(enum picker_mode_e mode,
                                    const catalog_reader_t* cat,
                                    const boot_flags_t* flags, bool pending_set,
-                                   boot_selection_t* out) {
+                                   const char* header, boot_selection_t* out) {
     enum boot_pick_e pick = BOOT_PICK_NONE;
 
     if (!out || !cat) {
@@ -237,7 +243,7 @@ enum boot_pick_e picker_screen_run(enum picker_mode_e mode,
     picker = (picker_t*)malloc(sizeof(*picker));
     made = (boot_made_t*)malloc(sizeof(*made));
     if (idx && art && shot && picker && made) {
-        pick = screen_run(mode, cat, flags, pending_set, out);
+        pick = screen_run(mode, cat, flags, pending_set, header, out);
     } else {
         // Refused, the same way a missing catalog is: the caller halts.
         Serial.printf("[PICKER] no heap for the picker (largest block %u)\n",

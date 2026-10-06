@@ -915,6 +915,121 @@ static void test_diag_mode_game_page_says_hold_to_install(void)
     TEST_ASSERT_TRUE(install);
 }
 
+/* A header takes one help-line band above the rows and costs one row. */
+static void test_a_header_draws_above_the_rows_and_costs_one(void)
+{
+    picker_t p;
+    picker_layout_t g;
+    picker_layout_t plain;
+    ui_canvas_t cv = canvas_over(&fk, GEOM_53_W, GEOM_53_H);
+    unsigned t;
+    bool header = false;
+
+    fill_library(LIB_COUNT);
+    TEST_ASSERT_EQUAL_INT(PICKER_OK,
+                          picker_layout(GEOM_53_W, GEOM_53_H, &plain));
+    g = plain;
+    TEST_ASSERT_EQUAL_INT(PICKER_OK, picker_layout_header(&g));
+    TEST_ASSERT_EQUAL_INT16(PICKER_LIST_TOP + UI_HELP_H, g.list_top);
+    TEST_ASSERT_EQUAL_UINT8(plain.rows - 1, g.rows);
+    TEST_ASSERT_EQUAL_INT16(g.list_top, g.list_art_y);
+    TEST_ASSERT_TRUE(g.list_shot_y + PICKER_ART_H <= g.foot_y);
+    TEST_ASSERT_EQUAL_INT(PICKER_ERR_ARGS, picker_layout_header(NULL));
+
+    TEST_ASSERT_EQUAL_INT(PICKER_OK,
+                          picker_init(&p, PICKER_MODE_IMMEDIATE, &lib, false,
+                                      false, NULL, g.rows));
+    picker_set_header(&p, "Step 2 of 3");
+    picker_draw(&p, &g, NULL, NULL, NULL, &cv);
+    assert_sane();
+    for (t = 0; t < fk.logged; t++) {
+        if (strcmp(fk.log[t].s, "Step 2 of 3") == 0) {
+            header = true;
+            TEST_ASSERT_TRUE(fk.log[t].y < g.list_top);
+        } else if (fk.log[t].y < g.list_top) {
+            TEST_FAIL_MESSAGE("a row was drawn in the header band");
+        }
+    }
+    TEST_ASSERT_TRUE(header);
+
+    /* No header: nothing above the first row's top. */
+    run_list(GEOM_53_W, GEOM_53_H, PICKER_MODE_IMMEDIATE, false, false, NULL);
+    assert_sane();
+    for (t = 0; t < fk.logged; t++) {
+        TEST_ASSERT_TRUE(fk.log[t].y >= PICKER_LIST_TOP);
+    }
+}
+
+static bool said(const char* s)
+{
+    unsigned t;
+
+    for (t = 0; t < fk.logged; t++) {
+        if (strcmp(fk.log[t].s, s) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Setup's game page names the cart the hold makes; pending mode does not. */
+static void test_the_setup_game_page_names_the_cart_it_makes(void)
+{
+    fill_library(LIB_COUNT);
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_IMMEDIATE, false, false, 0,
+               PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, DESC_200);
+    assert_sane();
+    TEST_ASSERT_TRUE(said("Hold to make wildcard"));
+
+    /* With the wildcard done, row 0 is Finish setup; row 1 is a game. */
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_IMMEDIATE, true, false, 1,
+               PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, DESC_200);
+    assert_sane();
+    TEST_ASSERT_TRUE(said("Hold to make game cart"));
+
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_PENDING, true, false, 0,
+               PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, DESC_200);
+    assert_sane();
+    TEST_ASSERT_TRUE(said("Hold to install to cart"));
+}
+
+static void test_the_make_menu_page_explains_itself(void)
+{
+    fill_library(LIB_COUNT);
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_MAKE_MENU, false, false, 0,
+               PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, NULL);
+    assert_sane();
+    TEST_ASSERT_EQUAL_UINT(0, fk.images);
+    TEST_ASSERT_TRUE(said("Make MENU cart"));
+    TEST_ASSERT_TRUE(said("Turns this cart into your MENU cart"));
+    TEST_ASSERT_TRUE(said("Hold to make MENU cart"));
+}
+
+/* The Finish note wraps inside the band and never says "writer". */
+static void test_the_finish_note_fits_the_band(void)
+{
+    picker_layout_t g;
+    unsigned t;
+    bool note = false;
+
+    fill_library(LIB_COUNT);
+    run_detail(GEOM_53_W, GEOM_53_H, PICKER_MODE_FINISH, true, false, 0,
+               PICKER_MEDIA_READY, PICKER_MEDIA_READY, 0, 0, NULL);
+    assert_sane();
+    TEST_ASSERT_EQUAL_INT(PICKER_OK,
+                          picker_layout(GEOM_53_W, GEOM_53_H, &g));
+    for (t = 0; t < fk.logged; t++) {
+        TEST_ASSERT_NULL(strstr(fk.log[t].s, "writer"));
+        if (strncmp(fk.log[t].s, "Ends setup.", 11) == 0) {
+            note = true;
+            TEST_ASSERT_TRUE(picker_desc_lines_px(fk.log[t].s, &g.adv,
+                                                  g.detail_w) <=
+                             g.band_rows);
+        }
+    }
+    TEST_ASSERT_TRUE(note);
+}
+
 /* ─── the description ─────────────────────────────────────────────────────── */
 
 static void test_the_page_is_the_description_and_never_less_than_the_band(void)
@@ -1462,6 +1577,10 @@ int main(void)
     RUN_TEST(test_the_launch_page_says_hold_to_play);
     RUN_TEST(test_diag_mode_list_footer_names_back);
     RUN_TEST(test_diag_mode_game_page_says_hold_to_install);
+    RUN_TEST(test_a_header_draws_above_the_rows_and_costs_one);
+    RUN_TEST(test_the_setup_game_page_names_the_cart_it_makes);
+    RUN_TEST(test_the_make_menu_page_explains_itself);
+    RUN_TEST(test_the_finish_note_fits_the_band);
     RUN_TEST(test_the_hold_bar_appears_only_once_the_hold_starts);
     RUN_TEST(test_every_wrapped_line_fits_the_column_in_pixels);
     RUN_TEST(test_the_wrap_breaks_at_spaces_and_hard_breaks_long_words);
