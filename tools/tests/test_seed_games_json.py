@@ -312,7 +312,8 @@ def test_build_entries_is_sorted_by_display_title_case_insensitively(tmp_path):
 def test_build_entries_output_passes_validation(gamelist, tmp_path):
     entries = seed.build_entries({"Foo": gamelist["Foo"]}, tmp_path)
     problems, _ = gamesdb.validate(entries)
-    assert problems == []
+    # A seed marks no starter; choosing them is curation.
+    assert problems == [gamesdb.NO_STARTER]
 
 
 def test_the_same_input_twice_gives_identical_json_text(gamelist, tmp_path):
@@ -363,7 +364,8 @@ def test_a_stem_with_no_gamelist_entry_still_gets_one_bare_entry(gamelist, tmp_p
         "players": None,
     }
     problems, _ = gamesdb.validate(entries)
-    assert problems == []
+    # A seed marks no starter; choosing them is curation.
+    assert problems == [gamesdb.NO_STARTER]
 
 
 def test_display_title_comes_from_the_gamelist_name(gamelist):
@@ -422,7 +424,7 @@ def test_a_full_seed_of_a_long_desc_writes_it_whole(tmp_path):
     assert len(long_text) > 1000
     entries = seed.build_entries({"Foo": described("Foo", "./Foo.zip", long_text)}, tmp_path)
     assert entries[0]["description"] == long_text
-    assert gamesdb.validate(entries)[0] == []
+    assert gamesdb.validate(entries)[0] == [gamesdb.NO_STARTER]
 
 
 def test_descriptions_refreshes_untouched_entries_only(tmp_path, capsys):

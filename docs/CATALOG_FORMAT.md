@@ -52,7 +52,7 @@ One object per game, in an array. Field order is not significant.
 | `art` | string | Path to the cover source, relative to the media directory named by `CYD_MEDIA_DIR`; empty when no source exists. |
 | `shot` | string | Path to the gameplay snapshot source, relative to the media directory named by `CYD_MEDIA_DIR`; empty when no source exists. |
 | `manual` | string | Path to the scanned PDF manual source, relative to the media directory named by `CYD_MEDIA_DIR`; empty when no source exists. |
-| `starter` | bool | Offered during first-boot setup. |
+| `starter` | bool | Offered during first-boot setup. At least one entry in the file must be a starter: setup's wildcard and game-cart steps list starters only. |
 | `developer` | string | For the record; not emitted to the catalog. |
 | `publisher` | string | For the record; not emitted to the catalog. |
 | `year` | number | Integer or null. For the record; not emitted to the catalog. |

@@ -261,6 +261,10 @@ def _check_sources(problems, label, game, rom_dir, media_dir):
             problems.append(f"{label}: no {field} source at {source}")
 
 
+# The file-wide problem for a games list with no starter entry.
+NO_STARTER = "no entry is a starter: setup needs at least one starter game"
+
+
 def validate(games, rom_dir=None, media_dir=None):
     """Check a loaded games.json against docs/CATALOG_FORMAT.md.
 
@@ -310,6 +314,11 @@ def validate(games, rom_dir=None, media_dir=None):
             empty_shot += 1
         if game.get("manual") == "":
             empty_manual += 1
+
+    # Setup's wildcard and game-cart steps list starter games only, so a file
+    # with none stops setup at its second step.
+    if not any(isinstance(g, dict) and g.get("starter") is True for g in games):
+        problems.append(NO_STARTER)
 
     if rom_dir is None:
         notices.append(

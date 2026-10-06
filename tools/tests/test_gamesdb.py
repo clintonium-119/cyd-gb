@@ -118,7 +118,7 @@ def game(**overrides):
         "art": "",
         "shot": "",
         "manual": "",
-        "starter": False,
+        "starter": True,
         "developer": "Nintendo",
         "publisher": "Nintendo",
         "genre": "Puzzle",
@@ -186,7 +186,10 @@ def test_top_level_object_is_a_problem_not_a_crash():
 
 def test_entry_that_is_not_an_object_is_reported():
     problems, _ = gamesdb.validate(["Tetris.gb"])
-    assert problems == ["entry 0 is not an object, it is a str"]
+    assert problems == [
+        "entry 0 is not an object, it is a str",
+        gamesdb.NO_STARTER,
+    ]
 
 
 def test_missing_field_is_reported_by_name():
@@ -329,6 +332,19 @@ def test_year_string_is_rejected():
 
 def test_boolean_is_not_an_integer_for_year_or_players():
     assert rejected(game(players=True), "players must be an integer or null, not bool")
+
+
+def test_a_list_with_no_starter_is_a_problem():
+    problems, _ = gamesdb.validate(
+        [game(starter=False), game(filename="B.gb", starter=False)]
+    )
+    assert problems == [gamesdb.NO_STARTER]
+    assert "setup needs at least one starter" in gamesdb.NO_STARTER
+
+
+def test_one_starter_is_enough():
+    problems, _ = gamesdb.validate([game(starter=False), game(filename="B.gb")])
+    assert problems == []
 
 
 def test_starter_must_be_a_bool():
