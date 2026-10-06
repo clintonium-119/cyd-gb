@@ -280,13 +280,17 @@ static void test_wizard_step_one_menu_cart(void)
     TEST_ASSERT_EQUAL_INT(BOOT_WIZARD_ADOPT_MENU, boot_decide(&in));
 
     in.auth = BOOT_AUTH_FOREIGN;
-    TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_INSERT_BLANK, boot_decide(&in));
+    TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_FOREIGN, boot_decide(&in));
 
     in.cls = BOOT_CLASS_GAME;
     in.auth = BOOT_AUTH_OURS;
     TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_INSERT_BLANK, boot_decide(&in));
 
     in.cls = BOOT_CLASS_WILD;
+    TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_INSERT_BLANK, boot_decide(&in));
+
+    /* A wrong cart is not authenticated against just to pick a halt. */
+    in.auth = BOOT_AUTH_UNKNOWN;
     TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_INSERT_BLANK, boot_decide(&in));
 }
 
@@ -305,7 +309,7 @@ static void test_wizard_step_two_wildcard(void)
     TEST_ASSERT_EQUAL_INT(BOOT_WIZARD_ADOPT_WILD, boot_decide(&in));
 
     in.auth = BOOT_AUTH_FOREIGN;
-    TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_INSERT_BLANK, boot_decide(&in));
+    TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_FOREIGN, boot_decide(&in));
 
     in.cls = BOOT_CLASS_MENU;
     in.auth = BOOT_AUTH_OURS;
@@ -315,32 +319,74 @@ static void test_wizard_step_two_wildcard(void)
     TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_INSERT_BLANK, boot_decide(&in));
 }
 
+/* The last step takes a blank for a game cart, or finishes with the MENU
+ * cart or wildcard already made. */
 static void test_wizard_step_three_game_cart(void)
 {
+    static const enum boot_class_e keys[2] = {
+        BOOT_CLASS_MENU, BOOT_CLASS_WILD,
+    };
     boot_input_t in = wizard_input(true, true);
+    size_t k;
 
     in.cls = BOOT_CLASS_BLANK;
     TEST_ASSERT_EQUAL_INT(BOOT_WIZARD_PICK_GAME, boot_decide(&in));
 
+    for (k = 0; k < 2; k++) {
+        in.cls = keys[k];
+        in.auth = BOOT_AUTH_OURS;
+        TEST_ASSERT_EQUAL_INT(BOOT_WIZARD_FINISH, boot_decide(&in));
+        in.auth = BOOT_AUTH_OPEN;
+        TEST_ASSERT_EQUAL_INT(BOOT_WIZARD_FINISH, boot_decide(&in));
+        in.auth = BOOT_AUTH_UNKNOWN;
+        TEST_ASSERT_EQUAL_INT(BOOT_NEED_AUTH, boot_decide(&in));
+        in.auth = BOOT_AUTH_FOREIGN;
+        TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_FOREIGN, boot_decide(&in));
+    }
+
     in.cls = BOOT_CLASS_GAME;
+    in.auth = BOOT_AUTH_OURS;
     TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_INSERT_BLANK, boot_decide(&in));
-
-    in.cls = BOOT_CLASS_MENU;
-    TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_INSERT_BLANK, boot_decide(&in));
-
-    in.cls = BOOT_CLASS_WILD;
+    in.auth = BOOT_AUTH_UNKNOWN;
     TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_INSERT_BLANK, boot_decide(&in));
 }
 
-/* A restarted setup writes over any tag of ours or an unprotected one at
- * every step, whatever its class; a foreign tag is still refused. */
+/* A foreign tag is refused at every step, restarted or not. */
+static void test_foreign_tag_is_refused_at_every_step(void)
+{
+    int step;
+    int rewrite;
+    int cls;
+
+    for (step = 0; step < 3; step++) {
+        for (rewrite = 0; rewrite < 2; rewrite++) {
+            for (cls = BOOT_CLASS_MENU; cls <= BOOT_CLASS_GAME; cls++) {
+                boot_input_t in = wizard_input(step >= 1, step >= 2);
+                in.flags.rewrite = (rewrite != 0);
+                in.cls = (enum boot_class_e)cls;
+                in.auth = BOOT_AUTH_FOREIGN;
+                TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_FOREIGN,
+                                      boot_decide(&in));
+            }
+        }
+    }
+}
+
+/* A restarted setup takes any tag of ours or an unprotected one at every
+ * step, whatever its class. Step 1 writes a MENU cart back and asks before
+ * turning a wildcard or game cart into one; a foreign tag is refused. */
 static void test_rewrite_writes_over_our_own_and_open_tags(void)
 {
-    static const enum boot_action_e write[3] = {
-        BOOT_WIZARD_WRITE_MENU, BOOT_WIZARD_PICK_WILD, BOOT_WIZARD_PICK_GAME,
-    };
     static const enum boot_class_e tagged[3] = {
         BOOT_CLASS_MENU, BOOT_CLASS_WILD, BOOT_CLASS_GAME,
+    };
+    static const enum boot_action_e want[3][3] = {
+        { BOOT_WIZARD_WRITE_MENU, BOOT_WIZARD_CONFIRM_MENU,
+          BOOT_WIZARD_CONFIRM_MENU },
+        { BOOT_WIZARD_PICK_WILD, BOOT_WIZARD_PICK_WILD,
+          BOOT_WIZARD_PICK_WILD },
+        { BOOT_WIZARD_PICK_GAME, BOOT_WIZARD_PICK_GAME,
+          BOOT_WIZARD_PICK_GAME },
     };
     int step;
     size_t c;
@@ -351,14 +397,13 @@ static void test_rewrite_writes_over_our_own_and_open_tags(void)
         for (c = 0; c < 3; c++) {
             in.cls = tagged[c];
             in.auth = BOOT_AUTH_OURS;
-            TEST_ASSERT_EQUAL_INT(write[step], boot_decide(&in));
+            TEST_ASSERT_EQUAL_INT(want[step][c], boot_decide(&in));
             in.auth = BOOT_AUTH_OPEN;
-            TEST_ASSERT_EQUAL_INT(write[step], boot_decide(&in));
+            TEST_ASSERT_EQUAL_INT(want[step][c], boot_decide(&in));
             in.auth = BOOT_AUTH_UNKNOWN;
             TEST_ASSERT_EQUAL_INT(BOOT_NEED_AUTH, boot_decide(&in));
             in.auth = BOOT_AUTH_FOREIGN;
-            TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_INSERT_BLANK,
-                                  boot_decide(&in));
+            TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_FOREIGN, boot_decide(&in));
         }
     }
 }
@@ -576,6 +621,42 @@ static void test_after_pick_table(void)
         boot_after_pick(BOOT_OPEN_WRITER, BOOT_PICK_FINISH));
     TEST_ASSERT_EQUAL_INT(BOOT_PICK_HALT_MENU_CART,
         boot_after_pick(BOOT_OPEN_WRITER, BOOT_PICK_NONE));
+
+    /* Wizard, last step with our MENU cart or wildcard: finish only. */
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_FINISH_SETUP,
+        boot_after_pick(BOOT_WIZARD_FINISH, BOOT_PICK_FINISH));
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_HALT_NO_SELECTION,
+        boot_after_pick(BOOT_WIZARD_FINISH, BOOT_PICK_NONE));
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_INVALID,
+        boot_after_pick(BOOT_WIZARD_FINISH, BOOT_PICK_ROM));
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_INVALID,
+        boot_after_pick(BOOT_WIZARD_FINISH, BOOT_PICK_CANCEL_PENDING));
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_INVALID,
+        boot_after_pick(BOOT_WIZARD_FINISH, BOOT_PICK_MAKE_MENU));
+
+    /* Restarted step 1 with a wildcard or game cart: the held row confirms
+     * making it the MENU cart. */
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_WRITE_MENU,
+        boot_after_pick(BOOT_WIZARD_CONFIRM_MENU, BOOT_PICK_MAKE_MENU));
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_HALT_NO_SELECTION,
+        boot_after_pick(BOOT_WIZARD_CONFIRM_MENU, BOOT_PICK_NONE));
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_INVALID,
+        boot_after_pick(BOOT_WIZARD_CONFIRM_MENU, BOOT_PICK_ROM));
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_INVALID,
+        boot_after_pick(BOOT_WIZARD_CONFIRM_MENU, BOOT_PICK_FINISH));
+
+    /* The make-MENU row means nothing to any other list. */
+    {
+        static const enum boot_action_e others[] = {
+            BOOT_WIZARD_PICK_WILD, BOOT_WIZARD_PICK_GAME, BOOT_WIZARD_FINISH,
+            BOOT_OPEN_WRITER, BOOT_LIST_OPEN, BOOT_WIZARD_WRITE_MENU,
+        };
+        size_t i;
+        for (i = 0; i < sizeof(others) / sizeof(others[0]); i++) {
+            TEST_ASSERT_EQUAL_INT(BOOT_PICK_INVALID,
+                boot_after_pick(others[i], BOOT_PICK_MAKE_MENU));
+        }
+    }
 
     /* Nothing else opens a picker. */
     TEST_ASSERT_EQUAL_INT(BOOT_PICK_INVALID,
@@ -808,6 +889,8 @@ static boot_result_t harness_boot(fake_ntag215_t* tag, nvs_t* nvs,
 
     case BOOT_WIZARD_PICK_WILD:
     case BOOT_WIZARD_PICK_GAME:
+    case BOOT_WIZARD_FINISH:
+    case BOOT_WIZARD_CONFIRM_MENU:
     case BOOT_OPEN_WRITER:
     case BOOT_LIST_OPEN: {
         boot_selection_t sel;
@@ -832,6 +915,13 @@ static boot_result_t harness_boot(fake_ntag215_t* tag, nvs_t* nvs,
              * as many as they like and then choose Finish setup. */
             res.wrote = true;
             res.write_rc = provision_class(&dev, BOOT_CLASS_GAME, sel.rom);
+            break;
+        case BOOT_PICK_WRITE_MENU:
+            res.wrote = true;
+            res.write_rc = provision_class(&dev, BOOT_CLASS_MENU, NULL);
+            if (res.write_rc == NTAG_OK) {
+                nvs->flags.menu_done = true;
+            }
             break;
         case BOOT_PICK_FINISH_SETUP:
             nvs->flags.setup_done = true;
@@ -1089,6 +1179,93 @@ static void test_re_adoption_after_an_nvs_clear(void)
     assert_tag_payload(&menu_tag, "MENU");
 }
 
+/* After a settings clear, the MENU cart and wildcard already made are enough
+ * to run setup again and finish it, with no tag written. */
+static void test_two_carts_finish_setup_after_an_nvs_clear(void)
+{
+    fake_ntag215_t menu_tag;
+    fake_ntag215_t wild_tag;
+    nvs_t nvs;
+    boot_result_t r;
+    scripted_pick_t pick;
+
+    memset(&nvs, 0, sizeof(nvs));
+    fake_ntag215_init(&menu_tag);
+    fake_ntag215_init(&wild_tag);
+    (void)harness_boot(&menu_tag, &nvs, NULL, NULL);
+    pick.pick = BOOT_PICK_ROM;
+    pick.rom = "Tetris.gb";
+    pick.target = BOOT_TARGET_WILDCARD;
+    (void)harness_boot(&wild_tag, &nvs, picker_scripted, &pick);
+    TEST_ASSERT_TRUE(nvs.flags.wild_done);
+
+    memset(&nvs, 0, sizeof(nvs));
+    fake_ntag215_reset_log(&menu_tag);
+    fake_ntag215_reset_log(&wild_tag);
+
+    r = harness_boot(&menu_tag, &nvs, NULL, NULL);
+    TEST_ASSERT_EQUAL_INT(BOOT_WIZARD_ADOPT_MENU, r.action);
+    r = harness_boot(&wild_tag, &nvs, NULL, NULL);
+    TEST_ASSERT_EQUAL_INT(BOOT_WIZARD_ADOPT_WILD, r.action);
+
+    pick.pick = BOOT_PICK_FINISH;
+    pick.rom = NULL;
+    pick.target = 0;
+    r = harness_boot(&menu_tag, &nvs, picker_scripted, &pick);
+    TEST_ASSERT_EQUAL_INT(BOOT_WIZARD_FINISH, r.action);
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_FINISH_SETUP, r.pick_action);
+    TEST_ASSERT_FALSE(r.wrote);
+    TEST_ASSERT_TRUE(nvs.flags.setup_done);
+
+    TEST_ASSERT_EQUAL_size_t(0, fake_ntag215_count(&menu_tag, NTAG_CMD_WRITE,
+                                                   FAKE_NTAG215_ANY_PAGE));
+    TEST_ASSERT_EQUAL_size_t(0, fake_ntag215_count(&wild_tag, NTAG_CMD_WRITE,
+                                                   FAKE_NTAG215_ANY_PAGE));
+    assert_tag_payload(&menu_tag, "MENU");
+    assert_tag_payload(&wild_tag, "WILD:Tetris.gb");
+}
+
+/* A restarted setup turns a wildcard into the MENU cart only after the held
+ * make-MENU row. */
+static void test_restarted_setup_confirms_a_wildcard_into_the_menu_cart(void)
+{
+    fake_ntag215_t wild_tag;
+    nvs_t nvs;
+    boot_result_t r;
+    scripted_pick_t pick;
+
+    memset(&nvs, 0, sizeof(nvs));
+    nvs.flags.menu_done = true;
+    fake_ntag215_init(&wild_tag);
+    pick.pick = BOOT_PICK_ROM;
+    pick.rom = "Tetris.gb";
+    pick.target = BOOT_TARGET_WILDCARD;
+    (void)harness_boot(&wild_tag, &nvs, picker_scripted, &pick);
+    assert_tag_payload(&wild_tag, "WILD:Tetris.gb");
+
+    memset(&nvs, 0, sizeof(nvs));
+    nvs.flags.rewrite = true;
+    fake_ntag215_reset_log(&wild_tag);
+
+    /* Powered off at the list: nothing written. */
+    pick.pick = BOOT_PICK_NONE;
+    pick.rom = NULL;
+    r = harness_boot(&wild_tag, &nvs, picker_scripted, &pick);
+    TEST_ASSERT_EQUAL_INT(BOOT_WIZARD_CONFIRM_MENU, r.action);
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_HALT_NO_SELECTION, r.pick_action);
+    TEST_ASSERT_FALSE(r.wrote);
+    TEST_ASSERT_FALSE(nvs.flags.menu_done);
+    assert_tag_payload(&wild_tag, "WILD:Tetris.gb");
+
+    pick.pick = BOOT_PICK_MAKE_MENU;
+    r = harness_boot(&wild_tag, &nvs, picker_scripted, &pick);
+    TEST_ASSERT_EQUAL_INT(BOOT_PICK_WRITE_MENU, r.pick_action);
+    TEST_ASSERT_EQUAL_INT(NTAG_OK, r.write_rc);
+    TEST_ASSERT_TRUE(nvs.flags.menu_done);
+    assert_tag_payload(&wild_tag, "MENU");
+    assert_tag_protected(&wild_tag);
+}
+
 static void test_a_blanked_menu_cart_boots_as_a_blank_open_tag(void)
 {
     fake_ntag215_t menu_tag;
@@ -1134,7 +1311,7 @@ static void test_a_foreign_menu_cart_cannot_be_adopted(void)
     fake_ntag215_reset_log(&menu_tag);
 
     r = harness_boot(&menu_tag, &nvs, NULL, NULL);
-    TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_INSERT_BLANK, r.action);
+    TEST_ASSERT_EQUAL_INT(BOOT_HALT_SETUP_FOREIGN, r.action);
     TEST_ASSERT_FALSE(nvs.flags.menu_done);
     TEST_ASSERT_EQUAL_size_t(0, fake_ntag215_count(&menu_tag, NTAG_CMD_WRITE,
                                                    FAKE_NTAG215_ANY_PAGE));
@@ -1398,6 +1575,7 @@ int main(void)
     RUN_TEST(test_wizard_step_two_wildcard);
     RUN_TEST(test_wizard_step_three_game_cart);
     RUN_TEST(test_rewrite_writes_over_our_own_and_open_tags);
+    RUN_TEST(test_foreign_tag_is_refused_at_every_step);
     RUN_TEST(test_rewrite_leaves_blank_tags_unchanged);
     RUN_TEST(test_rewrite_is_ignored_once_setup_is_done);
     RUN_TEST(test_unfinished_setup_never_loads_or_opens_the_writer);
@@ -1409,6 +1587,8 @@ int main(void)
     RUN_TEST(test_wizard_completes_on_the_host_against_fake_tags);
     RUN_TEST(test_the_stub_picker_finishes_setup_in_three_boots);
     RUN_TEST(test_re_adoption_after_an_nvs_clear);
+    RUN_TEST(test_two_carts_finish_setup_after_an_nvs_clear);
+    RUN_TEST(test_restarted_setup_confirms_a_wildcard_into_the_menu_cart);
     RUN_TEST(test_a_blanked_menu_cart_boots_as_a_blank_open_tag);
     RUN_TEST(test_a_foreign_menu_cart_cannot_be_adopted);
     RUN_TEST(test_pending_write_executes_end_to_end);

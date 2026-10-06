@@ -57,71 +57,83 @@ static bool adoptable(enum boot_auth_e auth)
     return auth == BOOT_AUTH_OURS || auth == BOOT_AUTH_OPEN;
 }
 
-/* A restarted setup's answer for a non-blank tag: the step's own write or
- * pick when the tag is ours or unprotected, the password check when that is
- * not yet known, and a refusal for a foreign tag. */
-static enum boot_action_e decide_rewrite(const boot_input_t* in,
-                                         enum boot_action_e write)
+/* Whether a non-blank tag may be taken by a setup step: `ok` when it is
+ * ours or unprotected, the password check when that is not yet known, and the
+ * foreign-tag halt otherwise. */
+static enum boot_action_e decide_ours(const boot_input_t* in,
+                                      enum boot_action_e ok)
 {
     if (in->auth == BOOT_AUTH_UNKNOWN) {
         return BOOT_NEED_AUTH;
     }
-    return adoptable(in->auth) ? write : BOOT_HALT_SETUP_INSERT_BLANK;
+    return adoptable(in->auth) ? ok : BOOT_HALT_SETUP_FOREIGN;
+}
+
+/* A cart of the wrong kind for this step. Its owner is only asked about when
+ * already known: a foreign tag is never authenticated against just to choose
+ * which halt to show. */
+static enum boot_action_e wrong_cart(const boot_input_t* in)
+{
+    return (in->auth == BOOT_AUTH_FOREIGN) ? BOOT_HALT_SETUP_FOREIGN
+                                           : BOOT_HALT_SETUP_INSERT_BLANK;
 }
 
 /* The first-boot wizard: MENU cart, then wildcard, then one game cart. Each
  * step accepts a blank tag, or re-adopts an existing tag of the class it is
  * looking for — which is what makes the wizard survive an NVS clear without
- * the kid having to find fresh tags. In a restarted setup (flags.rewrite)
- * each step instead writes over any tag of ours or an unprotected one,
- * whatever its class, so the same carts can run setup again. */
+ * the kid having to find fresh tags. At the last step our MENU cart or
+ * wildcard finishes setup without a write, so two carts are enough.
+ *
+ * In a restarted setup (flags.rewrite) each step instead takes any tag of
+ * ours or an unprotected one, whatever its class, so the same carts can run
+ * setup again. Step 1 writes a MENU cart straight back but asks before
+ * turning a wildcard or game cart into one; steps 2 and 3 open their lists,
+ * where the held pick is the confirmation. A foreign tag is refused at every
+ * step. */
 static enum boot_action_e decide_wizard(const boot_input_t* in)
 {
     bool rewrite = in->flags.rewrite && in->cls != BOOT_CLASS_BLANK;
 
     if (!in->flags.menu_done) {
-        if (rewrite) {
-            return decide_rewrite(in, BOOT_WIZARD_WRITE_MENU);
-        }
         if (in->cls == BOOT_CLASS_BLANK) {
             return BOOT_WIZARD_WRITE_MENU;
         }
-        if (in->cls == BOOT_CLASS_MENU) {
-            if (in->auth == BOOT_AUTH_UNKNOWN) {
-                return BOOT_NEED_AUTH;
-            }
-            return adoptable(in->auth) ? BOOT_WIZARD_ADOPT_MENU
-                                       : BOOT_HALT_SETUP_INSERT_BLANK;
+        if (rewrite) {
+            return decide_ours(in, (in->cls == BOOT_CLASS_MENU)
+                                       ? BOOT_WIZARD_WRITE_MENU
+                                       : BOOT_WIZARD_CONFIRM_MENU);
         }
-        return BOOT_HALT_SETUP_INSERT_BLANK;
+        if (in->cls == BOOT_CLASS_MENU) {
+            return decide_ours(in, BOOT_WIZARD_ADOPT_MENU);
+        }
+        return wrong_cart(in);
     }
 
     if (!in->flags.wild_done) {
-        if (rewrite) {
-            return decide_rewrite(in, BOOT_WIZARD_PICK_WILD);
-        }
         if (in->cls == BOOT_CLASS_BLANK) {
             return BOOT_WIZARD_PICK_WILD;
         }
-        if (in->cls == BOOT_CLASS_WILD) {
-            if (in->auth == BOOT_AUTH_UNKNOWN) {
-                return BOOT_NEED_AUTH;
-            }
-            return adoptable(in->auth) ? BOOT_WIZARD_ADOPT_WILD
-                                       : BOOT_HALT_SETUP_INSERT_BLANK;
+        if (rewrite) {
+            return decide_ours(in, BOOT_WIZARD_PICK_WILD);
         }
-        return BOOT_HALT_SETUP_INSERT_BLANK;
+        if (in->cls == BOOT_CLASS_WILD) {
+            return decide_ours(in, BOOT_WIZARD_ADOPT_WILD);
+        }
+        return wrong_cart(in);
     }
 
-    /* Last step: one ordinary game cart, which only a blank tag can become
-     * outside a restarted setup. */
-    if (rewrite) {
-        return decide_rewrite(in, BOOT_WIZARD_PICK_GAME);
-    }
+    /* Last step: one ordinary game cart from a blank, or finish with the
+     * MENU cart or wildcard already made. */
     if (in->cls == BOOT_CLASS_BLANK) {
         return BOOT_WIZARD_PICK_GAME;
     }
-    return BOOT_HALT_SETUP_INSERT_BLANK;
+    if (rewrite) {
+        return decide_ours(in, BOOT_WIZARD_PICK_GAME);
+    }
+    if (in->cls == BOOT_CLASS_MENU || in->cls == BOOT_CLASS_WILD) {
+        return decide_ours(in, BOOT_WIZARD_FINISH);
+    }
+    return wrong_cart(in);
 }
 
 static enum boot_action_e decide_pending(const boot_input_t* in)
@@ -225,6 +237,8 @@ enum boot_pick_action_e boot_after_pick(enum boot_action_e opened_by,
             opened_by == BOOT_WIZARD_PICK_WILD ||
             opened_by == BOOT_WIZARD_ADOPT_WILD ||
             opened_by == BOOT_WIZARD_PICK_GAME ||
+            opened_by == BOOT_WIZARD_FINISH ||
+            opened_by == BOOT_WIZARD_CONFIRM_MENU ||
             opened_by == BOOT_LIST_OPEN) {
             return BOOT_PICK_HALT_NO_SELECTION;
         }
@@ -248,6 +262,16 @@ enum boot_pick_action_e boot_after_pick(enum boot_action_e opened_by,
             return BOOT_PICK_FINISH_SETUP;
         }
         return BOOT_PICK_INVALID;
+
+    case BOOT_WIZARD_FINISH:
+        /* The finish-only list writes nothing. */
+        return (pick == BOOT_PICK_FINISH) ? BOOT_PICK_FINISH_SETUP
+                                          : BOOT_PICK_INVALID;
+
+    case BOOT_WIZARD_CONFIRM_MENU:
+        /* The held row is the confirmation to replace this cart. */
+        return (pick == BOOT_PICK_MAKE_MENU) ? BOOT_PICK_WRITE_MENU
+                                             : BOOT_PICK_INVALID;
 
     case BOOT_OPEN_WRITER:
         /* Pending mode: record it and tell them to power off and swap. */

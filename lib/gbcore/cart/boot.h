@@ -12,7 +12,9 @@
 // The order of the table is load-bearing, not incidental:
 //
 //   1. read failures        — nothing else can be decided without a payload
-//   2. setup not finished   — the wizard owns the device until it is
+//   2. setup not finished   — the wizard owns the device until it is; a
+//                             foreign tag is refused at every step, and our
+//                             MENU cart or wildcard finishes the last step
 //   3. MENU                 — BEFORE the pending check, or a pending write
 //                             would land on the menu cart and destroy it
 //   4. pending write        — only for a tag that matches its target
@@ -82,10 +84,12 @@ typedef struct boot_flags_s {
     bool menu_done;
     bool wild_done;
     bool setup_done;
-    /* Restart setup's mode: every wizard step writes over a tag that is ours
-     * or unprotected instead of adopting or refusing it. Set by the
-     * diagnostics System page's Restart setup, cleared by Finish setup. Last,
-     * so a zeroed struct is a first boot that is not rewriting. */
+    /* Restart setup's mode: every wizard step takes any tag that is ours or
+     * unprotected, whatever its kind, instead of adopting or refusing it.
+     * Step 1 asks before turning a wildcard or game cart into the MENU cart;
+     * steps 2 and 3 confirm with their held list pick. Set by the diagnostics
+     * System page's Restart setup, cleared by Finish setup. Last, so a zeroed
+     * struct is a first boot that is not rewriting. */
     bool rewrite;
 } boot_flags_t;
 
@@ -159,6 +163,8 @@ enum boot_action_e {
     BOOT_HALT_INSERT_BLANK,
     BOOT_HALT_INSERT_GAME_CART,
     BOOT_HALT_SETUP_INSERT_BLANK,
+    /* A setup step found a tag protected by someone else's password. */
+    BOOT_HALT_SETUP_FOREIGN,
 
     /* Re-enter with `auth` resolved. */
     BOOT_NEED_AUTH,
@@ -169,6 +175,11 @@ enum boot_action_e {
     BOOT_WIZARD_PICK_WILD,
     BOOT_WIZARD_ADOPT_WILD,
     BOOT_WIZARD_PICK_GAME,
+    /* Last step with our MENU cart or wildcard: a list with only Finish. */
+    BOOT_WIZARD_FINISH,
+    /* Restarted step 1 with a wildcard or game cart: a held one-row list
+     * confirms turning it into the MENU cart. */
+    BOOT_WIZARD_CONFIRM_MENU,
 
     BOOT_OPEN_WRITER,
     BOOT_EXECUTE_PENDING,
@@ -186,6 +197,8 @@ enum boot_pick_e {
     BOOT_PICK_ROM,
     BOOT_PICK_FINISH,
     BOOT_PICK_CANCEL_PENDING,
+    /* The make-MENU list's one row was held. */
+    BOOT_PICK_MAKE_MENU,
 };
 
 enum boot_pick_action_e {
@@ -193,6 +206,7 @@ enum boot_pick_action_e {
     BOOT_PICK_HALT_NO_SELECTION,
     BOOT_PICK_WRITE_WILD,
     BOOT_PICK_WRITE_GAME,
+    BOOT_PICK_WRITE_MENU,
     BOOT_PICK_FINISH_SETUP,
     BOOT_PICK_RECORD_PENDING,
     BOOT_PICK_CLEAR_PENDING,
