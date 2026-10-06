@@ -69,8 +69,9 @@ static int write_cart(enum boot_class_e cls, const char* rom) {
     return rc;
 }
 
-// Append a verified write to the setup-progress record. The record exists so
-// the wizard's picker can mark the titles that are already done; it carries
+// Append a verified game-cart write to the setup-progress record. The record
+// exists so the wizard's picker can mark the titles that already have a game
+// cart; the wildcard's game is not one of them. It carries
 // no protection or routing meaning, and a full record is not a write failure
 // — the cart is on the tag either way.
 static void record_made(const char* rom) {
@@ -126,7 +127,6 @@ int provision_wizard_write(enum boot_pick_action_e pick_action,
         if (rc != NTAG_OK) {
             return rc;
         }
-        record_made(pick->rom);
         flags->wild_done = true;
         settings_wizard_save(flags);
         return NTAG_OK;
