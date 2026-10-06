@@ -703,15 +703,28 @@ static void test_frameskip_steps_within_its_range(void)
     TEST_ASSERT_EQUAL_UINT8(0, diag_frameskip(&d));
 }
 
-/* Left/Right are frameskip on every row, and Up/Down never are. */
-static void test_frameskip_steps_from_any_row(void)
+/* Left/Right change only the highlighted row, and Up/Down never change a
+ * value. */
+static void test_left_right_change_only_the_highlighted_row(void)
 {
     goto_sys_row(DIAG_SYS_SETUP);
-    hammer(COMBO_BTN_RIGHT, 2);
-    TEST_ASSERT_EQUAL_UINT8(2, diag_frameskip(&d));
-    TEST_ASSERT_EQUAL_UINT8(DIAG_SYS_SETUP, diag_sys_row(&d));
+    sample(COMBO_EVENT_NONE, 0, 100);
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_RIGHT, 105));
+    sample(COMBO_EVENT_NONE, 0, 200);
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_LEFT, 205));
+    TEST_ASSERT_EQUAL_UINT8(0, diag_frameskip(&d));
+    TEST_ASSERT_FALSE(diag_list_mode(&d));
+    TEST_ASSERT_TRUE(diag_boot_logo(&d));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
+
+    setUp();
+    goto_sys_row(DIAG_SYS_LIST);
+    hammer(COMBO_BTN_RIGHT, 1);
+    TEST_ASSERT_EQUAL_UINT8(0, diag_frameskip(&d));
+    TEST_ASSERT_TRUE(diag_list_mode(&d));
+    TEST_ASSERT_TRUE(diag_boot_logo(&d));
     hammer(COMBO_BTN_UP, 3);
-    TEST_ASSERT_EQUAL_UINT8(2, diag_frameskip(&d));
+    TEST_ASSERT_EQUAL_UINT8(0, diag_frameskip(&d));
 }
 
 static void test_the_cursor_moves_and_clamps_at_both_ends(void)
@@ -761,38 +774,65 @@ static void test_a_on_the_frameskip_row_does_nothing(void)
     TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
 }
 
-static void test_a_on_the_games_list_row_toggles_it(void)
+/* Right sets a switch on and Left sets it off; pressing the way it already
+ * points reports nothing, so a held direction cannot flicker it. */
+static void assert_left_right_set_the_switch(uint8_t row, bool (*get)(
+                                                 const diag_t*))
 {
-    goto_sys_row(DIAG_SYS_LIST);
-    TEST_ASSERT_FALSE(diag_list_mode(&d));
+    bool start;
 
+    goto_sys_row(row);
+    start = get(&d);
     sample(COMBO_EVENT_NONE, 0, 100);
-    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_SWITCH | DIAG_EV_REDRAW,
-                            sample(COMBO_EVENT_NONE, COMBO_BTN_A, 105));
-    TEST_ASSERT_TRUE(diag_list_mode(&d));
-    TEST_ASSERT_TRUE(diag_boot_logo(&d));
-
+    TEST_ASSERT_EQUAL_HEX16(start ? 0 : (DIAG_EV_SWITCH | DIAG_EV_REDRAW),
+                            sample(COMBO_EVENT_NONE, COMBO_BTN_RIGHT, 105));
+    TEST_ASSERT_TRUE(get(&d));
     sample(COMBO_EVENT_NONE, 0, 200);
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_RIGHT, 205));
+    TEST_ASSERT_TRUE(get(&d));
+
+    sample(COMBO_EVENT_NONE, 0, 300);
     TEST_ASSERT_EQUAL_HEX16(DIAG_EV_SWITCH | DIAG_EV_REDRAW,
-                            sample(COMBO_EVENT_NONE, COMBO_BTN_A, 205));
+                            sample(COMBO_EVENT_NONE, COMBO_BTN_LEFT, 305));
+    TEST_ASSERT_FALSE(get(&d));
+    sample(COMBO_EVENT_NONE, 0, 400);
+    TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_LEFT, 405));
+    TEST_ASSERT_FALSE(get(&d));
+
+    /* Held: the repeat sets it again, never flips it back. */
+    sample(COMBO_EVENT_NONE, COMBO_BTN_RIGHT, 500);
+    sample(COMBO_EVENT_NONE, COMBO_BTN_RIGHT, 2000);
+    sample(COMBO_EVENT_NONE, COMBO_BTN_RIGHT, 3000);
+    TEST_ASSERT_TRUE(get(&d));
+}
+
+static void test_left_right_set_the_games_list(void)
+{
+    assert_left_right_set_the_switch(DIAG_SYS_LIST, diag_list_mode);
+    TEST_ASSERT_TRUE(diag_boot_logo(&d));
+}
+
+static void test_left_right_set_the_boot_logo(void)
+{
+    assert_left_right_set_the_switch(DIAG_SYS_LOGO, diag_boot_logo);
     TEST_ASSERT_FALSE(diag_list_mode(&d));
 }
 
-static void test_a_on_the_boot_logo_row_toggles_it(void)
+/* A is select, and a switch has nothing to select. */
+static void test_a_on_a_switch_row_does_nothing(void)
 {
-    goto_sys_row(DIAG_SYS_LOGO);
-    TEST_ASSERT_TRUE(diag_boot_logo(&d));
+    uint8_t row;
 
-    sample(COMBO_EVENT_NONE, 0, 100);
-    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_SWITCH | DIAG_EV_REDRAW,
-                            sample(COMBO_EVENT_NONE, COMBO_BTN_A, 105));
-    TEST_ASSERT_FALSE(diag_boot_logo(&d));
-    TEST_ASSERT_FALSE(diag_list_mode(&d));
-
-    sample(COMBO_EVENT_NONE, 0, 200);
-    TEST_ASSERT_EQUAL_HEX16(DIAG_EV_SWITCH | DIAG_EV_REDRAW,
-                            sample(COMBO_EVENT_NONE, COMBO_BTN_A, 205));
-    TEST_ASSERT_TRUE(diag_boot_logo(&d));
+    for (row = DIAG_SYS_LIST; row <= DIAG_SYS_LOGO; row++) {
+        setUp();
+        goto_sys_row(row);
+        sample(COMBO_EVENT_NONE, 0, 100);
+        TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, COMBO_BTN_A, 105));
+        sample(COMBO_EVENT_NONE, COMBO_BTN_A, 2000);
+        TEST_ASSERT_FALSE(diag_list_mode(&d));
+        TEST_ASSERT_TRUE(diag_boot_logo(&d));
+        TEST_ASSERT_EQUAL_UINT8(DIAG_TOOL_NONE, diag_hold_tool(&d));
+    }
 }
 
 /* A pressed on Restart setup at t = 100 and held to `until`; returns the OR
@@ -2055,12 +2095,13 @@ int main(void)
     RUN_TEST(test_leaving_the_audio_page_silences_the_tone);
     RUN_TEST(test_the_display_pattern_cycles_three_ways_round);
     RUN_TEST(test_frameskip_steps_within_its_range);
-    RUN_TEST(test_frameskip_steps_from_any_row);
+    RUN_TEST(test_left_right_change_only_the_highlighted_row);
     RUN_TEST(test_the_cursor_moves_and_clamps_at_both_ends);
     RUN_TEST(test_the_cursor_resets_on_page_entry);
     RUN_TEST(test_a_on_the_frameskip_row_does_nothing);
-    RUN_TEST(test_a_on_the_games_list_row_toggles_it);
-    RUN_TEST(test_a_on_the_boot_logo_row_toggles_it);
+    RUN_TEST(test_left_right_set_the_games_list);
+    RUN_TEST(test_left_right_set_the_boot_logo);
+    RUN_TEST(test_a_on_a_switch_row_does_nothing);
     RUN_TEST(test_a_held_on_restart_setup_fires_once);
     RUN_TEST(test_releasing_early_cancels_the_restart);
     RUN_TEST(test_an_extra_button_cancels_the_restart);

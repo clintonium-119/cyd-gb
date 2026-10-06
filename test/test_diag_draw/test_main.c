@@ -1239,7 +1239,8 @@ static void test_the_system_footer_names_its_buttons(void)
         TEST_ASSERT_TRUE(drew_text("U/D"));
         TEST_ASSERT_TRUE(drew_text("Row"));
         TEST_ASSERT_TRUE(drew_text("L/R"));
-        TEST_ASSERT_TRUE(drew_text("Toggle"));
+        TEST_ASSERT_TRUE(drew_text("Change"));
+        TEST_ASSERT_TRUE(drew_text("Select"));
         TEST_ASSERT_TRUE(drew_text(
             "Frameskip, list, logo, setup, build"));
     }

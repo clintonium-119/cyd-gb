@@ -243,11 +243,24 @@ static uint16_t pattern_step(diag_t* d, uint8_t dir_bits)
     return DIAG_EV_REDRAW;
 }
 
+/* A System switch set by direction: Right on, Left off. Set rather than
+ * flipped, so a held direction's repeat cannot flicker it. */
+static uint16_t switch_set(bool* sw, bool on)
+{
+    if (*sw == on) {
+        return 0;
+    }
+    *sw = on;
+    return DIAG_EV_SWITCH | DIAG_EV_REDRAW;
+}
+
 /* The System page: Up/Down move the row cursor, clamped at both ends, and
- * Left/Right step frameskip whichever row is selected. */
+ * Left/Right change the selected row — frameskip down/up, a switch off/on,
+ * nothing on Restart setup. */
 static uint16_t system_step(diag_t* d, uint8_t dir_bits)
 {
     uint8_t before;
+    bool right = (dir_bits == COMBO_BTN_RIGHT);
 
     if (dir_bits == COMBO_BTN_UP || dir_bits == COMBO_BTN_DOWN) {
         before = d->sys_row;
@@ -256,15 +269,23 @@ static uint16_t system_step(diag_t* d, uint8_t dir_bits)
                                    0, DIAG_SYS_ROW_COUNT - 1, 1);
         return (uint16_t)((d->sys_row != before) ? DIAG_EV_REDRAW : 0);
     }
-    if (dir_bits == COMBO_BTN_RIGHT || dir_bits == COMBO_BTN_LEFT) {
+    if (!right && dir_bits != COMBO_BTN_LEFT) {
+        return 0;
+    }
+    switch (d->sys_row) {
+    case DIAG_SYS_FRAMESKIP:
         before = d->frameskip;
-        d->frameskip = combo_step_u8(d->frameskip,
-                                     (dir_bits == COMBO_BTN_RIGHT) ? +1 : -1,
-                                     0, DIAG_FRAMESKIP_MAX, 1);
+        d->frameskip = combo_step_u8(d->frameskip, right ? +1 : -1, 0,
+                                     DIAG_FRAMESKIP_MAX, 1);
         return (uint16_t)((d->frameskip != before)
                               ? (DIAG_EV_FRAMESKIP | DIAG_EV_REDRAW) : 0);
+    case DIAG_SYS_LIST:
+        return switch_set(&d->list_mode, right);
+    case DIAG_SYS_LOGO:
+        return switch_set(&d->boot_logo, right);
+    default:
+        return 0;
     }
-    return 0;
 }
 
 
@@ -911,13 +932,8 @@ uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
             }
             break;
         case DIAG_PAGE_SYSTEM:
-            if (d->sys_row == DIAG_SYS_LIST) {
-                d->list_mode = !d->list_mode;
-                ev |= DIAG_EV_SWITCH | DIAG_EV_REDRAW;
-            } else if (d->sys_row == DIAG_SYS_LOGO) {
-                d->boot_logo = !d->boot_logo;
-                ev |= DIAG_EV_SWITCH | DIAG_EV_REDRAW;
-            } else if (d->sys_row == DIAG_SYS_SETUP) {
+            /* A is select: only Restart setup has anything to select. */
+            if (d->sys_row == DIAG_SYS_SETUP) {
                 ev |= hold_begin(d, DIAG_TOOL_SETUP, joypad, now_ms);
             }
             break;

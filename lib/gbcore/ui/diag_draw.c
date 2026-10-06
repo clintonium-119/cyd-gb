@@ -113,7 +113,7 @@ static const ui_hint_t HINTS_TRIM[] = {
 };
 /* No room for the page hint beside the row cursor's three. */
 static const ui_hint_t HINTS_SYSTEM[] = {
-    { "U/D", "Row" }, { "L/R", "Frameskip" }, { "A", "Toggle" },
+    { "U/D", "Row" }, { "L/R", "Change" }, { "A", "Select" },
 };
 
 #define HINTS(a) { (a), (uint8_t)(sizeof(a) / sizeof((a)[0])) }

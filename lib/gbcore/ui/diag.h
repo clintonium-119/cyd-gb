@@ -568,9 +568,10 @@ int diag_init(diag_t* d, int16_t panel_w, int16_t panel_h,
  * while it runs reports DIAG_EV_HOLD; after PICKER_HOLD_MS it reports the
  * tool's event once. Any change to the word, or a page change, cancels it.
  *
- * On the System page Up/Down move the row cursor (clamped), Left/Right step
- * frameskip, and A flips the selected switch (DIAG_EV_SWITCH). A held alone
- * on Restart setup runs the same hold and reports DIAG_EV_SETUP_RESTART.
+ * On the System page Up/Down move the row cursor (clamped) and Left/Right
+ * change the selected row: frameskip down/up, a switch off/on
+ * (DIAG_EV_SWITCH). A held alone on Restart setup runs the same hold and
+ * reports DIAG_EV_SETUP_RESTART; A does nothing on the other rows.
  *
  * Returns the OR of the DIAG_EV_* flags, or 0 for a NULL state.
  */
@@ -594,11 +595,11 @@ uint8_t diag_pattern(const diag_t* d);
 uint8_t diag_frameskip(const diag_t* d);
 
 /* The games-list mode starts off at diag_init(); the binding seeds the stored
- * value here. A on the System page flips it and reports DIAG_EV_SWITCH. */
+ * value here. Left/Right on its System row set it and report DIAG_EV_SWITCH. */
 void diag_set_list_mode(diag_t* d, bool on);
 
 /* The boot logo starts on at diag_init(); the binding seeds the stored value
- * here. A on the System page flips it and reports DIAG_EV_SWITCH. */
+ * here. Left/Right on its System row set it and report DIAG_EV_SWITCH. */
 void diag_set_boot_logo(diag_t* d, bool on);
 bool diag_boot_logo(const diag_t* d);
 
