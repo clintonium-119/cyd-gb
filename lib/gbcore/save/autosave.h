@@ -17,13 +17,13 @@
 // `wrote` is written by the cartridge-RAM callback and read by the tick, and
 // both run on the emulation task, so no `volatile` and no atomic is needed.
 //
-// Four things ask for a flush (design §7): the idle rule below, the menu
-// opening, a reset, and the battery crossing its low threshold. Only the
-// first and the last are decided here; the other two are events the caller
-// already knows about. There is deliberately no maximum-dirty-age rule — a
-// game that writes cartridge RAM continuously never goes idle and never
-// flushes, which is a measurement to take on hardware rather than a policy
-// to guess at.
+// Three things ask for a flush (design §7): the idle rule below, the menu
+// opening and a reset. Only the first is decided here; the other two are
+// events the caller already knows about. There is no low-battery flush: the
+// board has no battery sense (BUG-0003). There is deliberately no
+// maximum-dirty-age rule — a game that writes cartridge RAM continuously
+// never goes idle and never flushes, which is a measurement to take on
+// hardware rather than a policy to guess at.
 //
 // Pure C, no Arduino/ESP-IDF headers, no allocation.
 
@@ -48,7 +48,6 @@ typedef struct autosave_state_s {
     uint8_t wrote;          /* a write landed inside save_size since the tick  */
     uint8_t dirty;          /* the RAM differs from what is on the card        */
     uint32_t last_write_ms; /* tick time of the most recent write              */
-    uint8_t batt_low;       /* the low-battery flush has already fired         */
 } autosave_state_t;
 
 /*
@@ -106,22 +105,6 @@ void autosave_defer(autosave_state_t* s, uint32_t now_ms);
 
 /* After a flush that succeeded. */
 void autosave_flushed(autosave_state_t* s);
-
-/*
- * Whether the battery has just crossed below low_mv. True exactly once per
- * crossing: the first reading below low_mv latches, every reading while
- * latched is false, and the latch re-arms only once a reading reaches
- * low_mv + hyst_mv — so a cell sagging under load does not flush every
- * second.
- *
- * Independent of the dirty state on purpose: the latch tracks the voltage,
- * and the caller's flush is already a no-op on clean RAM. RAM dirtied later
- * under a still-low battery is caught by the idle rule.
- *
- * False for NULL.
- */
-bool autosave_battery(autosave_state_t* s, uint16_t mv, uint16_t low_mv,
-                      uint16_t hyst_mv);
 
 #ifdef __cplusplus
 }

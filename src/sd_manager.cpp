@@ -498,8 +498,8 @@ bool sd_commit_tmp(const char* path) {
 // The save is written to a sibling temp file and renamed over the real one,
 // so the card always holds one complete save. Writing in place would mean
 // removing the old file and then spending the whole write — up to 32 KB —
-// with nothing valid on the card, and the flush most likely to be cut short
-// is the low-battery one, which fires when power is about to go.
+// with nothing valid on the card, and a unit switched off or run flat
+// mid-write would be left with no save at all.
 //
 // The window is not closed, only narrowed: a power loss between the remove
 // and the rename still loses the save. Both are single directory-entry

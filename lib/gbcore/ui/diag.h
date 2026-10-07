@@ -51,7 +51,6 @@ enum diag_page_e {
     DIAG_PAGE_BUTTONS = 0,
     DIAG_PAGE_SD,
     DIAG_PAGE_NFC,
-    DIAG_PAGE_BATTERY,
     DIAG_PAGE_AUDIO,
     DIAG_PAGE_DISPLAY,
     DIAG_PAGE_NUDGE,
@@ -420,13 +419,6 @@ typedef struct diag_data_s {
     uint8_t nfc_outcome;        /* enum diag_nfc_outcome_e                  */
     int nfc_outcome_rc;         /* the failed write's code, for FAILED      */
     char nfc_outcome_title[CATALOG_TITLE_MAX];
-
-    /* Battery page. The divider is carried as a value rather than read from a
-     * header so the page can show the number the firmware actually used. */
-    uint16_t bat_raw;
-    uint16_t bat_pin_mv;
-    uint16_t bat_cell_mv;
-    uint16_t bat_divider_x100;
 
     /* Display page: which palette's darkest and lightest shades the
      * checkerboard is built from. */

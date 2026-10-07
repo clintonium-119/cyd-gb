@@ -1,6 +1,5 @@
 #include "diag.h"
 
-#include "battery.h"
 #include "build_info.h"
 #include "button_input.h"
 #include "cart_provision.h"
@@ -30,9 +29,9 @@
 //
 // Everything the mode decides is in lib/gbcore/ui/diag.c and everything it
 // lays out is in lib/gbcore/ui/diag_draw.c, both pure C and both host-tested.
-// This file supplies the seven things they cannot have: a clock, the button
-// expander through the combo module, the tag reader, the card, the ADC, the
-// speaker and the panel.
+// This file supplies the six things they cannot have: a clock, the button
+// expander through the combo module, the tag reader, the card, the speaker
+// and the panel.
 //
 //   * poll  — one expander read every DIAG_POLL_MS, fed through the combo
 //             module so Select+Left/Right arrive as events and the bare D-pad
@@ -40,8 +39,7 @@
 //   * draw  — the display module's canvas, asked for at the WORKING origin
 //             rather than the stored one, so the nudge page moves the window
 //             live
-//   * read  — the card once at entry, the ADC once a second on its own page,
-//             and the tag only when someone asks
+//   * read  — the card once at entry and the tag only when someone asks
 //   * write — the tag page's four held tools, each handed to the
 //             provisioner's diagnostics verbs against the tag on the reader
 //             at that moment; this file composes no write of its own
@@ -539,7 +537,6 @@ static void trim_push(int16_t ox, int16_t oy, uint8_t pat, int32_t sx,
 
 void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
 {
-    uint32_t next_bat_ms = 0;
     uint8_t last_buttons = 0;
     bool logged = false;
     uint16_t frame_flags = 0;
@@ -562,9 +559,6 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
     // about geometry and timing, not about which colours are running, so it
     // takes the fallback rather than teaching diag_draw the auto path.
     data.palette = (s->palette == PALETTE_AUTO) ? PALETTE_FALLBACK : s->palette;
-    // The divider as the firmware actually used it, so the page reports the
-    // placeholder rather than implying a measured ratio.
-    data.bat_divider_x100 = (uint16_t)(BAT_DIVIDER * 100.0f);
     data.nfc_fw = nfc_firmware_version();
     data.nfc_state = nfc_ok ? DIAG_NFC_NOT_SCANNED : DIAG_NFC_NO_READER;
 
@@ -774,17 +768,6 @@ void diag_run(settings_t* s, bool nfc_ok, bool sd_ok)
             dirty = true;
         }
         last_buttons = data.buttons;
-
-        if (page == DIAG_PAGE_BATTERY && (int32_t)(now - next_bat_ms) >= 0) {
-            uint16_t cell = 0;
-
-            next_bat_ms = now + BAT_SAMPLE_MS;
-            data.bat_raw = battery_read_raw(&data.bat_pin_mv);
-            if (battery_poll(now, &cell)) {
-                data.bat_cell_mv = cell;
-            }
-            dirty = true;
-        }
 
         if (((flags & DIAG_EV_REDRAW) || dirty) && !diag_trim_running(&d)) {
             uint32_t began = micros();

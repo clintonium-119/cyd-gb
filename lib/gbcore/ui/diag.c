@@ -13,7 +13,6 @@ static const char* const page_titles[DIAG_PAGE_COUNT] = {
     "Buttons",
     "SD card",
     "NFC tag",
-    "Battery",
     "Audio",
     "Display",
     "Nudge",
@@ -889,8 +888,8 @@ uint16_t diag_input(diag_t* d, uint8_t combo_event, uint8_t joypad,
             ev |= system_step(d, dir_bits);
             break;
         default:
-            /* Buttons, SD, tag and battery are readouts: the D-pad has
-             * nothing to move on them. */
+            /* Buttons, SD and tag are readouts: the D-pad has nothing
+             * to move on them. */
             break;
         }
     }

@@ -51,20 +51,12 @@ void emu_get_rom_title(char* out, size_t out_sz);
 // audio for about 400 ms, and Pokemon uses cartridge RAM as scratch from
 // the title screen on, so an idle save fired every ten seconds of play and
 // every one was heard as a dropout (BUG-0011). Saves happen when the menu
-// opens and once on a low battery.
-//
-// The battery thresholds are passed in rather than read here, which keeps
-// this header free of hw_config.h: the constants live there and are applied
-// from main.cpp, alongside the ADC reading they are compared against.
+// opens, on a reset and on a return to the games list.
 void emu_autosave_tick(uint32_t now_ms);
 
 // After a save that failed: restamps the RAM so the next trigger's retry is
 // not confused with a fresh write.
 void emu_autosave_defer(uint32_t now_ms);
-
-// True exactly once per crossing below low_mv; re-arms only above
-// low_mv + hyst_mv, so a cell sagging under load does not save repeatedly.
-bool emu_autosave_battery(uint16_t mv, uint16_t low_mv, uint16_t hyst_mv);
 
 // ─── Save states ────────────────────────────────────────────────────────────
 // The whole machine to and from one file, cartridge RAM included, through

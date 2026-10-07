@@ -4,7 +4,6 @@
 #include "display.h"
 #include "scale_bench.h"
 #include "button_input.h"
-#include "battery.h"
 #include "i2c_bus.h"
 #include "input/combo.h"
 #include "sd_manager.h"
@@ -370,13 +369,6 @@ void run_emu() {
         // resident and may not read a clock.
         emu_autosave_tick(now);
 
-        // One ADC read a second, and one save per crossing below the
-        // threshold — the latch in gbcore is what makes the second true.
-        uint16_t mv = 0;
-        if (battery_poll(now, &mv) && emu_autosave_battery(mv, BAT_LOW_MV, BAT_HYST_MV)) {
-            flush_save("battery");
-        }
-
         // The combo armed the snapshot; the game runs on, the combo masked
         // from it, until that frame is drawn.
         if (menu_req && (emu_state_thumb_ready()
@@ -592,7 +584,6 @@ void setup() {
     // one read.
     i2c_bus_init();
     button_init();
-    battery_init();
 
     // Diagnostic mode: Start+Select held at power-on, sampled here because the
     // expander is up and the tag has not been read. Two samples 10 ms apart,

@@ -20,11 +20,6 @@
 #define SAVE_8K   0x2000u
 #define SAVE_MBC2 0x200u
 
-/* Battery thresholds match the firmware's placeholders so the regions in the
- * latch tests read the way the hardware will. */
-#define LOW_MV  3500u
-#define HYST_MV 100u
-
 void setUp(void)
 {
 }
@@ -41,7 +36,6 @@ static autosave_state_t fresh(uint32_t save_size)
     s.wrote = 0xFFu;
     s.dirty = 0xFFu;
     s.last_write_ms = 0xFFFFFFFFu;
-    s.batt_low = 0xFFu;
     TEST_ASSERT_EQUAL_INT(AUTOSAVE_OK, autosave_init(&s, save_size));
     return s;
 }
@@ -55,7 +49,6 @@ static void test_init_yields_clean_state(void)
     TEST_ASSERT_EQUAL_UINT8(0, s.wrote);
     TEST_ASSERT_EQUAL_UINT8(0, s.dirty);
     TEST_ASSERT_EQUAL_UINT32(0, s.last_write_ms);
-    TEST_ASSERT_EQUAL_UINT8(0, s.batt_low);
     TEST_ASSERT_FALSE(autosave_dirty(&s));
     TEST_ASSERT_FALSE(autosave_idle_due(&s, 0));
     TEST_ASSERT_FALSE(autosave_idle_due(&s, 100000));
@@ -66,7 +59,6 @@ static void test_null_state_is_rejected(void)
     TEST_ASSERT_EQUAL_INT(AUTOSAVE_ERR_ARGS, autosave_init(NULL, 1));
     TEST_ASSERT_FALSE(autosave_dirty(NULL));
     TEST_ASSERT_FALSE(autosave_idle_due(NULL, 0));
-    TEST_ASSERT_FALSE(autosave_battery(NULL, 0, LOW_MV, HYST_MV));
 }
 
 /* ─── the save-size gate ──────────────────────────────────────────────────── */
@@ -192,33 +184,6 @@ static void test_defer_keeps_dirty_and_restarts_the_idle_clock(void)
     TEST_ASSERT_TRUE(autosave_idle_due(&s, 30000));
 }
 
-/* ─── the low-battery latch ───────────────────────────────────────────────── */
-
-static void test_the_battery_latch_fires_once_per_crossing(void)
-{
-    autosave_state_t s = fresh(SAVE_8K);
-    /* Above the threshold: nothing to do. */
-    TEST_ASSERT_FALSE(autosave_battery(&s, 3600, LOW_MV, HYST_MV));
-    /* The crossing itself. */
-    TEST_ASSERT_TRUE(autosave_battery(&s, 3450, LOW_MV, HYST_MV));
-    /* Still low, still latched. */
-    TEST_ASSERT_FALSE(autosave_battery(&s, 3440, LOW_MV, HYST_MV));
-    /* Recovered past low_mv but not past low_mv + hyst_mv: still latched. */
-    TEST_ASSERT_FALSE(autosave_battery(&s, 3590, LOW_MV, HYST_MV));
-    /* Clear of the hysteresis band: re-armed, and re-arming is not a flush. */
-    TEST_ASSERT_FALSE(autosave_battery(&s, 3600, LOW_MV, HYST_MV));
-    /* So the next crossing fires again. */
-    TEST_ASSERT_TRUE(autosave_battery(&s, 3450, LOW_MV, HYST_MV));
-}
-
-static void test_the_battery_latch_is_independent_of_dirty(void)
-{
-    autosave_state_t s = fresh(SAVE_8K);
-    TEST_ASSERT_FALSE(autosave_dirty(&s));
-    TEST_ASSERT_TRUE(autosave_battery(&s, 3450, LOW_MV, HYST_MV));
-    TEST_ASSERT_FALSE(autosave_dirty(&s));
-}
-
 int main(void)
 {
     UNITY_BEGIN();
@@ -240,9 +205,6 @@ int main(void)
 
     RUN_TEST(test_flushed_clears_dirty_and_the_rule);
     RUN_TEST(test_defer_keeps_dirty_and_restarts_the_idle_clock);
-
-    RUN_TEST(test_the_battery_latch_fires_once_per_crossing);
-    RUN_TEST(test_the_battery_latch_is_independent_of_dirty);
 
     return UNITY_END();
 }

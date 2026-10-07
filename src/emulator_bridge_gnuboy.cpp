@@ -1635,11 +1635,6 @@ void emu_autosave_defer(uint32_t now_ms)
     autosave_defer(&autosave, now_ms);
 }
 
-bool emu_autosave_battery(uint16_t mv, uint16_t low_mv, uint16_t hyst_mv)
-{
-    return autosave_battery(&autosave, mv, low_mv, hyst_mv);
-}
-
 void emu_set_volume(uint8_t idx)
 {
     vol_idx = (idx > MIX_VOL_HIGH) ? MIX_VOL_HIGH : idx;

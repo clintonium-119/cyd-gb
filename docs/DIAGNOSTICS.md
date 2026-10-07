@@ -43,22 +43,20 @@ Work down the list. Write the result in the blank; a blank you cannot fill is th
    `Write failed code <n>` means the write stopped part way; try again, then report the code.
    None of the tools change the setup wizard or its list of cartridges made, so a later wizard run still
    offers every starter.
-6. **Battery** — Cell should sit between 3.5 V and 4.2 V on a charged cell (that range is the cell's
-   datasheet, not a measurement of this board). Note all three numbers as shown: `____`.
-7. **Audio** — press **A** for the tone. It should be steady, not buzzing. **Down** three times: it should
+6. **Audio** — press **A** for the tone. It should be steady, not buzzing. **Down** three times: it should
    get quieter twice, then stop. **Up** three times brings it back. Silence at `Off` is correct — the board
    has no mute, so `Off` parks the output at mid-scale: `____`.
-8. **Display, colour bars** — eight bars, left to right: white, yellow, cyan, green, magenta, red, blue,
+7. **Display, colour bars** — eight bars, left to right: white, yellow, cyan, green, magenta, red, blue,
    black. Two neighbours that look the same mean a dead colour channel: `____`.
-9. **Display, border** — press **Down** for the next pattern. A white frame with a cross through the
+8. **Display, border** — press **Down** for the next pattern. A white frame with a cross through the
    middle. All four sides of the frame should be visible through the bezel, with no black gap outside it
-   and no edge cut off. If either, do step 11 before going on: `____`.
-10. **Display, checkerboard** — **Down** again. A fine grey pattern with no coloured speckle in it. Coloured
+   and no edge cut off. If either, do step 10 before going on: `____`.
+9. **Display, checkerboard** — **Down** again. A fine grey pattern with no coloured speckle in it. Coloured
     speckle is a real fault; an evenly grey look is correct: `____`.
-11. **Nudge** — the D-pad moves the whole picture one pixel at a time. Line the white frame up inside the
+10. **Nudge** — the D-pad moves the whole picture one pixel at a time. Line the white frame up inside the
     bezel, then press **A** to save. "Saved" appears for a moment. **B** puts it back to the factory
     position if you want to start over. Final values: `____`.
-12. **Panel trim** — this one takes a few minutes and needs no computer. The screen fills with a field of
+11. **Panel trim** — this one takes a few minutes and needs no computer. The screen fills with a field of
     small blocks drifting steadily upwards. Somewhere on it you should see a **seam** — a vertical line
     down the screen where the blocks on one side sit a little higher or lower than the blocks on the
     other — and it moves sideways, off one edge and back on at the opposite one.
@@ -141,7 +139,7 @@ Work down the list. Write the result in the blank; a blank you cannot fill is th
     many rounds you do, or a Porch that ends up at `1 + 0/64` or `126 + 63/64`, is this panel's oscillator
     being further out than the trim can reach. That is the fault you came to find; write down what it
     reached: `____`.
-13. **System** — Frameskip should read `0`; leave it there unless you were told otherwise. Write down
+12. **System** — Frameskip should read `0`; leave it there unless you were told otherwise. Write down
     Version and Built exactly as shown — that is how this unit gets matched to a build later: `____`.
 
 **Finish:** switch the unit off. Put a game cartridge in and switch it on normally. The game should sit

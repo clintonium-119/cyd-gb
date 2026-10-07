@@ -67,7 +67,6 @@ static const char* const HELPS[DIAG_PAGE_COUNT] = {
     "Press a button to light it",
     "Card, catalog, free space",
     "Sel+A MENU, Sel+B Wild, Start Game",
-    "Battery at pin and cell",
     "A tone at each volume",
     "Panel and scaler patterns",
     "Centre the window",
@@ -121,9 +120,9 @@ static const struct {
     const ui_hint_t* hints;
     uint8_t n;
 } FOOTERS[DIAG_PAGE_COUNT] = {
-    HINTS(HINTS_PAGE),    HINTS(HINTS_PAGE),   HINTS(HINTS_NFC),
-    HINTS(HINTS_PAGE),    HINTS(HINTS_AUDIO),  HINTS(HINTS_DISPLAY),
-    HINTS(HINTS_NUDGE),   HINTS(HINTS_TRIM),   HINTS(HINTS_SYSTEM),
+    HINTS(HINTS_PAGE),    HINTS(HINTS_PAGE),    HINTS(HINTS_NFC),
+    HINTS(HINTS_AUDIO),   HINTS(HINTS_DISPLAY), HINTS(HINTS_NUDGE),
+    HINTS(HINTS_TRIM),    HINTS(HINTS_SYSTEM),
 };
 
 /* ─── geometry ────────────────────────────────────────────────────────────── */
@@ -417,26 +416,6 @@ static void page_nfc(const ui_canvas_t* cv, const diag_layout_t* g,
         }
         full_row(cv, g, (uint8_t)(row + r), hex, UI_COL_DIM);
     }
-}
-
-static void page_battery(const ui_canvas_t* cv, const diag_layout_t* g,
-                         const diag_data_t* data)
-{
-    char buf[40];
-
-    snprintf(buf, sizeof(buf), "%u", (unsigned)data->bat_raw);
-    kv_row(cv, g, 0, "ADC raw", buf, UI_COL_TEXT);
-
-    snprintf(buf, sizeof(buf), "%u mV", (unsigned)data->bat_pin_mv);
-    kv_row(cv, g, 1, "Pin", buf, UI_COL_TEXT);
-
-    /* The divider is shown as the number the firmware actually used, because
-     * it is a placeholder until the bench meters the real one. */
-    snprintf(buf, sizeof(buf), "%u mV (x%u.%02u divider)",
-             (unsigned)data->bat_cell_mv,
-             (unsigned)(data->bat_divider_x100 / 100u),
-             (unsigned)(data->bat_divider_x100 % 100u));
-    kv_row(cv, g, 2, "Cell", buf, UI_COL_TEXT);
 }
 
 static void page_audio(const ui_canvas_t* cv, const diag_layout_t* g,
@@ -820,9 +799,6 @@ void diag_draw(const diag_t* d, const diag_data_t* data,
         break;
     case DIAG_PAGE_NFC:
         page_nfc(cv, g, data);
-        break;
-    case DIAG_PAGE_BATTERY:
-        page_battery(cv, g, data);
         break;
     case DIAG_PAGE_AUDIO:
         page_audio(cv, g, d);

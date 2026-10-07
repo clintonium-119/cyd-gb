@@ -75,7 +75,6 @@ way in.
 | Buttons | All eight switches live, each with the expander pin behind it, so a dead button names its GPA line |
 | SD card | Whether the card mounted, how many ROMs it holds, how many catalog entries, and how full it is |
 | NFC tag | The reader's firmware, and — on **A** — one cart's UID, `GET_VERSION`, `AUTH0`/`ACCESS`, raw NDEF and class. It reads; it has no way to write |
-| Battery | Raw ADC counts, pin millivolts and cell millivolts through the divider |
 | Audio | A test tone through the same mixer the emulator uses. **A** toggles it, **Up/Down** step the four volume states — "off" parks the DAC at mid-scale, because the board has no hardware mute |
 | Display | Colour bars, a one-pixel border on the window's edge, and a checkerboard pushed through the real scaler so the blend you judge is the blend a game gets. **Up/Down** cycle them |
 | Nudge | Moves the game window a pixel at a time with the D-pad, so it sits square behind the shell's bezel. **A** saves to NVS, **B** restores the compile-time default |

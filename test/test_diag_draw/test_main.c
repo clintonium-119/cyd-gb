@@ -381,11 +381,6 @@ static void fill_data(void)
              "GAME:The Legend of Zelda Links Awakening.gb");
     data.cls = 3;
 
-    data.bat_raw = 2210;
-    data.bat_pin_mv = 1783;
-    data.bat_cell_mv = 3566;
-    data.bat_divider_x100 = 200;
-
     data.palette = 0;
     snprintf(data.fw_version, sizeof(data.fw_version), "v0.9.3-14-gdeadbee");
     snprintf(data.build_time, sizeof(data.build_time), "2026-09-09 20:14 UTC");

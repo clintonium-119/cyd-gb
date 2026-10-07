@@ -353,10 +353,10 @@ static void test_arriving_at_the_tag_page_asks_for_one_scan_either_way(void)
         sample(COMBO_EVENT_BRIGHT_UP, COMBO_BTN_SELECT, 0));
     TEST_ASSERT_EQUAL_UINT8(DIAG_PAGE_NFC, diag_page(&d));
 
-    /* Backwards, from the battery page. */
+    /* Backwards, from the audio page. */
     TEST_ASSERT_EQUAL_HEX16(DIAG_EV_REDRAW | DIAG_EV_PAGE,
         sample(COMBO_EVENT_BRIGHT_UP, COMBO_BTN_SELECT, 0));
-    TEST_ASSERT_EQUAL_UINT8(DIAG_PAGE_BATTERY, diag_page(&d));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_PAGE_AUDIO, diag_page(&d));
     TEST_ASSERT_EQUAL_HEX16(DIAG_EV_REDRAW | DIAG_EV_PAGE | DIAG_EV_NFC_SCAN,
         sample(COMBO_EVENT_BRIGHT_DOWN, COMBO_BTN_SELECT, 0));
     TEST_ASSERT_EQUAL_UINT8(DIAG_PAGE_NFC, diag_page(&d));
@@ -497,7 +497,7 @@ static void test_a_page_change_cancels_the_hold(void)
     ev = sample(COMBO_EVENT_BRIGHT_UP, SEL_A, 600);
     TEST_ASSERT_TRUE((ev & DIAG_EV_PAGE) != 0);
     TEST_ASSERT_EQUAL_HEX16(0, ev & DIAG_EV_NFC_MENU);
-    TEST_ASSERT_EQUAL_UINT8(DIAG_PAGE_BATTERY, diag_page(&d));
+    TEST_ASSERT_EQUAL_UINT8(DIAG_PAGE_AUDIO, diag_page(&d));
     TEST_ASSERT_EQUAL_UINT8(0, diag_hold_pct(&d));
     TEST_ASSERT_EQUAL_HEX16(0, sample(COMBO_EVENT_NONE, SEL_A, 2000));
 }

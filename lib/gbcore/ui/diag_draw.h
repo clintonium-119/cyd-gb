@@ -11,9 +11,8 @@
 // The pages share the theme's chrome: the page's title on the left and its
 // number on the right, a grey help line saying what the page is for, and the
 // button-hint footer naming what the buttons do there. Between them each page
-// is its own thing: eight live button rows,
-// four readouts, a tag dump, a battery, a tone, three test patterns, the
-// nudge, and the build's own version.
+// is its own thing: eight live button rows, four readouts, a tag dump, a
+// tone, three test patterns, the nudge, and the build's own version.
 //
 // The checkerboard pattern is the one that needs the scaler. It is built at
 // Game Boy resolution and pushed through scaler_scale_block() in blend mode,
