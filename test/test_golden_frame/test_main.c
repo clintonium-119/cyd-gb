@@ -20,7 +20,7 @@
  * by frame 60 in test_gnuboy_core.
  */
 #define GOLDEN_FRAME_COUNT 60u
-#define GOLDEN_FRAME_HASH 0x0fc5b5c4ee79097aULL
+#define GOLDEN_FRAME_HASH 0x9bd1c0e716643736ULL
 
 #define ROM_PATH "test/roms/dmg-acid2.gb"
 #define ROM_MAX (1024 * 1024)

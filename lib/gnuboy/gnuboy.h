@@ -9,6 +9,9 @@
  *   - GNUBOY_DRAW_LINE() at the tail of lcd_renderline: per-line
  *     hand-off to the front end, empty unless the including file
  *     defines it.
+ *   - lcd.c's window line counter (WL): window rows advance only on
+ *     lines that draw the window, and upstream's window_offset hack is
+ *     no longer applied (its gnuboy.c table is left as is).
  * Update with scripts/update_gnuboy.sh <sha>.
  */
 

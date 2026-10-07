@@ -25,6 +25,9 @@ typedef struct
 
 static byte BUF[0x100];
 static int WX, WY;
+/* Local modification. The window line counter: the window row to draw next,
+ * advanced only on lines that draw the window, reset where WY is latched. */
+static int WL;
 static bool pal_dirty;
 
 /* Local modification. Per-line hand-off to the front end: the finished
@@ -482,6 +485,7 @@ void gb_lcd_reset(bool hard)
 
 	WX = 0;
 	WY = R_WY;
+	WL = 0;
 
 	gb_lcd_pal_dirty();
 
@@ -548,6 +552,7 @@ void gb_lcd_lcdc_change(byte b)
 		stat_change(2);
 		CYCLES = 40;  // Correct value seems to be 38
 		WY = R_WY;
+		WL = 0;
 	}
 }
 
@@ -659,15 +664,14 @@ static inline void lcd_renderline()
 	WX = R_WX - 7;
 	if (WY>SL || WY<0 || WY>143 || WX<-7 || WX>160 || !(R_LCDC&0x20))
 		WX = 160;
-	int WV = (SL - WY) & 7;
-	int WT = (SL - WY) >> 3;
-
-	// Fix for Fushigi no Dungeon - Fuurai no Shiren GB2 and Donkey Kong
-	// This is a hack, the real problem is elsewhere
-	if (GB.compat.window_offset && (R_LCDC & 0x20))
-	{
-		WT %= GB.compat.window_offset;
-	}
+	/* Local modification. The window row comes from the line counter, not
+	 * LY - WY, so a game that hides the window for some lines resumes it at
+	 * the next row rather than skipping rows; this also replaces upstream's
+	 * per-title window_offset hack, which patched over the same thing. */
+	int WV = WL & 7;
+	int WT = WL >> 3;
+	if (WX < 160)
+		WL++;
 
 	int NS = spr_enum(VS);
 	tilebuf(S, T, WT, WND, BG);
@@ -795,6 +799,7 @@ void gb_lcd_emulate(int cycles)
 			if (R_LY == 0)
 			{
 				WY = R_WY;
+				WL = 0;
 				stat_change(2); /* -> search */
 				CYCLES += 40;
 				break;
