@@ -272,6 +272,31 @@ static void test_unpacked_raw_colours_the_same_as_the_raw_byte(void)
     }
 }
 
+/* Remapping a byte with the registers and colouring it through the identity
+ * LUT is the same colour as the register-built LUT gives the raw byte, so a
+ * line resolved as it is drawn looks exactly as before. */
+static void test_remap_then_identity_lut_matches_the_register_lut(void)
+{
+    static const uint8_t regs[][3] = {
+        {0xE4, 0xE4, 0xE4}, {0xCC, 0x1E, 0x9C}, {0x9C, 0xD2, 0x0F},
+        {0x1B, 0x8D, 0x00}, {0xFF, 0x00, 0x27},
+    };
+    uint16_t want[PALETTE_LUT_SIZE];
+    uint16_t ident[PALETTE_LUT_SIZE];
+    uint8_t remap[PALETTE_LUT_SIZE];
+    unsigned r;
+    unsigned i;
+
+    palette_build_lut_gnuboy(1u, 0xE4, 0xE4, 0xE4, ident);
+    for (r = 0; r < sizeof(regs) / sizeof(regs[0]); r++) {
+        palette_build_lut_gnuboy(1u, regs[r][0], regs[r][1], regs[r][2], want);
+        palette_build_remap_gnuboy(regs[r][0], regs[r][1], regs[r][2], remap);
+        for (i = 0; i < PALETTE_LUT_SIZE; i++) {
+            TEST_ASSERT_EQUAL_HEX16(want[i], ident[remap[i]]);
+        }
+    }
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -288,5 +313,6 @@ int main(void)
     RUN_TEST(test_every_emitted_raw_value_packs_and_unpacks_to_itself);
     RUN_TEST(test_first_pixel_is_the_high_nibble_and_odd_tails_pad_zero);
     RUN_TEST(test_unpacked_raw_colours_the_same_as_the_raw_byte);
+    RUN_TEST(test_remap_then_identity_lut_matches_the_register_lut);
     return UNITY_END();
 }

@@ -104,6 +104,24 @@ void palette_build_lut_gnuboy_ramps(const uint16_t ramps[3][4], uint8_t bgp,
                                     uint16_t lut[PALETTE_LUT_SIZE]);
 
 /*
+ * The register half of palette_build_lut_gnuboy() on its own, as a byte map,
+ * so a line can be resolved the moment it is drawn.
+ *
+ * Games write BGP, OBP0 and OBP1 between lines — Donkey Kong gives its status
+ * bar one BGP and the playfield another — so registers read once per frame
+ * colour the whole frame with whichever value they happened to hold. Passing
+ * each line's raw bytes through this map with that line's registers leaves
+ * the shade the register selected in the low two bits and the source group
+ * untouched; the line then colours correctly through a LUT built with the
+ * identity registers, 0xE4, whatever the registers do later.
+ *
+ * Fills all PALETTE_LUT_SIZE entries; indices outside gnuboy's groups map
+ * through BGP, as the LUT folds them. Writes nothing if remap is NULL.
+ */
+void palette_build_remap_gnuboy(uint8_t bgp, uint8_t obp0, uint8_t obp1,
+                                uint8_t remap[PALETTE_LUT_SIZE]);
+
+/*
  * Four bits per pixel for a copy of gnuboy's raw line bytes, so a whole
  * 160x144 frame fits in 11,520 bytes.
  *

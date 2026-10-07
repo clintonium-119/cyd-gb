@@ -177,6 +177,26 @@ void palette_build_lut_gnuboy(uint8_t idx, uint8_t bgp, uint8_t obp0,
     palette_build_lut_gnuboy_ramps(pals[idx], bgp, obp0, obp1, lut);
 }
 
+void palette_build_remap_gnuboy(uint8_t bgp, uint8_t obp0, uint8_t obp1,
+                                uint8_t remap[PALETTE_LUT_SIZE])
+{
+    unsigned i;
+
+    if (remap == NULL) {
+        return;
+    }
+    for (i = 0; i < PALETTE_LUT_SIZE; i++) {
+        uint8_t reg = bgp;
+
+        if (i >= 32u && i < 36u) {
+            reg = obp0;
+        } else if (i >= 36u && i < 40u) {
+            reg = obp1;
+        }
+        remap[i] = (uint8_t)((i & ~3u) | reg_shade(reg, i & 3u));
+    }
+}
+
 static uint8_t raw_code(uint8_t v)
 {
     return (uint8_t)((v & 7u) | ((v >> 2) & 8u));

@@ -113,19 +113,22 @@ static uint8_t jpad = 0;
 // The tables live in gbcore, but the fill rule is the gnuboy one: the core
 // writes the tile's raw two bits and identifies the source in the high bits,
 // applying BGP / OBP0 / OBP1 when it builds its own colour table rather than
-// when it draws the pixel. So the LUT here is a function of the
-// three palette registers as well as the chosen palette, and it is rebuilt
-// whenever any of them moves — otherwise every fade and every inverted screen
-// would simply not happen.
+// when it draws the pixel. The line hook applies them instead, to each line
+// as it is drawn and with that line's registers, so fb holds shades and the
+// LUT here is built with the identity registers: a function of the chosen
+// palette alone, rebuilt only when that changes.
 //
-// Sixteen stores on the frames where a register changed, and nothing at all on
-// the frames where none did. The per-pixel cost stays one lookup, which is
-// what keeps the scaler and the rest of gbcore out of this entirely.
+// Per line rather than per frame because games write the registers between
+// lines — Donkey Kong's status bar and playfield have different BGPs — and a
+// LUT built from whatever the registers held when the run returned recoloured
+// the whole playfield on the frames that caught the status bar's value
+// (BUG-0026). The remap costs one table lookup per pixel on core 1, 23,040 a
+// frame, and a three-byte compare per line; its 64-byte table is rebuilt only
+// on a line where a register moved.
 //
-// Core 0 reads the LUT while core 1 may be rebuilding it. Each entry is an
-// aligned 16-bit store, so a reader sees either the old colour or the new one,
-// never half of each; the worst a race can do is give one block of one frame
-// of a fade the previous frame's shade.
+// Core 0 reads the LUT while core 1 may be rebuilding it after a palette
+// change. Each entry is an aligned 16-bit store, so a reader sees either the
+// old colour or the new one, never half of each.
 static uint16_t lut[PALETTE_LUT_SIZE];
 static uint8_t curpal = PALETTE_AUTO;
 /* The colours the Game Boy Color's table gives this cartridge, looked up once
@@ -134,6 +137,8 @@ static uint8_t curpal = PALETTE_AUTO;
  * builds the fallback rather than reading this. */
 static uint16_t auto_ramps[3][4];
 static bool auto_ok = false;
+/* The line remap and the registers it was built from. */
+static uint8_t remap[PALETTE_LUT_SIZE];
 static uint8_t pal_bgp = 0, pal_obp0 = 0, pal_obp1 = 0;
 static bool pal_valid = false;
 
@@ -151,28 +156,29 @@ static void build_lut(uint8_t bgp, uint8_t obp0, uint8_t obp1)
     }
 }
 
-static void palette_refresh(bool force)
+/* 0xE4 is the identity mapping, colour c is shade c: fb already holds the
+ * shade, so does the tear demo's test pattern. */
+static void palette_refresh()
 {
-#ifdef TEAR_DEMO
-    /* The test pattern's four shades are the palette's four shades, whatever
-     * ROM is running underneath and whatever it does to BGP. 0xE4 is the
-     * identity mapping: colour c is shade c. */
-    if (force || !pal_valid) {
-        pal_bgp = pal_obp0 = pal_obp1 = 0xE4;
+    build_lut(0xE4, 0xE4, 0xE4);
+}
+
+/* Resolve one fb line through the registers it was drawn with. */
+static void remap_line(uint8_t* px)
+{
+    unsigned x;
+
+    if (!pal_valid || pal_bgp != reg_bgp() || pal_obp0 != reg_obp0() ||
+        pal_obp1 != reg_obp1()) {
+        pal_bgp = reg_bgp();
+        pal_obp0 = reg_obp0();
+        pal_obp1 = reg_obp1();
         pal_valid = true;
-        build_lut(0xE4, 0xE4, 0xE4);
+        palette_build_remap_gnuboy(pal_bgp, pal_obp0, pal_obp1, remap);
     }
-    return;
-#endif
-    if (!force && pal_valid && pal_bgp == reg_bgp() && pal_obp0 == reg_obp0() &&
-        pal_obp1 == reg_obp1()) {
-        return;
+    for (x = 0; x < SCALER_SRC_W; x++) {
+        px[x] = remap[px[x] & (PALETTE_LUT_SIZE - 1u)];
     }
-    pal_bgp = reg_bgp();
-    pal_obp0 = reg_obp0();
-    pal_obp1 = reg_obp1();
-    pal_valid = true;
-    build_lut(pal_bgp, pal_obp0, pal_obp1);
 }
 
 void emu_set_palette(uint8_t idx)
@@ -183,7 +189,7 @@ void emu_set_palette(uint8_t idx)
         return;
     }
     curpal = idx;
-    palette_refresh(true);
+    palette_refresh();
 }
 
 uint8_t emu_get_palette()
@@ -1115,6 +1121,8 @@ void emu_gnuboy_line(const unsigned char* line, int index)
     if (index < 0 || index >= GB_SCREEN_H) {
         return;
     }
+    /* gnuboy copied the line into fb before the hook fired. */
+    remap_line(fb + (size_t)index * SCALER_SRC_W);
     /* The snapshot's lines while one is wanted, in order from line 0. A gap
      * (a skipped frame, the LCD switched off) starts it over, so a finished
      * frame is never two frames spliced. */
@@ -1123,7 +1131,8 @@ void emu_gnuboy_line(const unsigned char* line, int index)
             thumb_line = 0;
         }
         if (index == thumb_line) {
-            palette_pack_raw_line(line, EMU_THUMB_W, thumb[index]);
+            palette_pack_raw_line(fb + (size_t)index * SCALER_SRC_W,
+                                  EMU_THUMB_W, thumb[index]);
             thumb_line++;
         }
     }
@@ -1310,7 +1319,7 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     }
     autosave_init(&autosave, save_size);
 
-    palette_refresh(true);
+    palette_refresh();
     geom = scaler_geom_info(SCALE_GEOM);
     if (!geom || geom->src_lines_per_block != UNIT_LINES ||
         geom->dst_rows_per_block != UNIT_ROWS || geom->dst_w != GAME_W) {
@@ -1338,7 +1347,7 @@ bool emu_init(const uint8_t* rom_data, uint32_t rom_size)
     /* Before the palette is built, and once per ROM: the header is the only
      * input and it cannot change while a cartridge is running. */
     auto_ok = cgb_palette_lookup(rom, romlen, auto_ramps);
-    palette_refresh(true);
+    palette_refresh();
 
     rom_title(title, sizeof(title));
 #ifdef TEAR_DEMO
@@ -1386,11 +1395,9 @@ void emu_run_frame()
          * dropping time rather than resampling: the skipped run's head,
          * which carries on from the previous output, is spliced into the
          * kept run below. Kept here because the next run starts gnuboy's
-         * buffer over. The frame end and palette refresh run here too, so a
-         * register the skipped run wrote is not lost. */
+         * buffer over. The frame end runs here too. */
         gnuboy_run(false);
         frame_end();
-        palette_refresh(false);
         head_n = gnuboy_audio_samples() / 2u;
         if (head_n > FF_HEAD_FRAMES) {
             head_n = FF_HEAD_FRAMES;
@@ -1400,10 +1407,6 @@ void emu_run_frame()
     gnuboy_run(draw);
     frame_end();
     emu_us = (uint32_t)(esp_timer_get_time() - t);
-
-    /* After the frame, so a register the frame wrote is picked up before the
-     * next one is drawn with it. */
-    palette_refresh(false);
 
     /* Every frame, drawn or skipped: the sound has to stay continuous, and
      * the write is also what paces emulation — it blocks only while the DMA
@@ -1690,7 +1693,6 @@ void emu_reset()
      * restored. A soft reset still puts the CPU, the LCD, the sound unit and
      * every IO register back to their power-up values. */
     gnuboy_reset(false);
-    palette_refresh(true);
     fcnt = 0;
 }
 
@@ -1752,8 +1754,6 @@ bool emu_state_load(const char* path_vfs)
      * but the bridge forces DMG after every other path that could, so this
      * one does too. */
     GB.hwtype = GB_HW_DMG;
-    /* The registers the LUT was built from are the loaded ones now. */
-    palette_refresh(true);
     /* The splice's running offset belongs to the audio before the load. */
     ff_carry = 0;
     /* The loaded cartridge RAM differs from the .sav, so the next trigger
