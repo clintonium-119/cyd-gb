@@ -563,7 +563,9 @@ void gb_hw_write(unsigned a, byte b)
 				break;
 			case RI_STAT:
 				R_STAT = (R_STAT & 0x07) | (b & 0x78);
-				if (!IS_CGB && !(R_STAT & 2)) /* DMG STAT write bug => interrupt */
+				/* Local modification. No write-bug interrupt while the LCD is
+				   off, where the STAT line is held low. */
+				if (!IS_CGB && (R_LCDC & 0x80) && !(R_STAT & 2)) /* DMG STAT write bug => interrupt */
 					gb_hw_interrupt(IF_STAT, 1);
 				gb_lcd_stat_trigger();
 				break;

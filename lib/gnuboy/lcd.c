@@ -533,7 +533,12 @@ void gb_lcd_stat_trigger()
 	int condbits[4] = { 0x08, 0x10, 0x20, 0x00 };
 	int mask = condbits[R_STAT & 3];
 
-	if (R_LY == R_LYC)
+	/* Local modification. The LY=LYC flag holds its last value while the
+	   LCD is off, as on hardware: Mr. Do! sets LYC with the LCD off and
+	   then waits on the flag. */
+	if (!(R_LCDC & 0x80))
+		;
+	else if (R_LY == R_LYC)
 		R_STAT |= 0x04;
 	else
 		R_STAT &= ~0x04;

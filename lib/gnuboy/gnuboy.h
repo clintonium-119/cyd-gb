@@ -12,6 +12,8 @@
  *   - lcd.c's window line counter (WL): window rows advance only on
  *     lines that draw the window, and upstream's window_offset hack is
  *     no longer applied (its gnuboy.c table is left as is).
+ *   - LCD off: lcd.c's gb_lcd_stat_trigger leaves the STAT LY=LYC flag
+ *     alone, and hw.c's DMG STAT write bug raises no interrupt.
  * Update with scripts/update_gnuboy.sh <sha>.
  */
 
