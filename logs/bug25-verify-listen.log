@@ -1,0 +1,111 @@
+# capture start 2026-10-07T14:04:19-0400 port=/dev/ttyUSB0 baud=115200 duration=60s
+[   0.201] ets Jul 29 2019 12:21:46
+[   0.201] 
+[   0.201] rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+[   0.201] configsip: 0, SPIWP:0xee
+[   0.201] clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+[   0.201] mode:DIO, clock div:1
+[   0.201] load:0x3fff0030,len:1344
+[   0.201] load:0x40078000,len:13964
+[   0.201] load:0x40080400,len:3600
+[   0.201] entry 0x400805f0
+[   0.401] E (214) esp_core_dff}���͡� No core dump partition found!
+[   0.401] E (214) esp_core_dump_flash: No core dump partition found!
+[   0.601] 
+[   0.601] === CYD-GB ===
+[   0.601] [SPK] I2S DAC on IO26 32768 Hz depth 4
+[   0.601] [i2c] ack: 0x20 0x24
+[   0.601] [i2c] ack: 0x20 0x24
+[   1.202] [TFT] 320x240 OK
+[   1.202] [TFT] porch trim 11 + 20/64
+[   1.202] [INIT] Settings (NVS): fs=0 bl=115 vol=1 gx=26 gy=0
+[   1.202] [SD] Type:2 Size:120MB
+[   1.202] [INIT] Heap: 249976
+[   1.202] [ROM] partition 3392KB @0x0B0000
+[   1.202] [ROM] unchanged, skipping write (1024KB)
+[   1.202] [ROM] mapped 'Pokemon - Red Version.gb' 1024KB
+[   1.202]  * gnuboy_load_rom: Cart loaded: name='POKEMON RED', hw=SGB, mbc=MBC_MBC3, romsize=1024K, ramsize=32K, colorize=48
+[   1.402] [EMU] gnuboy 'POKEMON RED' 1024KB push:col auto:yes heap:95648 largest:14324
+[   1.402] [INIT] Palette: Auto
+[   1.402] [SD] Load: /saves/Pokemon - Red Version.sav (32768)
+[   1.402] [SAVE] Loaded 32768 bytes
+[   1.402] [SAVE] bg: on, 32768 bytes in 4 pieces
+[   1.402] [EMU] emulation on core 1
+[   1.402] [TFT] MADCTL 0xD8, scan order reversed, rot 2
+[   1.402] [TFT] COLMOD 0x53 for the frame path
+[   2.403] [EMU] heap free:53872 largest:10228
+[   2.403] [PERF] emu=11885us scale=6902us push=4024us qstall=2us qovf=0 qrej=0 apu=54us await=4527us aunder=0 aover=0 fps=59 split=c0 core=gnuboy ff=0 ff2=0
+[   3.404] [PERF] emu=11904us scale=6909us push=3949us qstall=2us qovf=0 qrej=0 apu=54us await=4471us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[   4.406] [PERF] emu=11915us scale=6899us push=3944us qstall=2us qovf=0 qrej=0 apu=54us await=4481us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[   5.407] [PERF] emu=11922us scale=6901us push=4015us qstall=2us qovf=0 qrej=0 apu=53us await=4494us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[   6.408] [PERF] emu=12040us scale=6910us push=4025us qstall=2us qovf=0 qrej=0 apu=53us await=4352us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[   7.410] [PERF] emu=8814us scale=6892us push=4041us qstall=4us qovf=1657 qrej=0 apu=56us await=7514us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[   8.412] [PERF] emu=7701us scale=6892us push=3973us qstall=4us qovf=1657 qrej=0 apu=59us await=8619us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[   9.413] [PERF] emu=7702us scale=6890us push=3959us qstall=4us qovf=1657 qrej=0 apu=59us await=8608us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  10.414] [PERF] emu=7703us scale=6914us push=4020us qstall=4us qovf=1657 qrej=0 apu=59us await=8608us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  11.415] [PERF] emu=6771us scale=6880us push=4060us qstall=5us qovf=3384 qrej=0 apu=59us await=9550us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  12.417] [PERF] emu=7287us scale=6882us push=4050us qstall=4us qovf=3384 qrej=0 apu=59us await=9030us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  13.418] [PERF] emu=7250us scale=6878us push=4051us qstall=5us qovf=3384 qrej=0 apu=59us await=9051us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  14.419] [PERF] emu=8058us scale=6919us push=3956us qstall=4us qovf=3384 qrej=0 apu=60us await=8274us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  15.421] [PERF] emu=7852us scale=6885us push=4055us qstall=4us qovf=3384 qrej=0 apu=59us await=8472us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  16.422] [PERF] emu=7856us scale=6885us push=4058us qstall=4us qovf=3384 qrej=0 apu=59us await=8473us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  17.423] [PERF] emu=7870us scale=6889us push=4050us qstall=4us qovf=3384 qrej=0 apu=60us await=8458us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  18.425] [PERF] emu=8346us scale=6877us push=3971us qstall=4us qovf=3384 qrej=0 apu=59us await=7984us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  19.426] [PERF] emu=7857us scale=6881us push=4052us qstall=4us qovf=3384 qrej=0 apu=68us await=8456us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  20.427] [PERF] emu=7931us scale=6897us push=3965us qstall=4us qovf=3384 qrej=0 apu=59us await=8395us aunder=0 aover=0 fps=59 split=c0 core=gnuboy ff=0 ff2=0
+[  21.429] [PERF] emu=7997us scale=6878us push=3971us qstall=4us qovf=3384 qrej=0 apu=59us await=8327us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  22.430] [PERF] emu=7874us scale=6920us push=4031us qstall=4us qovf=3384 qrej=0 apu=59us await=8461us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  23.431] [PERF] emu=41451us scale=6965us push=3960us qstall=8us qovf=3384 qrej=0 apu=9us await=33us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  24.432] [PERF] emu=8326us scale=6929us push=3963us qstall=4us qovf=3733 qrej=0 apu=75us await=7967us aunder=2 aover=0 fps=62 split=c0 core=gnuboy ff=0 ff2=0
+[  25.033] [SD] Save: /saves/Pokemon - Red Version.sav (32768)
+[  25.033] [SAVE] bg: 32768 bytes in 675 ms (ok)
+[  25.434] [PERF] emu=10113us scale=6906us push=3971us qstall=4us qovf=3733 qrej=0 apu=58us await=6178us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  26.435] [PERF] emu=7817us scale=6886us push=3977us qstall=5us qovf=3733 qrej=0 apu=59us await=8507us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  27.436] [PERF] emu=7805us scale=6873us push=4051us qstall=5us qovf=3733 qrej=0 apu=59us await=8502us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  28.438] [PERF] emu=7823us scale=6885us push=4077us qstall=4us qovf=3733 qrej=0 apu=58us await=8494us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  29.439] [PERF] emu=11098us scale=6915us push=3951us qstall=5us qovf=3733 qrej=0 apu=59us await=5243us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  30.440] [PERF] emu=7834us scale=6880us push=4070us qstall=4us qovf=3733 qrej=0 apu=58us await=7741us aunder=2 aover=0 fps=59 split=c0 core=gnuboy ff=0 ff2=0
+[  31.041] [SD] Save: /saves/Pokemon - Red Version.sav (32768)
+[  31.041] [SAVE] bg: 32768 bytes in 619 ms (ok)
+[  31.441] [PERF] emu=7865us scale=6911us push=4035us qstall=4us qovf=3733 qrej=0 apu=59us await=8467us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  32.443] [PERF] emu=7790us scale=6904us push=3956us qstall=5us qovf=3733 qrej=0 apu=59us await=8509us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  33.444] [PERF] emu=8510us scale=6914us push=3945us qstall=4us qovf=3733 qrej=0 apu=67us await=7813us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  34.446] [PERF] emu=11149us scale=6935us push=4009us qstall=4us qovf=3733 qrej=0 apu=68us await=5183us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  35.447] [PERF] emu=7859us scale=6886us push=4001us qstall=4us qovf=3733 qrej=0 apu=59us await=8483us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  35.647] [SD] Save: /saves/Pokemon - Red Version.sav (32768)
+[  35.647] [SAVE] bg: 32768 bytes in 666 ms (ok)
+[  36.448] [PERF] emu=7938us scale=6890us push=3979us qstall=4us qovf=3733 qrej=0 apu=59us await=8408us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  37.449] [PERF] emu=7807us scale=6884us push=3974us qstall=4us qovf=3733 qrej=0 apu=59us await=8512us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  38.451] [PERF] emu=10369us scale=6905us push=4024us qstall=5us qovf=3733 qrej=0 apu=59us await=5958us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  39.452] [PERF] emu=10233us scale=6897us push=4036us qstall=4us qovf=3733 qrej=0 apu=60us await=6081us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  40.053] [SD] Save: /saves/Pokemon - Red Version.sav (32768)
+[  40.053] [SAVE] bg: 32768 bytes in 471 ms (ok)
+[  40.454] [PERF] emu=7819us scale=6910us push=3955us qstall=5us qovf=3733 qrej=0 apu=59us await=8500us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  41.455] [PERF] emu=7833us scale=6907us push=3958us qstall=12us qovf=3733 qrej=0 apu=59us await=8512us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  42.456] [PERF] emu=8518us scale=6907us push=4028us qstall=4us qovf=3733 qrej=0 apu=58us await=7797us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  43.457] [PERF] emu=11289us scale=6911us push=4031us qstall=5us qovf=3733 qrej=0 apu=68us await=5010us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  44.459] [PERF] emu=7839us scale=6895us push=3933us qstall=5us qovf=3733 qrej=0 apu=59us await=8507us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  44.659] [SD] Save: /saves/Pokemon - Red Version.sav (32768)
+[  44.659] [SAVE] bg: 32768 bytes in 458 ms (ok)
+[  45.460] [PERF] emu=7821us scale=6891us push=4055us qstall=5us qovf=3733 qrej=0 apu=60us await=8483us aunder=2 aover=0 fps=59 split=c0 core=gnuboy ff=0 ff2=0
+[  46.461] [PERF] emu=7830us scale=6878us push=4061us qstall=4us qovf=3733 qrej=0 apu=60us await=8473us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  47.462] [PERF] emu=7865us scale=6921us push=3957us qstall=4us qovf=3733 qrej=0 apu=59us await=8457us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  48.463] [PERF] emu=10156us scale=6896us push=4042us qstall=4us qovf=3733 qrej=0 apu=60us await=6142us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  49.264] [SD] Save: /saves/Pokemon - Red Version.sav (32768)
+[  49.264] [SAVE] bg: 32768 bytes in 522 ms (ok)
+[  49.464] [PERF] emu=7839us scale=6916us push=4032us qstall=4us qovf=3733 qrej=0 apu=58us await=8464us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  50.466] [PERF] emu=7833us scale=6907us push=4023us qstall=4us qovf=3733 qrej=0 apu=59us await=8521us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  51.467] [PERF] emu=7829us scale=6911us push=3949us qstall=4us qovf=3733 qrej=0 apu=59us await=8522us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  52.468] [PERF] emu=11354us scale=6920us push=4033us qstall=5us qovf=3733 qrej=0 apu=59us await=4974us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  53.469] [PERF] emu=7850us scale=6891us push=4020us qstall=4us qovf=3733 qrej=0 apu=58us await=8491us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  53.670] [SD] Save: /saves/Pokemon - Red Version.sav (32768)
+[  53.670] [SAVE] bg: 32768 bytes in 493 ms (ok)
+[  54.470] [PERF] emu=7840us scale=6883us push=4067us qstall=4us qovf=3733 qrej=0 apu=59us await=8492us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  55.472] [PERF] emu=7831us scale=6883us push=3976us qstall=5us qovf=3733 qrej=0 apu=58us await=8509us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  56.473] [PERF] emu=10200us scale=6905us push=4028us qstall=5us qovf=3733 qrej=0 apu=60us await=6095us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  57.474] [PERF] emu=10373us scale=6893us push=4039us qstall=5us qovf=3733 qrej=0 apu=59us await=5970us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  58.275] [SD] Save: /saves/Pokemon - Red Version.sav (32768)
+[  58.275] [SAVE] bg: 32768 bytes in 476 ms (ok)
+[  58.475] [PERF] emu=7888us scale=6888us push=4062us qstall=22us qovf=3733 qrej=0 apu=58us await=8434us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  59.477] [PERF] emu=7851us scale=6887us push=4051us qstall=4us qovf=3935 qrej=0 apu=60us await=8480us aunder=2 aover=0 fps=59 split=c0 core=gnuboy ff=0 ff2=0
+# capture end, elapsed 60.1s
