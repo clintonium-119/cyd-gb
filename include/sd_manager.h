@@ -26,7 +26,7 @@
 #define SAVE_PATH       "/saves"
 
 // Appended to a save path to name the file a save is written to before it is
-// renamed into place. Nothing but sd_save_state() ever creates or reads one,
+// renamed into place. Nothing but sd_save_stream() ever creates or reads one,
 // and a leftover is stale by definition — the rename is the last step, so a
 // temp file that outlives its save means that save never completed.
 #define SAVE_TMP_SUFFIX ".tmp"
@@ -184,6 +184,16 @@ bool sd_catalog_reader(catalog_reader_t* out);
 // by an interrupted save is not a save and is never loaded.
 bool sd_save_state(const char* rom_path, const uint8_t* sram, uint32_t size);
 bool sd_load_state(const char* rom_path, uint8_t* sram, uint32_t size);
+
+// The same save, with the bytes pulled a block at a time: fill() is asked
+// for `n` bytes (at most SD_SAVE_BLOCK) from offset `off` into `dst`, which
+// is word-aligned. For a source that cannot be read a byte at a time — the
+// background save keeps its copy in 32-bit-only instruction RAM.
+#define SD_SAVE_BLOCK 512
+typedef void (*sd_save_fill_fn)(void* ctx, uint32_t off, uint8_t* dst,
+                                uint32_t n);
+bool sd_save_stream(const char* rom_path, uint32_t size, sd_save_fill_fn fill,
+                    void* ctx);
 
 // Save file path helper
 void sd_get_save_path(const char* rom_path, char* save_path, int max_len);

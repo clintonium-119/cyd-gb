@@ -1630,6 +1630,11 @@ void emu_autosave_tick(uint32_t now_ms)
     autosave_tick(&autosave, now_ms);
 }
 
+bool emu_autosave_due(uint32_t now_ms)
+{
+    return autosave_due(&autosave, now_ms);
+}
+
 void emu_autosave_defer(uint32_t now_ms)
 {
     autosave_defer(&autosave, now_ms);

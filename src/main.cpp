@@ -9,6 +9,7 @@
 #include "sd_manager.h"
 #include "menu.h"
 #include "emulator_bridge.h"
+#include "bg_save.h"
 #include "rom_store.h"
 #include "settings.h"
 #include "speaker.h"
@@ -266,21 +267,87 @@ static void poll_input(uint32_t now_ms) {
 // the hold also gives back 400 ms of paused emulation per save, which the
 // audio queue was riding out as silence.
 //
-// A failed save now reports only over serial. The write is retried a full
-// idle period later and the RAM stays dirty until it lands, so nothing is
-// lost to a single failure; a card that fails every time loses saves without
-// telling the player, and if that is worth surfacing the RGB LED is the
-// unobtrusive place for it.
-
-// Write cartridge RAM to the card, with the toast that confirms it. Self
-// contained: it decides whether there is anything to do, takes the display
-// bus itself and gives it back, so every call site is one line.
+// A failed save reports only over serial. The RAM is dirty again and the
+// retry waits ten seconds, so nothing is lost to a single failure; a card
+// that fails every time loses saves without telling the player, and if that
+// is worth surfacing the RGB LED is the unobtrusive place for it.
 //
-// A failed write leaves the RAM dirty — it has not reached the card — and
-// defers the retry by a full idle period, so a bad card costs one toast every
-// ten seconds rather than one every frame.
+// Two paths. During play, save_tick() copies cartridge RAM between frames
+// and bg_save writes the copy from core 0, so the game never pauses; that is
+// what gets an in-game save onto the card before a child switches off
+// (BUG-0025). flush_save() covers the menu, a reset and the games list. When
+// the copy could not be reserved, flush_save() is the only path, as before.
+
+// A finished background write's outcome. A failure makes the RAM dirty again
+// and holds the retry off for ten seconds.
+static void save_collect(uint32_t now_ms) {
+    if (bg_save_result() == BG_SAVE_FAILED) {
+        emu_autosave_defer(now_ms);
+    }
+}
+
+// Copy cartridge RAM and hand it to the writer. Clean from here on means
+// "matches the copy"; the result says whether the copy reached the card.
+static void save_kick() {
+    uint32_t sz = 0;
+    uint8_t* ram = emu_get_cart_ram(&sz);
+    bg_save_take(ram);
+    emu_clear_cart_ram_dirty();
+    bg_save_start(cur_path);
+}
+
+// Once a frame, after the autosave tick. Writer busy is the rate limit.
+static void save_tick(uint32_t now_ms) {
+    if (!bg_save_ready() || !cur_path[0]) {
+        return;
+    }
+    save_collect(now_ms);
+    if (bg_save_idle() && emu_autosave_due(now_ms)) {
+        save_kick();
+    }
+}
+
+// Write cartridge RAM to the card before the menu, a reset or a restart.
+// Self contained: it decides whether there is anything to do and pauses the
+// pipeline itself, so every call site is one line.
+//
+// It always waits for a background write in flight, dirty or not: the copy
+// clears dirty when it is taken, so a write can be on its way while the RAM
+// reads clean, and a restart would cut it off and leave only a .tmp.
+//
+// Nothing else touches the card while a game runs, so waiting here is all
+// the ordering the writer needs. Every other SD and stdio user reachable
+// from play — the menu's state save and load, its snapshot, catalog,
+// description and media reads, and the manual — runs on this task inside
+// menu_open(), after this call; core 0's push task never touches the card.
 static void flush_save(const char* why) {
-    if (!cur_path[0] || !emu_cart_ram_dirty()) {
+    if (!cur_path[0]) {
+        return;
+    }
+    if (bg_save_ready()) {
+        if (bg_save_idle() && !emu_cart_ram_dirty()) {
+            return;
+        }
+        // Paused, because this task stops producing frames while it waits,
+        // and speaker_silence() holding the pin at mid-scale is quieter than
+        // a starved chain repeating its last buffer.
+        emu_pause_pipeline();
+        bg_save_wait();
+        save_collect(millis());
+        if (emu_cart_ram_dirty()) {
+            save_kick();
+            bg_save_wait();
+            bool ok = bg_save_result() != BG_SAVE_FAILED;
+            if (!ok) {
+                emu_autosave_defer(millis());
+            }
+            Serial.printf("[SAVE] %s: (%s)\n", why, ok ? "ok" : "fail");
+        }
+        emu_resume_pipeline();
+        return;
+    }
+
+    if (!emu_cart_ram_dirty()) {
         return;
     }
 
@@ -290,10 +357,8 @@ static void flush_save(const char* why) {
         return;
     }
 
-    // The pipeline still pauses: the card write blocks this core for long
-    // enough that the DMA queue would run dry, and speaker_silence() holding
-    // the pin at mid-scale is quieter than a starved chain repeating its last
-    // buffer. Nothing is drawn, so the frozen frame is all the player sees.
+    // The card write blocks this core for long enough that the DMA queue
+    // would run dry, so the pipeline pauses, as above.
     emu_pause_pipeline();
 
     bool ok = sd_save_state(cur_path, ram, sz);
@@ -368,6 +433,7 @@ void run_emu() {
         // state here, stamped with this frame's time: the callback is IRAM
         // resident and may not read a clock.
         emu_autosave_tick(now);
+        save_tick(now);
 
         // The combo armed the snapshot; the game runs on, the combo masked
         // from it, until that frame is drawn.
@@ -547,6 +613,15 @@ static void load_and_run(const char* name) {
     emu_start_push_task();
 
     load_ram();
+    // After the push task, for the same reason, and after the load so the
+    // heap the copy is sized against is the heap play will run on. A
+    // cartridge with no save, or a copy that cannot be had, leaves the menu,
+    // reset and games-list saves as the only ones.
+    uint32_t save_sz = 0;
+    emu_get_cart_ram(&save_sz);
+    if (save_sz) {
+        bg_save_init(save_sz);
+    }
     if (LED_G_PIN >= 0) digitalWrite(LED_G_PIN, LOW);
     run_emu();
 }

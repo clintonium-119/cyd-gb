@@ -47,15 +47,19 @@ void emu_get_rom_title(char* out, size_t out_sz);
 // that flag into the dirty state. So the dirty stamp is the frame's
 // timestamp, not the write's, which is at worst one frame stale.
 //
-// There is deliberately no idle rule. A card write pauses emulation and
-// audio for about 400 ms, and Pokemon uses cartridge RAM as scratch from
-// the title screen on, so an idle save fired every ten seconds of play and
-// every one was heard as a dropout (BUG-0011). Saves happen when the menu
-// opens, on a reset and on a return to the games list.
+// Saves also happen during play, when emu_autosave_due() says so: half a
+// second after cartridge RAM goes quiet, or ten seconds after it went dirty
+// for the games that never let it go quiet. The caller writes those in the
+// background (bg_save.h), because a card write on this core pauses emulation
+// and audio — the stall that removed the old ten-second idle save (BUG-0011).
+// Saves on the menu, a reset and a return to the games list are unchanged.
 void emu_autosave_tick(uint32_t now_ms);
 
-// After a save that failed: restamps the RAM so the next trigger's retry is
-// not confused with a fresh write.
+// Whether a save is due by that rule.
+bool emu_autosave_due(uint32_t now_ms);
+
+// After a save that failed: the RAM is dirty again, and no save is due for
+// ten seconds, so a bad card is retried rather than hammered.
 void emu_autosave_defer(uint32_t now_ms);
 
 // ─── Save states ────────────────────────────────────────────────────────────

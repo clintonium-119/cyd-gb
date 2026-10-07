@@ -11,6 +11,9 @@ int autosave_init(autosave_state_t* s, uint32_t save_size)
     s->wrote = 0;
     s->dirty = 0;
     s->last_write_ms = 0;
+    s->dirty_since_ms = 0;
+    s->held = 0;
+    s->hold_until_ms = 0;
     return AUTOSAVE_OK;
 }
 
@@ -23,6 +26,9 @@ void autosave_tick(autosave_state_t* s, uint32_t now_ms)
         return;
     }
     s->wrote = 0;
+    if (!s->dirty) {
+        s->dirty_since_ms = now_ms;
+    }
     s->dirty = 1;
     s->last_write_ms = now_ms;
 }
@@ -35,7 +41,7 @@ bool autosave_dirty(const autosave_state_t* s)
     return s->dirty != 0;
 }
 
-bool autosave_idle_due(const autosave_state_t* s, uint32_t now_ms)
+bool autosave_due(const autosave_state_t* s, uint32_t now_ms)
 {
     if (s == NULL) {
         return false;
@@ -43,9 +49,13 @@ bool autosave_idle_due(const autosave_state_t* s, uint32_t now_ms)
     if (!s->dirty) {
         return false;
     }
-    // Signed difference so the rule survives the caller's ms counter
+    // Signed differences so the rule survives the caller's ms counter
     // rolling over, the idiom the coalesced settings save uses.
-    return (int32_t)(now_ms - s->last_write_ms) >= AUTOSAVE_IDLE_MS;
+    if (s->held && (int32_t)(now_ms - s->hold_until_ms) < 0) {
+        return false;
+    }
+    return (int32_t)(now_ms - s->last_write_ms) >= AUTOSAVE_QUIET_MS
+           || (int32_t)(now_ms - s->dirty_since_ms) >= AUTOSAVE_MAX_AGE_MS;
 }
 
 void autosave_defer(autosave_state_t* s, uint32_t now_ms)
@@ -53,7 +63,12 @@ void autosave_defer(autosave_state_t* s, uint32_t now_ms)
     if (s == NULL) {
         return;
     }
-    s->last_write_ms = now_ms;
+    if (!s->dirty) {
+        s->dirty_since_ms = now_ms;
+    }
+    s->dirty = 1;
+    s->held = 1;
+    s->hold_until_ms = now_ms + AUTOSAVE_MAX_AGE_MS;
 }
 
 void autosave_flushed(autosave_state_t* s)
@@ -62,4 +77,5 @@ void autosave_flushed(autosave_state_t* s)
         return;
     }
     s->dirty = 0;
+    s->held = 0;
 }

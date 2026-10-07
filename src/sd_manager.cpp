@@ -504,8 +504,9 @@ bool sd_commit_tmp(const char* path) {
 // The window is not closed, only narrowed: a power loss between the remove
 // and the rename still loses the save. Both are single directory-entry
 // operations, against a write that is thousands of times longer.
-bool sd_save_state(const char* rp, const uint8_t* data, uint32_t sz) {
-    if (!ready || !data || !sz) {
+bool sd_save_stream(const char* rp, uint32_t sz, sd_save_fill_fn fill,
+                    void* ctx) {
+    if (!ready || !fill || !sz) {
         return false;
     }
 
@@ -529,11 +530,22 @@ bool sd_save_state(const char* rp, const uint8_t* data, uint32_t sz) {
     if (!f) {
         return false;
     }
-    size_t w = f.write(data, sz);
+    // Words, so fill() may hand back a word-aligned block.
+    uint32_t blk[SD_SAVE_BLOCK / 4];
+    size_t w = 0;
+    for (uint32_t off = 0; off < sz; off += SD_SAVE_BLOCK) {
+        uint32_t len = (sz - off < SD_SAVE_BLOCK) ? sz - off : SD_SAVE_BLOCK;
+        fill(ctx, off, (uint8_t*)blk, len);
+        size_t got = f.write((const uint8_t*)blk, len);
+        w += got;
+        if (got != len) {
+            break;
+        }
+    }
     f.close();
 
     // A short write never becomes the save file. The old one stays untouched
-    // and the caller keeps the RAM dirty for the next flush.
+    // and the caller keeps the RAM dirty for the next save.
     if (w != sz) {
         Serial.printf("[SD] Save short: %s (%u of %u)\n", tp, (uint32_t)w, sz);
         SD.remove(tp);
@@ -546,6 +558,17 @@ bool sd_save_state(const char* rp, const uint8_t* data, uint32_t sz) {
 
     Serial.printf("[SD] Save: %s (%u)\n", sp, (uint32_t)w);
     return true;
+}
+
+static void fill_from_bytes(void* ctx, uint32_t off, uint8_t* dst, uint32_t n) {
+    memcpy(dst, (const uint8_t*)ctx + off, n);
+}
+
+bool sd_save_state(const char* rp, const uint8_t* data, uint32_t sz) {
+    if (!data) {
+        return false;
+    }
+    return sd_save_stream(rp, sz, fill_from_bytes, (void*)data);
 }
 
 bool sd_load_state(const char* rp, uint8_t* data, uint32_t sz) {

@@ -1,0 +1,120 @@
+# capture start 2026-10-07T13:37:54-0400 port=/dev/ttyUSB0 baud=115200 duration=60s
+[   0.201] ets Jul 29 2019 12:21:46
+[   0.201] 
+[   0.201] rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+[   0.201] configsip: 0, SPIWP:0xee
+[   0.201] clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+[   0.201] mode:DIO, clock div:1
+[   0.201] load:0x3fff0030,len:1344
+[   0.201] load:0x40078000,len:13964
+[   0.201] load:0x40080400,len:3600
+[   0.201] entry 0x400805f0
+[   0.401] E (214) esp_core_d3f}���͡� No core dump partition found!
+[   0.401] E (214) esp_core_dump_flash: No core dump partition found!
+[   0.601] 
+[   0.601] === CYD-GB ===
+[   0.601] [SPK] I2S DAC on IO26 32768 Hz depth 4
+[   0.601] [i2c] ack: 0x20 0x24
+[   0.601] [i2c] ack: 0x20 0x24
+[   1.202] [TFT] 320x240 OK
+[   1.202] [TFT] porch trim 11 + 20/64
+[   1.202] [INIT] Settings (NVS): fs=0 bl=115 vol=1 gx=26 gy=0
+[   1.202] [SD] Type:2 Size:120MB
+[   1.202] [INIT] Heap: 249528
+[   1.202] [ROM] partition 3392KB @0x0B0000
+[   1.402] [ROM] writing 1024KB...
+[   4.005] [ROM] wrote 64KB
+[   4.406] [ROM] wrote 128KB
+[   4.606] [ROM] wrote 192KB
+[   4.806] [ROM] wrote 256KB
+[   5.207] [ROM] wrote 320KB
+[   5.407] [ROM] wrote 384KB
+[   5.607] [ROM] wrote 448KB
+[   6.008] [ROM] wrote 512KB
+[   6.208] [ROM] wrote 576KB
+[   6.408] [ROM] wrote 640KB
+[   6.608] [ROM] wrote 704KB
+[   7.009] [ROM] wrote 768KB
+[   7.209] [ROM] wrote 832KB
+[   7.409] [ROM] wrote 896KB
+[   7.810] [ROM] wrote 960KB
+[   8.010] [ROM] wrote 1024KB
+[   8.010] [ROM] done 1048576 bytes in 6742ms
+[   8.010] [ROM] mapped 'Pokemon - Red Version.gb' 1024KB
+[   8.010]  * gnuboy_load_rom: Cart loaded: name='POKEMON RED', hw=SGB, mbc=MBC_MBC3, romsize=1024K, ramsize=32K, colorize=48
+[   8.010] [EMU] gnuboy 'POKEMON RED' 1024KB push:col auto:yes heap:95200 largest:14324
+[   8.010] [INIT] Palette: Auto
+[   8.010] [SD] Load: /saves/Pokemon - Red Version.sav (32768)
+[   8.010] [SAVE] Loaded 32768 bytes
+[   8.010] [EMU] emulation on core 1
+[   8.010] [TFT] MADCTL 0xD8, scan order reversed, rot 2
+[   8.010] [TFT] COLMOD 0x53 for the frame path
+[   9.011] [EMU] heap free:86256 largest:10228
+[   9.011] [PERF] emu=12913us scale=6907us push=3906us qstall=2us qovf=0 qrej=0 apu=60us await=3500us aunder=0 aover=0 fps=59 split=c0 core=gnuboy ff=0 ff2=0
+[  10.013] [PERF] emu=12957us scale=6915us push=3811us qstall=1us qovf=0 qrej=0 apu=60us await=3457us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  11.014] [PERF] emu=12955us scale=6922us push=3821us qstall=2us qovf=0 qrej=0 apu=60us await=3448us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  12.015] [PERF] emu=12959us scale=6927us push=3898us qstall=2us qovf=0 qrej=0 apu=60us await=3436us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  13.016] [PERF] emu=13072us scale=6897us push=3906us qstall=2us qovf=0 qrej=0 apu=60us await=3319us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  13.016] [PROBE] heap before 8bit free:26552 largest:10228 | exec free:78168 largest:59380 | 32bit free:86256 largest:59380
+[  13.016] [PROBE] piece 1 in exec at 0x400916c8
+[  13.016] [PROBE] piece 2 in exec at 0x400936d8
+[  13.016] [PROBE] piece 3 in exec at 0x400956e8
+[  13.016] [PROBE] piece 4 in exec at 0x400976f8
+[  13.016] [PROBE] heap held 8bit free:26552 largest:10228 | exec free:45336 largest:26612 | 32bit free:53424 largest:26612
+[  13.016] [PROBE] spin 8 s at priority 0, no yield
+[  14.018] [PERF] emu=8921us scale=6890us push=3923us qstall=6us qovf=1423 qrej=0 apu=59us await=7414us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  15.019] [PERF] emu=7661us scale=6879us push=3863us qstall=23us qovf=1423 qrej=0 apu=60us await=8656us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  16.020] [PERF] emu=7655us scale=6888us push=3859us qstall=6us qovf=1423 qrej=0 apu=61us await=8672us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  17.021] [PERF] emu=7681us scale=6881us push=3936us qstall=6us qovf=1423 qrej=0 apu=61us await=8647us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  18.023] [PERF] emu=6694us scale=6888us push=3923us qstall=5us qovf=3173 qrej=0 apu=60us await=9616us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  19.024] [PERF] emu=7283us scale=6877us push=3940us qstall=6us qovf=3173 qrej=0 apu=61us await=9017us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  20.025] [PERF] emu=7230us scale=6909us push=3921us qstall=23us qovf=3173 qrej=0 apu=61us await=9083us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  21.026] [PERF] emu=7349us scale=6878us push=3870us qstall=5us qovf=3173 qrej=0 apu=70us await=8966us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  21.026] [PROBE] spin survived
+[  21.827] [PROBE] write 32768 B in 722 ms (ok) copy 32768 B in 1026 us hwm 1456
+[  22.028] [PERF] emu=7351us scale=6904us push=3923us qstall=5us qovf=3173 qrej=0 apu=61us await=8941us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  23.029] [PERF] emu=7254us scale=6877us push=3940us qstall=5us qovf=3173 qrej=0 apu=60us await=9062us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  24.030] [PERF] emu=8082us scale=6905us push=3920us qstall=6us qovf=3173 qrej=0 apu=68us await=8235us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  25.031] [PERF] emu=7865us scale=6874us push=3858us qstall=6us qovf=3173 qrej=0 apu=60us await=8441us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  26.032] [PERF] emu=7921us scale=6881us push=3933us qstall=5us qovf=3173 qrej=0 apu=60us await=8384us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  26.633] [PROBE] write 32768 B in 465 ms (ok) copy 32768 B in 1053 us hwm 1456
+[  27.033] [PERF] emu=7721us scale=6890us push=3850us qstall=5us qovf=3437 qrej=0 apu=63us await=8579us aunder=0 aover=0 fps=59 split=c0 core=gnuboy ff=0 ff2=0
+[  28.034] [PERF] emu=7827us scale=6884us push=3854us qstall=5us qovf=3437 qrej=0 apu=63us await=8476us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  29.035] [PERF] emu=7674us scale=6897us push=3938us qstall=6us qovf=3437 qrej=0 apu=63us await=8640us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  30.037] [PERF] emu=7567us scale=6877us push=3937us qstall=6us qovf=3437 qrej=0 apu=70us await=8762us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  31.038] [PERF] emu=7763us scale=6893us push=3846us qstall=6us qovf=3437 qrej=0 apu=63us await=8516us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  31.839] [PROBE] write 32768 B in 605 ms (ok) copy 32768 B in 1058 us hwm 1456
+[  32.039] [PERF] emu=7663us scale=6883us push=3857us qstall=5us qovf=3437 qrej=0 apu=70us await=8645us aunder=0 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  33.040] [PERF] emu=7677us scale=6884us push=3932us qstall=5us qovf=4251 qrej=0 apu=65us await=8629us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  34.042] [PERF] emu=8150us scale=6902us push=3847us qstall=6us qovf=4251 qrej=0 apu=62us await=8140us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  35.243] [PERF] emu=7684us scale=6885us push=3927us qstall=5us qovf=4251 qrej=0 apu=63us await=8622us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  36.244] [PERF] emu=7690us scale=6885us push=3924us qstall=5us qovf=4251 qrej=0 apu=62us await=8621us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  36.644] [PROBE] write 32768 B in 469 ms (ok) copy 32768 B in 1056 us hwm 1456
+[  37.245] [PERF] emu=7679us scale=6896us push=3845us qstall=6us qovf=4251 qrej=0 apu=61us await=8633us aunder=2 aover=0 fps=59 split=c0 core=gnuboy ff=0 ff2=0
+[  38.246] [PERF] emu=8477us scale=6909us push=3903us qstall=6us qovf=4251 qrej=0 apu=62us await=7830us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  39.247] [PERF] emu=11500us scale=6918us push=3904us qstall=6us qovf=4251 qrej=0 apu=62us await=4817us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  40.248] [PERF] emu=7691us scale=6906us push=3915us qstall=6us qovf=4251 qrej=0 apu=60us await=8626us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  41.250] [PERF] emu=7683us scale=6883us push=3860us qstall=5us qovf=4251 qrej=0 apu=60us await=8633us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  41.650] [PROBE] write 32768 B in 464 ms (ok) copy 32768 B in 1061 us hwm 1456
+[  42.251] [PERF] emu=7693us scale=6886us push=3944us qstall=5us qovf=4251 qrej=0 apu=61us await=8621us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  43.252] [PERF] emu=10939us scale=6902us push=3924us qstall=5us qovf=4251 qrej=0 apu=60us await=5403us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  44.253] [PERF] emu=7733us scale=6908us push=3922us qstall=5us qovf=4251 qrej=0 apu=61us await=8569us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  45.255] [PERF] emu=7708us scale=6903us push=3848us qstall=5us qovf=4251 qrej=0 apu=61us await=8624us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  46.256] [PERF] emu=7741us scale=6885us push=3932us qstall=5us qovf=4251 qrej=0 apu=68us await=8526us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  46.656] [PROBE] write 32768 B in 539 ms (ok) copy 32768 B in 1050 us hwm 1456
+[  47.257] [PERF] emu=8008us scale=6896us push=3926us qstall=6us qovf=4251 qrej=0 apu=62us await=8319us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  48.258] [PERF] emu=8700us scale=6908us push=3916us qstall=6us qovf=4251 qrej=0 apu=61us await=7593us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  49.260] [PERF] emu=7673us scale=6901us push=3862us qstall=5us qovf=4251 qrej=0 apu=60us await=8668us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  50.261] [PERF] emu=7685us scale=6896us push=3933us qstall=5us qovf=4251 qrej=0 apu=61us await=8656us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  51.262] [PERF] emu=7701us scale=6893us push=3923us qstall=6us qovf=4251 qrej=0 apu=69us await=8598us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  51.663] [PROBE] write 32768 B in 469 ms (ok) copy 32768 B in 1052 us hwm 1456
+[  52.263] [PERF] emu=8631us scale=6894us push=3851us qstall=5us qovf=4251 qrej=0 apu=63us await=7668us aunder=2 aover=0 fps=59 split=c0 core=gnuboy ff=0 ff2=0
+[  53.265] [PERF] emu=7693us scale=6895us push=3913us qstall=6us qovf=4251 qrej=0 apu=63us await=8636us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  54.266] [PERF] emu=7720us scale=6889us push=3918us qstall=5us qovf=4251 qrej=0 apu=63us await=8584us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  55.267] [PERF] emu=7696us scale=6881us push=3854us qstall=6us qovf=4251 qrej=0 apu=62us await=8607us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  56.268] [PERF] emu=7702us scale=6893us push=3844us qstall=5us qovf=4251 qrej=0 apu=62us await=8599us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  56.669] [PROBE] write 32768 B in 471 ms (ok) copy 32768 B in 1057 us hwm 1456
+[  57.270] [PERF] emu=8765us scale=6909us push=3903us qstall=5us qovf=4251 qrej=0 apu=61us await=7554us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  58.271] [PERF] emu=7690us scale=6904us push=3926us qstall=5us qovf=4251 qrej=0 apu=62us await=8645us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+[  59.272] [PERF] emu=7676us scale=6898us push=3850us qstall=6us qovf=4251 qrej=0 apu=62us await=8641us aunder=2 aover=0 fps=60 split=c0 core=gnuboy ff=0 ff2=0
+# capture end, elapsed 60.1s
