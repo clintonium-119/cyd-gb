@@ -16,7 +16,7 @@
  * test plants a pattern in that RAM before the save and scribbles over it
  * afterwards, which is the case a battery game exercises by writing its save.
  *
- * dmg-acid2 draws one still picture from the first run on, so identical frames
+ * dmg-acid2 draws one still picture once its LCD is on, so identical frames
  * alone would prove little. The machine underneath does move — CPU, timers,
  * work RAM, the sound unit's counters — so each pass also saves a second
  * state at its end, and the two must be the same file byte for byte. The
@@ -40,7 +40,10 @@
  */
 #define STATE_BOOT_REG (0xD00u + 0x50u)
 
-#define SAVE_AT 2u
+/* After dmg-acid2 switches its LCD on, about ten runs in. The frame buffer is
+ * not part of a state, so a save taken while the LCD is still off would be
+ * compared against whatever picture the buffer last held. */
+#define SAVE_AT 12u
 #define RUN_ON 10u
 
 #define FW GNUBOY_RUNNER_W

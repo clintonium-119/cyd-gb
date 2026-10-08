@@ -349,7 +349,8 @@ static uint32_t q_stall_acc = 0;
 //
 // The buffer still carries headroom above one frame because gnuboy wraps and
 // loses samples if a frame fills it: this bridge passes no audio callback for
-// it to flush through, and the first frame after a reset emits 572.
+// it to flush through, and the first frame after a reset emits a few more
+// than a steady one.
 static int16_t apu_buf[2 * (SPEAKER_SAMPLES_PER_FRAME + GNUBOY_AUDIO_HEADROOM)];
 static uint8_t mono_buf[SPEAKER_SAMPLES_MAX];
 // The head of a fast-forward frame's skipped run, up to and across the seam,
@@ -1139,14 +1140,13 @@ void emu_gnuboy_line(const unsigned char* line, int index)
     /*
      * The frame boundary is the line number wrapping, NOT gnuboy_run()
      * returning, and the difference is load-bearing rather than pedantic.
-     * gnuboy's run loop tests R_LY between CPU steps, so a step that carries
-     * the LCD past the last line and around to the top is not noticed and the
-     * run keeps going into the next frame: the first run after a reset draws
-     * 287 lines, two frames' worth, before it returns.
+     * A run is a frame's worth of time, not an LCD frame: when a game
+     * switches the LCD on part way through a run, the picture starts there
+     * and the run ends mid-frame, so the next run opens on a later line.
      *
-     * Missing that wrap commits block 0 of the second frame while the queue
-     * is still expecting block 17 of the first, which it rejects as out of
-     * order — and a rejected commit leaves its slot producer-owned, so two of
+     * Missing a wrap commits block 0 of the next frame while the queue is
+     * still expecting the last block of the current one, which it rejects as
+     * out of order — and a rejected commit leaves its slot producer-owned, so two of
      * them strand both slots and the producer waits for a free one forever.
      */
     if (frame_open && index <= last_line) {
@@ -1418,7 +1418,7 @@ void emu_run_frame()
     n_samples = gnuboy_audio_samples() / 2u;
     if (n_samples > SPEAKER_SAMPLES_MAX) {
         /* Only a frame that ran long enough to overshoot the speaker's
-         * headroom, which the reset frame's 572 does not. Clamping here
+         * headroom, which the reset frame does not. Clamping here
          * discards audio, so it is the last resort rather than the rule. */
         n_samples = SPEAKER_SAMPLES_MAX;
     }

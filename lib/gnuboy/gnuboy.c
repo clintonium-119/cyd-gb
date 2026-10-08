@@ -83,33 +83,44 @@ void gnuboy_run(bool draw)
 	GB.audio.pos = 0;
 
 	int cycles = 0;
+	int lines = 0;
 
-	// LCD is powered down, it won't touch LY or do vblank
-	if (!(R_LCDC & 0x80)) {
-		cycles += 154 * 228;
-		cycles -= gb_cpu_emulate(cycles);
-		return;
-	}
-
-	// We emulate until vblank (0..144)
-	while (R_LY <= 144) {
+	// We emulate until vblank (0..144). A powered-down LCD holds LY at 0, so
+	// the loop also stops if the game switches it off part way through.
+	while ((R_LCDC & 0x80) && R_LY <= 144) {
 		cycles += 228;
 		cycles -= gb_cpu_emulate(cycles);
+		lines++;
 	}
 
-	/* When using GB_PIXEL_PALETTED, the host should draw the frame in this callback
-	   because the palette can be modified below before gnuboy_run returns. */
-	if (draw && GB.video.callback) {
-		(GB.video.callback)(GB.video.buffer);
+	if (R_LCDC & 0x80) {
+		/* When using GB_PIXEL_PALETTED, the host should draw the frame in this callback
+		   because the palette can be modified below before gnuboy_run returns. */
+		if (draw && GB.video.callback) {
+			(GB.video.callback)(GB.video.buffer);
+		}
+
+		gb_hw_vblank();
+
+		// Emulate vblank (145...0)
+		while (R_LY > 0) {
+			cycles += 228;
+			cycles -= gb_cpu_emulate(cycles);
+			lines++;
+		}
 	}
 
-	gb_hw_vblank();
-
-	// Emulate vblank (145...0)
-	while (R_LY > 0) {
-		cycles += 228;
+	// LCD is powered down, it won't touch LY or do vblank: run out the
+	// rest of the frame's time with it off.
+	if (!(R_LCDC & 0x80) && lines < 154) {
+		cycles += (154 - lines) * 228;
 		cycles -= gb_cpu_emulate(cycles);
 	}
+
+	// Sound is otherwise only caught up at vblank or on a sound register
+	// access, so a frame with the LCD off would emit nothing and leave its
+	// samples to pile into a later one. This keeps each run's samples its own.
+	gb_sound_emulate();
 
 	if (GB.audio.callback && GB.audio.pos > 0) {
 		(GB.audio.callback)(GB.audio.buffer, GB.audio.pos);
